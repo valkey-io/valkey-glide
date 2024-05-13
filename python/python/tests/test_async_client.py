@@ -1850,6 +1850,10 @@ class TestCommands:
         ]
         assert await redis_client.bzpopmin(["non_existing_key"], 0.5) is None
 
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmin([], 0.5)
+
         # key exists, but it is not a sorted set
         assert await redis_client.set("foo", "value") == OK
         with pytest.raises(RequestError):
@@ -1904,6 +1908,10 @@ class TestCommands:
             2.0,
         ]
         assert await redis_client.bzpopmax(["non_existing_key"], 0.5) is None
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmax([], 0.5)
 
         # key exists, but it is not a sorted set
         assert await redis_client.set("foo", "value") == OK

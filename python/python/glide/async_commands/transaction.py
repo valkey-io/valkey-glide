@@ -1626,12 +1626,13 @@ class BaseTransaction:
 
     def bzpopmax(self: TTransaction, keys: List[str], timeout: float) -> TTransaction:
         """
-        Blocks the connection until it removes and returns a member with the highest score from the first non-empty
-        sorted set, with the given keys being checked in the order they are provided.
+        Pops the member with the highest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
 
-        BZPOPMAX is the blocking variant of ZPOPMAX.
+        `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
 
-        BZPOPMAX is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZPOPMAX` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/bzpopmax for more details.
 
@@ -1671,12 +1672,13 @@ class BaseTransaction:
 
     def bzpopmin(self: TTransaction, keys: List[str], timeout: float) -> TTransaction:
         """
-        Blocks the connection until it removes and returns a member with the lowest score from the first non-empty
-        sorted set, with the given keys being checked in the order they are provided.
+        Pops the member with the lowest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
 
-        BZPOPMIN is the blocking variant of ZPOPMIN.
+        `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
 
-        BZPOPMIN is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZPOPMIN` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/bzpopmin for more details.
 
