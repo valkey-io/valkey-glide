@@ -53,6 +53,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -169,6 +170,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
@@ -4180,6 +4182,59 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Double[][]> response = service.geopos(key, members);
         Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geodist_returns_success() {
+        // setup
+        String key = "testKey";
+        String member1 = "Catania";
+        String member2 = "Palermo";
+        String[] arguments = new String[] {key, member1, member2};
+        Double value = 166274.1516;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(GeoDist), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.geodist(key, member1, member2);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geodist_with_metrics_returns_success() {
+        // setup
+        String key = "testKey";
+        String member1 = "Catania";
+        String member2 = "Palermo";
+        GeoUnit geoUnit = GeoUnit.KILOMETERS;
+        String[] arguments = new String[] {key, member1, member2, GeoUnit.KILOMETERS.getRedisApi()};
+        Double value = 166.2742;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(GeoDist), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.geodist(key, member1, member2, geoUnit);
+        Double payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

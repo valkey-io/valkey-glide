@@ -20,6 +20,7 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -478,13 +479,17 @@ public class TransactionTestUtilities {
                                 "Catania",
                                 new GeospatialData(15.087269, 37.502669)))
                 .geopos(geoKey1, new String[] {"Palermo", "Catania"});
+        transaction.geodist(geoKey1, "Palermo", "Catania");
+        transaction.geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS);
 
         return new Object[] {
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
             new Double[][] {
                 {13.36138933897018433, 38.11555639549629859},
                 {15.08726745843887329, 37.50266842333162032},
-            }, // geopos(new String[]{"Palermo", "Catania"})
+            }, // geopos(geoKey1, new String[]{"Palermo", "Catania"})
+            166274.1516, // geodist(geoKey1, "Palermo", "Catania")
+            166.2742, // geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
         };
     }
 
