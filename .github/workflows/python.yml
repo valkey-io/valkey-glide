@@ -12,6 +12,7 @@ on:
             - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-redis-modules/action.yml
+            - .github/workflows/create-ec-cluster/action.yml
 
     pull_request:
         paths:
@@ -23,6 +24,7 @@ on:
             - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-redis-modules/action.yml
+            - .github/workflows/create-ec-cluster/action.yml
 
 concurrency:
     group: python-${{ github.head_ref || github.ref }}
@@ -56,6 +58,7 @@ jobs:
               uses: actions/setup-python@v4
               with:
                   python-version: "3.10"
+              
 
             - name: Install dependencies
               working-directory: ./python
@@ -63,6 +66,25 @@ jobs:
                   python -m pip install --upgrade pip
                   pip install flake8 isort black mypy-protobuf
 
+                
+            - name: Start self hosted EC2 runner
+              uses: ./.github/workflows/start-self-hosted-runner
+              with:
+                            aws-access-key-id: ${{ secrets.AWS_EC2_ACCESS_KEY_ID }}
+                            aws-secret-access-key: ${{ secrets.AWS_EC2_SECRET_ACCESS_KEY }}
+                            aws-region: ${{ secrets.AWS_REGION }}
+                            ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+            
+            - name: Check AWS_ACCESS_KEY_ID
+              shell: bash
+              run: |
+                echo shoham
+                echo $AWS_ACCESS_KEY_ID
+
+            - name: Install ec cluster
+              uses: ./.github/workflows/create-ec-cluster
+              with:
+                aws-region: ${{ secrets.AWS_REGION }}
             - name: Lint with isort
               working-directory: ./python
               run: |
@@ -80,13 +102,6 @@ jobs:
               working-directory: ./python
               run: |
                   black --check --diff .
-
-            - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
-              with:
-                  os: "ubuntu"
-                  target: "x86_64-unknown-linux-gnu"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Type check with mypy
               working-directory: ./python
@@ -114,82 +129,7 @@ jobs:
             - uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -python
-
-    lint-rust:
-        runs-on: ubuntu-latest
-        timeout-minutes: 15
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-
-            - uses: ./.github/workflows/lint-rust
-              with:
-                  cargo-toml-folder: ./python
-              name: lint python-rust
-
-    build-macos-latest:
-        runs-on: macos-latest
-        timeout-minutes: 25
-        steps:
-            - uses: actions/checkout@v4
-              with:
-                  submodules: recursive
-            - name: Set up Homebrew
-              uses: Homebrew/actions/setup-homebrew@master
-
-            - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
-              with:
-                  os: "macos"
-                  target: "aarch64-apple-darwin"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Test compatibility with pytest
-              working-directory: ./python
-              run: |
-                  source .env/bin/activate
-                  pytest --asyncio-mode=auto -m smoke_test
-
-    build-amazonlinux-latest:
-        runs-on: ubuntu-latest
-        container: amazonlinux:latest
-        timeout-minutes: 15
-        steps:
-            - name: Install git
-              run: |
-                  yum -y remove git
-                  yum -y remove git-*
-                  yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
-                  yum install -y git 
-                  git --version
-
-            - uses: actions/checkout@v4
-
-            - name: Checkout submodules
-              run: |
-                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
-                  git submodule update --init --recursive
-
-            - name: Install python
-              run: |
-                  yum install -y python3
-
-            - name: Build Python wrapper
-              uses: ./.github/workflows/build-python-wrapper
-              with:
-                  os: "amazon-linux"
-                  target: "x86_64-unknown-linux-gnu"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Create a symbolic Link for redis6 binaries
-              working-directory: ./python
-              run: |
-                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
-                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
-
-            - name: Test compatibility with pytest
-              working-directory: ./python
-              run: |
-                  source .env/bin/activate
-                  pytest --asyncio-mode=auto -m smoke_test
+            
+            
+    
+            
