@@ -2058,7 +2058,7 @@ class BaseTransaction:
         """
         Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-        When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+        When in cluster mode,`destination` and all keys in `keys` must map to the same hash slot.
 
         See https://valkey.io/commands/zinterstore/ for more details.
 
@@ -2085,7 +2085,7 @@ class BaseTransaction:
         """
         Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-        When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+        When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
         see https://valkey.io/commands/zunionstore/ for more details.
 

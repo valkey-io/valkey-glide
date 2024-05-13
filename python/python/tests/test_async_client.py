@@ -1825,8 +1825,8 @@ class TestCommands:
         members_scores1 = {"one": 1.0, "two": 2.0}
         members_scores2 = {"one": 1.5, "two": 2.5, "three": 3.5}
 
-        assert await redis_client.zadd(key1, members_scores=members_scores1) == 2
-        assert await redis_client.zadd(key2, members_scores=members_scores2) == 3
+        assert await redis_client.zadd(key1, members_scores1) == 2
+        assert await redis_client.zadd(key2, members_scores2) == 3
 
         assert await redis_client.zinterstore(key3, [key1, key2]) == 2
         assert await redis_client.zrange_withscores(key3, range) == {
@@ -1894,8 +1894,8 @@ class TestCommands:
         members_scores1 = {"one": 1.0, "two": 2.0}
         members_scores2 = {"one": 1.5, "two": 2.5, "three": 3.5}
 
-        assert await redis_client.zadd(key1, members_scores=members_scores1) == 2
-        assert await redis_client.zadd(key2, members_scores=members_scores2) == 3
+        assert await redis_client.zadd(key1, members_scores1) == 2
+        assert await redis_client.zadd(key2, members_scores2) == 3
 
         assert await redis_client.zunionstore(key3, [key1, key2]) == 3
         assert await redis_client.zrange_withscores(key3, range) == {

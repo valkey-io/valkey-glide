@@ -178,8 +178,8 @@ def separate_keys(
 ) -> Tuple[List[str], List[str]]:
     '''
     Returns seperate lists of keys and weights in case of weighted keys.
-    '''
-    if len(keys) == 0:
+    """
+    if not keys:
         return [], []
 
     key_list: List[str] = []
@@ -205,11 +205,11 @@ def _create_z_cmd_store_args(
 
     args += only_keys
 
-    if len(weights) != 0:
+    if weights:
         args.append("WEIGHTS")
         args += weights
 
-    if aggregation_type is not None:
+    if aggregation_type:
         args.append("AGGREGATE")
         args.append(aggregation_type.value)
 
