@@ -498,12 +498,18 @@ public class TransactionTestUtilities {
     }
 
     private static Object[] bitmapCommands(BaseTransaction<?> transaction) {
-        String key = "{key-" + UUID.randomUUID();
+        String key1 = "{bitmapKey}-1" + UUID.randomUUID();
+        String key2 = "{bitmapKey}-2" + UUID.randomUUID();
 
-        transaction.set(key, "foobar").bitcount(key).bitcount(key, 1, 1);
+        transaction
+                .set(key1, "foobar")
+                .bitcount(key1)
+                .bitcount(key1, 1, 1)
+                .setbit(key2, 1, 1)
+                .setbit(key2, 1, 0);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction.bitcount(key, 5, 30, BitmapIndexType.BIT);
+            transaction.bitcount(key1, 5, 30, BitmapIndexType.BIT);
         }
 
         var expectedResults =
@@ -511,6 +517,8 @@ public class TransactionTestUtilities {
                     OK, // set(key, "foobar")
                     26L, // bitcount(key)
                     6L, // bitcount(key, 1, 1)
+                    0L, // setbit(key, 1, 1)
+                    1L, // setbit(key, 1, 0)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
