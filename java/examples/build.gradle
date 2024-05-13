@@ -6,20 +6,20 @@ plugins {
 repositories {
     // Use Maven Central for resolving dependencies.
     mavenCentral()
+    mavenLocal()
 }
 
 dependencies {
-    implementation project(':client')
+    implementation 'software.amazon.glide:glide:255.255.255'
 
     implementation 'redis.clients:jedis:4.4.3'
     implementation 'io.lettuce:lettuce-core:6.2.6.RELEASE'
     implementation 'commons-cli:commons-cli:1.5.0'
 }
 
-run.dependsOn ':client:buildRustRelease'
+run.dependsOn ':client:publishToMavenLocal'
 
 application {
     // Define the main class for the application.
     mainClass = 'glide.examples.ExamplesApp'
-    applicationDefaultJvmArgs = ['-Djava.library.path=../target/release']
 }
