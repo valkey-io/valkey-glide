@@ -2730,6 +2730,9 @@ class CoreCommands(Protocol):
                 empty list.
 
         Examples:
+            >>> await client.zadd("sorted_set1", {"element1":1.0, "element2": 2.0, "element3": 3.0})
+            >>> await client.zadd("sorted_set2", {"element2": 2.0})
+            >>> await client.zadd("sorted_set3", {"element3": 3.0})
             >>> await client.zdiff("sorted_set1", "sorted_set2", "sorted_set3")
                 ["element1"]  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
         """
@@ -2738,9 +2741,9 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ZDiff, [str(len(keys))] + keys),
         )
 
-    async def zdiff_withscores(self, keys: List[str]) -> Dict[str, float]:
+    async def zdiff_withscores(self, keys: List[str]) -> Mapping[str, float]:
         """
-        Returns the difference between the first sorted set and all the successive sorted sets.
+        Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
         When in Cluster mode, all keys must map to the same hash slot.
 
         See https://valkey.io/commands/zdiff for more details.
@@ -2749,17 +2752,20 @@ class CoreCommands(Protocol):
             keys (List[str]): The keys of the sorted sets.
 
         Returns:
-            Dict[str, float]: A dictionary of elements and their scores representing the difference between the sorted
+            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted
                 sets.
                 If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
 
         Examples:
+            >>> await client.zadd("sorted_set1", {"element1":1.0, "element2": 2.0, "element3": 3.0})
+            >>> await client.zadd("sorted_set2", {"element2": 2.0})
+            >>> await client.zadd("sorted_set3", {"element3": 3.0})
             >>> await client.zdiff_withscores("sorted_set1", "sorted_set2", "sorted_set3")
                 {"element1": 1.0}  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
         """
         return cast(
-            Dict[str, float],
+            Mapping[str, float],
             await self._execute_command(
                 RequestType.ZDiff, [str(len(keys))] + keys + ["WITHSCORES"]
             ),

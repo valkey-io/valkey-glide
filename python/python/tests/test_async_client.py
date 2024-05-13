@@ -2353,12 +2353,29 @@ class TestCommands:
         assert await redis_client.zdiff([key1, key3]) == []
         assert await redis_client.zdiff([non_existing_key, key3]) == []
 
-        assert await redis_client.zdiff_withscores([key1, key2]) == {
+        zdiff_map = await redis_client.zdiff_withscores([key1, key2])
+        expected_map = {
             "one": 1.0,
             "three": 3.0,
         }
-        assert await redis_client.zdiff_withscores([key1, key3]) == {}
-        assert await redis_client.zdiff_withscores([non_existing_key, key3]) == {}
+        assert compare_maps(zdiff_map, expected_map) is True
+        assert (
+            compare_maps(await redis_client.zdiff_withscores([key1, key3]), {}) is True
+        )
+        assert (
+            compare_maps(
+                await redis_client.zdiff_withscores([non_existing_key, key3]), {}
+            )
+            is True
+        )
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.zdiff([])
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.zdiff_withscores([])
 
         # key exists, but it is not a sorted set
         assert await redis_client.set(string_key, "foo") == OK

@@ -1964,7 +1964,7 @@ class BaseTransaction:
 
     def zdiff_withscores(self: TTransaction, keys: List[str]) -> TTransaction:
         """
-        Returns the difference between the first sorted set and all the successive sorted sets.
+        Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
 
         See https://valkey.io/commands/zdiff for more details.
 
@@ -1972,7 +1972,7 @@ class BaseTransaction:
             keys (List[str]): The keys of the sorted sets.
 
         Command response:
-            Dict[str, float]: A dictionary of elements and their scores representing the difference between the sorted sets.
+            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted sets.
                 If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
         """
