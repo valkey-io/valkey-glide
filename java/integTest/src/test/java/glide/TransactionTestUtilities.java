@@ -8,6 +8,7 @@ import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
+import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -63,7 +64,9 @@ public class TransactionTestUtilities {
                         (TransactionBuilder) TransactionTestUtilities::connectionManagementCommands),
                 Arguments.of(
                         "Geospatial Commands",
-                        (TransactionBuilder) TransactionTestUtilities::geospatialCommands));
+                        (TransactionBuilder) TransactionTestUtilities::geospatialCommands),
+                Arguments.of(
+                        "Bitmap Commands", (TransactionBuilder) TransactionTestUtilities::bitmapCommands));
     }
 
     /** Generate test samples for parametrized tests. Could be routed to primary nodes only. */
@@ -466,5 +469,31 @@ public class TransactionTestUtilities {
             166274.1516, // geodist(geoKey1, "Palermo", "Catania")
             166.2742, // geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
         };
+    }
+
+    private static Object[] bitmapCommands(BaseTransaction<?> transaction) {
+        String key = "{key-" + UUID.randomUUID();
+
+        transaction.set(key, "foobar").bitcount(key).bitcount(key, 1, 1);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction.bitcount(key, 5, 30, BitmapIndexType.BIT);
+        }
+
+        var expectedResults =
+                new Object[] {
+                    OK, // set(key, "foobar")
+                    26L, // bitcount(key)
+                    6L, // bitcount(key, 1, 1)
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            return concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
+                    });
+        }
+        return expectedResults;
     }
 }

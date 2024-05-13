@@ -10,7 +10,7 @@ class TestProtobufCodec:
     def test_encode_decode_delimited(self):
         request = RedisRequest()
         request.callback_idx = 1
-        request.single_command.request_type = RequestType.SetString
+        request.single_command.request_type = RequestType.Set
         args = [
             "foo",
             "bar",
@@ -28,7 +28,7 @@ class TestProtobufCodec:
         )
         assert new_offset == len(b_arr)
         assert parsed_request.callback_idx == 1
-        assert parsed_request.single_command.request_type == RequestType.SetString
+        assert parsed_request.single_command.request_type == RequestType.Set
         assert parsed_request.single_command.args_array.args == args
 
     def test_decode_partial_message_fails(self):
