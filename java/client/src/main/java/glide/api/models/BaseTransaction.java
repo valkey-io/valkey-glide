@@ -32,6 +32,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -154,6 +155,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
@@ -3034,6 +3036,46 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T geopos(@NonNull String key, @NonNull String[] members) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
         protobufTransaction.addCommands(buildCommand(GeoPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
+     * geospatial index stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member1 The name of the first member.
+     * @param member2 The name of the second member.
+     * @param geoUnit The unit of distance measurement - see {@link GeoUnit}.
+     * @return Command Response - The distance between <code>member1</code> and <code>member2</code>.
+     *     If one or both members do not exist or if the key does not exist returns <code>null</code>.
+     */
+    public T geodist(
+            @NonNull String key,
+            @NonNull String member1,
+            @NonNull String member2,
+            @NonNull GeoUnit geoUnit) {
+        ArgsArray commandArgs = buildArgs(key, member1, member2, geoUnit.getRedisApi());
+        protobufTransaction.addCommands(buildCommand(GeoDist, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
+     * geospatial index stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member1 The name of the first member.
+     * @param member2 The name of the second member.
+     * @return Command Response - The distance between <code>member1</code> and <code>member2</code>.
+     *     If one or both members do not exist or if the key does not exist returns <code>null</code>.
+     *     The default unit is {@see GeoUnit#METERS}.
+     */
+    public T geodist(@NonNull String key, @NonNull String member1, @NonNull String member2) {
+        ArgsArray commandArgs = buildArgs(key, member1, member2);
+        protobufTransaction.addCommands(buildCommand(GeoDist, commandArgs));
         return getThis();
     }
 
