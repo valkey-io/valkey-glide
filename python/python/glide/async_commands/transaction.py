@@ -1945,6 +1945,41 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZMScore, [key] + members)
 
+    def zdiff(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets.
+        To get the elements with their scores, see `zdiff_withscores`.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            List[str]: A list of elements representing the difference between the sorted sets.
+                If the first key does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+        """
+        return self.append_command(RequestType.ZDiff, [str(len(keys))] + keys)
+
+    def zdiff_withscores(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted sets.
+                If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+        """
+        return self.append_command(
+            RequestType.ZDiff, [str(len(keys))] + keys + ["WITHSCORES"]
+        )
+
     def zdiffstore(
         self: TTransaction, destination: str, keys: List[str]
     ) -> TTransaction:
