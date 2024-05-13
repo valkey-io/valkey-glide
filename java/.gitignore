@@ -6,3 +6,6 @@ build
 
 # Ignore protobuf generated files
 protobuf
+
+# Must be ignored as part of Maven Central publishing process
+gradle.properties
