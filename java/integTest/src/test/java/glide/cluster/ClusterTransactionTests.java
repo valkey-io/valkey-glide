@@ -115,53 +115,50 @@ public class ClusterTransactionTests {
         assertTrue(Instant.ofEpochSecond((long) response[0]).isAfter(yesterday));
     }
 
-    // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
-    // @Test
-    // @SneakyThrows
-    // public void objectFreq() {
-    //    String objectFreqKey = "key";
-    //    String maxmemoryPolicy = "maxmemory-policy";
-    //    String oldPolicy = clusterClient.configGet(new String[] { maxmemoryPolicy
-    // }).get().get(maxmemoryPolicy);
-    //    try {
-    //        ClusterTransaction transaction = new ClusterTransaction();
-    //        transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"), ALL_NODES).get();
-    //        transaction.set(objectFreqKey, "");
-    //        transaction.objectFreq(objectFreqKey);
-    //        var response = clusterClient.exec(transaction).get();
-    //        assertEquals(OK, response[0]);
-    //        assertEquals(OK, response[1]);
-    //        assertTrue((long) response[2] >= 0L);
-    //    } finally {
-    //        clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy));
-    //    }
-    // }
+    @Test
+    @SneakyThrows
+    public void objectFreq() {
+        String objectFreqKey = "key";
+        String maxmemoryPolicy = "maxmemory-policy";
+        String oldPolicy =
+                clusterClient.configGet(new String[] {maxmemoryPolicy}).get().get(maxmemoryPolicy);
+        try {
+            ClusterTransaction transaction = new ClusterTransaction();
+            transaction.configSet(Map.of(maxmemoryPolicy, "allkeys-lfu"));
+            transaction.set(objectFreqKey, "");
+            transaction.objectFreq(objectFreqKey);
+            var response = clusterClient.exec(transaction).get();
+            assertEquals(OK, response[0]);
+            assertEquals(OK, response[1]);
+            assertTrue((long) response[2] >= 0L);
+        } finally {
+            clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy));
+        }
+    }
 
-    // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
-    // @Test
-    // @SneakyThrows
-    // public void objectIdletime() {
-    //    String objectIdletimeKey = "key";
-    //    ClusterTransaction transaction = new ClusterTransaction();
-    //    transaction.set(objectIdletimeKey, "");
-    //    transaction.objectIdletime(objectIdletimeKey);
-    //    var response = clusterClient.exec(transaction).get();
-    //    assertEquals(OK, response[0]);
-    //    assertTrue((long) response[1] >= 0L);
-    // }
+    @Test
+    @SneakyThrows
+    public void objectIdletime() {
+        String objectIdletimeKey = "key";
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction.set(objectIdletimeKey, "");
+        transaction.objectIdletime(objectIdletimeKey);
+        var response = clusterClient.exec(transaction).get();
+        assertEquals(OK, response[0]);
+        assertTrue((long) response[1] >= 0L);
+    }
 
-    // TODO: Enable when https://github.com/amazon-contributing/redis-rs/pull/138 is merged.
-    // @Test
-    // @SneakyThrows
-    // public void objectRefcount() {
-    //    String objectRefcountKey = "key";
-    //    ClusterTransaction transaction = new ClusterTransaction();
-    //    transaction.set(objectRefcountKey, "");
-    //    transaction.objectRefcount(objectRefcountKey);
-    //    var response = clusterClient.exec(transaction).get();
-    //    assertEquals(OK, response[0]);
-    //    assertTrue((long) response[1] >= 0L);
-    // }
+    @Test
+    @SneakyThrows
+    public void objectRefcount() {
+        String objectRefcountKey = "key";
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction.set(objectRefcountKey, "");
+        transaction.objectRefcount(objectRefcountKey);
+        var response = clusterClient.exec(transaction).get();
+        assertEquals(OK, response[0]);
+        assertTrue((long) response[1] >= 0L);
+    }
 
     @Test
     @SneakyThrows
