@@ -109,7 +109,7 @@ public class CallbackDispatcher {
             future.completeAsync(() -> response);
         } else {
             // probably a response was received after shutdown or `registerRequest` call was missing
-            Logger.log(Logger.Level.ERROR, "callback dispatcher", "Received a response for not registered callback id " + callbackId + ", request error = " + response.getRequestError() + "%n");
+            Logger.log(Logger.Level.ERROR, "callback dispatcher", "Received a response for not registered callback id " + callbackId + ", request error = " + response.getRequestError());
             distributeClosingException("Client is in an erroneous state and should close");
         }
     }

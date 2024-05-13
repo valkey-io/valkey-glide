@@ -30,7 +30,7 @@ public class ReadHandler extends ChannelInboundHandlerAdapter {
     /** Handles uncaught exceptions from {@link #channelRead(ChannelHandlerContext, Object)}. */
     @Override
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
-        Logger.log(Logger.Level.ERROR, "read handler", "=== exceptionCaught " + ctx + " " + cause + " %n");
+        Logger.log(Logger.Level.ERROR, "read handler", "=== exceptionCaught " + ctx + " " + cause);
 
         callbackDispatcher.distributeClosingException(
                 "An unhandled error while reading from UDS channel: " + cause);
