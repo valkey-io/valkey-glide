@@ -81,7 +81,7 @@ jobs:
                           TARGET: aarch64-unknown-linux-musl,
                           RUNNER: [self-hosted, Linux, ARM64],
                           IMAGE: 'node:alpine',
-                          CONTAINER_OPTIONS: '--user root --privileged',
+                          CONTAINER_OPTIONS: '--user root --privileged --rm',
                       }
                     - {
                           OS: ubuntu,

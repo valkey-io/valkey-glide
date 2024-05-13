@@ -215,9 +215,7 @@ jobs:
         runs-on: [self-hosted, Linux, ARM64]
         container:
             image: node:alpine
-            options: --user root --privileged
-        strategy:
-            fail-fast: false
+            options: --user root --privileged --rm
         steps:
           - name: Install dependencies
             run: |
