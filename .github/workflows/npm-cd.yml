@@ -309,3 +309,116 @@ jobs:
                   npm publish --access public --tag ${{ env.tag }}
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+    test-release-candidate:
+        if: github.event_name != 'pull_request' && contains(github.ref, 'rc')
+        name: Test the release candidate
+        needs: publish-base-to-npm
+        runs-on: ${{ matrix.build.RUNNER }}
+        container:
+            image: ${{ matrix.build.IMAGE || '' }}
+            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
+        strategy:
+            fail-fast: false
+            matrix:
+                build:
+                    - {
+                          RUNNER: ubuntu-latest,
+                      }
+                    - {
+                          RUNNER: [self-hosted, Linux, ARM64],
+                      }
+                    - {
+                          RUNNER: macos-12,
+                      }
+                    - {
+                          RUNNER: macos-13-xlarge,
+                      }
+                    - {
+                          RUNNER: [self-hosted, Linux, ARM64],
+                          IMAGE: 'node:alpine',
+                          CONTAINER_OPTIONS: '--user root --privileged --rm',
+                      }
+                    - {
+                          RUNNER: ubuntu-latest,
+                          IMAGE: 'node:alpine',
+                          CONTAINER_OPTIONS: '--user root --privileged',
+                      }
+        steps:
+            - name: install Redis, Python and git for alpine
+              if: ${{ matrix.build.IMAGE == 'node:alpine' }}
+              run: |
+                apk update
+                apk add redis python3 git
+                redis-server --daemonize yes
+            
+            - name: install Redis and Python for ubuntu
+              if: ${{ ! matrix.build.IMAGE == 'node:alpine' && ! contains(matrix.build.RUNNER, 'mac') }}
+              run: |
+                sudo apt-get update
+                sudo apt-get install redis-server python3
+                sudo systemctl start redis-server
+
+            - name: install Redis and Python for macos
+              if: ${{ contains(matrix.build.RUNNER, 'mac') }}
+              run: |
+                brew install redis python3
+                brew services start redis
+
+            # Currently "Checkout" action is not supported for musl on ARM64, so the checkout is happening on the runner and 
+            # here we just making sure we getting the clean repo
+            - name: Clean repository for musl on ARM64
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.IMAGE == 'node:alpine' }}
+              run: |
+                  git config --global --add safe.directory $GITHUB_WORKSPACE
+                  git clean -xdf
+                  git reset --hard
+                  git submodule sync
+                  git submodule update --init --recursive
+            
+            - name: Set up access for musl on ARM
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.IMAGE == 'node:alpine' }}
+              run: |
+                chown -R $(whoami):$(whoami) $GITHUB_WORKSPACE
+
+            - name: Setup self-hosted runner access
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.IMAGE != 'node:alpine' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+
+            - name: Checkout
+              if: ${{ matrix.build.IMAGE != 'node:alpine' }}
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Install node
+              if: ${{ matrix.build.IMAGE != 'node:alpine' }}
+              uses: actions/setup-node@v3
+              with:
+                  node-version: "16"
+                  registry-url: "https://registry.npmjs.org"
+                  scope: "${{ vars.NPM_SCOPE }}"
+                  always-auth: true
+
+            - name: Setup node
+              if: ${{ matrix.build.IMAGE == 'node:alpine' }}
+              working-directory: ./node
+              run: |
+                npm config set registry https://registry.npmjs.org/
+                npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
+                npm config set scope ${{ vars.NPM_SCOPE }}
+
+            - name: Run the tests
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/node
+              run: |
+                  npm run test
+
+            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
+            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
+            - name: Reset repository
+              if: ${{ matrix.build.ARCH == 'arm64' }}
+              shell: bash
+              run: |
+                git reset --hard
+                git clean -xdf

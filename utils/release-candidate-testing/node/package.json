@@ -1,0 +1,23 @@
+{
+    "name": "release-candidate-testing-nodejs",
+    "version": "1.0.0",
+    "description": "A small amount of test cases to test wether release candidate in working fine",
+    "main": "index.ts",
+    "type": "module",
+    "scripts": {
+        "test": "npm run install-candidate && node index.js",
+        "install-candidate": "npm install @aws/glide-for-redis@next",
+        "prettier:check:ci": "./node_modules/.bin/prettier --check .",
+        "prettier:format": "./node_modules/.bin/prettier --write . "
+    },
+    "author": "",
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@aws/glide-for-redis": "^0.3.3",
+        "child_process": "^1.0.2",
+        "find-free-ports": "^3.1.1"
+    },
+    "devDependencies": {
+        "prettier": "^2.8.8"
+    }
+}
