@@ -3951,56 +3951,17 @@ public class RedisClientTest {
         String value = "testValue";
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(1L);
-        when(commandManager.<String>submitNewCommand(
+        when(commandManager.<Long>submitNewCommand(
             eq(Append), eq(new String[] {key, value}), any()))
             .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.append(key, value);
-        Long payload = response.get();  // lol i forgot what we do from here
-
-        // verify
-        assertEquals(1L, response);
-    }
-
-    @SneakyThrows
-    @Test
-    public void get_returns_success() {
-        // setup
-        String key = "testKey";
-        String value = "testValue";
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-        when(commandManager.<String>submitNewCommand(eq(GetString), eq(new String[] {key}), any()))
-            .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.get(key);
-        String payload = response.get();
+        Long payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(1L, payload);
     }
 
-    @SneakyThrows
-    @Test
-    public void set_returns_success() {
-        // setup
-        String key = "testKey";
-        String value = "testValue";
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(null);
-        when(commandManager.<String>submitNewCommand(
-            eq(SetString), eq(new String[] {key, value}), any()))
-            .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.set(key, value);
-        Object okResponse = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertNull(okResponse);
-    }
 }

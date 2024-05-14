@@ -244,36 +244,6 @@ public interface StringBaseCommands {
      */
     CompletableFuture<String> getrange(String key, int start, int end);
 
-    /**
-     * Sets the given <code>key</code> with the given value.
-     *
-     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
-     * @param key The <code>key</code> to store.
-     * @param value The value to store with the given <code>key</code>.
-     * @return Response from Redis containing <code>"OK"</code>.
-     * @example
-     *     <pre>{@code
-     * String value = client.set("key", "value").get();
-     * assert value.equals("OK");
-     * }</pre>
-     */
-    /**
-     * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
-     * value exists.
-     *
-     * @see <a href="https://redis.io/commands/get/">redis.io</a> for details.
-     * @param key The <code>key</code> to retrieve from the database.
-     * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
-     *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
-     * @example
-     *     <pre>{@code
-     * String value = client.get("key").get();
-     * assert value.equals("value");
-     *
-     * String value = client.get("non_existing_key").get();
-     * assert value.equals(null);
-     * }</pre>
-     */
 
     /**
      * Appends a value to a key.
@@ -287,15 +257,18 @@ public interface StringBaseCommands {
      *    <pre>{@code
      * String value = client.append("key", "value").get();
      * assert value.equals(5);
+     * Indicates that "Hello" has been appended to the value of <code>key</code>, which was initially empty,
+     * resulting in a new value of "Hello" with a length of 5 - similar to the set operation.
      *
      * String value = client.append("key", " world").get();
      * assert value.equals(11);
+     * Indicates that " world" has been appended to the value of <code>key</code>, resulting in a new value of "Hello world" with a length of 11.
      *
      * String value = client.get("key").get();
      * assert value.equals("Hello world");
+     * Returns the value stored in <code>key</code>, which is now "Hello world".
      * }</pre>
      */
-
     CompletableFuture<Long> append(String key, String value);
 
 

@@ -31,8 +31,8 @@ public class ExamplesApp {
 //            System.out.println("PING(found you): " + client.ping("found you").get());
 
             System.out.println("SET(apples, oranges): " + client.set("apples", "oranges").get());
-            System.out.println("");
-            //System.out.println("GET(apples): " + client.get("apples").get());
+            System.out.println("APPEND(apples, mewomeow): " + client.append("apples", "mewomeow").get());
+            System.out.println("GET(apples): " + client.get("apples").get());
 
         } catch (ExecutionException | InterruptedException e) {
             System.out.println("Glide example failed with an exception: ");
