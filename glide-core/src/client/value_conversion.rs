@@ -22,6 +22,7 @@ pub(crate) enum ExpectedReturnType {
     ArrayOfArraysOfDoubleOrNull,
     ArrayOfKeyValuePairs,
     ZMPopReturnType,
+    KeyWithMemberAndScore,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -320,6 +321,28 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
+        // Used by BZPOPMIN/BZPOPMAX, which return an array consisting of the key of the sorted set that was popped, the popped member, and its score.
+        // RESP2 returns the score as a string, but RESP3 returns the score as a double. Here we convert string scores into type double.
+        ExpectedReturnType::KeyWithMemberAndScore => match value {
+            Value::Nil => Ok(value),
+            Value::Array(ref array) if array.len() == 3 && matches!(array[2], Value::Double(_)) => {
+                Ok(value)
+            }
+            Value::Array(mut array)
+                if array.len() == 3
+                    && matches!(array[2], Value::BulkString(_) | Value::SimpleString(_)) =>
+            {
+                array[2] =
+                    convert_to_expected_type(array[2].clone(), Some(ExpectedReturnType::Double))?;
+                Ok(Value::Array(array))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array containing a key, member, and score",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
     }
 }
 
@@ -454,6 +477,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZRANK" | b"ZREVRANK" => cmd
             .position(b"WITHSCORE")
             .map(|_| ExpectedReturnType::ZRankReturnType),
+        b"BZPOPMIN" | b"BZPOPMAX" => Some(ExpectedReturnType::KeyWithMemberAndScore),
         b"SPOP" => {
             if cmd.arg_idx(2).is_some() {
                 Some(ExpectedReturnType::Set)
@@ -813,6 +837,70 @@ mod tests {
             expected_type_for_cmd(redis::cmd("ZPOPMAX").arg("1")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
+    }
+
+    #[test]
+    fn convert_bzpopmin_bzpopmax() {
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("BZPOPMIN")
+                    .arg("myzset1")
+                    .arg("myzset2")
+                    .arg("1")
+            ),
+            Some(ExpectedReturnType::KeyWithMemberAndScore)
+        ));
+
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("BZPOPMAX")
+                    .arg("myzset1")
+                    .arg("myzset2")
+                    .arg("1")
+            ),
+            Some(ExpectedReturnType::KeyWithMemberAndScore)
+        ));
+
+        let array_with_double_score = Value::Array(vec![
+            Value::BulkString(b"key1".to_vec()),
+            Value::BulkString(b"member1".to_vec()),
+            Value::Double(2.0),
+        ]);
+        let result = convert_to_expected_type(
+            array_with_double_score.clone(),
+            Some(ExpectedReturnType::KeyWithMemberAndScore),
+        )
+        .unwrap();
+        assert_eq!(array_with_double_score, result);
+
+        let array_with_string_score = Value::Array(vec![
+            Value::BulkString(b"key1".to_vec()),
+            Value::BulkString(b"member1".to_vec()),
+            Value::BulkString(b"2.0".to_vec()),
+        ]);
+        let result = convert_to_expected_type(
+            array_with_string_score.clone(),
+            Some(ExpectedReturnType::KeyWithMemberAndScore),
+        )
+        .unwrap();
+        assert_eq!(array_with_double_score, result);
+
+        let converted_nil_value =
+            convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::KeyWithMemberAndScore))
+                .unwrap();
+        assert_eq!(Value::Nil, converted_nil_value);
+
+        let array_with_unexpected_length = Value::Array(vec![
+            Value::BulkString(b"key1".to_vec()),
+            Value::BulkString(b"member1".to_vec()),
+            Value::Double(2.0),
+            Value::Double(2.0),
+        ]);
+        assert!(convert_to_expected_type(
+            array_with_unexpected_length,
+            Some(ExpectedReturnType::KeyWithMemberAndScore)
+        )
+        .is_err());
     }
 
     #[test]
