@@ -2171,14 +2171,14 @@ class BaseTransaction:
         count: Optional[int] = None,
     ) -> TTransaction:
         """
-        Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with
-        the given keys being checked in the order they are provided. The optional `count` argument can be used to
-        specify the number of elements to pop, and is set to 1 by default. The number of popped elements is the minimum
-        from the sorted set's cardinality and `count`.
+        Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
+        that they are given. Blocks the connection when there are no members to pop from any of the given sorted sets.
+        The optional `count` argument can be used to specify the number of elements to pop, and is set to 1 by default.
+        The number of popped elements is the minimum from the sorted set's cardinality and `count`.
 
-        BZMPOP is the blocking variant of ZMPOP.
+        `BZMPOP` is the blocking variant of `ZMPOP`.
 
-        BZMPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/bzmpop for more details.
 

@@ -3076,16 +3076,16 @@ class CoreCommands(Protocol):
         count: Optional[int] = None,
     ) -> Optional[List[Union[str, Dict[str, float]]]]:
         """
-        Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with
-        the given keys being checked in the order they are provided. The optional `count` argument can be used to
-        specify the number of elements to pop, and is set to 1 by default. The number of popped elements is the minimum
-        from the sorted set's cardinality and `count`.
+        Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
+        that they are given. Blocks the connection when there are no members to pop from any of the given sorted sets.
+        The optional `count` argument can be used to specify the number of elements to pop, and is set to 1 by default.
+        The number of popped elements is the minimum from the sorted set's cardinality and `count`.
 
         When in cluster mode, all keys must map to the same hash slot.
 
-        BZMPOP is the blocking variant of ZMPOP.
+        `BZMPOP` is the blocking variant of `ZMPOP`.
 
-        BZMPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         See https://valkey.io/commands/bzmpop for more details.
 
@@ -3103,8 +3103,10 @@ class CoreCommands(Protocol):
                 popped and the timeout expired, returns None.
 
         Examples:
+            >>> await client.zadd("zSet1", {"one": 1.0, "two": 2.0, "three": 3.0})
+            >>> await client.zadd("zSet2", {"four": 4.0})
             >>> await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.5, 2)
-                ['zSet1', {'two': 2.0, 'one': 1.0}]  # "two" with score 2.0 and "one" with score 1.0 were popped from "zSet1".
+                ['zSet1', {'three': 3.0, 'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
 
         Since: Redis version 7.0.0.
         """
