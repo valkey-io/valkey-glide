@@ -4346,11 +4346,11 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(SetBit), eq(new String[] {key, "1", "1"}), any()))
+        when(commandManager.<Long>submitNewCommand(eq(SetBit), eq(new String[] {key, "8", "1"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.setbit(key, 1, 1);
+        CompletableFuture<Long> response = service.setbit(key, 8, 1);
         Long payload = response.get();
 
         // verify

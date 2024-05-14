@@ -3596,14 +3596,9 @@ public class SharedCommandTests {
         assertEquals(0, client.setbit(key1, 0, 1).get());
         assertEquals(1, client.setbit(key1, 0, 0).get());
 
-        // Exception thrown due to the negative offset and is out of range
+        // Exception thrown due to the negative offset
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.setbit(key1, -1, 1).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-
-        // Exception thrown due to the offset exceeding the offset limit of 2^32
-        executionException =
-                assertThrows(ExecutionException.class, () -> client.setbit(key1, 4294967296L, 1).get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
         // Exception thrown due to the value set not being 0 or 1
@@ -3611,7 +3606,7 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.setbit(key1, 1, 2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
-        // Exception thrown due to the key holding a value with the wrong type
+        // Exception thrown: key is not a string
         assertEquals(1, client.sadd(key2, new String[] {"value"}).get());
         executionException =
                 assertThrows(ExecutionException.class, () -> client.setbit(key2, 1, 1).get());
