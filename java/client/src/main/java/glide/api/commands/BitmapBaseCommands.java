@@ -103,7 +103,7 @@ public interface BitmapBaseCommands {
      * @param key The key for the string to get the bit at <code>offset</code> of.
      * @param offset The index of the bit to return.
      * @return The bit at offset of the string. Returns zero if the key is missing as it is treated as
-     *     an empty string. Returns zero if the positive offset exceeds the length of the string as it
+     *     an empty string. Returns zero if the positive <code>offset</code> exceeds the length of the string as it
      *     is assumed to be padded zeroes.
      * @example
      *     <pre>{@code
