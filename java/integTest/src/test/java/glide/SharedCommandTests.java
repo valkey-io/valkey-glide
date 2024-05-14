@@ -3390,4 +3390,16 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.geopos(key2, members).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void append(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String value = String.valueOf(UUID.randomUUID());
+
+        assertEquals(value.length(), client.append(key1, value).get());
+        assertEquals(value.length() * 2L, client.append(key1, value).get());
+        assertEquals(value + value, client.get(key1).get());
+    }
 }

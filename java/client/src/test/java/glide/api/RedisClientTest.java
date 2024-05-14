@@ -142,6 +142,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Zcount;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrange;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrank;
 import static redis_request.RedisRequestOuterClass.RequestType.Zrem;
+
 import glide.api.models.Script;
 import glide.api.models.Transaction;
 import glide.api.models.commands.ConditionalChange;
@@ -4055,15 +4056,14 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void append(){
+    public void append() {
         // setup
         String key = "testKey";
         String value = "testValue";
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(1L);
-        when(commandManager.<Long>submitNewCommand(
-            eq(Append), eq(new String[] {key, value}), any()))
-            .thenReturn(testResponse);
+        when(commandManager.<Long>submitNewCommand(eq(Append), eq(new String[] {key, value}), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.append(key, value);
@@ -4073,5 +4073,4 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(1L, payload);
     }
-
 }

@@ -244,17 +244,16 @@ public interface StringBaseCommands {
      */
     CompletableFuture<String> getrange(String key, int start, int end);
 
-
     /**
-     * Appends a value to a key.
-     * If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to `SET` in this special case.
+     * Appends a value to a key. If `key` does not exist it is created and set as an empty string, so
+     * `APPEND` will be similar to `SET` in this special case.
+     *
      * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
      * @param key The <code>key</code> to which the value will be appended.
      * @param value The value to append
      * @return Response from Redis. The length of the string after appending the value.
-     *
      * @example
-     *    <pre>{@code
+     *     <pre>{@code
      * String value = client.append("key", "value").get();
      * assert value.equals(5);
      * Indicates that "Hello" has been appended to the value of <code>key</code>, which was initially empty,
@@ -270,6 +269,4 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> append(String key, String value);
-
-
 }

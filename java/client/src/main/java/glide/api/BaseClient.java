@@ -1192,7 +1192,6 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> append(@NonNull String key, @NonNull String value) {
         return commandManager.submitNewCommand(
-            Append, new String[] {key, value}, this::handleLongResponse);
+                Append, new String[] {key, value}, this::handleLongResponse);
     }
-
 }
