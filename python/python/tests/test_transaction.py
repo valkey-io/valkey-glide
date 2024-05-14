@@ -17,6 +17,7 @@ from glide.async_commands.sorted_set import (
     LexBoundary,
     RangeByIndex,
     ScoreBoundary,
+    ScoreFilter,
 )
 from glide.async_commands.transaction import (
     BaseTransaction,
@@ -300,6 +301,19 @@ async def transaction_test(
     args.append("0-2")
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
+
+    min_version = "7.0.0"
+    if not await check_if_server_version_lt(redis_client, min_version):
+        # TODO: change it to pytest fixture after we'll implement a sync client
+        zset_key = "{{{}}}:{}".format(keyslot, get_random_string(3))
+
+        transaction.zadd(zset_key, {"a": 1, "b": 2, "c": 3, "d": 4})
+        args.append(4)
+        transaction.bzmpop([zset_key], ScoreFilter.MAX, 0.1)
+        args.append([zset_key, {"d": 4.0}])
+        transaction.bzmpop([zset_key], ScoreFilter.MIN, 0.1, 2)
+        args.append([zset_key, {"a": 1.0, "b": 2.0}])
+
     return args
 
 

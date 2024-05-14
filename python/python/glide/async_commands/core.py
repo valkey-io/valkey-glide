@@ -24,6 +24,7 @@ from glide.async_commands.sorted_set import (
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
     _create_z_cmd_store_args,
     _create_zrange_args,
     _create_zrangestore_args,
@@ -3065,6 +3066,55 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.ZRandMember, [key, str(count), "WITHSCORES"]
             ),
+        )
+
+    async def bzmpop(
+        self,
+        keys: List[str],
+        modifier: ScoreFilter,
+        timeout: float,
+        count: Optional[int] = None,
+    ) -> Optional[List[Union[str, Dict[str, float]]]]:
+        """
+        Blocks the connection until it pops and returns a member-score pair from the first non-empty sorted set, with
+        the given keys being checked in the order they are provided. The optional `count` argument can be used to
+        specify the number of elements to pop, and is set to 1 by default. The number of popped elements is the minimum
+        from the sorted set's cardinality and `count`.
+
+        When in cluster mode, all keys must map to the same hash slot.
+
+        BZMPOP is the blocking variant of ZMPOP.
+
+        BZMPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/bzmpop for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted set.
+            modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
+                members with the lowest/highest scores accordingly.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will
+                block indefinitely.
+            count (Optional[int]): The number of elements to pop.
+
+        Returns:
+            Optional[List[Union[str, Dict[str, float]]]]: A two-element list containing the key name of the set from
+                which elements were popped, and a member-score dict of the popped elements. If no members could be
+                popped and the timeout expired, returns None.
+
+        Examples:
+            >>> await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.5, 2)
+                ['zSet1', {'two': 2.0, 'one': 1.0}]  # "two" with score 2.0 and "one" with score 1.0 were popped from "zSet1".
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(timeout), str(len(keys))] + keys + [modifier.value]
+        if count is not None:
+            args = args + ["COUNT", str(count)]
+
+        return cast(
+            Optional[List[Union[str, Dict[str, float]]]],
+            await self._execute_command(RequestType.BZMPop, args),
         )
 
     async def invoke_script(

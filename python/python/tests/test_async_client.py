@@ -34,6 +34,7 @@ from glide.async_commands.sorted_set import (
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
 )
 from glide.config import ProtocolVersion, RedisCredentials
 from glide.constants import OK, TResult
@@ -884,9 +885,8 @@ class TestCommands:
         value_list = [value1, value2]
 
         assert await redis_client.lpush(key1, value_list) == 2
-        # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
         assert await redis_client.blpop([key1, key2], 0.5) == [key1, value2]
-
+        # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
         assert await redis_client.blpop(["non_existent_key"], 0.5) is None
 
         # key exists, but not a list
@@ -2650,6 +2650,80 @@ class TestCommands:
         assert await redis_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.zdiffstore(key4, [string_key, key1])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bzmpop(self, redis_client: TRedisClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            # TODO: change it to pytest fixture after we'll implement a sync client
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = f"{{test}}-1-f{get_random_string(10)}"
+        key2 = f"{{test}}-2-f{get_random_string(10)}"
+        non_existing_key = f"{{test}}-non_existing_key"
+        string_key = f"{{test}}-3-f{get_random_string(10)}"
+
+        assert await redis_client.zadd(key1, {"a1": 1, "b1": 2}) == 2
+        assert await redis_client.zadd(key2, {"a2": 0.1, "b2": 0.2}) == 2
+
+        assert await redis_client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1) == [
+            key1,
+            {"b1": 2},
+        ]
+        assert await redis_client.bzmpop([key2, key1], ScoreFilter.MAX, 0.1, 10) == [
+            key2,
+            {"b2": 0.2, "a2": 0.1},
+        ]
+
+        # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+        assert (
+            await redis_client.bzmpop([non_existing_key], ScoreFilter.MIN, 0.5) is None
+        )
+        assert (
+            await redis_client.bzmpop([non_existing_key], ScoreFilter.MIN, 0.55, 1)
+            is None
+        )
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.bzmpop([string_key], ScoreFilter.MAX, 0.1)
+        with pytest.raises(RequestError):
+            await redis_client.bzmpop([string_key], ScoreFilter.MAX, 0.1, 1)
+
+        # incorrect argument: key list should not be empty
+        with pytest.raises(RequestError):
+            assert await redis_client.bzmpop([], ScoreFilter.MAX, 0.1, 1)
+
+        # incorrect argument: count should be greater than 0
+        with pytest.raises(RequestError):
+            assert await redis_client.bzmpop([key1], ScoreFilter.MAX, 0.1, 0)
+
+        # check that order of entries in the response is preserved
+        entries = {}
+        for i in range(0, 10):
+            entries.update({f"a{i}": float(i)})
+
+        assert await redis_client.zadd(key2, entries) == 10
+        assert await redis_client.bzmpop([key2], ScoreFilter.MIN, 0.1, 10) == [
+            key2,
+            entries,
+        ]
+
+        async def endless_bzmpop_call():
+            await redis_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
+
+        # bzmpop is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_bzmpop_call(), timeout=0.5)
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1)
+            assert "CrossSlot" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
