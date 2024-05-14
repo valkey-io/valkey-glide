@@ -1835,6 +1835,46 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bzpopmin(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:{get_random_string(10)}"
+        key2 = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:non_existing_key"
+
+        assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
+        assert await redis_client.zadd(key2, {"c": 2.0}) == 1
+        assert await redis_client.bzpopmin([key1, key2], 0.5) == [key1, "a", 1.0]
+        assert await redis_client.bzpopmin([non_existing_key, key2], 0.5) == [
+            key2,
+            "c",
+            2.0,
+        ]
+        assert await redis_client.bzpopmin(["non_existing_key"], 0.5) is None
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmin([], 0.5)
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set("foo", "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmin(["foo"], 0.5)
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5)
+            assert "CrossSlot" in str(e)
+
+        async def endless_bzpopmin_call():
+            await redis_client.bzpopmin(["non_existent_key"], 0)
+
+        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_bzpopmin_call(), timeout=0.5)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zpopmax(self, redis_client: TRedisClient):
         key = get_random_string(10)
         members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
@@ -1851,6 +1891,46 @@ class TestCommands:
             await redis_client.zpopmax(key)
 
         assert await redis_client.zpopmax("non_exisitng_key") == {}
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bzpopmax(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:{get_random_string(10)}"
+        key2 = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:non_existing_key"
+
+        assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
+        assert await redis_client.zadd(key2, {"c": 2.0}) == 1
+        assert await redis_client.bzpopmax([key1, key2], 0.5) == [key1, "b", 1.5]
+        assert await redis_client.bzpopmax([non_existing_key, key2], 0.5) == [
+            key2,
+            "c",
+            2.0,
+        ]
+        assert await redis_client.bzpopmax(["non_existing_key"], 0.5) is None
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmax([], 0.5)
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set("foo", "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmax(["foo"], 0.5)
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5)
+            assert "CrossSlot" in str(e)
+
+        async def endless_bzpopmax_call():
+            await redis_client.bzpopmax(["non_existent_key"], 0)
+
+        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_bzpopmax_call(), timeout=0.5)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
