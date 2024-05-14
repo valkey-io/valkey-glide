@@ -2979,8 +2979,9 @@ class CoreCommands(Protocol):
                 If the sorted set does not exist or is empty, the response will be None.
 
         Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.zrandmember("my_sorted_set")
-                "GLIDE"  # "GLIDE" is a random member of "my_sorted_set".
+                "member1"  # "member1" is a random member of "my_sorted_set".
             >>> await client.zrandmember("non_existing_sorted_set")
                 None  # "non_existing_sorted_set" is not an existing key, so None was returned.
         """
@@ -3006,8 +3007,9 @@ class CoreCommands(Protocol):
                 If the sorted set does not exist or is empty, the response will be an empty list.
 
         Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.zrandmember("my_sorted_set", -3)
-                ["GLIDE", "GLIDE", "PYTHON"]  # "GLIDE" and "PYTHON" are random members of "my_sorted_set".
+                ["member1", "member1", "member2"]  # "member1" and "member2" are random members of "my_sorted_set".
             >>> await client.zrandmember("non_existing_sorted_set", 3)
                 []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
         """
@@ -3036,8 +3038,9 @@ class CoreCommands(Protocol):
                 If the sorted set does not exist or is empty, the response will be an empty list.
 
         Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.zrandmember_withscores("my_sorted_set", -3)
-                [["GLIDE", 1.0], ["GLIDE", 1.0], ["PYTHON", 2.0]]  # "GLIDE" and "PYTHON" are random members of "my_sorted_set", and have scores of 1.0 and 2.0, respectively.
+                [["member1", 1.0], ["member1", 1.0], ["member2", 2.0]]  # "member1" and "member2" are random members of "my_sorted_set", and have scores of 1.0 and 2.0, respectively.
             >>> await client.zrandmember_withscores("non_existing_sorted_set", 3)
                 []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
         """
