@@ -458,7 +458,7 @@ fn convert_to_array_of_pairs(
         }
         _ => Err((
             ErrorKind::TypeError,
-            "Response couldn't be converted to an array of member-score pairs",
+            "Response couldn't be converted to an array of key-value pairs",
             format!("(response was {:?})", response),
         )
             .into()),
