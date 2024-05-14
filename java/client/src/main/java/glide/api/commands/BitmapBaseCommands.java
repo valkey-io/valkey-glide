@@ -100,11 +100,11 @@ public interface BitmapBaseCommands {
      * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
-     * @param key The key for the string to get the bit at <code>offset</code> of.
+     * @param key The key for the string.
      * @param offset The index of the bit to return.
-     * @return The bit at offset of the string. Returns zero if the key is missing as it is treated as
-     *     an empty string. Returns zero if the positive <code>offset</code> exceeds the length of the string as it
-     *     is assumed to be padded zeroes.
+     * @return The bit at offset of the string. Returns zero if the key is empty or if the positive
+     *     <code>offset</code> exceeds the length of the string. An error is thrown when the <code>
+     *     offset</code> is negative.
      * @example
      *     <pre>{@code
      * Long payload = client.getbit("myKey1", 1).get();
@@ -112,5 +112,4 @@ public interface BitmapBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> getbit(String key, long offset);
-
 }
