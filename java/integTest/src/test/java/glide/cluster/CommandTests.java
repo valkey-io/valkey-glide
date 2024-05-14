@@ -647,37 +647,51 @@ public class CommandTests {
 
     public static Stream<Arguments> callCrossSlotCommandsWhichShouldFail() {
         return Stream.of(
-                Arguments.of("smove", clusterClient.smove("abc", "zxy", "lkn")),
-                Arguments.of("renamenx", clusterClient.renamenx("abc", "zxy")),
-                Arguments.of("sinterstore", clusterClient.sinterstore("abc", new String[] {"zxy", "lkn"})),
-                Arguments.of("sdiff", clusterClient.sdiff(new String[] {"abc", "zxy", "lkn"})),
-                Arguments.of("sdiffstore", clusterClient.sdiffstore("abc", new String[] {"zxy", "lkn"})),
-                Arguments.of("sinter", clusterClient.sinter(new String[] {"abc", "zxy", "lkn"})),
-                Arguments.of("sunionstore", clusterClient.sunionstore("abc", new String[] {"zxy", "lkn"})),
-                Arguments.of("zdiff", clusterClient.zdiff(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("smove", null, clusterClient.smove("abc", "zxy", "lkn")),
+                Arguments.of("renamenx", null, clusterClient.renamenx("abc", "zxy")),
                 Arguments.of(
-                        "zdiffWithScores", clusterClient.zdiffWithScores(new String[] {"abc", "zxy", "lkn"})),
-                Arguments.of("zdiffstore", clusterClient.zdiffstore("abc", new String[] {"zxy", "lkn"})),
+                        "sinterstore", null, clusterClient.sinterstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("sdiff", null, clusterClient.sdiff(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
-                        "zunion", clusterClient.zunion(new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                        "sdiffstore", null, clusterClient.sdiffstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("sinter", null, clusterClient.sinter(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
-                        "zrangestore", clusterClient.zrangestore("abc", "zxy", new RangeByIndex(3, 1))),
+                        "sunionstore", null, clusterClient.sunionstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("zdiff", null, clusterClient.zdiff(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "zdiffWithScores",
+                        null,
+                        clusterClient.zdiffWithScores(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "zdiffstore", null, clusterClient.zdiffstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "zunion", null, clusterClient.zunion(new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                Arguments.of(
+                        "zrangestore", null, clusterClient.zrangestore("abc", "zxy", new RangeByIndex(3, 1))),
                 Arguments.of(
                         "zinterstore",
+                        null,
                         clusterClient.zinterstore("foo", new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
-                Arguments.of("brpop", clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
-                Arguments.of("blpop", clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
-                Arguments.of("pfcount", clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
-                Arguments.of("pfmerge", clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})),
-                Arguments.of("bzpopmax", clusterClient.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1)),
-                Arguments.of("bzpopmin", clusterClient.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1)),
-                Arguments.of("bzmpop", clusterClient.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1)));
+                Arguments.of("brpop", null, clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of("pfcount", null, clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("pfmerge", null, clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "bzpopmax", "5.0.0", clusterClient.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of(
+                        "bzpopmin", "5.0.0", clusterClient.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of(
+                        "bzmpop", "7.0.0", clusterClient.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1)));
     }
 
     @SneakyThrows
     @ParameterizedTest(name = "{0} cross slot keys will throw RequestException")
     @MethodSource("callCrossSlotCommandsWhichShouldFail")
-    public void check_throws_cross_slot_error(String testName, CompletableFuture<?> future) {
+    public void check_throws_cross_slot_error(
+            String testName, String minVer, CompletableFuture<?> future) {
+        if (minVer != null) {
+            assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo(minVer));
+        }
         var executionException = assertThrows(ExecutionException.class, future::get);
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
