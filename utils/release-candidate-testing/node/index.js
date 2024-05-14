@@ -23,16 +23,9 @@ function parseOutput(input) {
     };
 }
 
-async function createCluster(cluster_mode, shardCount, replicaCount) {
-    return new Promise((resolve, reject) => {
-        let command = `python3 ../../../utils/cluster_manager.py start -r ${replicaCount} -n ${shardCount}`;
-
-        if (cluster_mode) {
-            command += " --cluster-mode";
-        }
-
-        console.log(command);
-        exec(command, (error, stdout, stderr) => {
+async function main() {
+    try {
+        let { clusterFolder, addresses } = new Promise(exec(`python3../../../ utils / cluster_manager.py start - r 3 - n 3 --cluster-mode`, (error, stdout, stderr) => {
             if (error) {
                 console.error(stderr);
                 reject(error);
@@ -40,30 +33,7 @@ async function createCluster(cluster_mode, shardCount, replicaCount) {
                 const { clusterFolder, addresses } = parseOutput(stdout);
                 resolve({ clusterFolder, addresses });
             }
-        });
-    });
-}
-
-// Kill the cluster
-async function close(clusterFolder) {
-    await new Promise((resolve, reject) => {
-        exec(
-            `python3 ../../../utils/cluster_manager.py stop --cluster-folder ${clusterFolder}`,
-            (error, _, stderr) => {
-                if (error) {
-                    console.error(stderr);
-                    reject(error);
-                } else {
-                    resolve();
-                }
-            }
-        );
-    });
-}
-
-async function main() {
-    try {
-        let { clusterFolder, addresses } = await createCluster(true, 3, 3);
+        }))
         addresses = addresses.map((address) => {
             return { host: address[0], port: address[1] };
         });
@@ -82,7 +52,19 @@ async function main() {
         await client.ping();
         await client.time();
         client.close();
-        await close(clusterFolder);
+        await new Promise((resolve, reject) => {
+            exec(
+                `python3 ../../../utils/cluster_manager.py stop --cluster-folder ${clusterFolder}`,
+                (error, _, stderr) => {
+                    if (error) {
+                        console.error(stderr);
+                        reject(error);
+                    } else {
+                        resolve();
+                    }
+                }
+            );
+        });
     } catch (error) {
         console.error(error);
         exec(`pkill -f redis`);
