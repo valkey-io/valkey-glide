@@ -306,20 +306,20 @@ pub(crate) fn convert_to_expected_type(
             }
         }
         // Used by HRANDFIELD when the WITHVALUES arg is passed.
-        // The server response can be a nil value, an empty array, a flat array of key-value pairs, or a two-dimensional array of key-value pairs.
+        // The server response can be an empty array, a flat array of key-value pairs, or a two-dimensional array of key-value pairs.
         // The conversions we do here are as follows:
         //
-        // - if the server returned nil, return nil
         // - if the server returned an empty array, return an empty array
-        // - otherwise, return a two-dimensional array of key-value pairs
+        // - if the server returned a flat array of key-value pairs, convert to a two-dimensional array of key-value pairs
+        // - if the server returned a two-dimensional array of key-value pairs, return as-is
         ExpectedReturnType::ArrayOfPairs => convert_to_array_of_pairs(value, None),
         // Used by ZRANDMEMBER when the WITHSCORES arg is passed.
-        // The server response can be a nil value, an empty array, a flat array of member-score pairs, or a two-dimensional array of member-score pairs.
+        // The server response can be an empty array, a flat array of member-score pairs, or a two-dimensional array of member-score pairs.
         // The server response scores can be strings or doubles. The conversions we do here are as follows:
         //
-        // - if the server returned nil, return nil
         // - if the server returned an empty array, return an empty array
-        // - otherwise, return a two-dimensional array of member-score pairs, where scores are of type double
+        // - if the server returned a flat array of member-score pairs, convert to a two-dimensional array of member-score pairs. The scores are converted from type string to type double.
+        // - if the server returned a two-dimensional array of key-value pairs, return as-is. The scores will already be of type double since this is a RESP3 response.
         ExpectedReturnType::ArrayOfMemberScorePairs => {
             // RESP2 returns scores as strings, but we want scores as type double.
             convert_to_array_of_pairs(value, Some(ExpectedReturnType::Double))
@@ -429,7 +429,6 @@ fn convert_array_to_map(
 /// Used by commands like ZRANDMEMBER and HRANDFIELD. Normally a map would be more suitable for these key-value responses, but these commands may return duplicate key-value pairs depending on the command arguments. These duplicated pairs cannot be represented by a map.
 ///
 /// Converts a server response as follows:
-/// - if the server returned nil, return nil.
 /// - if the server returned an empty array, return an empty array.
 /// - if the server returned a flat array (RESP2), convert it to a two-dimensional array, where the inner arrays are length=2 arrays representing key-value pairs.
 /// - if the server returned a two-dimensional array (RESP3), return the response as is, since it is already in the correct format.
@@ -442,7 +441,6 @@ fn convert_to_array_of_pairs(
     value_expected_return_type: Option<ExpectedReturnType>,
 ) -> RedisResult<Value> {
     match response {
-        Value::Nil => Ok(response),
         Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Array(_)) => {
             // The server response is an empty array or a RESP3 array of pairs. In RESP3, the values in the pairs are
             // already of the correct type, so we do not need to convert them and `response` is in the correct format.
@@ -669,10 +667,6 @@ mod tests {
             convert_to_expected_type(empty_array.clone(), Some(ExpectedReturnType::ArrayOfPairs))
                 .unwrap();
         assert_eq!(empty_array, converted_empty_array);
-
-        let converted_nil_value =
-            convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::ArrayOfPairs)).unwrap();
-        assert_eq!(Value::Nil, converted_nil_value);
 
         let flat_array_unexpected_length =
             Value::Array(vec![Value::BulkString(b"somekey".to_vec())]);
