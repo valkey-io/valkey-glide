@@ -2656,7 +2656,6 @@ class TestCommands:
     async def test_bzmpop(self, redis_client: TRedisClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
-            # TODO: change it to pytest fixture after we'll implement a sync client
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
         key1 = f"{{test}}-1-f{get_random_string(10)}"

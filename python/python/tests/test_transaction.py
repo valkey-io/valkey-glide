@@ -51,6 +51,7 @@ async def transaction_test(
     key13 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
     key14 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
     key15 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
+    key16 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -304,15 +305,12 @@ async def transaction_test(
 
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):
-        # TODO: change it to pytest fixture after we'll implement a sync client
-        zset_key = "{{{}}}:{}".format(keyslot, get_random_string(3))
-
-        transaction.zadd(zset_key, {"a": 1, "b": 2, "c": 3, "d": 4})
+        transaction.zadd(key16, {"a": 1, "b": 2, "c": 3, "d": 4})
         args.append(4)
-        transaction.bzmpop([zset_key], ScoreFilter.MAX, 0.1)
-        args.append([zset_key, {"d": 4.0}])
-        transaction.bzmpop([zset_key], ScoreFilter.MIN, 0.1, 2)
-        args.append([zset_key, {"a": 1.0, "b": 2.0}])
+        transaction.bzmpop([key16], ScoreFilter.MAX, 0.1)
+        args.append([key16, {"d": 4.0}])
+        transaction.bzmpop([key16], ScoreFilter.MIN, 0.1, 2)
+        args.append([key16, {"a": 1.0, "b": 2.0}])
 
     return args
 
