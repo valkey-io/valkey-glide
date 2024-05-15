@@ -46,6 +46,7 @@ public class TransactionTestUtilities {
     private static final String field1 = UUID.randomUUID().toString();
     private static final String field2 = UUID.randomUUID().toString();
     private static final String field3 = UUID.randomUUID().toString();
+    private static final String key10 = "{key}" + UUID.randomUUID();
 
     public static BaseTransaction<?> transactionTest(BaseTransaction<?> baseTransaction) {
 
@@ -56,6 +57,8 @@ public class TransactionTestUtilities {
 
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
         baseTransaction.strlen(key2);
+        baseTransaction.append(key10, value1);
+        baseTransaction.get(key10);
         baseTransaction.customCommand(new String[] {"MGET", key1, key2});
         baseTransaction.renamenx(key1, key2);
 
@@ -199,9 +202,6 @@ public class TransactionTestUtilities {
                 .pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
                 .pfcount(new String[] {hllKey3});
 
-        baseTransaction.append(key1, value1);
-        baseTransaction.get(key1);
-
         // keep it last - it deletes all the keys
         baseTransaction.flushall().flushall(ASYNC);
 
@@ -216,6 +216,8 @@ public class TransactionTestUtilities {
             "embstr", // objectEncoding(key1)
             null,
             (long) value1.length(), // strlen(key2)
+            Long.valueOf(value1.length()), // append(key10, value1)
+            value1, // get(key10)
             new String[] {value1, value2},
             false, // renamenx(key1, key2)
             1L,
@@ -325,8 +327,6 @@ public class TransactionTestUtilities {
             3L, // pfcount(new String[] { hllKey1, hllKey2 });;
             OK, // pfmerge(hllKey3, new String[] {hllKey1, hllKey2})
             3L, // pfcount(new String[] { hllKey3 })
-            value1.length(), // append()
-            value1, // get()
             OK, // flushall()
             OK, // flushall(ASYNC)
         };

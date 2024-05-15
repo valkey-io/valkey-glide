@@ -3396,10 +3396,21 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void append(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
-        String value = String.valueOf(UUID.randomUUID());
+        String value1 = String.valueOf(UUID.randomUUID());
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
 
-        assertEquals(value.length(), client.append(key1, value).get());
-        assertEquals(value.length() * 2L, client.append(key1, value).get());
-        assertEquals(value + value, client.get(key1).get());
+        assertEquals(value1.length(), client.append(key1, value1).get());
+        assertEquals(value1.length() * 2L, client.append(key1, value1).get());
+        assertEquals(value1 + value1, client.get(key1).get());
+
+        // Non Existing Key
+        assertEquals(1L, client.append(key2, "b").get());
+
+        // key exists but holding the wrong kind of value
+        assertEquals(1, client.sadd(key3, new String[] {"a"}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.append(key3, "z").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }
