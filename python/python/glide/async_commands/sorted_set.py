@@ -182,7 +182,7 @@ def _create_zrange_args(
 def separate_keys(
     keys: Union[List[str], List[Tuple[str, float]]]
 ) -> Tuple[List[str], List[str]]:
-    '''
+    """
     Returns seperate lists of keys and weights in case of weighted keys.
     """
     if not keys:
