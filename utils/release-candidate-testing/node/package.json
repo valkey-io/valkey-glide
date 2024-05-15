@@ -5,8 +5,7 @@
     "main": "index.ts",
     "type": "module",
     "scripts": {
-        "test": "npm run install-candidate && node index.js",
-        "install-candidate": "npm install @aws/glide-for-redis@next",
+        "test": "node index.js",
         "prettier:check:ci": "./node_modules/.bin/prettier --check .",
         "prettier:format": "./node_modules/.bin/prettier --write . "
     },

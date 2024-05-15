@@ -408,6 +408,7 @@ jobs:
               shell: bash
               working-directory: ./utils/release-candidate-testing/node
               run: |
+                  npm install --no-save @aws/glide-for-redis@next
                   npm run test
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
