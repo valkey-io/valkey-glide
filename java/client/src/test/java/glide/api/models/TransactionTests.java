@@ -40,6 +40,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -704,6 +705,9 @@ public class TransactionTests {
                                 "Place")));
         transaction.geopos("key", new String[] {"Place"});
         results.add(Pair.of(GeoPos, buildArgs("key", "Place")));
+
+        transaction.geohash("key", new String[] {"Place"});
+        results.add(Pair.of(GeoHash, buildArgs("key", "Place")));
 
         transaction.bitcount("key");
         results.add(Pair.of(Bitcount, buildArgs("key")));

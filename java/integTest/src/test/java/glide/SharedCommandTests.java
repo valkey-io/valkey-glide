@@ -3486,6 +3486,31 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void geohash(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String[] members = {"Palermo", "Catania", "NonExisting"};
+        String[] expected = {"sqc8b49rny0", "sqdtr74hyu0", null};
+
+        // adding locations
+        Map<String, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put("Palermo", new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put("Catania", new GeospatialData(15.087269, 37.502669));
+        assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
+
+        String[] actual = client.geohash(key1, members).get();
+        assertArrayEquals(expected, actual);
+
+        // key exists but holding the wrong kind of value (non-ZSET)
+        assertEquals(OK, client.set(key2, "geohash").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.geohash(key2, members).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void bitcount(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();

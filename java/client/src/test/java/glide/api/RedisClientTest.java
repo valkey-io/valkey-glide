@@ -51,6 +51,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -4123,6 +4124,31 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Double[][]> response = service.geopos(key, members);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geohash_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] members = {"Catania", "Palermo", "NonExisting"};
+        String[] arguments = new String[] {key, "Catania", "Palermo", "NonExisting"};
+        String[] value = {"sqc8b49rny0", "sqdtr74hyu0", null};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(GeoHash), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.geohash(key, members);
         Object[] payload = response.get();
 
         // verify
