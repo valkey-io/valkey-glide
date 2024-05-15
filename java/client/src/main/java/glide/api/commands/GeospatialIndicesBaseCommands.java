@@ -125,7 +125,7 @@ public interface GeospatialIndicesBaseCommands {
      * @see <a href="https://valkey.io/commands/geohash">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param members The array of members whose <code>GeoHash</code> strings are to be retrieved.
-     * @return A list of <code>GeoHash</code> strings representing the positions of the specified
+     * @return An array of <code>GeoHash</code> strings representing the positions of the specified
      *     members stored at <code>key</code>. If a member does not exist in the sorted set then a
      *     <code>null</code> value is returned for that member.
      * @example

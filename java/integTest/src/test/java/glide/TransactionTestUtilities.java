@@ -479,9 +479,9 @@ public class TransactionTestUtilities {
                                 "Catania",
                                 new GeospatialData(15.087269, 37.502669)))
                 .geopos(geoKey1, new String[] {"Palermo", "Catania"})
+                .geodist(geoKey1, "Palermo", "Catania")
+                .geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
                 .geohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"});
-        transaction.geodist(geoKey1, "Palermo", "Catania");
-        transaction.geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS);
 
         return new Object[] {
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
