@@ -194,8 +194,9 @@ def separate_keys(
     if isinstance(keys[0], tuple):
         key_list = [item[0] for item in keys]
         weight_list = [str(item[1]) for item in keys]
-    elif isinstance(keys[0], str):
-        key_list = keys
+    # elif isinstance(keys[0], str):
+    else:
+        key_list = keys # type: ignore
 
     return key_list, weight_list
 
