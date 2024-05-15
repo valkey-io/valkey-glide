@@ -2,6 +2,7 @@ import java.nio.file.Paths
 
 plugins {
     id 'java-library'
+    id 'maven-publish'
 }
 
 repositories {
@@ -139,13 +140,77 @@ tasks.register('buildAll') {
     finalizedBy 'build'
 }
 
+tasks.register('buildAllRelease') {
+    dependsOn 'protobuf', 'buildRustRelease', 'testFfi'
+    finalizedBy 'build'
+}
+
 compileJava.dependsOn('protobuf')
 clean.dependsOn('cleanProtobuf', 'cleanRust')
+
+tasks.register('copyNativeLib', Copy) {
+    from "${projectDir}/../target/release"
+    include "*.dylib", "*.so"
+    into sourceSets.main.output.resourcesDir
+}
+
+jar.dependsOn('copyNativeLib')
+copyNativeLib.dependsOn('buildRustRelease')
+compileTestJava.dependsOn('publishToMavenLocal')
 test.dependsOn('buildRust')
 testFfi.dependsOn('buildRust')
 
 test {
     exclude "glide/ffi/FfiTest.class"
+}
+
+sourceSets {
+    main {
+        java {
+            srcDir 'src/main/java'
+        }
+        resources {
+            srcDir 'src/main/resources'
+        }
+    }
+}
+
+publishing {
+    publications {
+        mavenJava(MavenPublication) {
+            from components.java
+            groupId = 'software.amazon.glide'
+            artifactId = 'glide'
+            version = "255.255.255"
+            pom {
+                name = 'glide-for-valkey'
+                description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
+                url = 'https://github.com/aws/glide-for-redis.git'
+                inceptionYear = '2024'
+                scm {
+                    url = 'https://github.com/aws/glide-for-redis/tree/main'
+                    connection = 'scm:git:ssh://git@github.com/aws/glide-for-redis.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/aws/glide-for-redis.git'
+                }
+                licenses {
+                    license {
+                        name = 'The Apache License, Version 2.0'
+                        url = 'https://www.apache.org/licenses/LICENSE-2.0.txt'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        name = 'glide-for-valkey'
+                        url = 'https://github.com/aws/glide-for-redis.git'
+                    }
+                }
+            }
+        }
+    }
+    repositories {
+        mavenLocal()
+    }
 }
 
 tasks.withType(Test) {
@@ -154,7 +219,6 @@ tasks.withType(Test) {
         events "started", "skipped", "passed", "failed"
         showStandardStreams true
     }
-    jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
 }
 
 jar {

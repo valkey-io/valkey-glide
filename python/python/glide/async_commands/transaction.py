@@ -1624,6 +1624,29 @@ class BaseTransaction:
             RequestType.ZPopMax, [key, str(count)] if count else [key]
         )
 
+    def bzpopmax(self: TTransaction, keys: List[str], timeout: float) -> TTransaction:
+        """
+        Pops the member with the highest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
+
+        `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
+
+        `BZPOPMAX` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/bzpopmax for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
+
+        Command response:
+            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+                and the member score. If no member could be popped and the `timeout` expired, returns None.
+        """
+        return self.append_command(RequestType.BZPopMax, keys + [str(timeout)])
+
     def zpopmin(
         self: TTransaction, key: str, count: Optional[int] = None
     ) -> TTransaction:
@@ -1646,6 +1669,29 @@ class BaseTransaction:
         return self.append_command(
             RequestType.ZPopMin, [key, str(count)] if count else [key]
         )
+
+    def bzpopmin(self: TTransaction, keys: List[str], timeout: float) -> TTransaction:
+        """
+        Pops the member with the lowest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
+
+        `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
+
+        `BZPOPMIN` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/bzpopmin for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
+
+        Command response:
+            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+                and the member score. If no member could be popped and the `timeout` expired, returns None.
+        """
+        return self.append_command(RequestType.BZPopMin, keys + [str(timeout)])
 
     def zrange(
         self: TTransaction,
@@ -1944,6 +1990,41 @@ class BaseTransaction:
                 If a member does not exist in the sorted set, the corresponding value in the list will be None.
         """
         return self.append_command(RequestType.ZMScore, [key] + members)
+
+    def zdiff(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets.
+        To get the elements with their scores, see `zdiff_withscores`.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            List[str]: A list of elements representing the difference between the sorted sets.
+                If the first key does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+        """
+        return self.append_command(RequestType.ZDiff, [str(len(keys))] + keys)
+
+    def zdiff_withscores(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted sets.
+                If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+        """
+        return self.append_command(
+            RequestType.ZDiff, [str(len(keys))] + keys + ["WITHSCORES"]
+        )
 
     def zdiffstore(
         self: TTransaction, destination: str, keys: List[str]

@@ -26,7 +26,7 @@ from glide.config import ProtocolVersion
 from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.conftest import create_client
-from tests.test_async_client import check_if_server_version_lt, get_random_string
+from tests.utils.utils import check_if_server_version_lt, get_random_string
 
 
 async def transaction_test(
@@ -46,6 +46,7 @@ async def transaction_test(
     key10 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # hyper log log
     key11 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # streams
     key12 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # geo
+    key13 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -227,16 +228,27 @@ async def transaction_test(
     args.append([2.0, 3.0])
     transaction.zrangestore(key8, key8, RangeByIndex(0, -1))
     args.append(3)
-    transaction.zpopmin(key8)
-    args.append({"two": 2.0})
+    transaction.bzpopmin([key8], 0.5)
+    args.append([key8, "two", 2.0])
+    transaction.bzpopmax([key8], 0.5)
+    args.append([key8, "four", 4.0])
     transaction.zpopmax(key8)
-    args.append({"four": 4})
+    args.append({"three": 3.0})
+    transaction.zpopmin(key8)
+    args.append({})
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
-    args.append(1)
+    args.append(0)
     transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(0)
     transaction.zdiffstore(key8, [key8, key8])
     args.append(0)
+
+    transaction.zadd(key13, {"one": 1.0, "two": 2.0})
+    args.append(2)
+    transaction.zdiff([key13, key8])
+    args.append(["one", "two"])
+    transaction.zdiff_withscores([key13, key8])
+    args.append({"one": 1.0, "two": 2.0})
 
     transaction.pfadd(key10, ["a", "b", "c"])
     args.append(1)

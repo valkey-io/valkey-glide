@@ -21,6 +21,8 @@ pub(crate) enum ExpectedReturnType {
     Lolwut,
     ArrayOfArraysOfDoubleOrNull,
     ArrayOfKeyValuePairs,
+    ZMPopReturnType,
+    KeyWithMemberAndScore,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -182,6 +184,38 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
+        // command returns nil or an array of 2 elements, where the second element is a map represented by a 2D array
+        // we convert that second element to a map as we do in `MapOfStringToDouble`
+        /*
+        > zmpop 1 z1 min count 10
+        1) "z1"
+        2) 1) 1) "2"
+              2) (double) 2
+           2) 1) "3"
+              2) (double) 3
+         */
+        ExpectedReturnType::ZMPopReturnType => match value {
+            Value::Nil => Ok(value),
+            Value::Array(array) if array.len() == 2 && matches!(array[1], Value::Array(_)) => {
+                let Value::Array(nested_array) = array[1].clone() else {
+                    unreachable!("Pattern match above ensures that it is Array")
+                };
+                // convert the nested array to a map
+                let map = convert_array_to_map(
+                    nested_array,
+                    Some(ExpectedReturnType::BulkString),
+                    Some(ExpectedReturnType::Double),
+                )?;
+
+                Ok(Value::Array(vec![array[0].clone(), map]))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to ZMPOP return type",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
         ExpectedReturnType::ArrayOfArraysOfDoubleOrNull => match value {
             // This is used for GEOPOS command.
             Value::Array(array) => {
@@ -283,6 +317,28 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of key-value pairs",
+                format!("(response was {:?})", value),
+            )
+                .into()),
+        },
+        // Used by BZPOPMIN/BZPOPMAX, which return an array consisting of the key of the sorted set that was popped, the popped member, and its score.
+        // RESP2 returns the score as a string, but RESP3 returns the score as a double. Here we convert string scores into type double.
+        ExpectedReturnType::KeyWithMemberAndScore => match value {
+            Value::Nil => Ok(value),
+            Value::Array(ref array) if array.len() == 3 && matches!(array[2], Value::Double(_)) => {
+                Ok(value)
+            }
+            Value::Array(mut array)
+                if array.len() == 3
+                    && matches!(array[2], Value::BulkString(_) | Value::SimpleString(_)) =>
+            {
+                array[2] =
+                    convert_to_expected_type(array[2].clone(), Some(ExpectedReturnType::Double))?;
+                Ok(Value::Array(array))
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array containing a key, member, and score",
                 format!("(response was {:?})", value),
             )
                 .into()),
@@ -403,6 +459,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
+        b"BZMPOP" | b"ZMPOP" => Some(ExpectedReturnType::ZMPopReturnType),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
         b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
         b"HRANDFIELD" => cmd
@@ -420,6 +477,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZRANK" | b"ZREVRANK" => cmd
             .position(b"WITHSCORE")
             .map(|_| ExpectedReturnType::ZRankReturnType),
+        b"BZPOPMIN" | b"BZPOPMAX" => Some(ExpectedReturnType::KeyWithMemberAndScore),
         b"SPOP" => {
             if cmd.arg_idx(2).is_some() {
                 Some(ExpectedReturnType::Set)
@@ -594,6 +652,45 @@ mod tests {
     }
 
     #[test]
+    fn convert_zmpop_response() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("BZMPOP").arg(1).arg(1).arg("key").arg("min")),
+            Some(ExpectedReturnType::ZMPopReturnType)
+        ));
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("ZMPOP").arg(1).arg(1).arg("key").arg("min")),
+            Some(ExpectedReturnType::ZMPopReturnType)
+        ));
+
+        let redis_response = Value::Array(vec![
+            Value::SimpleString("key".into()),
+            Value::Array(vec![
+                Value::Array(vec![Value::SimpleString("elem1".into()), Value::Double(1.)]),
+                Value::Array(vec![Value::SimpleString("elem2".into()), Value::Double(2.)]),
+            ]),
+        ]);
+        let converted_response =
+            convert_to_expected_type(redis_response, Some(ExpectedReturnType::ZMPopReturnType))
+                .unwrap();
+        let expected_response = Value::Array(vec![
+            Value::SimpleString("key".into()),
+            Value::Map(vec![
+                (Value::BulkString("elem1".into()), Value::Double(1.)),
+                (Value::BulkString("elem2".into()), Value::Double(2.)),
+            ]),
+        ]);
+        assert_eq!(expected_response, converted_response);
+
+        let redis_response = Value::Nil;
+        let converted_response = convert_to_expected_type(
+            redis_response.clone(),
+            Some(ExpectedReturnType::ZMPopReturnType),
+        )
+        .unwrap();
+        assert_eq!(redis_response, converted_response);
+    }
+
+    #[test]
     fn convert_zadd_only_if_incr_is_included() {
         assert!(matches!(
             expected_type_for_cmd(
@@ -740,6 +837,70 @@ mod tests {
             expected_type_for_cmd(redis::cmd("ZPOPMAX").arg("1")),
             Some(ExpectedReturnType::MapOfStringToDouble)
         ));
+    }
+
+    #[test]
+    fn convert_bzpopmin_bzpopmax() {
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("BZPOPMIN")
+                    .arg("myzset1")
+                    .arg("myzset2")
+                    .arg("1")
+            ),
+            Some(ExpectedReturnType::KeyWithMemberAndScore)
+        ));
+
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("BZPOPMAX")
+                    .arg("myzset1")
+                    .arg("myzset2")
+                    .arg("1")
+            ),
+            Some(ExpectedReturnType::KeyWithMemberAndScore)
+        ));
+
+        let array_with_double_score = Value::Array(vec![
+            Value::BulkString(b"key1".to_vec()),
+            Value::BulkString(b"member1".to_vec()),
+            Value::Double(2.0),
+        ]);
+        let result = convert_to_expected_type(
+            array_with_double_score.clone(),
+            Some(ExpectedReturnType::KeyWithMemberAndScore),
+        )
+        .unwrap();
+        assert_eq!(array_with_double_score, result);
+
+        let array_with_string_score = Value::Array(vec![
+            Value::BulkString(b"key1".to_vec()),
+            Value::BulkString(b"member1".to_vec()),
+            Value::BulkString(b"2.0".to_vec()),
+        ]);
+        let result = convert_to_expected_type(
+            array_with_string_score.clone(),
+            Some(ExpectedReturnType::KeyWithMemberAndScore),
+        )
+        .unwrap();
+        assert_eq!(array_with_double_score, result);
+
+        let converted_nil_value =
+            convert_to_expected_type(Value::Nil, Some(ExpectedReturnType::KeyWithMemberAndScore))
+                .unwrap();
+        assert_eq!(Value::Nil, converted_nil_value);
+
+        let array_with_unexpected_length = Value::Array(vec![
+            Value::BulkString(b"key1".to_vec()),
+            Value::BulkString(b"member1".to_vec()),
+            Value::Double(2.0),
+            Value::Double(2.0),
+        ]);
+        assert!(convert_to_expected_type(
+            array_with_unexpected_length,
+            Some(ExpectedReturnType::KeyWithMemberAndScore)
+        )
+        .is_err());
     }
 
     #[test]

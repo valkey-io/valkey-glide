@@ -2285,6 +2285,42 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def bzpopmax(
+        self, keys: List[str], timeout: float
+    ) -> Optional[List[Union[str, float]]]:
+        """
+        Pops the member with the highest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
+
+        When in cluster mode, all keys must map to the same hash slot.
+
+        `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
+
+        `BZPOPMAX` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/bzpopmax for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
+
+        Returns:
+            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+                and the member score. If no member could be popped and the `timeout` expired, returns None.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set1", {"member1": 10.0, "member2": 5.0})
+                2  # Two elements have been added to the sorted set at "my_sorted_set1".
+            >>> await client.bzpopmax(["my_sorted_set1", "my_sorted_set2"], 0.5)
+                ['my_sorted_set1', 'member1', 10.0]  # "member1" with a score of 10.0 has been removed from "my_sorted_set1".
+        """
+        return cast(
+            Optional[List[Union[str, float]]],
+            await self._execute_command(RequestType.BZPopMax, keys + [str(timeout)]),
+        )
+
     async def zpopmin(
         self, key: str, count: Optional[int] = None
     ) -> Mapping[str, float]:
@@ -2315,6 +2351,42 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.ZPopMin, [key, str(count)] if count else [key]
             ),
+        )
+
+    async def bzpopmin(
+        self, keys: List[str], timeout: float
+    ) -> Optional[List[Union[str, float]]]:
+        """
+        Pops the member with the lowest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
+
+        When in cluster mode, all keys must map to the same hash slot.
+
+        `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
+
+        `BZPOPMIN` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/bzpopmin for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
+
+        Returns:
+            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+                and the member score. If no member could be popped and the `timeout` expired, returns None.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set1", {"member1": 10.0, "member2": 5.0})
+                2  # Two elements have been added to the sorted set at "my_sorted_set1".
+            >>> await client.bzpopmin(["my_sorted_set1", "my_sorted_set2"], 0.5)
+                ['my_sorted_set1', 'member2', 5.0]  # "member2" with a score of 5.0 has been removed from "my_sorted_set1".
+        """
+        return cast(
+            Optional[List[Union[str, float]]],
+            await self._execute_command(RequestType.BZPopMin, keys + [str(timeout)]),
         )
 
     async def zrange(
@@ -2710,6 +2782,65 @@ class CoreCommands(Protocol):
         return cast(
             List[Optional[float]],
             await self._execute_command(RequestType.ZMScore, [key] + members),
+        )
+
+    async def zdiff(self, keys: List[str]) -> List[str]:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets.
+        To get the elements with their scores, see `zdiff_withscores`.
+
+        When in Cluster mode, all keys must map to the same hash slot.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Returns:
+            List[str]: A list of elements representing the difference between the sorted sets.
+                If the first key does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+
+        Examples:
+            >>> await client.zadd("sorted_set1", {"element1":1.0, "element2": 2.0, "element3": 3.0})
+            >>> await client.zadd("sorted_set2", {"element2": 2.0})
+            >>> await client.zadd("sorted_set3", {"element3": 3.0})
+            >>> await client.zdiff("sorted_set1", "sorted_set2", "sorted_set3")
+                ["element1"]  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.ZDiff, [str(len(keys))] + keys),
+        )
+
+    async def zdiff_withscores(self, keys: List[str]) -> Mapping[str, float]:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
+        When in Cluster mode, all keys must map to the same hash slot.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Returns:
+            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted
+                sets.
+                If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+
+        Examples:
+            >>> await client.zadd("sorted_set1", {"element1":1.0, "element2": 2.0, "element3": 3.0})
+            >>> await client.zadd("sorted_set2", {"element2": 2.0})
+            >>> await client.zadd("sorted_set3", {"element3": 3.0})
+            >>> await client.zdiff_withscores("sorted_set1", "sorted_set2", "sorted_set3")
+                {"element1": 1.0}  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
+        """
+        return cast(
+            Mapping[str, float],
+            await self._execute_command(
+                RequestType.ZDiff, [str(len(keys))] + keys + ["WITHSCORES"]
+            ),
         )
 
     async def zdiffstore(self, destination: str, keys: List[str]) -> int:

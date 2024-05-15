@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import math
-import random
-import string
 import time
 from datetime import datetime, timedelta, timezone
-from typing import Dict, List, TypeVar, Union, cast
+from typing import Dict, Union, cast
 
 import pytest
-from glide import ClosingError, RequestError, Script, TimeoutError
+from glide import ClosingError, RequestError, Script
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -49,75 +47,15 @@ from glide.routes import (
     SlotKeyRoute,
     SlotType,
 )
-from packaging import version
 from tests.conftest import create_client
-
-T = TypeVar("T")
-
-
-def is_single_response(response: T, single_res: T) -> bool:
-    """
-    Recursively checks if a given response matches the type structure of single_res.
-
-    Args:
-        response (T): The response to check.
-        single_res (T): An object with the expected type structure as an example for the single node response.
-
-    Returns:
-        bool: True if response matches the structure of single_res, False otherwise.
-
-     Example:
-        >>> is_single_response(["value"], LIST_STR)
-        True
-        >>> is_single_response([["value"]], LIST_STR)
-        False
-    """
-    if isinstance(single_res, list) and isinstance(response, list):
-        return is_single_response(response[0], single_res[0])
-    elif isinstance(response, type(single_res)):
-        return True
-    return False
-
-
-def get_first_result(res: str | List[str] | List[List[str]] | Dict[str, str]) -> str:
-    while isinstance(res, list):
-        res = (
-            res[1]
-            if not isinstance(res[0], list) and res[0].startswith("127.0.0.1")
-            else res[0]
-        )
-
-    if isinstance(res, dict):
-        res = list(res.values())[0]
-
-    return res
-
-
-def parse_info_response(res: str | Dict[str, str]) -> Dict[str, str]:
-    res = get_first_result(res)
-    info_lines = [
-        line for line in res.splitlines() if line and not line.startswith("#")
-    ]
-    info_dict = {}
-    for line in info_lines:
-        splitted_line = line.split(":")
-        key = splitted_line[0]
-        value = splitted_line[1]
-        info_dict[key] = value
-    return info_dict
-
-
-def get_random_string(length):
-    result_str = "".join(random.choice(string.ascii_letters) for i in range(length))
-    return result_str
-
-
-async def check_if_server_version_lt(client: TRedisClient, min_version: str) -> bool:
-    # TODO: change it to pytest fixture after we'll implement a sync client
-    info_str = await client.info([InfoSection.SERVER])
-    redis_version = parse_info_response(info_str).get("redis_version")
-    assert redis_version is not None
-    return version.parse(redis_version) < version.parse(min_version)
+from tests.utils.utils import (
+    check_if_server_version_lt,
+    compare_maps,
+    get_first_result,
+    get_random_string,
+    is_single_response,
+    parse_info_response,
+)
 
 
 @pytest.mark.asyncio
@@ -262,8 +200,11 @@ class TestRedisClients:
             # Delete this user
             await redis_client.custom_command(["ACL", "DELUSER", username])
 
-    async def test_select_standalone_database_id(self, request):
-        redis_client = await create_client(request, cluster_mode=False, database_id=4)
+    @pytest.mark.parametrize("cluster_mode", [False])
+    async def test_select_standalone_database_id(self, request, cluster_mode):
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, database_id=4
+        )
         client_info = await redis_client.custom_command(["CLIENT", "INFO"])
         assert "db=4" in client_info
 
@@ -631,7 +572,9 @@ class TestCommands:
         assert await redis_client.hget(key, field2) == "value2"
         assert await redis_client.hget(key, "non_existing_field") is None
 
-        assert await redis_client.hgetall(key) == {field: "value", field2: "value2"}
+        hgetall_map = await redis_client.hgetall(key)
+        expected_map = {field: "value", field2: "value2"}
+        assert compare_maps(hgetall_map, expected_map) is True
         assert await redis_client.hgetall("non_existing_field") == {}
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -1879,7 +1822,10 @@ class TestCommands:
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
         assert await redis_client.zpopmin(key) == {"a": 1.0}
 
-        assert await redis_client.zpopmin(key, 3) == {"b": 2.0, "c": 3.0}
+        zpopmin_map = await redis_client.zpopmin(key, 3)
+        expected_map = {"b": 2.0, "c": 3.0}
+        assert compare_maps(zpopmin_map, expected_map) is True
+
         assert await redis_client.zpopmin(key) == {}
         assert await redis_client.set(key, "value") == OK
         with pytest.raises(RequestError):
@@ -1889,18 +1835,102 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bzpopmin(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:{get_random_string(10)}"
+        key2 = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:non_existing_key"
+
+        assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
+        assert await redis_client.zadd(key2, {"c": 2.0}) == 1
+        assert await redis_client.bzpopmin([key1, key2], 0.5) == [key1, "a", 1.0]
+        assert await redis_client.bzpopmin([non_existing_key, key2], 0.5) == [
+            key2,
+            "c",
+            2.0,
+        ]
+        assert await redis_client.bzpopmin(["non_existing_key"], 0.5) is None
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmin([], 0.5)
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set("foo", "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmin(["foo"], 0.5)
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5)
+            assert "CrossSlot" in str(e)
+
+        async def endless_bzpopmin_call():
+            await redis_client.bzpopmin(["non_existent_key"], 0)
+
+        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_bzpopmin_call(), timeout=0.5)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zpopmax(self, redis_client: TRedisClient):
         key = get_random_string(10)
         members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await redis_client.zadd(key, members_scores) == 3
         assert await redis_client.zpopmax(key) == {"c": 3.0}
-        assert await redis_client.zpopmax(key, 3) == {"b": 2.0, "a": 1.0}
+
+        zpopmax_map = await redis_client.zpopmax(key, 3)
+        expected_map = {"b": 2.0, "a": 1.0}
+        assert compare_maps(zpopmax_map, expected_map) is True
+
         assert await redis_client.zpopmax(key) == {}
         assert await redis_client.set(key, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.zpopmax(key)
 
         assert await redis_client.zpopmax("non_exisitng_key") == {}
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bzpopmax(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:{get_random_string(10)}"
+        key2 = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:non_existing_key"
+
+        assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
+        assert await redis_client.zadd(key2, {"c": 2.0}) == 1
+        assert await redis_client.bzpopmax([key1, key2], 0.5) == [key1, "b", 1.5]
+        assert await redis_client.bzpopmax([non_existing_key, key2], 0.5) == [
+            key2,
+            "c",
+            2.0,
+        ]
+        assert await redis_client.bzpopmax(["non_existing_key"], 0.5) is None
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmax([], 0.5)
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set("foo", "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.bzpopmax(["foo"], 0.5)
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5)
+            assert "CrossSlot" in str(e)
+
+        async def endless_bzpopmax_call():
+            await redis_client.bzpopmax(["non_existent_key"], 0)
+
+        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_bzpopmax_call(), timeout=0.5)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1914,9 +1944,11 @@ class TestCommands:
             "two",
         ]
 
-        assert (
-            await redis_client.zrange_withscores(key, RangeByIndex(start=0, stop=-1))
-        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
+        zrange_map = await redis_client.zrange_withscores(
+            key, RangeByIndex(start=0, stop=-1)
+        )
+        expected_map = {"one": 1.0, "two": 2.0, "three": 3.0}
+        assert compare_maps(zrange_map, expected_map) is True
 
         assert await redis_client.zrange(
             key, RangeByIndex(start=0, stop=1), reverse=True
@@ -1945,12 +1977,12 @@ class TestCommands:
             ),
         ) == ["one", "two"]
 
-        assert (
-            await redis_client.zrange_withscores(
-                key,
-                RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
-            )
-        ) == {"one": 1.0, "two": 2.0, "three": 3.0}
+        zrange_map = await redis_client.zrange_withscores(
+            key,
+            RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
+        )
+        expected_map = {"one": 1.0, "two": 2.0, "three": 3.0}
+        assert compare_maps(zrange_map, expected_map) is True
 
         assert await redis_client.zrange(
             key,
@@ -2379,6 +2411,70 @@ class TestCommands:
         assert await redis_client.set(key, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.zrank(key, "one")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zdiff(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        member_scores1 = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores2 = {"two": 2.0}
+        member_scores3 = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0}
+
+        assert await redis_client.zadd(key1, member_scores1) == 3
+        assert await redis_client.zadd(key2, member_scores2) == 1
+        assert await redis_client.zadd(key3, member_scores3) == 4
+
+        assert await redis_client.zdiff([key1, key2]) == ["one", "three"]
+        assert await redis_client.zdiff([key1, key3]) == []
+        assert await redis_client.zdiff([non_existing_key, key3]) == []
+
+        zdiff_map = await redis_client.zdiff_withscores([key1, key2])
+        expected_map = {
+            "one": 1.0,
+            "three": 3.0,
+        }
+        assert compare_maps(zdiff_map, expected_map) is True
+        assert (
+            compare_maps(await redis_client.zdiff_withscores([key1, key3]), {}) is True
+        )
+        assert (
+            compare_maps(
+                await redis_client.zdiff_withscores([non_existing_key, key3]), {}
+            )
+            is True
+        )
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.zdiff([])
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.zdiff_withscores([])
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zdiff([string_key, key2])
+
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zdiff_withscores([string_key, key2])
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.zdiff(["abc", "zxy", "lkn"])
+            assert "CrossSlot" in str(e)
+
+            with pytest.raises(RequestError) as e:
+                await redis_client.zdiff_withscores(["abc", "zxy", "lkn"])
+            assert "CrossSlot" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

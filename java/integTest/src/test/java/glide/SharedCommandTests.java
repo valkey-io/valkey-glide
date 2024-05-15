@@ -11,6 +11,8 @@ import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.POSITIVE_INFINITY;
+import static glide.api.models.commands.ScoreFilter.MAX;
+import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
@@ -22,6 +24,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.BaseClient;
 import glide.api.RedisClient;
@@ -45,6 +48,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
@@ -2638,6 +2642,89 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void bzmpop(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String key1 = "{bzmpop}-1-" + UUID.randomUUID();
+        String key2 = "{bzmpop}-2-" + UUID.randomUUID();
+        String key3 = "{bzmpop}-3-" + UUID.randomUUID();
+
+        assertEquals(2, client.zadd(key1, Map.of("a1", 1., "b1", 2.)).get());
+        assertEquals(2, client.zadd(key2, Map.of("a2", .1, "b2", .2)).get());
+
+        assertArrayEquals(
+                new Object[] {key1, Map.of("b1", 2.)},
+                client.bzmpop(new String[] {key1, key2}, MAX, 0.1).get());
+        assertArrayEquals(
+                new Object[] {key2, Map.of("b2", .2, "a2", .1)},
+                client.bzmpop(new String[] {key2, key1}, MAX, 0.1, 10).get());
+
+        // nothing popped out
+        assertNull(client.bzmpop(new String[] {key3}, MIN, 0.001).get());
+        assertNull(client.bzmpop(new String[] {key3}, MIN, 0.001, 1).get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.bzmpop(new String[] {key3}, MAX, .1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.bzmpop(new String[] {key3}, MAX, .1, 1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // incorrect argument
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.bzmpop(new String[] {key1}, MAX, .1, 0).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // check that order of entries in the response is preserved
+        var entries = new LinkedHashMap<String, Double>();
+        for (int i = 0; i < 10; i++) {
+            // a => 1., b => 2. etc
+            entries.put("" + ('a' + i), (double) i);
+        }
+        assertEquals(10, client.zadd(key2, entries).get());
+        assertEquals(entries, client.bzmpop(new String[] {key2}, MIN, .1, 10).get()[1]);
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bzmpop_timeout_check(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String key = UUID.randomUUID().toString();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.bzmpop(new String[] {key}, MAX, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.bzmpop(new String[] {key}, MAX, 0).get(3, TimeUnit.SECONDS));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void xadd_and_xtrim(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
@@ -3480,6 +3567,45 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "geopos").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geopos(key2, members).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geodist(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String member1 = "Palermo";
+        String member2 = "Catania";
+        String member3 = "NonExisting";
+        GeoUnit geoUnitKM = GeoUnit.KILOMETERS;
+        Double expected = 166274.1516;
+        Double expectedKM = 166.2742;
+        Double delta = 1e-9;
+
+        // adding locations
+        Map<String, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put("Palermo", new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put("Catania", new GeospatialData(15.087269, 37.502669));
+        assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
+
+        // assert correct result with default metric
+        Double actual = client.geodist(key1, member1, member2).get();
+        assertEquals(expected, actual, delta);
+
+        // assert correct result with manual metric specification kilometers
+        Double actualKM = client.geodist(key1, member1, member2, geoUnitKM).get();
+        assertEquals(expectedKM, actualKM, delta);
+
+        // assert null result when member index is missing
+        Double actualMissing = client.geodist(key1, member1, member3).get();
+        assertNull(actualMissing);
+
+        // key exists but holds a non-ZSET value
+        assertEquals(OK, client.set(key2, "geodist").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.geodist(key2, member1, member2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
