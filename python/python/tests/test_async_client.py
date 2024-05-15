@@ -1829,54 +1829,69 @@ class TestCommands:
         assert await redis_client.zadd(key2, members_scores2) == 3
 
         assert await redis_client.zinterstore(key3, [key1, key2]) == 2
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zinterstore_map = await redis_client.zrange_withscores(key3, range)
+        expected_map = {
             "one": 2.5,
             "two": 4.5,
         }
+        assert compare_maps(zinterstore_map, expected_map) is True
 
         # Intersection results are aggregated by the MAX score of elements
         assert (
             await redis_client.zinterstore(key3, [key1, key2], AggregationType.MAX) == 2
         )
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zinterstore_map_max = await redis_client.zrange_withscores(key3, range)
+        expected_map_max = {
             "one": 1.5,
             "two": 2.5,
         }
+        assert compare_maps(zinterstore_map_max, expected_map_max) is True
 
         # Intersection results are aggregated by the MIN score of elements
         assert (
             await redis_client.zinterstore(key3, [key1, key2], AggregationType.MIN) == 2
         )
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zinterstore_map_min = await redis_client.zrange_withscores(key3, range)
+        expected_map_min = {
             "one": 1.0,
             "two": 2.0,
         }
+        assert compare_maps(zinterstore_map_min, expected_map_min) is True
 
         # Intersection results are aggregated by the SUM score of elements
         assert (
             await redis_client.zinterstore(key3, [key1, key2], AggregationType.SUM) == 2
         )
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zinterstore_map_sum = await redis_client.zrange_withscores(key3, range)
+        expected_map_sum = {
             "one": 2.5,
             "two": 4.5,
         }
+        assert compare_maps(zinterstore_map_sum, expected_map_sum) is True
 
         # Scores are multiplied by 2.0 for key1 and key2 during aggregation.
         assert (
             await redis_client.zinterstore(
-                key3, [(key1, 2), (key2, 2)], AggregationType.SUM
+                key3, [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
             )
             == 2
         )
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zinterstore_map_multiplied = await redis_client.zrange_withscores(key3, range)
+        expected_map_multiplied = {
             "one": 5.0,
             "two": 9.0,
         }
+        assert compare_maps(zinterstore_map_multiplied, expected_map_multiplied) is True
 
         assert (
             await redis_client.zinterstore(key3, [key1, "{testKey}-non_existing_key"])
             == 0
         )
+
+        # Empty list check
+        with pytest.raises(RequestError) as e:
+            await redis_client.zinterstore("{xyz}", [])
+        assert "wrong number of arguments" in str(e)
 
         # Cross slot query
         if isinstance(redis_client, RedisClusterClient):
@@ -1898,59 +1913,74 @@ class TestCommands:
         assert await redis_client.zadd(key2, members_scores2) == 3
 
         assert await redis_client.zunionstore(key3, [key1, key2]) == 3
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zunionstore_map = await redis_client.zrange_withscores(key3, range)
+        expected_map = {
             "one": 2.5,
             "three": 3.5,
             "two": 4.5,
         }
+        assert compare_maps(zunionstore_map, expected_map) is True
 
         # Intersection results are aggregated by the MAX score of elements
         assert (
             await redis_client.zunionstore(key3, [key1, key2], AggregationType.MAX) == 3
         )
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zunionstore_map_max = await redis_client.zrange_withscores(key3, range)
+        expected_map_max = {
             "one": 1.5,
             "two": 2.5,
             "three": 3.5,
         }
+        assert compare_maps(zunionstore_map_max, expected_map_max) is True
 
         # Intersection results are aggregated by the MIN score of elements
         assert (
             await redis_client.zunionstore(key3, [key1, key2], AggregationType.MIN) == 3
         )
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zunionstore_map_min = await redis_client.zrange_withscores(key3, range)
+        expected_map_min = {
             "one": 1.0,
             "two": 2.0,
             "three": 3.5,
         }
+        assert compare_maps(zunionstore_map_min, expected_map_min) is True
 
         # Intersection results are aggregated by the SUM score of elements
         assert (
             await redis_client.zunionstore(key3, [key1, key2], AggregationType.SUM) == 3
         )
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zunionstore_map_sum = await redis_client.zrange_withscores(key3, range)
+        expected_map_sum = {
             "one": 2.5,
             "three": 3.5,
             "two": 4.5,
         }
+        assert compare_maps(zunionstore_map_sum, expected_map_sum) is True
 
         # Scores are multiplied by 2.0 for key1 and key2 during aggregation.
         assert (
             await redis_client.zunionstore(
-                key3, [(key1, 2), (key2, 2)], AggregationType.SUM
+                key3, [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
             )
             == 3
         )
-        assert await redis_client.zrange_withscores(key3, range) == {
+        zunionstore_map = await redis_client.zrange_withscores(key3, range)
+        expected_map = {
             "one": 5.0,
-            "three": 7,
+            "three": 7.0,
             "two": 9.0,
         }
+        assert compare_maps(zunionstore_map, expected_map) is True
 
         assert (
             await redis_client.zunionstore(key3, [key1, "{testKey}-non_existing_key"])
             == 2
         )
+
+        # Empty list check
+        with pytest.raises(RequestError) as e:
+            await redis_client.zunionstore("{xyz}", [])
+        assert "wrong number of arguments" in str(e)
 
         # Cross slot query
         if isinstance(redis_client, RedisClusterClient):
