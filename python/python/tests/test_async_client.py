@@ -2782,6 +2782,47 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zintercard(self, redis_client: TRedisClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            # TODO: change it to pytest fixture after we'll implement a sync client
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        member_scores1 = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores2 = {"two": 2.0, "three": 3.0, "four": 4.0}
+
+        assert await redis_client.zadd(key1, member_scores1) == 3
+        assert await redis_client.zadd(key2, member_scores2) == 3
+
+        assert await redis_client.zintercard([key1, key2]) == 2
+        assert await redis_client.zintercard([key1, non_existing_key]) == 0
+
+        assert await redis_client.zintercard([key1, key2], 0) == 2
+        assert await redis_client.zintercard([key1, key2], 1) == 1
+        assert await redis_client.zintercard([key1, key2], 3) == 2
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.zintercard([])
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zintercard([string_key])
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.zintercard(["abc", "def"])
+            assert "CrossSlot" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_type(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK
