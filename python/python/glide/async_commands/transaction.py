@@ -2058,13 +2058,14 @@ class BaseTransaction:
         """
         Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
-        When in cluster mode,`destination` and all keys in `keys` must map to the same hash slot.
+
+        When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
         See https://valkey.io/commands/zinterstore/ for more details.
 
         Args:
             destination (str): The key of the destination sorted set.
-            keys (Union[List[str], List[Tuple[str, float]]]):The keys of the sorted sets with possible formats:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
                 List[Tuple[str, float]]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
@@ -2085,13 +2086,14 @@ class BaseTransaction:
         """
         Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+
         When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
         see https://valkey.io/commands/zunionstore/ for more details.
 
         Args:
             destination (str): The key of the destination sorted set.
-            keys (Union[List[str], List[Tuple[str, float]]]):The keys of the sorted sets with possible formats:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
                 List[Tuple[str, float]]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply

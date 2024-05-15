@@ -195,7 +195,7 @@ def separate_keys(
         key_list = [item[0] for item in keys]
         weight_list = [str(item[1]) for item in keys]
     elif isinstance(keys[0], str):
-        key_list = [str(item) for item in keys]
+        key_list = keys
 
     return key_list, weight_list
 
