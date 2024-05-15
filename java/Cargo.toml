@@ -19,5 +19,6 @@ jni = "0.21.1"
 log = "0.4.20"
 
 [profile.release]
-lto = true
-debug = true
+lto = "fat"
+debug = false
+strip = true

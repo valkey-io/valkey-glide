@@ -27,8 +27,9 @@ tikv-jemallocator = {version = "0.5.4", features = ["disable_initial_exec_tls"] 
 napi-build = "2.0.1"
 
 [profile.release]
-lto = true
-debug = true
+lto = "fat"
+debug = false
+strip = true
 
 [features]
 testing_utilities = ["num-bigint"]

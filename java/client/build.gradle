@@ -90,12 +90,6 @@ tasks.register('buildRustRelease', Exec) {
     environment CARGO_TERM_COLOR: 'always'
 }
 
-tasks.register('buildRustReleaseStrip', Exec) {
-    commandLine 'cargo', 'build', '--release', '--strip'
-    workingDir project.rootDir
-    environment CARGO_TERM_COLOR: 'always'
-}
-
 tasks.register('buildRust', Exec) {
     commandLine 'cargo', 'build'
     workingDir project.rootDir

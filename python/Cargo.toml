@@ -20,5 +20,6 @@ logger_core = {path = "../logger_core"}
 python-source = "python"
 
 [profile.release]
-lto = true
-debug = true
+lto = "fat"
+debug = false
+strip = true
