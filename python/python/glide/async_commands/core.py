@@ -985,7 +985,7 @@ class CoreCommands(Protocol):
             key (str): The key of the hash.
             count (int): The number of field names to return.
                 If `count` is positive, returns unique elements.
-                If negative, allows for duplicates.
+                If `count` is negative, allows for duplicates elements.
 
         Returns:
             List[str]: A list of random field names from the hash.
@@ -1012,7 +1012,7 @@ class CoreCommands(Protocol):
             key (str): The key of the hash.
             count (int): The number of field names to return.
                 If `count` is positive, returns unique elements.
-                If negative, allows for duplicates.
+                If `count` is negative, allows for duplicates elements.
 
         Returns:
             List[List[str]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
@@ -2963,6 +2963,93 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(RequestType.ZUnionStore, args),
+        )
+
+    async def zrandmember(self, key: str) -> Optional[str]:
+        """
+        Returns a random member from the sorted set stored at 'key'.
+
+        See https://valkey.io/commands/zrandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+
+        Returns:
+            Optional[str]: A random member from the sorted set.
+                If the sorted set does not exist or is empty, the response will be None.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.zrandmember("my_sorted_set")
+                "member1"  # "member1" is a random member of "my_sorted_set".
+            >>> await client.zrandmember("non_existing_sorted_set")
+                None  # "non_existing_sorted_set" is not an existing key, so None was returned.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.ZRandMember, [key]),
+        )
+
+    async def zrandmember_count(self, key: str, count: int) -> List[str]:
+        """
+        Retrieves up to the absolute value of `count` random members from the sorted set stored at 'key'.
+
+        See https://valkey.io/commands/zrandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
+
+        Returns:
+            List[str]: A list of members from the sorted set.
+                If the sorted set does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.zrandmember("my_sorted_set", -3)
+                ["member1", "member1", "member2"]  # "member1" and "member2" are random members of "my_sorted_set".
+            >>> await client.zrandmember("non_existing_sorted_set", 3)
+                []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.ZRandMember, [key, str(count)]),
+        )
+
+    async def zrandmember_withscores(
+        self, key: str, count: int
+    ) -> List[List[Union[str, float]]]:
+        """
+        Retrieves up to the absolute value of `count` random members along with their scores from the sorted set
+        stored at 'key'.
+
+        See https://valkey.io/commands/zrandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
+
+        Returns:
+            List[List[Union[str, float]]]: A list of `[member, score]` lists, where `member` is a random member from
+                the sorted set and `score` is the associated score.
+                If the sorted set does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.zrandmember_withscores("my_sorted_set", -3)
+                [["member1", 1.0], ["member1", 1.0], ["member2", 2.0]]  # "member1" and "member2" are random members of "my_sorted_set", and have scores of 1.0 and 2.0, respectively.
+            >>> await client.zrandmember_withscores("non_existing_sorted_set", 3)
+                []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
+        """
+        return cast(
+            List[List[Union[str, float]]],
+            await self._execute_command(
+                RequestType.ZRandMember, [key, str(count), "WITHSCORES"]
+            ),
         )
 
     async def invoke_script(

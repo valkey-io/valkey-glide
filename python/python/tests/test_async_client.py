@@ -2715,6 +2715,79 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrandmember(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        string_key = get_random_string(10)
+        scores = {"one": 1, "two": 2}
+        assert await redis_client.zadd(key, scores) == 2
+
+        member = await redis_client.zrandmember(key)
+        assert member in scores
+        assert await redis_client.zrandmember("non_existing_key") is None
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrandmember(string_key)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrandmember_count(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        string_key = get_random_string(10)
+        scores = {"one": 1, "two": 2}
+        assert await redis_client.zadd(key, scores) == 2
+
+        # unique values are expected as count is positive
+        members = await redis_client.zrandmember_count(key, 4)
+        assert len(members) == 2
+        assert set(members) == {"one", "two"}
+
+        # duplicate values are expected as count is negative
+        members = await redis_client.zrandmember_count(key, -4)
+        assert len(members) == 4
+        for member in members:
+            assert member in scores
+
+        assert await redis_client.zrandmember_count(key, 0) == []
+        assert await redis_client.zrandmember_count("non_existing_key", 0) == []
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrandmember_count(string_key, 5)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrandmember_withscores(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        string_key = get_random_string(10)
+        scores = {"one": 1, "two": 2}
+        assert await redis_client.zadd(key, scores) == 2
+
+        # unique values are expected as count is positive
+        elements = await redis_client.zrandmember_withscores(key, 4)
+        assert len(elements) == 2
+
+        for member, score in elements:
+            assert scores[str(member)] == score
+
+        # duplicate values are expected as count is negative
+        elements = await redis_client.zrandmember_withscores(key, -4)
+        assert len(elements) == 4
+        for member, score in elements:
+            assert scores[str(member)] == score
+
+        assert await redis_client.zrandmember_withscores(key, 0) == []
+        assert await redis_client.zrandmember_withscores("non_existing_key", 0) == []
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrandmember_withscores(string_key, 5)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_type(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK
