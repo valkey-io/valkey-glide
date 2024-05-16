@@ -236,7 +236,7 @@ pub extern "system" fn Java_glide_api_logging_Logger_initInternal<'local>(
     level: jint,
     file_name: JString<'local>,
 ) -> jint {
-    let level = if level > 0 { Some(level) } else { None };
+    let level = if level >= 0 { Some(level) } else { None };
     let file_name: Option<String> = match env.get_string(&file_name) {
         Ok(file_name) => Some(file_name.into()),
         Err(JniError::NullPtr(_)) => None,
