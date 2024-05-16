@@ -3616,6 +3616,7 @@ public class SharedCommandTests {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
         String[] members = {"Palermo", "Catania", "NonExisting"};
+        String[] empty = {};
         String[] expected = {"sqc8b49rny0", "sqdtr74hyu0", null};
 
         // adding locations
@@ -3626,6 +3627,9 @@ public class SharedCommandTests {
 
         String[] actual = client.geohash(key1, members).get();
         assertArrayEquals(expected, actual);
+
+        // members array is empty
+        assertEquals(client.geohash(key1, empty).get().length, 0);
 
         // key exists but holding the wrong kind of value (non-ZSET)
         assertEquals(OK, client.set(key2, "geohash").get());
