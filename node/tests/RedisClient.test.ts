@@ -17,10 +17,10 @@ import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
     RedisCluster,
-    getOptions,
+    flushAndCloseClient,
+    getClientConfigurationOption,
     parseCommandLineArgs,
     parseEndpoints,
-    testTeardown,
     transactionTest,
 } from "./TestUtilities";
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -47,17 +47,7 @@ describe("RedisClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await testTeardown(
-            false,
-            getOptions(cluster.getAddresses(), ProtocolVersion.RESP3, 2000),
-        );
-
-        // some tests don't initialize a client
-        if (client == undefined) {
-            return;
-        }
-
-        client.close();
+        await flushAndCloseClient(false, cluster.getAddresses(), client);
     });
 
     afterAll(async () => {
@@ -115,7 +105,7 @@ describe("RedisClient", () => {
         "info without parameters",
         async (protocol) => {
             client = await RedisClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = await client.info();
             expect(result).toEqual(expect.stringContaining("# Server"));
@@ -130,7 +120,7 @@ describe("RedisClient", () => {
         "simple select test",
         async (protocol) => {
             client = await RedisClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             let selectResult = await client.select(0);
             expect(selectResult).toEqual("OK");
@@ -154,7 +144,7 @@ describe("RedisClient", () => {
         `can send transactions_%p`,
         async (protocol) => {
             client = await RedisClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new Transaction();
             const expectedRes = await transactionTest(transaction);
@@ -169,10 +159,10 @@ describe("RedisClient", () => {
         "can return null on WATCH transaction failures",
         async (protocol) => {
             const client1 = await RedisClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const client2 = await RedisClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new Transaction();
             transaction.get("key");
@@ -192,7 +182,10 @@ describe("RedisClient", () => {
 
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
-            const options = getOptions(cluster.getAddresses(), protocol);
+            const options = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
             options.protocol = protocol;
             options.clientName = clientName;
             testsFailed += 1;

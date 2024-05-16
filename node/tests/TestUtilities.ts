@@ -7,6 +7,7 @@ import { exec } from "child_process";
 import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
 import {
+    BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
     Logger,
@@ -138,7 +139,7 @@ export async function testTeardown(
     client.close();
 }
 
-export const getOptions = (
+export const getClientConfigurationOption = (
     addresses: [string, number][],
     protocol: ProtocolVersion,
     timeout?: number,
@@ -152,6 +153,24 @@ export const getOptions = (
         ...(timeout && { requestTimeout: timeout }),
     };
 };
+
+export async function flushAndCloseClient(
+    cluster_mode: boolean,
+    addresses: [string, number][],
+    client?: BaseClient,
+) {
+    await testTeardown(
+        cluster_mode,
+        getClientConfigurationOption(addresses, ProtocolVersion.RESP3, 2000),
+    );
+
+    // some tests don't initialize a client
+    if (client == undefined) {
+        return;
+    }
+
+    client.close();
+}
 
 /**
  * Compare two maps by converting them to JSON strings and checking for equality, including property order.

@@ -21,11 +21,11 @@ import {
 import { runBaseTests } from "./SharedTests";
 import {
     RedisCluster,
+    flushAndCloseClient,
+    getClientConfigurationOption,
     getFirstResult,
-    getOptions,
     parseCommandLineArgs,
     parseEndpoints,
-    testTeardown,
     transactionTest,
 } from "./TestUtilities";
 
@@ -50,17 +50,7 @@ describe("RedisClusterClient", () => {
     }, 20000);
 
     afterEach(async () => {
-        await testTeardown(
-            true,
-            getOptions(cluster.getAddresses(), ProtocolVersion.RESP3, 2000),
-        );
-
-        // some tests don't initialize a client
-        if (client == undefined) {
-            return;
-        }
-
-        client.close();
+        await flushAndCloseClient(true, cluster.getAddresses(), client);
     });
 
     afterAll(async () => {
@@ -71,7 +61,10 @@ describe("RedisClusterClient", () => {
 
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
-            const options = getOptions(cluster.getAddresses(), protocol);
+            const options = getClientConfigurationOption(
+                cluster.getAddresses(),
+                protocol,
+            );
             options.protocol = protocol;
             options.clientName = clientName;
             testsFailed += 1;
@@ -95,7 +88,7 @@ describe("RedisClusterClient", () => {
         `info with server and replication_%p`,
         async (protocol) => {
             client = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const info_server = getFirstResult(
                 await client.info([InfoOptions.Server]),
@@ -126,7 +119,7 @@ describe("RedisClusterClient", () => {
         `info with server and randomNode route_%p`,
         async (protocol) => {
             client = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = await client.info(
                 [InfoOptions.Server],
@@ -153,7 +146,7 @@ describe("RedisClusterClient", () => {
             };
 
             client = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = cleanResult(
                 (await client.customCommand(
@@ -198,7 +191,7 @@ describe("RedisClusterClient", () => {
         `fail routing by address if no port is provided_%p`,
         async (protocol) => {
             client = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             expect(() =>
                 client.info(undefined, {
@@ -214,7 +207,7 @@ describe("RedisClusterClient", () => {
         `config get and config set transactions test_%p`,
         async (protocol) => {
             client = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
             transaction.configSet({ timeout: "1000" });
@@ -229,7 +222,7 @@ describe("RedisClusterClient", () => {
         `can send transactions_%p`,
         async (protocol) => {
             client = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
             const expectedRes = await transactionTest(transaction);
@@ -243,10 +236,10 @@ describe("RedisClusterClient", () => {
         `can return null on WATCH transaction failures_%p`,
         async (protocol) => {
             const client1 = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const client2 = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
             transaction.get("key");
@@ -269,7 +262,7 @@ describe("RedisClusterClient", () => {
         `echo with all nodes routing_%p`,
         async (protocol) => {
             client = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const message = uuidv4();
             const echoDict = await client.echo(message, "allNodes");
