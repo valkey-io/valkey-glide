@@ -119,8 +119,8 @@ public interface GeospatialIndicesBaseCommands {
     CompletableFuture<Double> geodist(String key, String member1, String member2);
 
     /**
-     * Returns the <code>GeoHash</code> strings that representing the positions of all the specified
-     * <code>members</code> in the sorted set stored at <code>key</code>.
+     * Returns the <code>GeoHash</code> strings representing the positions of all the specified <code>
+     * members</code> in the sorted set stored at <code>key</code>.
      *
      * @see <a href="https://valkey.io/commands/geohash">valkey.io</a> for more details.
      * @param key The key of the sorted set.
