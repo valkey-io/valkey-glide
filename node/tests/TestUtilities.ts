@@ -6,7 +6,17 @@ import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
-import { ClusterTransaction, Logger, ReturnType, Transaction } from "..";
+import {
+    BaseClient,
+    BaseClientConfiguration,
+    ClusterTransaction,
+    Logger,
+    ProtocolVersion,
+    RedisClient,
+    RedisClusterClient,
+    ReturnType,
+    Transaction,
+} from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
@@ -115,6 +125,51 @@ export function getFirstResult(
  */
 export function parseCommandLineArgs() {
     return parseArgs(process.argv.slice(2));
+}
+
+export async function testTeardown(
+    cluster_mode: boolean,
+    option: BaseClientConfiguration,
+) {
+    const client = cluster_mode
+        ? await RedisClusterClient.createClient(option)
+        : await RedisClient.createClient(option);
+
+    await client.customCommand(["FLUSHALL"]);
+    client.close();
+}
+
+export const getClientConfigurationOption = (
+    addresses: [string, number][],
+    protocol: ProtocolVersion,
+    timeout?: number,
+): BaseClientConfiguration => {
+    return {
+        addresses: addresses.map(([host, port]) => ({
+            host,
+            port,
+        })),
+        protocol,
+        ...(timeout && { requestTimeout: timeout }),
+    };
+};
+
+export async function flushAndCloseClient(
+    cluster_mode: boolean,
+    addresses: [string, number][],
+    client?: BaseClient,
+) {
+    await testTeardown(
+        cluster_mode,
+        getClientConfigurationOption(addresses, ProtocolVersion.RESP3, 2000),
+    );
+
+    // some tests don't initialize a client
+    if (client == undefined) {
+        return;
+    }
+
+    client.close();
 }
 
 /**
