@@ -2107,7 +2107,7 @@ class BaseTransaction:
 
     def zrandmember(self: TTransaction, key: str) -> TTransaction:
         """
-        Returns a random element from the sorted set stored at 'key'.
+        Returns a random member from the sorted set stored at 'key'.
 
         See https://valkey.io/commands/zrandmember for more details.
 
@@ -2115,25 +2115,25 @@ class BaseTransaction:
             key (str): The key of the sorted set.
 
         Command response:
-            Optional[str]: A string representing a random element from the sorted set.
+            Optional[str]: A random member from the sorted set.
                 If the sorted set does not exist or is empty, the response will be None.
         """
         return self.append_command(RequestType.ZRandMember, [key])
 
     def zrandmember_count(self: TTransaction, key: str, count: int) -> TTransaction:
         """
-        Retrieves random elements from the sorted set stored at 'key'.
+        Retrieves up to the absolute value of `count` random members from the sorted set stored at 'key'.
 
         See https://valkey.io/commands/zrandmember for more details.
 
         Args:
             key (str): The key of the sorted set.
-            count (int): The number of elements to return.
-                If `count` is positive, returns unique elements.
-                If `count` is negative, allows for duplicates elements.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
 
         Command response:
-            List[str]: A list of elements from the sorted set.
+            List[str]: A list of members from the sorted set.
                 If the sorted set does not exist or is empty, the response will be an empty list.
         """
         return self.append_command(RequestType.ZRandMember, [key, str(count)])
@@ -2142,15 +2142,16 @@ class BaseTransaction:
         self: TTransaction, key: str, count: int
     ) -> TTransaction:
         """
-        Retrieves random elements along with their scores from the sorted set stored at 'key'.
+        Retrieves up to the absolute value of `count` random members along with their scores from the sorted set
+        stored at 'key'.
 
         See https://valkey.io/commands/zrandmember for more details.
 
         Args:
             key (str): The key of the sorted set.
-            count (int): The number of elements to return.
-                If `count` is positive, returns unique elements.
-                If `count` is negative, allows for duplicates elements.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
 
         Command response:
             List[List[Union[str, float]]]: A list of `[member, score]` lists, where `member` is a random member from

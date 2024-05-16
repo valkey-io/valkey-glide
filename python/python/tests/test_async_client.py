@@ -2769,18 +2769,14 @@ class TestCommands:
         elements = await redis_client.zrandmember_withscores(key, 4)
         assert len(elements) == 2
 
-        for element in elements:
-            member = element[0]
-            score = element[1]
-            assert scores.get(str(member)) == score
+        for member, score in elements:
+            assert scores[str(member)] == score
 
         # duplicate values are expected as count is negative
         elements = await redis_client.zrandmember_withscores(key, -4)
         assert len(elements) == 4
-        for element in elements:
-            member = element[0]
-            score = element[1]
-            assert scores.get(str(member)) == score
+        for member, score in elements:
+            assert scores[str(member)] == score
 
         assert await redis_client.zrandmember_withscores(key, 0) == []
         assert await redis_client.zrandmember_withscores("non_existing_key", 0) == []

@@ -2967,7 +2967,7 @@ class CoreCommands(Protocol):
 
     async def zrandmember(self, key: str) -> Optional[str]:
         """
-        Returns a random element from the sorted set stored at 'key'.
+        Returns a random member from the sorted set stored at 'key'.
 
         See https://valkey.io/commands/zrandmember for more details.
 
@@ -2975,7 +2975,7 @@ class CoreCommands(Protocol):
             key (str): The key of the sorted set.
 
         Returns:
-            Optional[str]: A string representing a random element from the sorted set.
+            Optional[str]: A random member from the sorted set.
                 If the sorted set does not exist or is empty, the response will be None.
 
         Examples:
@@ -2992,18 +2992,18 @@ class CoreCommands(Protocol):
 
     async def zrandmember_count(self, key: str, count: int) -> List[str]:
         """
-        Retrieves random elements from the sorted set stored at 'key'.
+        Retrieves up to the absolute value of `count` random members from the sorted set stored at 'key'.
 
         See https://valkey.io/commands/zrandmember for more details.
 
         Args:
             key (str): The key of the sorted set.
-            count (int): The number of elements to return.
-                If `count` is positive, returns unique elements.
-                If `count` is negative, allows for duplicates elements.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
 
         Returns:
-            List[str]: A list of elements from the sorted set.
+            List[str]: A list of members from the sorted set.
                 If the sorted set does not exist or is empty, the response will be an empty list.
 
         Examples:
@@ -3022,15 +3022,16 @@ class CoreCommands(Protocol):
         self, key: str, count: int
     ) -> List[List[Union[str, float]]]:
         """
-        Retrieves random elements along with their scores from the sorted set stored at 'key'.
+        Retrieves up to the absolute value of `count` random members along with their scores from the sorted set
+        stored at 'key'.
 
         See https://valkey.io/commands/zrandmember for more details.
 
         Args:
             key (str): The key of the sorted set.
-            count (int): The number of elements to return.
-                If `count` is positive, returns unique elements.
-                If `count` is negative, allows for duplicates elements.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
 
         Returns:
             List[List[Union[str, float]]]: A list of `[member, score]` lists, where `member` is a random member from
