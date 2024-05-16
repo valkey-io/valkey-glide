@@ -18,6 +18,8 @@ import org.apache.commons.lang3.tuple.Pair;
 import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.Response;
 
+import static glide.api.logging.Logger.Level.ERROR;
+
 /** Holder for resources required to dispatch responses and used by {@link ReadHandler}. */
 @RequiredArgsConstructor
 public class CallbackDispatcher {
@@ -109,7 +111,7 @@ public class CallbackDispatcher {
             future.completeAsync(() -> response);
         } else {
             // probably a response was received after shutdown or `registerRequest` call was missing
-            Logger.log(Logger.Level.ERROR, "callback dispatcher", "Received a response for not registered callback id " + callbackId + ", request error = " + response.getRequestError());
+            Logger.log(ERROR, "callback dispatcher", "Received a response for not registered callback id " + callbackId + ", request error = " + response.getRequestError());
             distributeClosingException("Client is in an erroneous state and should close");
         }
     }
