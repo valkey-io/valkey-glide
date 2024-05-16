@@ -1847,16 +1847,10 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.bzpopmin(["foo"], 0.5)
 
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5)
-            assert "CrossSlot" in str(e)
-
         async def endless_bzpopmin_call():
             await redis_client.bzpopmin(["non_existent_key"], 0)
 
-        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(endless_bzpopmin_call(), timeout=0.5)
@@ -1905,12 +1899,6 @@ class TestCommands:
         assert await redis_client.set("foo", "value") == OK
         with pytest.raises(RequestError):
             await redis_client.bzpopmax(["foo"], 0.5)
-
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5)
-            assert "CrossSlot" in str(e)
 
         async def endless_bzpopmax_call():
             await redis_client.bzpopmax(["non_existent_key"], 0)
@@ -2634,6 +2622,8 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zdiff(["abc", "zxy", "lkn"]),
             redis_client.zdiff_withscores(["abc", "zxy", "lkn"]),
             redis_client.zrangestore("abc", "zxy", RangeByIndex(0, -1)),
+            redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
+            redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
         ]:
             with pytest.raises(RequestError) as e:
                 await promise
