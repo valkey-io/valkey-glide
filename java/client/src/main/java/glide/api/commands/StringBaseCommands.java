@@ -252,7 +252,7 @@ public interface StringBaseCommands {
      * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
      * @param key The key of the string.
      * @param value The value to append.
-     * @return Response from Redis. The length of the string after appending the value.
+     * @return The length of the string after appending the value.
      * @example
      *     <pre>{@code
      * String value = client.append("key", "value").get();
