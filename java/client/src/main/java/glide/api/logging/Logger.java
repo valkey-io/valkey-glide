@@ -6,9 +6,11 @@ import lombok.NonNull;
 
 /**
  * A singleton class that allows logging which is consistent with logs from the internal rust core.
- * The logger can be set up in 2 ways - <br>
- * 1. By calling <code>Logger.init</code>, which configures the logger only if it wasn't previously configured.<br>
- * 2. By calling <code>Logger.setLoggerConfig</code>, which replaces the existing configuration, and means that new logs will not be
+ * The logger can be set up in 2 ways -
+ * <ol>
+ * <li>By calling <code>Logger.init</code>, which configures the logger only if it wasn't previously configured.</li>
+ * <li>By calling <code>Logger.setLoggerConfig</code>, which replaces the existing configuration, and means that new logs will not be</li>
+ * </ol>
  * saved with the logs that were sent before the call.<br><br>
  * If <code>setLoggerConfig</code> wasn't called, the first log attempt will initialize a new logger with default configuration decided
  * by the Rust core.
