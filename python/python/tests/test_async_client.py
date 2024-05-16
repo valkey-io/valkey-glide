@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import math
 import time
+from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
 from typing import Dict, Union, cast
 
@@ -2706,7 +2707,9 @@ class TestCommands:
 
         assert await redis_client.zadd(key2, entries) == 10
         result = await redis_client.bzmpop([key2], ScoreFilter.MIN, 0.1, 10)
-        assert compare_maps(entries, result[1]) is True
+        assert result is not None and type(result[1]) is Mapping
+        result_map: Mapping[str, float] = result[1]
+        assert compare_maps(entries, result_map) is True
 
         async def endless_bzmpop_call():
             await redis_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
