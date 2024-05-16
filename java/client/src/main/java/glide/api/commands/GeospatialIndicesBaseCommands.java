@@ -126,7 +126,7 @@ public interface GeospatialIndicesBaseCommands {
      * @param key The key of the sorted set.
      * @param members The array of members whose <code>GeoHash</code> strings are to be retrieved.
      * @return An array of <code>GeoHash</code> strings representing the positions of the specified
-     *     members stored at <code>key</code>. If a member does not exist in the sorted set then a
+     *     members stored at <code>key</code>. If a member does not exist in the sorted set, a
      *     <code>null</code> value is returned for that member.
      * @example
      *     <pre>{@code
