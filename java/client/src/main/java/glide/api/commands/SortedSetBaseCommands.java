@@ -859,8 +859,8 @@ public interface SortedSetBaseCommands {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>keysOrWeightedKeys</code>
-     *     must map to the same hash slot.
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -887,8 +887,8 @@ public interface SortedSetBaseCommands {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keysOrWeightedKeys</code>
-     *     must map to the same hash slot.
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -912,8 +912,8 @@ public interface SortedSetBaseCommands {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keysOrWeightedKeys</code>
-     *     must map to the same hash slot.
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -940,8 +940,8 @@ public interface SortedSetBaseCommands {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keysOrWeightedKeys</code>
-     *     must map to the same hash slot.
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -1040,8 +1040,8 @@ public interface SortedSetBaseCommands {
      * </code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
-     * @apiNote When in cluster mode, all keys listed in <code>keysOrWeightedKeys</code> must map to
-     *     the same hash slot.
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1072,8 +1072,8 @@ public interface SortedSetBaseCommands {
      * #zunion(KeysOrWeightedKeys, Aggregate)}.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
-     * @apiNote When in cluster mode, all keys listed in <code>keysOrWeightedKeys</code> must map to
-     *     the same hash slot.
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1099,8 +1099,8 @@ public interface SortedSetBaseCommands {
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      * keysOrWeightedKeys</code>.
      *
-     * @apiNote When in cluster mode, all keys listed in <code>keysOrWeightedKeys</code> must map to
-     *     the same hash slot.
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1131,8 +1131,8 @@ public interface SortedSetBaseCommands {
      * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
      * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
-     * @apiNote When in cluster mode, all keys listed in <code>keysOrWeightedKeys</code> must map to
-     *     the same hash slot.
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>

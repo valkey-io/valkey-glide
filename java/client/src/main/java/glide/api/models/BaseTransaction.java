@@ -2171,8 +2171,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To perform a <code>zinterstore</code> operation while specifying aggregation settings, use
      * {@link #zinterstore(String, KeysOrWeightedKeys, Aggregate)}
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keysOrWeightedKeys</code>
-     *     must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:

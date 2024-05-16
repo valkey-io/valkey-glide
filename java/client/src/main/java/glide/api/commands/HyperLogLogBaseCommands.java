@@ -58,8 +58,8 @@ public interface HyperLogLogBaseCommands {
      * If the destination variable exists, it is treated as one of the source HyperLogLog data sets,
      * otherwise a new HyperLogLog is created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>sourceKeys</code> must
-     *     map to the same hash slot.
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>sourceKeys</code>
+     *     must map to the same hash slot.
      * @see <a href="https://redis.io/commands/pfmerge/">redis.io</a> for details.
      * @param destination The key of the destination HyperLogLog where the merged data sets will be
      *     stored.

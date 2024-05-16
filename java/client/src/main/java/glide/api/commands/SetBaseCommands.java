@@ -97,8 +97,8 @@ public interface SetBaseCommands {
      * </code>, removing it from the source set. Creates a new destination set if needed. The
      * operation is atomic.
      *
-     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
-     *     same hash slot.
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
      * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
      * @param source The key of the set to remove the element from.
      * @param destination The key of the set to add the element to.
