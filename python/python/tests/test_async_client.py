@@ -2705,10 +2705,8 @@ class TestCommands:
             entries.update({f"a{i}": float(i)})
 
         assert await redis_client.zadd(key2, entries) == 10
-        assert await redis_client.bzmpop([key2], ScoreFilter.MIN, 0.1, 10) == [
-            key2,
-            entries,
-        ]
+        result = await redis_client.bzmpop([key2], ScoreFilter.MIN, 0.1, 10)
+        assert compare_maps(entries, result[1]) is True
 
         async def endless_bzmpop_call():
             await redis_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)

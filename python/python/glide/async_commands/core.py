@@ -3081,7 +3081,7 @@ class CoreCommands(Protocol):
         The optional `count` argument can be used to specify the number of elements to pop, and is set to 1 by default.
         The number of popped elements is the minimum from the sorted set's cardinality and `count`.
 
-        When in cluster mode, all keys must map to the same hash slot.
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
 
         `BZMPOP` is the blocking variant of `ZMPOP`.
 
