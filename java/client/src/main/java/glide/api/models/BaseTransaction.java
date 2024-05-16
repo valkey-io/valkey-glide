@@ -3,6 +3,7 @@ package glide.api.models;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
@@ -108,6 +109,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
@@ -2161,6 +2163,44 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         concatenateArrays(
                                 new String[] {destination}, keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
         protobufTransaction.addCommands(buildCommand(ZInterStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of sorted sets to intersect.
+     * @return Command Response - The number of members in the intersection.
+     */
+    public T zintercard(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, Integer.toString(keys.length)));
+        protobufTransaction.addCommands(buildCommand(ZInterCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
+     * algorithm will exit early and yield <code>limit</code> as the cardinality.
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of sorted sets to intersect.
+     * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
+     *     <code>0</code> the range will be unlimited.
+     * @return Command Response - The number of members in the intersection, or the <code>limit</code>
+     *     if reached.
+     */
+    public T zintercard(@NonNull String[] keys, long limit) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Integer.toString(keys.length)},
+                                keys,
+                                new String[] {LIMIT_REDIS_API, Long.toString(limit)}));
+        protobufTransaction.addCommands(buildCommand(ZInterCard, commandArgs));
         return getThis();
     }
 

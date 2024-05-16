@@ -2567,6 +2567,42 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zintercard(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        String key1 = "{zintercard}-" + UUID.randomUUID();
+        String key2 = "{zintercard}-" + UUID.randomUUID();
+        String key3 = "{zintercard}-" + UUID.randomUUID();
+
+        assertEquals(3, client.zadd(key1, Map.of("a", 1.0, "b", 2.0, "c", 3.0)).get());
+        assertEquals(3, client.zadd(key2, Map.of("b", 1.0, "c", 2.0, "d", 3.0)).get());
+
+        assertEquals(2L, client.zintercard(new String[] {key1, key2}).get());
+        assertEquals(0, client.zintercard(new String[] {key1, key3}).get());
+
+        assertEquals(2L, client.zintercard(new String[] {key1, key2}, 0).get());
+        assertEquals(1L, client.zintercard(new String[] {key1, key2}, 1).get());
+        assertEquals(2L, client.zintercard(new String[] {key1, key2}, 3).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zintercard(new String[] {key3}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // same-slot requirement
+        if (client instanceof RedisClusterClient) {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.zintercard(new String[] {"abc", "zxy", "lkn"}).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zinterstore(BaseClient client) {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
