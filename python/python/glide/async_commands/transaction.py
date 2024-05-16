@@ -2021,7 +2021,7 @@ class BaseTransaction:
             keys (List[str]): The keys of the sorted sets.
 
         Command response:
-            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted sets.
+            Mapping[str, float]: A mapping of elements and their scores representing the difference between the sorted sets.
                 If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
         """
