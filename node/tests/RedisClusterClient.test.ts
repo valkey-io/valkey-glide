@@ -13,8 +13,6 @@ import {
 import { v4 as uuidv4 } from "uuid";
 
 import {
-    BaseClientConfiguration,
-    ClosingError,
     ClusterTransaction,
     InfoOptions,
     ProtocolVersion,
@@ -24,8 +22,10 @@ import { runBaseTests } from "./SharedTests";
 import {
     RedisCluster,
     getFirstResult,
+    getOptions,
     parseCommandLineArgs,
     parseEndpoints,
+    testTeardown,
     transactionTest,
 } from "./TestUtilities";
 
@@ -50,17 +50,14 @@ describe("RedisClusterClient", () => {
     }, 20000);
 
     afterEach(async () => {
+        await testTeardown(
+            true,
+            getOptions(cluster.getAddresses(), ProtocolVersion.RESP3, 2000),
+        );
+
         // some tests don't initialize a client
         if (client == undefined) {
             return;
-        }
-
-        try {
-            await client.customCommand(["FLUSHALL"]);
-        } catch (e) {
-            expect((e as ClosingError).message).toMatch(
-                "Unable to execute requests; the client is closed. Please create a new client.",
-            );
         }
 
         client.close();
@@ -71,19 +68,6 @@ describe("RedisClusterClient", () => {
             await cluster.close();
         }
     });
-
-    const getOptions = (
-        addresses: [string, number][],
-        protocol: ProtocolVersion,
-    ): BaseClientConfiguration => {
-        return {
-            addresses: addresses.map(([host, port]) => ({
-                host,
-                port,
-            })),
-            protocol,
-        };
-    };
 
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {

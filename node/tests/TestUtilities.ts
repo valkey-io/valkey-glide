@@ -6,7 +6,16 @@ import { beforeAll, expect } from "@jest/globals";
 import { exec } from "child_process";
 import parseArgs from "minimist";
 import { v4 as uuidv4 } from "uuid";
-import { ClusterTransaction, Logger, ReturnType, Transaction } from "..";
+import {
+    BaseClientConfiguration,
+    ClusterTransaction,
+    Logger,
+    ProtocolVersion,
+    RedisClient,
+    RedisClusterClient,
+    ReturnType,
+    Transaction,
+} from "..";
 import { checkIfServerVersionLessThan } from "./SharedTests";
 
 beforeAll(() => {
@@ -116,6 +125,33 @@ export function getFirstResult(
 export function parseCommandLineArgs() {
     return parseArgs(process.argv.slice(2));
 }
+
+export async function testTeardown(
+    cluster_mode: boolean,
+    option: BaseClientConfiguration,
+) {
+    const client = cluster_mode
+        ? await RedisClusterClient.createClient(option)
+        : await RedisClient.createClient(option);
+
+    await client.customCommand(["FLUSHALL"]);
+    client.close();
+}
+
+export const getOptions = (
+    addresses: [string, number][],
+    protocol: ProtocolVersion,
+    timeout?: number,
+): BaseClientConfiguration => {
+    return {
+        addresses: addresses.map(([host, port]) => ({
+            host,
+            port,
+        })),
+        protocol,
+        ...(timeout && { requestTimeout: timeout }),
+    };
+};
 
 /**
  * Compare two maps by converting them to JSON strings and checking for equality, including property order.
