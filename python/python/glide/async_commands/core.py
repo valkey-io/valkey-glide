@@ -3141,7 +3141,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2, "member3": 9.6})
-            >>> await client.zadd("key2", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 10.5, "member2": 3.5})
             >>> await client.zintercard(["key1", "key2"])
                 2  # Indicates that the intersection of the sorted sets at "key1" and "key2" has a cardinality of 2.
             >>> await client.zintercard(["key1", "key2"], 1)
