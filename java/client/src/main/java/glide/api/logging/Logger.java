@@ -103,7 +103,7 @@ public final class Logger {
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when there is no intention to
      * replace an existing logger.
      * The logger will filter all logs with a level lower than the default level decided by the Rust core.
-     * The logs will be written to the console.
+     * The logs will be written to stdout.
      */
     public static void init() {
         init(Level.DEFAULT, null);
@@ -113,7 +113,7 @@ public final class Logger {
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when there is no intention to
      * replace an existing logger.
      * The logger will filter all logs with a level lower than the given level.
-     * The logs will be written to the console.
+     * The logs will be written to stdout.
      *
      * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]</code>.
      * If log level isn't provided, the logger will be configured with default configuration decided by the Rust core.
@@ -139,14 +139,14 @@ public final class Logger {
      * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]</code>.
      * If log level isn't provided, the logger will be configured with default configuration decided by the Rust core.
      * @param fileName If provided, the target of the logs will be the file mentioned.
-     * Otherwise, logs will be printed to the console.
+     * Otherwise, logs will be printed to stdout.
      */
     public static void setLoggerConfig(@NonNull Level level, String fileName) {
         initLogger(level, fileName);
     }
 
     /**
-     * Creates a new logger instance and configure it with the provided log level and file name.
+     * Creates a new logger instance and configure it with the provided log level and to stdout.
      * The logs will be written to the console.
      *
      * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]</code>.
@@ -157,11 +157,11 @@ public final class Logger {
     }
 
     /**
-     * Creates a new logger instance and configure it with the provided log level and file name.
+     * Creates a new logger instance and configure it with the provided file name and default log level. 
      * The logger will filter all logs with a level lower than the default level decided by the Rust core.
      *
      * @param fileName If provided, the target of the logs will be the file mentioned.
-     * Otherwise, logs will be printed to the console.
+     * Otherwise, logs will be printed to stdout.
      */
     public static void setLoggerConfig(String fileName) {
         setLoggerConfig(Level.DEFAULT, fileName);
@@ -170,7 +170,7 @@ public final class Logger {
     /**
      * Creates a new logger instance and configure it with the provided log level and file name.
      * The logger will filter all logs with a level lower than the default level decided by the Rust core.
-     * The logs will be written to the console.
+     * The logs will be written to stdout.
      */
     public static void setLoggerConfig() {
         setLoggerConfig(Level.DEFAULT, null);
