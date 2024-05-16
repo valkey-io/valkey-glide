@@ -250,7 +250,7 @@ public interface StringBaseCommands {
      * case.
      *
      * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
-     * @param key The <code>key</code> to which the value will be appended.
+     * @param key The key of the string.
      * @param value The value to append.
      * @return Response from Redis. The length of the string after appending the value.
      * @example
