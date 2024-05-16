@@ -1651,8 +1651,8 @@ class TestCommands:
             )
             == 2
         )
-        zrange_res = await redis_client.zrange_withscores(key1, range)
-        assert compare_maps(zrange_res, {"a": 1.0, "d": 4.0}) is True
+        zremrangebylex_res = await redis_client.zrange_withscores(key1, range)
+        assert compare_maps(zremrangebylex_res, {"a": 1.0, "d": 4.0}) is True
 
         assert (
             await redis_client.zremrangebylex(key1, LexBoundary("d"), InfBound.POS_INF)
@@ -2063,6 +2063,7 @@ class TestCommands:
             destination, RangeByIndex(0, -1)
         )
         assert compare_maps(zrange_res, {"one": 1.0, "two": 2.0, "three": 3.0}) is True
+
         # range from rank 0 to 1, from highest to lowest score
         assert (
             await redis_client.zrangestore(
