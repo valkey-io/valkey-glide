@@ -2842,7 +2842,7 @@ class CoreCommands(Protocol):
             keys (List[str]): The keys of the sorted sets.
 
         Returns:
-            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted
+            Mapping[str, float]: A mapping of elements and their scores representing the difference between the sorted
                 sets.
                 If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
@@ -3074,7 +3074,7 @@ class CoreCommands(Protocol):
         modifier: ScoreFilter,
         timeout: float,
         count: Optional[int] = None,
-    ) -> Optional[List[Union[str, Dict[str, float]]]]:
+    ) -> Optional[List[Union[str, Mapping[str, float]]]]:
         """
         Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
         that they are given. Blocks the connection when there are no members to pop from any of the given sorted sets.
@@ -3098,8 +3098,8 @@ class CoreCommands(Protocol):
             count (Optional[int]): The number of elements to pop.
 
         Returns:
-            Optional[List[Union[str, Dict[str, float]]]]: A two-element list containing the key name of the set from
-                which elements were popped, and a member-score dict of the popped elements. If no members could be
+            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+                which elements were popped, and a member-score mapping of the popped elements. If no members could be
                 popped and the timeout expired, returns None.
 
         Examples:
@@ -3115,7 +3115,7 @@ class CoreCommands(Protocol):
             args = args + ["COUNT", str(count)]
 
         return cast(
-            Optional[List[Union[str, Dict[str, float]]]],
+            Optional[List[Union[str, Mapping[str, float]]]],
             await self._execute_command(RequestType.BZMPop, args),
         )
 

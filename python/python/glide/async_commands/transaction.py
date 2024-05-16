@@ -2191,8 +2191,8 @@ class BaseTransaction:
             count (Optional[int]): The number of elements to pop.
 
         Command response:
-            Optional[List[Union[str, Dict[str, float]]]]: A two-element list containing the key name of the set from
-                which elements were popped, and a member-score dict. If no members could be popped and the timeout
+            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+                which elements were popped, and a member-score mapping. If no members could be popped and the timeout
                 expired, returns None.
 
         Since: Redis version 7.0.0.
