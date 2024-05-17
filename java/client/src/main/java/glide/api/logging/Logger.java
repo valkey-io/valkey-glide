@@ -24,6 +24,7 @@ import lombok.NonNull;
 public final class Logger {
     @Getter
     public enum Level {
+        DISABLED(-2),
         DEFAULT(-1),
         ERROR(0),
         WARN(1),
@@ -58,6 +59,10 @@ public final class Logger {
     @Getter private static Level loggerLevel;
 
     private static void initLogger(@NonNull Level level, String fileName) {
+        if (level == Level.DISABLED) {
+            loggerLevel = level;
+            return;
+        }
         loggerLevel = Level.fromInt(initInternal(level.getLevel(), fileName));
     }
 

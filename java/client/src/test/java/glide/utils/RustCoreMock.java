@@ -2,6 +2,7 @@
 package glide.utils;
 
 import connection_request.ConnectionRequestOuterClass.ConnectionRequest;
+import glide.api.logging.Logger;
 import glide.connectors.resources.Platform;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.buffer.ByteBuf;
@@ -24,9 +25,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
+import org.mockito.MockedStatic;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
+
+import static org.mockito.Mockito.mockStatic;
 
 public class RustCoreMock {
 

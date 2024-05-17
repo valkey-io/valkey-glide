@@ -48,7 +48,7 @@ public class LoggerTests {
         String traceIdentifier = "Trace";
         String traceMessage = "squawk";
 
-        Logger.init(Logger.Level.INFO, "log.txt");
+        Logger.setLoggerConfig(Logger.Level.INFO, "log.txt");
         Logger.log(Logger.Level.INFO, infoIdentifier, infoMessage);
         Logger.log(Logger.Level.WARN, warnIdentifier, warnMessage);
         Logger.log(Logger.Level.ERROR, errorIdentifier, errorMessage);

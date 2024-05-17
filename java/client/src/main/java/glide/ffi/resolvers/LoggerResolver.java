@@ -4,7 +4,7 @@ package glide.ffi.resolvers;
 public class LoggerResolver {
     // TODO: consider lazy loading the glide_rs library
     static {
-        System.loadLibrary("glide_rs");
+        NativeUtils.loadGlideLib();
     }
 
     public static native int initInternal(int level, String fileName);
