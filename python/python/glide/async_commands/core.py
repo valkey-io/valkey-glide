@@ -3076,12 +3076,12 @@ class CoreCommands(Protocol):
         that they are given. The optional `count` argument can be used to specify the number of elements to pop, and is
         set to 1 by default. The number of popped elements is the minimum from the sorted set's cardinality and `count`.
 
-        When in cluster mode, all keys must map to the same hash slot.
+        When in cluster mode, all `keys` must map to the same hash slot.
 
         See https://valkey.io/commands/zmpop for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted set.
+            keys (List[str]): The keys of the sorted sets.
             modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
                 members with the lowest/highest scores accordingly.
             count (Optional[int]): The number of elements to pop.

@@ -2177,7 +2177,7 @@ class BaseTransaction:
         See https://valkey.io/commands/zmpop for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted set.
+            keys (List[str]): The keys of the sorted sets.
             modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
                 members with the lowest/highest scores accordingly.
             count (Optional[int]): The number of elements to pop.
