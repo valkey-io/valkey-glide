@@ -1145,6 +1145,59 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sunionstore(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        key4 = f"{{testKey}}:4-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        assert await redis_client.sadd(key1, ["a", "b", "c"]) == 3
+        assert await redis_client.sadd(key2, ["c", "d", "e"]) == 3
+        assert await redis_client.sadd(key3, ["e", "f", "g"]) == 3
+
+        # store union in new key
+        assert await redis_client.sunionstore(key4, [key1, key2]) == 5
+        assert await redis_client.smembers(key4) == {"a", "b", "c", "d", "e"}
+
+        # overwrite existing set
+        assert await redis_client.sunionstore(key1, [key4, key2]) == 5
+        assert await redis_client.smembers(key1) == {"a", "b", "c", "d", "e"}
+
+        # overwrite one of the source keys
+        assert await redis_client.sunionstore(key2, [key4, key2]) == 5
+        assert await redis_client.smembers(key1) == {"a", "b", "c", "d", "e"}
+
+        # union with a non existing key
+        assert await redis_client.sunionstore(key2, [non_existing_key]) == 0
+        assert await redis_client.smembers(key2) == set()
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.sunionstore(key4, [string_key, key1])
+
+        # overwrite destination when destination is not a set
+        assert await redis_client.sunionstore(string_key, [key1, key3]) == 7
+        assert await redis_client.smembers(string_key) == {
+            "a",
+            "b",
+            "c",
+            "d",
+            "e",
+            "f",
+            "g",
+        }
+
+        # same-slot requirement
+        if isinstance(redis_client, RedisClusterClient):
+            with pytest.raises(RequestError) as e:
+                await redis_client.sunionstore("abc", ["zxy", "lkn"])
+            assert "CrossSlot" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ltrim(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
