@@ -2816,6 +2816,59 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zmpop(self, redis_client: TRedisClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = f"{{test}}-1-f{get_random_string(10)}"
+        key2 = f"{{test}}-2-f{get_random_string(10)}"
+        non_existing_key = f"{{test}}-non_existing_key"
+        string_key = f"{{test}}-3-f{get_random_string(10)}"
+
+        assert await redis_client.zadd(key1, {"a1": 1, "b1": 2}) == 2
+        assert await redis_client.zadd(key2, {"a2": 0.1, "b2": 0.2}) == 2
+
+        assert await redis_client.zmpop([key1, key2], ScoreFilter.MAX) == [
+            key1,
+            {"b1": 2},
+        ]
+        assert await redis_client.zmpop([key2, key1], ScoreFilter.MAX, 10) == [
+            key2,
+            {"b2": 0.2, "a2": 0.1},
+        ]
+
+        assert await redis_client.zmpop([non_existing_key], ScoreFilter.MIN) is None
+        assert await redis_client.zmpop([non_existing_key], ScoreFilter.MIN, 1) is None
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zmpop([string_key], ScoreFilter.MAX)
+        with pytest.raises(RequestError):
+            await redis_client.zmpop([string_key], ScoreFilter.MAX, 1)
+
+        # incorrect argument: key list should not be empty
+        with pytest.raises(RequestError):
+            assert await redis_client.zmpop([], ScoreFilter.MAX, 1)
+
+        # incorrect argument: count should be greater than 0
+        with pytest.raises(RequestError):
+            assert await redis_client.zmpop([key1], ScoreFilter.MAX, 0)
+
+        # check that order of entries in the response is preserved
+        entries = {}
+        for i in range(0, 10):
+            entries.update({f"a{i}": float(i)})
+
+        assert await redis_client.zadd(key2, entries) == 10
+        result = await redis_client.zmpop([key2], ScoreFilter.MIN, 10)
+        assert result is not None
+        result_map = cast(Mapping[str, float], result[1])
+        assert compare_maps(entries, result_map) is True
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_type(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK
@@ -2987,6 +3040,7 @@ class TestMultiKeyCommandCrossSlot:
                 [
                     redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
                     redis_client.zintercard(["abc", "def"]),
+                    redis_client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
                 ]
             )
 

@@ -182,6 +182,7 @@ enum RequestType {
     Bitcount = 140;
     BZMPop = 141;
     ZInterCard = 143;
+    ZMPop = 144;
 }
 
 message Command {

@@ -2163,6 +2163,38 @@ class BaseTransaction:
             RequestType.ZRandMember, [key, str(count), "WITHSCORES"]
         )
 
+    def zmpop(
+        self: TTransaction,
+        keys: List[str],
+        filter: ScoreFilter,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
+        that they are given. The optional `count` argument can be used to specify the number of elements to pop, and is
+        set to 1 by default. The number of popped elements is the minimum from the sorted set's cardinality and `count`.
+
+        See https://valkey.io/commands/zmpop for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
+                members with the lowest/highest scores accordingly.
+            count (Optional[int]): The number of elements to pop.
+
+        Command response:
+            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+                which elements were popped, and a member-score mapping of the popped elements. If no members could be
+                popped and the timeout expired, returns None.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(len(keys))] + keys + [filter.value]
+        if count is not None:
+            args = args + ["COUNT", str(count)]
+
+        return self.append_command(RequestType.ZMPop, args)
+
     def bzmpop(
         self: TTransaction,
         keys: List[str],
