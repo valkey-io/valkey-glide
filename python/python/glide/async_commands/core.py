@@ -3127,14 +3127,15 @@ class CoreCommands(Protocol):
         optional `limit` argument, if the intersection cardinality reaches `limit` partway through the computation, the
         algorithm will exit early and yield `limit` as the cardinality.
 
-        When in Cluster mode, all keys must map to the same hash slot.
-
         See https://valkey.io/commands/zintercard for more details.
 
         Args:
             keys (List[str]): The keys of the sorted sets to intersect.
             limit (Optional[int]): An optional argument that can be used to specify a maximum number for the
                 intersection cardinality. If limit is not supplied, or if it is set to 0, there will be no limit.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
 
         Returns:
             int: The cardinality of the intersection of the given sorted sets, or the `limit` if reached.
