@@ -2934,7 +2934,7 @@ class TestMultiKeyCommandCrossSlot:
     async def test_multi_key_command_returns_cross_slot_error(
         self, redis_client: RedisClusterClient
     ):
-        for promise in [
+        promises = [
             redis_client.blpop(["abc", "zxy", "lkn"], 0.1),
             redis_client.brpop(["abc", "zxy", "lkn"], 0.1),
             redis_client.rename("abc", "zxy"),
@@ -2946,8 +2946,12 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zunionstore("{xyz}", ["{abc}", "{def}"]),
             redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
             redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
-            redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
-        ]:
+        ]
+
+        if check_if_server_version_lt(redis_client, "7.0.0"):
+            promises.append(redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1))
+
+        for promise in promises:
             with pytest.raises(RequestError) as e:
                 await promise
             assert "crossslot" in str(e).lower()
