@@ -1546,9 +1546,10 @@ class CoreCommands(Protocol):
         Moves `member` from the set at `source` to the set at `destination`, removing it from the source set. Creates a
         new destination set if needed. The operation is atomic.
 
-        When in cluster mode, `source` and `destination` must map to the same hash slot.
-
         See https://valkey.io/commands/smove for more details.
+
+        Note:
+            When in cluster mode, `source` and `destination` must map to the same hash slot.
 
         Args:
             source (str): The key of the set to remove the element from.

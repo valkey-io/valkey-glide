@@ -1143,12 +1143,6 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.smove(string_key, key1, "_")
 
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.smove("abc", "def", "_")
-            assert "CrossSlot" in str(e)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ltrim(self, redis_client: TRedisClient):
@@ -3086,6 +3080,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zunionstore("{xyz}", ["{abc}", "{def}"]),
             redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
             redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
+            redis_client.smove("abc", "def", "_")
         ]
 
         if not check_if_server_version_lt(redis_client, "7.0.0"):
