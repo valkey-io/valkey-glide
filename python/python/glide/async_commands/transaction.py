@@ -2206,6 +2206,32 @@ class BaseTransaction:
 
         return self.append_command(RequestType.BZMPop, args)
 
+    def zintercard(
+        self: TTransaction, keys: List[str], limit: Optional[int] = None
+    ) -> TTransaction:
+        """
+        Returns the cardinality of the intersection of the sorted sets specified by `keys`. When provided with the
+        optional `limit` argument, if the intersection cardinality reaches `limit` partway through the computation, the
+        algorithm will exit early and yield `limit` as the cardinality.
+
+        See https://valkey.io/commands/zintercard for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets to intersect.
+            limit (Optional[int]): An optional argument that can be used to specify a maximum number for the
+                intersection cardinality. If limit is not supplied, or if it is set to 0, there will be no limit.
+
+        Command response:
+            int: The cardinality of the intersection of the given sorted sets, or the `limit` if reached.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(len(keys))] + keys
+        if limit is not None:
+            args.extend(["LIMIT", str(limit)])
+
+        return self.append_command(RequestType.ZInterCard, args)
+
     def dbsize(self: TTransaction) -> TTransaction:
         """
         Returns the number of keys in the currently selected database.
