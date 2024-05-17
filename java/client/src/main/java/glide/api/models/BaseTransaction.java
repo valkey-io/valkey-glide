@@ -33,6 +33,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -3076,6 +3077,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T geodist(@NonNull String key, @NonNull String member1, @NonNull String member2) {
         ArgsArray commandArgs = buildArgs(key, member1, member2);
         protobufTransaction.addCommands(buildCommand(GeoDist, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the <code>GeoHash</code> strings representing the positions of all the specified <code>
+     * members</code> in the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geohash">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members The array of members whose <code>GeoHash</code> strings are to be retrieved.
+     * @return Command Response - An array of <code>GeoHash</code> strings representing the positions
+     *     of the specified members stored at <code>key</code>. If a member does not exist in the
+     *     sorted set, a <code>null</code> value is returned for that member.
+     */
+    public T geohash(@NonNull String key, @NonNull String[] members) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(members, key));
+        protobufTransaction.addCommands(buildCommand(GeoHash, commandArgs));
         return getThis();
     }
 
