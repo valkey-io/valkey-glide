@@ -111,8 +111,7 @@ public final class Logger {
     /**
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when
      * there is no intention to replace an existing logger. The logger will filter all logs with a
-     * level lower than the default level decided by Glide core. The logs will be written to
-     * stdout.
+     * level lower than the default level decided by Glide core. The logs will be written to stdout.
      */
     public static void init() {
         init(Level.DEFAULT, null);
