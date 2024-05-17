@@ -29,6 +29,7 @@
 * Python: Added ZUNIONSTORE, ZINTERSTORE commands ([#1388](https://github.com/aws/glide-for-redis/pull/1388))
 * Python: Added ZRANDMEMBER command ([#1413](https://github.com/aws/glide-for-redis/pull/1413))
 * Python: Added BZMPOP command ([#1412](https://github.com/aws/glide-for-redis/pull/1412))
+* Python: Added ZINTERCARD command ([#1418](https://github.com/aws/glide-for-redis/pull/1418))
 
 
 #### Fixes
