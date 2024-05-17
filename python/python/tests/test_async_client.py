@@ -1883,12 +1883,6 @@ class TestCommands:
             await redis_client.zinterstore("{xyz}", [])
         assert "wrong number of arguments" in str(e)
 
-        # Cross slot query
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.zinterstore("{xyz}", ["{abc}", "{def}"])
-            assert "CrossSlot" in str(e)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zunionstore(self, redis_client: TRedisClient):
@@ -1971,12 +1965,6 @@ class TestCommands:
         with pytest.raises(RequestError) as e:
             await redis_client.zunionstore("{xyz}", [])
         assert "wrong number of arguments" in str(e)
-
-        # Cross slot query
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.zunionstore("{xyz}", ["{abc}", "{def}"])
-            assert "CrossSlot" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2719,12 +2707,6 @@ class TestCommands:
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(endless_bzmpop_call(), timeout=0.5)
 
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1)
-            assert "CrossSlot" in str(e)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrandmember(self, redis_client: TRedisClient):
@@ -2960,8 +2942,11 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zdiff(["abc", "zxy", "lkn"]),
             redis_client.zdiff_withscores(["abc", "zxy", "lkn"]),
             redis_client.zrangestore("abc", "zxy", RangeByIndex(0, -1)),
+            redis_client.zinterstore("{xyz}", ["{abc}", "{def}"]),
+            redis_client.zunionstore("{xyz}", ["{abc}", "{def}"]),
             redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
             redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
+            redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
         ]:
             with pytest.raises(RequestError) as e:
                 await promise
