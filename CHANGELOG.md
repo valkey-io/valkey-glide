@@ -31,6 +31,7 @@
 * Python: Added BZMPOP command ([#1412](https://github.com/aws/glide-for-redis/pull/1412))
 * Python: Added ZINTERCARD command ([#1418](https://github.com/aws/glide-for-redis/pull/1418))
 * Python: Added ZMPOP command ([#1417](https://github.com/aws/glide-for-redis/pull/1417))
+* Python: Added SMOVE command ([#1421](https://github.com/aws/glide-for-redis/pull/1421))
 
 
 #### Fixes
