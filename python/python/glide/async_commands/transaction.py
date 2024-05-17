@@ -1011,6 +1011,28 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SIsMember, [key, member])
 
+    def smove(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        member: str,
+    ) -> TTransaction:
+        """
+        Moves `member` from the set at `source` to the set at `destination`, removing it from the source set. Creates a
+        new destination set if needed. The operation is atomic.
+
+        See https://valkey.io/commands/smove for more details.
+
+        Args:
+            source (str): The key of the set to remove the element from.
+            destination (str): The key of the set to add the element to.
+            member (str): The set element to move.
+
+        Command response:
+            bool: True on success, or False if the `source` set does not exist or the element is not a member of the source set.
+        """
+        return self.append_command(RequestType.SMove, [source, destination, member])
+
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.

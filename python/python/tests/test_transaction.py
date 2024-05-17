@@ -205,6 +205,8 @@ async def transaction_test(
     args.append(2)
     transaction.spop_count(key7, 4)
     args.append({"foo", "bar"})
+    transaction.smove(key7, key7, "non_existing_member")
+    args.append(False)
 
     transaction.zadd(key8, {"one": 1, "two": 2, "three": 3, "four": 4})
     args.append(4)
