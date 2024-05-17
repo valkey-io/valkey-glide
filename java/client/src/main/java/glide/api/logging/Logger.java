@@ -21,7 +21,7 @@ import lombok.NonNull;
  * saved with the logs that were sent before the call.<br>
  * <br>
  * If <code>setLoggerConfig</code> wasn't called, the first log attempt will initialize a new logger
- * with default configuration decided by the Rust core.
+ * with default configuration decided by Glide core.
  */
 public final class Logger {
     @Getter
@@ -84,7 +84,7 @@ public final class Logger {
      *
      * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
-     *     configuration decided by the Rust core.
+     *     configuration decided by Glide core.
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
      *     will be printed to the console.
      */
@@ -97,7 +97,7 @@ public final class Logger {
     /**
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when
      * there is no intention to replace an existing logger. The logger will filter all logs with a
-     * level lower than the default level decided by the Rust core. If given a <code>fileName</code>
+     * level lower than the default level decided by Glide core. If given a <code>fileName</code>
      * argument, will write the logs to files postfixed with <code>fileName</code>. If <code>fileName
      * </code> isn't provided, the logs will be written to the console.
      *
@@ -111,7 +111,7 @@ public final class Logger {
     /**
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when
      * there is no intention to replace an existing logger. The logger will filter all logs with a
-     * level lower than the default level decided by the Rust core. The logs will be written to
+     * level lower than the default level decided by Glide core. The logs will be written to
      * stdout.
      */
     public static void init() {
@@ -125,7 +125,7 @@ public final class Logger {
      *
      * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
-     *     configuration decided by the Rust core.
+     *     configuration decided by Glide core.
      */
     public static void init(@NonNull Level level) {
         init(level, null);
@@ -147,7 +147,7 @@ public final class Logger {
      *
      * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
-     *     configuration decided by the Rust core.
+     *     configuration decided by Glide core.
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
      *     will be printed to stdout.
      */
@@ -161,7 +161,7 @@ public final class Logger {
      *
      * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
-     *     configuration decided by the Rust core.
+     *     configuration decided by Glide core.
      */
     public static void setLoggerConfig(@NonNull Level level) {
         setLoggerConfig(level, null);
@@ -181,7 +181,7 @@ public final class Logger {
 
     /**
      * Creates a new logger instance. The logger will filter all logs with a level lower than the
-     * default level decided by the Rust core. The logs will be written to stdout.
+     * default level decided by Glide core. The logs will be written to stdout.
      */
     public static void setLoggerConfig() {
         setLoggerConfig(Level.DEFAULT, null);
