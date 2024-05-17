@@ -1,3 +1,4 @@
+/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -6,11 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import glide.api.logging.Logger;
-import lombok.SneakyThrows;
-import org.junit.jupiter.api.Test;
-
 import java.io.File;
 import java.util.Scanner;
+import lombok.SneakyThrows;
+import org.junit.jupiter.api.Test;
 
 public class LoggerTests {
 

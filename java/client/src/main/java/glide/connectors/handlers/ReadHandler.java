@@ -1,14 +1,14 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.handlers;
 
+import static glide.api.logging.Logger.Level.ERROR;
+
 import glide.api.logging.Logger;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import response.ResponseOuterClass.Response;
-
-import static glide.api.logging.Logger.Level.ERROR;
 
 /** Handler for inbound traffic though UDS. Used by Netty. */
 @RequiredArgsConstructor
