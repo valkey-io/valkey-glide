@@ -22,6 +22,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -1258,6 +1259,13 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String member1, @NonNull String member2) {
         String[] arguments = new String[] {key, member1, member2};
         return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> geohash(@NonNull String key, @NonNull String[] members) {
+        String[] arguments = concatenateArrays(new String[] {key}, members);
+        return commandManager.submitNewCommand(
+                GeoHash, arguments, response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
