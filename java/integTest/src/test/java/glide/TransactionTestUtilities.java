@@ -478,9 +478,10 @@ public class TransactionTestUtilities {
                                 new GeospatialData(13.361389, 38.115556),
                                 "Catania",
                                 new GeospatialData(15.087269, 37.502669)))
-                .geopos(geoKey1, new String[] {"Palermo", "Catania"});
-        transaction.geodist(geoKey1, "Palermo", "Catania");
-        transaction.geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS);
+                .geopos(geoKey1, new String[] {"Palermo", "Catania"})
+                .geodist(geoKey1, "Palermo", "Catania")
+                .geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
+                .geohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"});
 
         return new Object[] {
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
@@ -490,6 +491,9 @@ public class TransactionTestUtilities {
             }, // geopos(geoKey1, new String[]{"Palermo", "Catania"})
             166274.1516, // geodist(geoKey1, "Palermo", "Catania")
             166.2742, // geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
+            new String[] {
+                "sqc8b49rny0", "sqdtr74hyu0", null
+            } // eohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"})
         };
     }
 

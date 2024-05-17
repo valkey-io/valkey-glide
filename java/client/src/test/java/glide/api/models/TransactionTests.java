@@ -44,6 +44,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
@@ -720,6 +721,9 @@ public class TransactionTests {
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2")));
         transaction.geodist("key", "Place", "Place2", GeoUnit.KILOMETERS);
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2", "km")));
+
+        transaction.geohash("key", new String[] {"Place"});
+        results.add(Pair.of(GeoHash, buildArgs("key", "Place")));
 
         transaction.bitcount("key");
         results.add(Pair.of(Bitcount, buildArgs("key")));
