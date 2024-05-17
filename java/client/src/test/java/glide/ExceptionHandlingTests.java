@@ -43,11 +43,11 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.MockedStatic;
 import redis_request.RedisRequestOuterClass.RedisRequest;
 import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.RequestErrorType;
 import response.ResponseOuterClass.Response;
-import org.mockito.MockedStatic;
 
 public class ExceptionHandlingTests {
     private MockedStatic<Logger> mockedLogger;
