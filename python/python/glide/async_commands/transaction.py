@@ -23,6 +23,7 @@ from glide.async_commands.sorted_set import (
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
     _create_z_cmd_store_args,
     _create_zrange_args,
     _create_zrangestore_args,
@@ -2020,7 +2021,7 @@ class BaseTransaction:
             keys (List[str]): The keys of the sorted sets.
 
         Command response:
-            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted sets.
+            Mapping[str, float]: A mapping of elements and their scores representing the difference between the sorted sets.
                 If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
         """
@@ -2161,6 +2162,49 @@ class BaseTransaction:
         return self.append_command(
             RequestType.ZRandMember, [key, str(count), "WITHSCORES"]
         )
+
+    def bzmpop(
+        self: TTransaction,
+        keys: List[str],
+        modifier: ScoreFilter,
+        timeout: float,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
+        that they are given. Blocks the connection when there are no members to pop from any of the given sorted sets.
+
+        The optional `count` argument can be used to specify the number of elements to pop, and is set to 1 by default.
+
+        The number of popped elements is the minimum from the sorted set's cardinality and `count`.
+
+        `BZMPOP` is the blocking variant of `ZMPOP`.
+
+        See https://valkey.io/commands/bzmpop for more details.
+
+        Note:
+            `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
+                members with the lowest/highest scores accordingly.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will
+                block indefinitely.
+            count (Optional[int]): The number of elements to pop.
+
+        Command response:
+            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+                which elements were popped, and a member-score mapping. If no members could be popped and the timeout
+                expired, returns None.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(timeout), str(len(keys))] + keys + [modifier.value]
+        if count is not None:
+            args = args + ["COUNT", str(count)]
+
+        return self.append_command(RequestType.BZMPop, args)
 
     def dbsize(self: TTransaction) -> TTransaction:
         """

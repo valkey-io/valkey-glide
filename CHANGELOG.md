@@ -28,6 +28,7 @@
 * Python: Added BZPOPMIN and BZPOPMAX commands ([#1399](https://github.com/aws/glide-for-redis/pull/1399))
 * Python: Added ZUNIONSTORE, ZINTERSTORE commands ([#1388](https://github.com/aws/glide-for-redis/pull/1388))
 * Python: Added ZRANDMEMBER command ([#1413](https://github.com/aws/glide-for-redis/pull/1413))
+* Python: Added BZMPOP command ([#1412](https://github.com/aws/glide-for-redis/pull/1412))
 
 
 #### Fixes
