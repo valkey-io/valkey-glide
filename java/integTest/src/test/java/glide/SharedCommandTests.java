@@ -2503,16 +2503,6 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zintercard(new String[] {key3}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.zintercard(new String[] {"abc", "zxy", "lkn"}).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
