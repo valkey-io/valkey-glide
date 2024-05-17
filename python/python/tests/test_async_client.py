@@ -7,7 +7,7 @@ import math
 import time
 from collections.abc import Mapping
 from datetime import datetime, timedelta, timezone
-from typing import Dict, Union, cast
+from typing import Any, Dict, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
@@ -2934,7 +2934,7 @@ class TestMultiKeyCommandCrossSlot:
     async def test_multi_key_command_returns_cross_slot_error(
         self, redis_client: RedisClusterClient
     ):
-        promises = [
+        promises: list[Any] = [
             redis_client.blpop(["abc", "zxy", "lkn"], 0.1),
             redis_client.brpop(["abc", "zxy", "lkn"], 0.1),
             redis_client.rename("abc", "zxy"),
