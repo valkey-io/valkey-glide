@@ -894,12 +894,6 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.blpop(["foo"], 0.001)
 
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.blpop(["abc", "zxy", "lkn"], 0.5)
-            assert "CrossSlot" in str(e)
-
         async def endless_blpop_call():
             await redis_client.blpop(["non_existent_key"], 0)
 
@@ -985,12 +979,6 @@ class TestCommands:
         assert await redis_client.set("foo", "bar")
         with pytest.raises(RequestError):
             await redis_client.brpop(["foo"], 0.001)
-
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.brpop(["abc", "zxy", "lkn"], 0.5)
-            assert "CrossSlot" in str(e)
 
         async def endless_brpop_call():
             await redis_client.brpop(["non_existent_key"], 0)
@@ -2034,16 +2022,10 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.bzpopmin(["foo"], 0.5)
 
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5)
-            assert "CrossSlot" in str(e)
-
         async def endless_bzpopmin_call():
             await redis_client.bzpopmin(["non_existent_key"], 0)
 
-        # bzpopmax is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # bzpopmin is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
         # avoid having the test block forever
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(endless_bzpopmin_call(), timeout=0.5)
@@ -2092,12 +2074,6 @@ class TestCommands:
         assert await redis_client.set("foo", "value") == OK
         with pytest.raises(RequestError):
             await redis_client.bzpopmax(["foo"], 0.5)
-
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5)
-            assert "CrossSlot" in str(e)
 
         async def endless_bzpopmax_call():
             await redis_client.bzpopmax(["non_existent_key"], 0)
@@ -2355,12 +2331,6 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.zrangestore(destination, string_key, RangeByIndex(0, -1))
 
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.zrangestore("abc", "def", RangeByIndex(0, -1))
-            assert "CrossSlot" in str(e)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrangestore_by_score(self, redis_client: TRedisClient):
@@ -2463,14 +2433,6 @@ class TestCommands:
                 string_key,
                 RangeByScore(ScoreBoundary(0), ScoreBoundary(3)),
             )
-
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.zrangestore(
-                    "abc", "def", RangeByScore(ScoreBoundary(0), ScoreBoundary(3))
-                )
-            assert "CrossSlot" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2575,14 +2537,6 @@ class TestCommands:
                 destination, string_key, RangeByLex(InfBound.NEG_INF, InfBound.POS_INF)
             )
 
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.zrangestore(
-                    "abc", "def", RangeByLex(InfBound.NEG_INF, InfBound.POS_INF)
-                )
-            assert "CrossSlot" in str(e)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrank(self, redis_client: TRedisClient):
@@ -2658,16 +2612,6 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.zdiff_withscores([string_key, key2])
 
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.zdiff(["abc", "zxy", "lkn"])
-            assert "CrossSlot" in str(e)
-
-            with pytest.raises(RequestError) as e:
-                await redis_client.zdiff_withscores(["abc", "zxy", "lkn"])
-            assert "CrossSlot" in str(e)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zdiffstore(self, redis_client: TRedisClient):
@@ -2706,12 +2650,6 @@ class TestCommands:
         assert await redis_client.set(string_key, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.zdiffstore(key4, [string_key, key1])
-
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.zdiffstore("abc", ["zxy", "lkn"])
-            assert "CrossSlot" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2932,6 +2870,43 @@ class TestCommands:
         assert await redis_client.set("foo", "value") == OK
         with pytest.raises(RequestError):
             await redis_client.pfadd("foo", [])
+
+
+class TestMultiKeyCommandCrossSlot:
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_multi_key_command_returns_cross_slot_error(
+        self, redis_client: RedisClusterClient
+    ):
+        for promise in [
+            redis_client.blpop(["abc", "zxy", "lkn"], 0.1),
+            redis_client.brpop(["abc", "zxy", "lkn"], 0.1),
+            redis_client.rename("abc", "zxy"),
+            redis_client.zdiffstore("abc", ["zxy", "lkn"]),
+            redis_client.zdiff(["abc", "zxy", "lkn"]),
+            redis_client.zdiff_withscores(["abc", "zxy", "lkn"]),
+            redis_client.zrangestore("abc", "zxy", RangeByIndex(0, -1)),
+            redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
+            redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
+        ]:
+            with pytest.raises(RequestError) as e:
+                await promise
+            assert "crossslot" in str(e).lower()
+
+        # TODO bz*, zunion, sdiff and others - all rest multi-key commands except ones tested below
+        pass
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_multi_key_command_routed_to_multiple_nodes(
+        self, redis_client: RedisClusterClient
+    ):
+        await redis_client.exists(["abc", "zxy", "lkn"])
+        await redis_client.unlink(["abc", "zxy", "lkn"])
+        await redis_client.delete(["abc", "zxy", "lkn"])
+        await redis_client.mget(["abc", "zxy", "lkn"])
+        await redis_client.mset({"abc": "1", "zxy": "2", "lkn": "3"})
+        # TODO touch
 
 
 class TestCommandsUnitTests:
