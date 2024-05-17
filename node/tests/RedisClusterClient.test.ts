@@ -274,4 +274,49 @@ describe("RedisClusterClient", () => {
         },
         TIMEOUT,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `check that multi key command returns a cross slot error`,
+        async (protocol) => {
+            const client = await RedisClusterClient.createClient(
+                getOptions(cluster.getAddresses(), protocol),
+            );
+
+            const promises = [
+                client.blpop(["abc", "zxy", "lkn"], 0.1),
+                client.rename("abc", "zxy"),
+                client.brpop(["abc", "zxy", "lkn"], 0.1),
+                // TODO all rest multi-key commands except ones tested below
+            ];
+
+            for (const promise of promises) {
+                try {
+                    await promise;
+                } catch (e) {
+                    expect((e as Error).message.toLowerCase()).toContain(
+                        "crossslot",
+                    );
+                }
+            }
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `check that multi key command routed to multiple nodes`,
+        async (protocol) => {
+            const client = await RedisClusterClient.createClient(
+                getOptions(cluster.getAddresses(), protocol),
+            );
+
+            await client.exists(["abc", "zxy", "lkn"]);
+            await client.unlink(["abc", "zxy", "lkn"]);
+            await client.del(["abc", "zxy", "lkn"]);
+            await client.mget(["abc", "zxy", "lkn"]);
+            await client.mset({ abc: "1", zxy: "2", lkn: "3" });
+            // TODO touch
+            client.close();
+        },
+    );
 });
