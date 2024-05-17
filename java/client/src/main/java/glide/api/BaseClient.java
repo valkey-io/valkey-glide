@@ -1072,18 +1072,18 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zintercard(@NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, Integer.toString(keys.length));
+        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zintercard(@NonNull String[] keys, long limit) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Integer.toString(keys.length)},
                         keys,
                         new String[] {LIMIT_REDIS_API, Long.toString(limit)});
-        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
-    }
-
-    @Override
-    public CompletableFuture<Long> zintercard(@NonNull String[] keys) {
-        String[] arguments = ArrayUtils.addFirst(keys, Integer.toString(keys.length));
         return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
     }
 

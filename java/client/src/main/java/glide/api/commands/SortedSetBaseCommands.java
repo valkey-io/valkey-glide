@@ -1217,6 +1217,24 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
+     * algorithm will exit early and yield <code>limit</code> as the cardinality.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of sorted sets to intersect.
+     * @return The number of members in the intersection.
+     * @example
+     *     <pre>{@code
+     * Long length = client.zintercard(new String[] {"mySortedSet1", "mySortedSet2"}).get();
+     * assert length == 3L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zintercard(String[] keys);
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @since Redis 7.0 and above
@@ -1235,22 +1253,4 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zintercard(String[] keys, long limit);
-
-    /**
-     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
-     * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
-     * algorithm will exit early and yield <code>limit</code> as the cardinality.
-     *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above
-     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
-     * @param keys The keys of sorted sets to intersect.
-     * @return The number of members in the intersection.
-     * @example
-     *     <pre>{@code
-     * Long length = client.zintercard(new String[] {"mySortedSet1", "mySortedSet2"}).get();
-     * assert length == 3L;
-     * }</pre>
-     */
-    CompletableFuture<Long> zintercard(String[] keys);
 }
