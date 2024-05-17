@@ -3080,7 +3080,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zunionstore("{xyz}", ["{abc}", "{def}"]),
             redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
             redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
-            redis_client.smove("abc", "def", "_")
+            redis_client.smove("abc", "def", "_"),
         ]
 
         if not check_if_server_version_lt(redis_client, "7.0.0"):
