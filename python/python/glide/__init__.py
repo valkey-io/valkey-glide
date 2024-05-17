@@ -17,6 +17,7 @@ from glide.async_commands.core import (
 )
 from glide.async_commands.redis_modules import json
 from glide.async_commands.sorted_set import (
+    AggregationType,
     InfBound,
     LexBoundary,
     Limit,
@@ -89,6 +90,7 @@ __all__ = [
     "ExpiryType",
     "GeoUnit",
     "GeospatialData",
+    "AggregationType",
     "InfBound",
     "InfoSection",
     "InsertPosition",

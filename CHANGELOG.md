@@ -21,7 +21,13 @@
 * Python: Added HRANDFIELD command ([#1334](https://github.com/aws/glide-for-redis/pull/1334))
 * Node: Added BLPOP command ([#1223](https://github.com/aws/glide-for-redis/pull/1223))
 * Python: Added XADD, XTRIM commands ([#1320](https://github.com/aws/glide-for-redis/pull/1320))
+* Python: Added BLPOP and BRPOP commands ([#1369](https://github.com/aws/glide-for-redis/pull/1369))
 * Python: Added ZRANGESTORE command ([#1377](https://github.com/aws/glide-for-redis/pull/1377))
+* Python: Added ZDIFFSTORE command ([#1378](https://github.com/aws/glide-for-redis/pull/1378))
+* Python: Added ZDIFF command ([#1401](https://github.com/aws/glide-for-redis/pull/1401))
+* Python: Added BZPOPMIN and BZPOPMAX commands ([#1399](https://github.com/aws/glide-for-redis/pull/1399))
+* Python: Added ZUNIONSTORE, ZINTERSTORE commands ([#1388](https://github.com/aws/glide-for-redis/pull/1388))
+* Python: Added ZRANDMEMBER command ([#1413](https://github.com/aws/glide-for-redis/pull/1413))
 
 
 #### Fixes

@@ -17,12 +17,14 @@ from typing import (
 )
 
 from glide.async_commands.sorted_set import (
+    AggregationType,
     InfBound,
     LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    _create_z_cmd_store_args,
     _create_zrange_args,
     _create_zrangestore_args,
 )
@@ -427,9 +429,7 @@ class CoreCommands(Protocol):
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        return cast(
-            Optional[str], await self._execute_command(RequestType.SetString, args)
-        )
+        return cast(Optional[str], await self._execute_command(RequestType.Set, args))
 
     async def get(self, key: str) -> Optional[str]:
         """
@@ -446,9 +446,7 @@ class CoreCommands(Protocol):
             >>> await client.get("key")
                 'value'
         """
-        return cast(
-            Optional[str], await self._execute_command(RequestType.GetString, [key])
-        )
+        return cast(Optional[str], await self._execute_command(RequestType.Get, [key]))
 
     async def append(self, key: str, value: str) -> int:
         """
@@ -701,7 +699,7 @@ class CoreCommands(Protocol):
             field_value_list.extend(pair)
         return cast(
             int,
-            await self._execute_command(RequestType.HashSet, field_value_list),
+            await self._execute_command(RequestType.HSet, field_value_list),
         )
 
     async def hget(self, key: str, field: str) -> Optional[str]:
@@ -726,7 +724,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[str],
-            await self._execute_command(RequestType.HashGet, [key, field]),
+            await self._execute_command(RequestType.HGet, [key, field]),
         )
 
     async def hsetnx(
@@ -782,9 +780,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             int,
-            await self._execute_command(
-                RequestType.HashIncrBy, [key, field, str(amount)]
-            ),
+            await self._execute_command(RequestType.HIncrBy, [key, field, str(amount)]),
         )
 
     async def hincrbyfloat(self, key: str, field: str, amount: float) -> float:
@@ -811,7 +807,7 @@ class CoreCommands(Protocol):
         return cast(
             float,
             await self._execute_command(
-                RequestType.HashIncrByFloat, [key, field, str(amount)]
+                RequestType.HIncrByFloat, [key, field, str(amount)]
             ),
         )
 
@@ -835,7 +831,7 @@ class CoreCommands(Protocol):
                 False
         """
         return cast(
-            bool, await self._execute_command(RequestType.HashExists, [key, field])
+            bool, await self._execute_command(RequestType.HExists, [key, field])
         )
 
     async def hgetall(self, key: str) -> Dict[str, str]:
@@ -856,7 +852,7 @@ class CoreCommands(Protocol):
                 {"field1": "value1", "field2": "value2"}
         """
         return cast(
-            Dict[str, str], await self._execute_command(RequestType.HashGetAll, [key])
+            Dict[str, str], await self._execute_command(RequestType.HGetAll, [key])
         )
 
     async def hmget(self, key: str, fields: List[str]) -> List[Optional[str]]:
@@ -879,7 +875,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             List[Optional[str]],
-            await self._execute_command(RequestType.HashMGet, [key] + fields),
+            await self._execute_command(RequestType.HMGet, [key] + fields),
         )
 
     async def hdel(self, key: str, fields: List[str]) -> int:
@@ -899,9 +895,7 @@ class CoreCommands(Protocol):
             >>> await client.hdel("my_hash", ["field1", "field2"])
                 2  # Indicates that two fields were successfully removed from the hash.
         """
-        return cast(
-            int, await self._execute_command(RequestType.HashDel, [key] + fields)
-        )
+        return cast(int, await self._execute_command(RequestType.HDel, [key] + fields))
 
     async def hlen(self, key: str) -> int:
         """
@@ -940,7 +934,7 @@ class CoreCommands(Protocol):
            >>> await client.hvals("my_hash")
                ["value1", "value2", "value3"]  # Returns all the values stored in the hash "my_hash".
         """
-        return cast(List[str], await self._execute_command(RequestType.Hvals, [key]))
+        return cast(List[str], await self._execute_command(RequestType.HVals, [key]))
 
     async def hkeys(self, key: str) -> List[str]:
         """
@@ -958,7 +952,7 @@ class CoreCommands(Protocol):
             >>> await client.hkeys("my_hash")
                 ["field1", "field2", "field3"]  # Returns all the field names stored in the hash "my_hash".
         """
-        return cast(List[str], await self._execute_command(RequestType.Hkeys, [key]))
+        return cast(List[str], await self._execute_command(RequestType.HKeys, [key]))
 
     async def hrandfield(self, key: str) -> Optional[str]:
         """
@@ -991,7 +985,7 @@ class CoreCommands(Protocol):
             key (str): The key of the hash.
             count (int): The number of field names to return.
                 If `count` is positive, returns unique elements.
-                If negative, allows for duplicates.
+                If `count` is negative, allows for duplicates elements.
 
         Returns:
             List[str]: A list of random field names from the hash.
@@ -1018,7 +1012,7 @@ class CoreCommands(Protocol):
             key (str): The key of the hash.
             count (int): The number of field names to return.
                 If `count` is positive, returns unique elements.
-                If negative, allows for duplicates.
+                If `count` is negative, allows for duplicates elements.
 
         Returns:
             List[List[str]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
@@ -1062,7 +1056,8 @@ class CoreCommands(Protocol):
 
     async def lpushx(self, key: str, elements: List[str]) -> int:
         """
-        Inserts specified values at the head of the `list`, only if `key` already exists and holds a list.
+        Inserts all the specified values at the head of the list stored at `key`, only if `key` exists and holds a list.
+        If `key` is not a list, this performs no operation.
 
         See https://redis.io/commands/lpushx/ for more details.
 
@@ -1131,6 +1126,34 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.LPop, [key, str(count)]),
         )
 
+    async def blpop(self, keys: List[str], timeout: float) -> Optional[List[str]]:
+        """
+        Pops an element from the head of the first list that is non-empty, with the given keys being checked in the
+        order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
+
+        When in cluster mode, all keys must map to the same hash slot.
+
+        See https://valkey.io/commands/blpop for details.
+
+        BLPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        Args:
+            keys (List[str]): The keys of the lists to pop from.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+
+        Returns:
+            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
+
+        Examples:
+            >>> await client.blpop(["list1", "list2"], 0.5)
+                ["list1", "element"]  # "element" was popped from the head of the list with key "list1"
+        """
+        return cast(
+            Optional[List[str]],
+            await self._execute_command(RequestType.BLPop, keys + [str(timeout)]),
+        )
+
     async def lrange(self, key: str, start: int, end: int) -> List[str]:
         """
         Retrieve the specified elements of the list stored at `key` within the given range.
@@ -1195,7 +1218,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[str],
-            await self._execute_command(RequestType.Lindex, [key, str(index)]),
+            await self._execute_command(RequestType.LIndex, [key, str(index)]),
         )
 
     async def rpush(self, key: str, elements: List[str]) -> int:
@@ -1224,7 +1247,8 @@ class CoreCommands(Protocol):
 
     async def rpushx(self, key: str, elements: List[str]) -> int:
         """
-        Inserts specified values at the tail of the `list`, only if `key` already exists and holds a list.
+        Inserts all the specified values at the tail of the list stored at `key`, only if `key` exists and holds a list.
+        If `key` is not a list, this performs no operation.
 
         See https://redis.io/commands/rpushx/ for more details.
 
@@ -1291,6 +1315,34 @@ class CoreCommands(Protocol):
         return cast(
             Optional[List[str]],
             await self._execute_command(RequestType.RPop, [key, str(count)]),
+        )
+
+    async def brpop(self, keys: List[str], timeout: float) -> Optional[List[str]]:
+        """
+        Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the
+        order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
+
+        When in cluster mode, all keys must map to the same hash slot.
+
+        See https://valkey.io/commands/brpop for details.
+
+        BRPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        Args:
+            keys (List[str]): The keys of the lists to pop from.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
+
+        Returns:
+            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+                popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
+
+        Examples:
+            >>> await client.brpop(["list1", "list2"], 0.5)
+                ["list1", "element"]  # "element" was popped from the tail of the list with key "list1"
+        """
+        return cast(
+            Optional[List[str]],
+            await self._execute_command(RequestType.BRPop, keys + [str(timeout)]),
         )
 
     async def linsert(
@@ -1419,7 +1471,7 @@ class CoreCommands(Protocol):
             >>> await client.spop("non_exiting_key")
                 None
         """
-        return cast(Optional[str], await self._execute_command(RequestType.Spop, [key]))
+        return cast(Optional[str], await self._execute_command(RequestType.SPop, [key]))
 
     async def spop_count(self, key: str, count: int) -> Set[str]:
         """
@@ -1443,7 +1495,7 @@ class CoreCommands(Protocol):
                 Set()
         """
         return cast(
-            Set[str], await self._execute_command(RequestType.Spop, [key, str(count)])
+            Set[str], await self._execute_command(RequestType.SPop, [key, str(count)])
         )
 
     async def sismember(
@@ -2073,7 +2125,7 @@ class CoreCommands(Protocol):
 
         return cast(
             int,
-            await self._execute_command(RequestType.Zadd, args),
+            await self._execute_command(RequestType.ZAdd, args),
         )
 
     async def zadd_incr(
@@ -2131,7 +2183,7 @@ class CoreCommands(Protocol):
         args += [str(increment), member]
         return cast(
             Optional[float],
-            await self._execute_command(RequestType.Zadd, args),
+            await self._execute_command(RequestType.ZAdd, args),
         )
 
     async def zcard(self, key: str) -> int:
@@ -2153,7 +2205,7 @@ class CoreCommands(Protocol):
             >>> await client.zcard("non_existing_key")
                 0
         """
-        return cast(int, await self._execute_command(RequestType.Zcard, [key]))
+        return cast(int, await self._execute_command(RequestType.ZCard, [key]))
 
     async def zcount(
         self,
@@ -2199,7 +2251,7 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(
-                RequestType.Zcount, [key, score_min, score_max]
+                RequestType.ZCount, [key, score_min, score_max]
             ),
         )
 
@@ -2235,6 +2287,42 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def bzpopmax(
+        self, keys: List[str], timeout: float
+    ) -> Optional[List[Union[str, float]]]:
+        """
+        Pops the member with the highest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
+
+        When in cluster mode, all keys must map to the same hash slot.
+
+        `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
+
+        `BZPOPMAX` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/bzpopmax for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
+
+        Returns:
+            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+                and the member score. If no member could be popped and the `timeout` expired, returns None.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set1", {"member1": 10.0, "member2": 5.0})
+                2  # Two elements have been added to the sorted set at "my_sorted_set1".
+            >>> await client.bzpopmax(["my_sorted_set1", "my_sorted_set2"], 0.5)
+                ['my_sorted_set1', 'member1', 10.0]  # "member1" with a score of 10.0 has been removed from "my_sorted_set1".
+        """
+        return cast(
+            Optional[List[Union[str, float]]],
+            await self._execute_command(RequestType.BZPopMax, keys + [str(timeout)]),
+        )
+
     async def zpopmin(
         self, key: str, count: Optional[int] = None
     ) -> Mapping[str, float]:
@@ -2265,6 +2353,42 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.ZPopMin, [key, str(count)] if count else [key]
             ),
+        )
+
+    async def bzpopmin(
+        self, keys: List[str], timeout: float
+    ) -> Optional[List[Union[str, float]]]:
+        """
+        Pops the member with the lowest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
+
+        When in cluster mode, all keys must map to the same hash slot.
+
+        `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
+
+        `BZPOPMIN` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/bzpopmin for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
+
+        Returns:
+            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+                and the member score. If no member could be popped and the `timeout` expired, returns None.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set1", {"member1": 10.0, "member2": 5.0})
+                2  # Two elements have been added to the sorted set at "my_sorted_set1".
+            >>> await client.bzpopmin(["my_sorted_set1", "my_sorted_set2"], 0.5)
+                ['my_sorted_set1', 'member2', 5.0]  # "member2" with a score of 5.0 has been removed from "my_sorted_set1".
+        """
+        return cast(
+            Optional[List[Union[str, float]]],
+            await self._execute_command(RequestType.BZPopMin, keys + [str(timeout)]),
         )
 
     async def zrange(
@@ -2302,7 +2426,7 @@ class CoreCommands(Protocol):
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=False)
 
-        return cast(List[str], await self._execute_command(RequestType.Zrange, args))
+        return cast(List[str], await self._execute_command(RequestType.ZRange, args))
 
     async def zrange_withscores(
         self,
@@ -2336,7 +2460,7 @@ class CoreCommands(Protocol):
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
 
         return cast(
-            Mapping[str, float], await self._execute_command(RequestType.Zrange, args)
+            Mapping[str, float], await self._execute_command(RequestType.ZRange, args)
         )
 
     async def zrangestore(
@@ -2406,7 +2530,7 @@ class CoreCommands(Protocol):
                 None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
         """
         return cast(
-            Optional[int], await self._execute_command(RequestType.Zrank, [key, member])
+            Optional[int], await self._execute_command(RequestType.ZRank, [key, member])
         )
 
     async def zrank_withscore(
@@ -2437,7 +2561,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[List[Union[int, float]]],
-            await self._execute_command(RequestType.Zrank, [key, member, "WITHSCORE"]),
+            await self._execute_command(RequestType.ZRank, [key, member, "WITHSCORE"]),
         )
 
     async def zrem(
@@ -2467,7 +2591,7 @@ class CoreCommands(Protocol):
         """
         return cast(
             int,
-            await self._execute_command(RequestType.Zrem, [key] + members),
+            await self._execute_command(RequestType.ZRem, [key] + members),
         )
 
     async def zremrangebyscore(
@@ -2660,6 +2784,272 @@ class CoreCommands(Protocol):
         return cast(
             List[Optional[float]],
             await self._execute_command(RequestType.ZMScore, [key] + members),
+        )
+
+    async def zdiff(self, keys: List[str]) -> List[str]:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets.
+        To get the elements with their scores, see `zdiff_withscores`.
+
+        When in Cluster mode, all keys must map to the same hash slot.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Returns:
+            List[str]: A list of elements representing the difference between the sorted sets.
+                If the first key does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+
+        Examples:
+            >>> await client.zadd("sorted_set1", {"element1":1.0, "element2": 2.0, "element3": 3.0})
+            >>> await client.zadd("sorted_set2", {"element2": 2.0})
+            >>> await client.zadd("sorted_set3", {"element3": 3.0})
+            >>> await client.zdiff("sorted_set1", "sorted_set2", "sorted_set3")
+                ["element1"]  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.ZDiff, [str(len(keys))] + keys),
+        )
+
+    async def zdiff_withscores(self, keys: List[str]) -> Mapping[str, float]:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
+        When in Cluster mode, all keys must map to the same hash slot.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Returns:
+            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted
+                sets.
+                If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+
+        Examples:
+            >>> await client.zadd("sorted_set1", {"element1":1.0, "element2": 2.0, "element3": 3.0})
+            >>> await client.zadd("sorted_set2", {"element2": 2.0})
+            >>> await client.zadd("sorted_set3", {"element3": 3.0})
+            >>> await client.zdiff_withscores("sorted_set1", "sorted_set2", "sorted_set3")
+                {"element1": 1.0}  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
+        """
+        return cast(
+            Mapping[str, float],
+            await self._execute_command(
+                RequestType.ZDiff, [str(len(keys))] + keys + ["WITHSCORES"]
+            ),
+        )
+
+    async def zdiffstore(self, destination: str, keys: List[str]) -> int:
+        """
+        Calculates the difference between the first sorted set and all the successive sorted sets at `keys` and stores
+        the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
+        treated as empty sets.
+
+        When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+
+        See https://valkey.io/commands/zdiffstore for more details.
+
+        Args:
+            destination (str): The key for the resulting sorted set.
+            keys (List[str]): The keys of the sorted sets to compare.
+
+        Returns:
+            int: The number of members in the resulting sorted set stored at `destination`.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+                2  # Indicates that two elements have been added to the sorted set at "key1".
+            >>> await client.zadd("key2", {"member1": 10.5})
+                1  # Indicates that one element has been added to the sorted set at "key2".
+            >>> await client.zdiffstore("my_sorted_set", ["key1", "key2"])
+                1  # One member exists in "key1" but not "key2", and this member was stored in "my_sorted_set".
+            >>> await client.zrange("my_sorted_set", RangeByIndex(0, -1))
+                ['member2']  # "member2" is now stored in "my_sorted_set"
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZDiffStore, [destination, str(len(keys))] + keys
+            ),
+        )
+
+    async def zinterstore(
+        self,
+        destination: str,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> int:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+
+        When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zinterstore/ for more details.
+
+        Args:
+            destination (str): The key of the destination sorted set.
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Returns:
+            int: The number of elements in the resulting sorted set stored at `destination`.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zinterstore("my_sorted_set", ["key1", "key2"])
+                1 # Indicates that the sorted set "my_sorted_set" contains one element.
+            >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
+                {'member1': 20}  # "member1"  is now stored in "my_sorted_set" with score of 20.
+            >>> await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX )
+                1 # Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+            >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
+                {'member1': 10.5}  # "member1"  is now stored in "my_sorted_set" with score of 10.5.
+        """
+        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        return cast(
+            int,
+            await self._execute_command(RequestType.ZInterStore, args),
+        )
+
+    async def zunionstore(
+        self,
+        destination: str,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> int:
+        """
+        Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+
+        When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+
+        see https://valkey.io/commands/zunionstore/ for more details.
+
+        Args:
+            destination (str): The key of the destination sorted set.
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Returns:
+            int: The number of elements in the resulting sorted set stored at `destination`.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zunionstore("my_sorted_set", ["key1", "key2"])
+                2 # Indicates that the sorted set "my_sorted_set" contains two element.
+            >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
+                {'member1': 20, 'member2': 8.2}
+            >>> await client.zunionstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX )
+                2 # Indicates that the sorted set "my_sorted_set" contains two element, and each score is the maximum score between the sets.
+            >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
+                {'member1': 10.5, 'member2': 8.2}
+        """
+        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        return cast(
+            int,
+            await self._execute_command(RequestType.ZUnionStore, args),
+        )
+
+    async def zrandmember(self, key: str) -> Optional[str]:
+        """
+        Returns a random member from the sorted set stored at 'key'.
+
+        See https://valkey.io/commands/zrandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+
+        Returns:
+            Optional[str]: A random member from the sorted set.
+                If the sorted set does not exist or is empty, the response will be None.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.zrandmember("my_sorted_set")
+                "member1"  # "member1" is a random member of "my_sorted_set".
+            >>> await client.zrandmember("non_existing_sorted_set")
+                None  # "non_existing_sorted_set" is not an existing key, so None was returned.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.ZRandMember, [key]),
+        )
+
+    async def zrandmember_count(self, key: str, count: int) -> List[str]:
+        """
+        Retrieves up to the absolute value of `count` random members from the sorted set stored at 'key'.
+
+        See https://valkey.io/commands/zrandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
+
+        Returns:
+            List[str]: A list of members from the sorted set.
+                If the sorted set does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.zrandmember("my_sorted_set", -3)
+                ["member1", "member1", "member2"]  # "member1" and "member2" are random members of "my_sorted_set".
+            >>> await client.zrandmember("non_existing_sorted_set", 3)
+                []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.ZRandMember, [key, str(count)]),
+        )
+
+    async def zrandmember_withscores(
+        self, key: str, count: int
+    ) -> List[List[Union[str, float]]]:
+        """
+        Retrieves up to the absolute value of `count` random members along with their scores from the sorted set
+        stored at 'key'.
+
+        See https://valkey.io/commands/zrandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
+
+        Returns:
+            List[List[Union[str, float]]]: A list of `[member, score]` lists, where `member` is a random member from
+                the sorted set and `score` is the associated score.
+                If the sorted set does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.zrandmember_withscores("my_sorted_set", -3)
+                [["member1", 1.0], ["member1", 1.0], ["member2", 2.0]]  # "member1" and "member2" are random members of "my_sorted_set", and have scores of 1.0 and 2.0, respectively.
+            >>> await client.zrandmember_withscores("non_existing_sorted_set", 3)
+                []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
+        """
+        return cast(
+            List[List[Union[str, float]]],
+            await self._execute_command(
+                RequestType.ZRandMember, [key, str(count), "WITHSCORES"]
+            ),
         )
 
     async def invoke_script(

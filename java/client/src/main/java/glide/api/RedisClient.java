@@ -12,9 +12,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
+import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -23,6 +24,7 @@ import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.models.Transaction;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
@@ -61,7 +63,7 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> exec(@NonNull Transaction transaction) {
-        return commandManager.submitNewCommand(transaction, this::handleArrayOrNullResponse);
+        return commandManager.submitNewTransaction(transaction, this::handleArrayOrNullResponse);
     }
 
     @Override
@@ -143,21 +145,32 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> flushall() {
+        return commandManager.submitNewCommand(FlushAll, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushall(@NonNull FlushMode mode) {
+        return commandManager.submitNewCommand(
+                FlushAll, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> lolwut() {
-        return commandManager.submitNewCommand(LOLWUT, new String[0], this::handleStringResponse);
+        return commandManager.submitNewCommand(Lolwut, new String[0], this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> lolwut(int @NonNull [] parameters) {
         String[] arguments =
                 Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new);
-        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
+        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> lolwut(int version) {
         return commandManager.submitNewCommand(
-                LOLWUT,
+                Lolwut,
                 new String[] {VERSION_REDIS_API, Integer.toString(version)},
                 this::handleStringResponse);
     }
@@ -168,6 +181,6 @@ public class RedisClient extends BaseClient
                 concatenateArrays(
                         new String[] {VERSION_REDIS_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
-        return commandManager.submitNewCommand(LOLWUT, arguments, this::handleStringResponse);
+        return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
     }
 }
