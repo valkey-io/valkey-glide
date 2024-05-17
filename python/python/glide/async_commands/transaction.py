@@ -2182,9 +2182,8 @@ class BaseTransaction:
 
         See https://valkey.io/commands/bzmpop for more details.
 
-        Notes:
-            1. When in cluster mode, all `keys` must map to the same hash slot.
-            2. `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        Note:
+            `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
             keys (List[str]): The keys of the sorted sets.
