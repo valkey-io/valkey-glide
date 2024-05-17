@@ -16,6 +16,7 @@ import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
+import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
@@ -35,6 +36,8 @@ import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.RangeOptions.RangeByIndex;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
@@ -46,12 +49,17 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Stream;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 
 @Timeout(10) // seconds
 public class CommandTests {
@@ -635,6 +643,75 @@ public class CommandTests {
         } finally {
             clusterClient.configSet(Map.of(maxmemoryPolicy, oldPolicy)).get();
         }
+    }
+
+    public static Stream<Arguments> callCrossSlotCommandsWhichShouldFail() {
+        return Stream.of(
+                Arguments.of("smove", null, clusterClient.smove("abc", "zxy", "lkn")),
+                Arguments.of("renamenx", null, clusterClient.renamenx("abc", "zxy")),
+                Arguments.of(
+                        "sinterstore", null, clusterClient.sinterstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("sdiff", null, clusterClient.sdiff(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "sdiffstore", null, clusterClient.sdiffstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("sinter", null, clusterClient.sinter(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "sunionstore", null, clusterClient.sunionstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of("zdiff", null, clusterClient.zdiff(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "zdiffWithScores",
+                        null,
+                        clusterClient.zdiffWithScores(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "zdiffstore", null, clusterClient.zdiffstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "zunion", null, clusterClient.zunion(new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                Arguments.of(
+                        "zrangestore", null, clusterClient.zrangestore("abc", "zxy", new RangeByIndex(3, 1))),
+                Arguments.of(
+                        "zinterstore",
+                        null,
+                        clusterClient.zinterstore("foo", new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                Arguments.of("brpop", null, clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of("pfcount", null, clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("pfmerge", null, clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "bzpopmax", "5.0.0", clusterClient.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of(
+                        "bzpopmin", "5.0.0", clusterClient.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1)),
+                Arguments.of(
+                        "bzmpop", "7.0.0", clusterClient.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1)));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0} cross slot keys will throw RequestException")
+    @MethodSource("callCrossSlotCommandsWhichShouldFail")
+    public void check_throws_cross_slot_error(
+            String testName, String minVer, CompletableFuture<?> future) {
+        if (minVer != null) {
+            assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo(minVer));
+        }
+        var executionException = assertThrows(ExecutionException.class, future::get);
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+    }
+
+    public static Stream<Arguments> callCrossSlotCommandsWhichShouldPass() {
+        return Stream.of(
+                Arguments.of("exists", clusterClient.exists(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("unlink", clusterClient.unlink(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("del", clusterClient.del(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("mget", clusterClient.mget(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("mset", clusterClient.mset(Map.of("abc", "1", "zxy", "2", "lkn", "3"))),
+                Arguments.of("touch", clusterClient.touch(new String[] {"abc", "zxy", "lkn"})));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0} cross slot keys are allowed")
+    @MethodSource("callCrossSlotCommandsWhichShouldPass")
+    public void check_does_not_throw_cross_slot_error(String testName, CompletableFuture<?> future) {
+        future.get();
     }
 
     @Test
