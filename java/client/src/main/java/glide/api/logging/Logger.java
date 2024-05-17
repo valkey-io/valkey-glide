@@ -19,11 +19,6 @@ import static glide.ffi.resolvers.LoggerResolver.logInternal;
  * by the Rust core.
  */
 public final class Logger {
-    // TODO: consider lazy loading the glide_rs library
-    static {
-        System.loadLibrary("glide_rs");
-    }
-
     @Getter
     public enum Level {
         DEFAULT(-1),
