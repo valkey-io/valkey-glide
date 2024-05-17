@@ -2984,7 +2984,10 @@ class TestMultiKeyCommandCrossSlot:
 
         if not check_if_server_version_lt(redis_client, "7.0.0"):
             promises.extend(
-                [redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1)]
+                [
+                    redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
+                    redis_client.zintercard(["abc", "def"]),
+                ]
             )
 
         for promise in promises:
