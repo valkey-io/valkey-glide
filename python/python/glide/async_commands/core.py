@@ -495,9 +495,10 @@ class CoreCommands(Protocol):
         """
         Renames `key` to `new_key`.
         If `newkey` already exists it is overwritten.
-        In Cluster mode, both `key` and `newkey` must be in the same hash slot,
-        meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
         See https://redis.io/commands/rename/ for more details.
+
+        Note:
+            When in cluster mode, both `key` and `newkey` must map to the same hash slot.
 
         Args:
             key (str) : The key to rename.
@@ -514,6 +515,9 @@ class CoreCommands(Protocol):
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
         See https://redis.io/commands/del/ for details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
             keys (List[str]): A list of keys to be deleted from the database.
@@ -599,8 +603,11 @@ class CoreCommands(Protocol):
         Set multiple keys to multiple values in a single atomic operation.
         See https://redis.io/commands/mset/ for more details.
 
+        Note:
+            When in cluster mode, the command may route to multiple nodes when keys in `key_value_map` map to different hash slots.
+
         Args:
-            parameters (Mapping[str, str]): A map of key value pairs.
+            key_value_map (Mapping[str, str]): A map of key value pairs.
 
         Returns:
             OK: a simple OK response.
@@ -618,6 +625,9 @@ class CoreCommands(Protocol):
         """
         Retrieve the values of multiple keys.
         See https://redis.io/commands/mget/ for more details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
             keys (List[str]): A list of keys to retrieve values for.
@@ -1130,12 +1140,11 @@ class CoreCommands(Protocol):
         """
         Pops an element from the head of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
-
-        When in cluster mode, all keys must map to the same hash slot.
-
         See https://valkey.io/commands/blpop for details.
 
-        BLPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        Notes:
+            1. When in cluster mode, all `keys` must map to the same hash slot.
+            2. `BLPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
             keys (List[str]): The keys of the lists to pop from.
@@ -1321,12 +1330,11 @@ class CoreCommands(Protocol):
         """
         Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
-
-        When in cluster mode, all keys must map to the same hash slot.
-
         See https://valkey.io/commands/brpop for details.
 
-        BRPOP is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+        Notes:
+            1. When in cluster mode, all `keys` must map to the same hash slot.
+            2. `BRPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
             keys (List[str]): The keys of the lists to pop from.
@@ -1607,6 +1615,9 @@ class CoreCommands(Protocol):
         Returns the number of keys in `keys` that exist in the database.
         See https://redis.io/commands/exists/ for more details.
 
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+
         Args:
             keys (List[str]): The list of keys to check.
 
@@ -1627,6 +1638,9 @@ class CoreCommands(Protocol):
         This command, similar to DEL, removes specified keys and ignores non-existent ones.
         However, this command does not block the server, while [DEL](https://redis.io/commands/del) does.
         See https://redis.io/commands/unlink/ for more details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
             keys (List[str]): The list of keys to unlink.
@@ -2474,12 +2488,13 @@ class CoreCommands(Protocol):
         Stores a specified range of elements from the sorted set at `source`, into a new sorted set at `destination`. If
         `destination` doesn't exist, a new sorted set is created; if it exists, it's overwritten.
 
-        When in Cluster mode, all keys must map to the same hash slot.
-
         ZRANGESTORE can perform different types of range queries: by index (rank), by the score, or by lexicographical
         order.
 
         See https://valkey.io/commands/zrangestore for more details.
+
+        Note:
+            When in Cluster mode, all `keys` must map to the same hash slot.
 
         Args:
             destination (str): The key for the destination sorted set.
@@ -2850,10 +2865,10 @@ class CoreCommands(Protocol):
         Calculates the difference between the first sorted set and all the successive sorted sets at `keys` and stores
         the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
         treated as empty sets.
-
-        When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
-
         See https://valkey.io/commands/zdiffstore for more details.
+
+        Note:
+            When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
 
         Args:
             destination (str): The key for the resulting sorted set.
