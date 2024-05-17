@@ -4,6 +4,9 @@ package glide.api.logging;
 import lombok.Getter;
 import lombok.NonNull;
 
+import static glide.ffi.resolvers.LoggerResolver.initInternal;
+import static glide.ffi.resolvers.LoggerResolver.logInternal;
+
 /**
  * A singleton class that allows logging which is consistent with logs from the internal rust core.
  * The logger can be set up in 2 ways -
@@ -175,8 +178,4 @@ public final class Logger {
     public static void setLoggerConfig() {
         setLoggerConfig(Level.DEFAULT, null);
     }
-
-    private static native int initInternal(int level, String fileName);
-
-    private static native void logInternal(int level, String logIdentifier, String message);
 }

@@ -207,7 +207,7 @@ impl TryFrom<Level> for logger_core::Level {
 }
 
 #[no_mangle]
-pub extern "system" fn Java_glide_api_logging_Logger_logInternal<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_logInternal<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     level: jint,
@@ -230,7 +230,7 @@ pub extern "system" fn Java_glide_api_logging_Logger_logInternal<'local>(
 }
 
 #[no_mangle]
-pub extern "system" fn Java_glide_api_logging_Logger_initInternal<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     level: jint,
