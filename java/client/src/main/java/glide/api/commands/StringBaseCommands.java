@@ -246,8 +246,8 @@ public interface StringBaseCommands {
 
     /**
      * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
-     * created and set as an empty string, so `APPEND` will be similar to {@see #set} in this special
-     * case.
+     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
+     * this special case.
      *
      * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
      * @param key The key of the string.
@@ -255,8 +255,8 @@ public interface StringBaseCommands {
      * @return The length of the string after appending the value.
      * @example
      *     <pre>{@code
-     * String value = client.append("key", "value").get();
-     * assert value.equals(5);
+     * Long value = client.append("key", "value").get();
+     * assert value.equals(5L);
      * }</pre>
      */
     CompletableFuture<Long> append(String key, String value);

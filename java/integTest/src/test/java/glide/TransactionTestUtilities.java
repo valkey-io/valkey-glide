@@ -46,7 +46,6 @@ public class TransactionTestUtilities {
     private static final String field1 = UUID.randomUUID().toString();
     private static final String field2 = UUID.randomUUID().toString();
     private static final String field3 = UUID.randomUUID().toString();
-    private static final String key10 = "{key}" + UUID.randomUUID();
 
     public static BaseTransaction<?> transactionTest(BaseTransaction<?> baseTransaction) {
 
@@ -57,9 +56,9 @@ public class TransactionTestUtilities {
 
         baseTransaction.set(key2, value2, SetOptions.builder().returnOldValue(true).build());
         baseTransaction.strlen(key2);
-        baseTransaction.append(key10, value1);
-        baseTransaction.get(key10);
-        baseTransaction.customCommand(new String[] {"MGET", key1, key2});
+        baseTransaction.append(key2, value2);
+        baseTransaction.mset(Map.of(key2, value2));
+        baseTransaction.mget(new String[] {key1, key2});
         baseTransaction.renamenx(key1, key2);
 
         baseTransaction.exists(new String[] {key1});
@@ -216,8 +215,8 @@ public class TransactionTestUtilities {
             "embstr", // objectEncoding(key1)
             null,
             (long) value1.length(), // strlen(key2)
-            Long.valueOf(value1.length()), // append(key10, value1)
-            value1, // get(key10)
+            Long.valueOf(value1.length() * 2), // append(key2, value1)
+            OK, // mset(Map.of(key1, value2, key2, value1)
             new String[] {value1, value2},
             false, // renamenx(key1, key2)
             1L,
