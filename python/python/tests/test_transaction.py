@@ -254,6 +254,11 @@ async def transaction_test(
     args.append(0)
     transaction.zdiffstore(key8, [key8, key8])
     args.append(0)
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.zmpop([key8], ScoreFilter.MAX)
+        args.append(None)
+        transaction.zmpop([key8], ScoreFilter.MAX, 1)
+        args.append(None)
 
     transaction.zadd(key13, {"one": 1.0, "two": 2.0})
     args.append(2)
