@@ -2949,7 +2949,9 @@ class TestMultiKeyCommandCrossSlot:
         ]
 
         if check_if_server_version_lt(redis_client, "7.0.0"):
-            promises.append(redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1))
+            promises.extend(
+                [redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1)]
+            )
 
         for promise in promises:
             with pytest.raises(RequestError) as e:
