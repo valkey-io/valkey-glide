@@ -3121,6 +3121,44 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.BZMPop, args),
         )
 
+    async def zintercard(self, keys: List[str], limit: Optional[int] = None) -> int:
+        """
+        Returns the cardinality of the intersection of the sorted sets specified by `keys`. When provided with the
+        optional `limit` argument, if the intersection cardinality reaches `limit` partway through the computation, the
+        algorithm will exit early and yield `limit` as the cardinality.
+
+        See https://valkey.io/commands/zintercard for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets to intersect.
+            limit (Optional[int]): An optional argument that can be used to specify a maximum number for the
+                intersection cardinality. If limit is not supplied, or if it is set to 0, there will be no limit.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
+
+        Returns:
+            int: The cardinality of the intersection of the given sorted sets, or the `limit` if reached.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2, "member3": 9.6})
+            >>> await client.zadd("key2", {"member1": 10.5, "member2": 3.5})
+            >>> await client.zintercard(["key1", "key2"])
+                2  # Indicates that the intersection of the sorted sets at "key1" and "key2" has a cardinality of 2.
+            >>> await client.zintercard(["key1", "key2"], 1)
+                1  # A `limit` of 1 was provided, so the intersection computation exits early and yields the `limit` value of 1.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(len(keys))] + keys
+        if limit is not None:
+            args.extend(["LIMIT", str(limit)])
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.ZInterCard, args),
+        )
+
     async def invoke_script(
         self,
         script: Script,
