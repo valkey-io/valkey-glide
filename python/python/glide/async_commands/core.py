@@ -3073,12 +3073,17 @@ class CoreCommands(Protocol):
     ) -> Optional[List[Union[str, Mapping[str, float]]]]:
         """
         Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
-        that they are given. The optional `count` argument can be used to specify the number of elements to pop, and is
-        set to 1 by default. The number of popped elements is the minimum from the sorted set's cardinality and `count`.
+        that they are given.
 
-        When in cluster mode, all `keys` must map to the same hash slot.
+        The optional `count` argument can be used to specify the number of elements to pop, and is
+        set to 1 by default.
+
+        The number of popped elements is the minimum from the sorted set's cardinality and `count`.
 
         See https://valkey.io/commands/zmpop for more details.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
 
         Args:
             keys (List[str]): The keys of the sorted sets.

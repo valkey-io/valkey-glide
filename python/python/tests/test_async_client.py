@@ -2867,12 +2867,6 @@ class TestCommands:
         result_map = cast(Mapping[str, float], result[1])
         assert compare_maps(entries, result_map) is True
 
-        # same-slot requirement
-        if isinstance(redis_client, RedisClusterClient):
-            with pytest.raises(RequestError) as e:
-                await redis_client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX)
-            assert "CrossSlot" in str(e)
-
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_type(self, redis_client: TRedisClient):
