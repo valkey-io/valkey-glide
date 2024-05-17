@@ -279,7 +279,7 @@ describe("RedisClusterClient", () => {
         `check that multi key command returns a cross slot error`,
         async (protocol) => {
             const client = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
             const promises = [
@@ -307,7 +307,7 @@ describe("RedisClusterClient", () => {
         `check that multi key command routed to multiple nodes`,
         async (protocol) => {
             const client = await RedisClusterClient.createClient(
-                getOptions(cluster.getAddresses(), protocol),
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
             await client.exists(["abc", "zxy", "lkn"]);
