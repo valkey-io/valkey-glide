@@ -2948,7 +2948,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
         ]
 
-        if check_if_server_version_lt(redis_client, "7.0.0"):
+        if not check_if_server_version_lt(redis_client, "7.0.0"):
             promises.extend(
                 [redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1)]
             )
