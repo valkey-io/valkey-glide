@@ -15,11 +15,9 @@ import lombok.NonNull;
  *   <li>By calling <code>Logger.init</code>, which configures the logger only if it wasn't
  *       previously configured.
  *   <li>By calling <code>Logger.setLoggerConfig</code>, which replaces the existing configuration,
- *       and means that new logs will not be
+ *       and means that new logs will not be saved with the logs that were sent before the call.
  * </ol>
  *
- * saved with the logs that were sent before the call.<br>
- * <br>
  * If <code>setLoggerConfig</code> wasn't called, the first log attempt will initialize a new logger
  * with default configuration decided by Glide core.
  */
@@ -169,7 +167,7 @@ public final class Logger {
     /**
      * Creates a new logger instance and configure it with the provided file name and default log
      * level. The logger will filter all logs with a level lower than the default level decided by the
-     * Rust core.
+     * Glide core.
      *
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
      *     will be printed to stdout.
