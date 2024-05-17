@@ -42,6 +42,24 @@ class AggregationType(Enum):
     """
 
 
+class ScoreFilter(Enum):
+    """
+    Defines which elements to pop from a sorted set.
+
+    ScoreFilter is a mandatory option for ZMPOP (https://valkey.io/commands/zmpop)
+    and BZMPOP (https://valkey.io/commands/bzmpop).
+    """
+
+    MIN = "MIN"
+    """
+    Pop elements with the lowest scores.
+    """
+    MAX = "MAX"
+    """
+    Pop elements with the highest scores.
+    """
+
+
 class ScoreBoundary:
     """
     Represents a specific numeric score boundary in a sorted set.

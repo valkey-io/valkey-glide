@@ -1,11 +1,11 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 from abc import ABC, abstractmethod
+from collections.abc import Mapping
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
     Dict,
     List,
-    Mapping,
     Optional,
     Protocol,
     Set,
@@ -24,6 +24,7 @@ from glide.async_commands.sorted_set import (
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
     _create_z_cmd_store_args,
     _create_zrange_args,
     _create_zrangestore_args,
@@ -2841,7 +2842,7 @@ class CoreCommands(Protocol):
             keys (List[str]): The keys of the sorted sets.
 
         Returns:
-            Mapping[str, float]: A dictionary of elements and their scores representing the difference between the sorted
+            Mapping[str, float]: A mapping of elements and their scores representing the difference between the sorted
                 sets.
                 If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
@@ -3065,6 +3066,59 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.ZRandMember, [key, str(count), "WITHSCORES"]
             ),
+        )
+
+    async def bzmpop(
+        self,
+        keys: List[str],
+        modifier: ScoreFilter,
+        timeout: float,
+        count: Optional[int] = None,
+    ) -> Optional[List[Union[str, Mapping[str, float]]]]:
+        """
+        Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
+        that they are given. Blocks the connection when there are no members to pop from any of the given sorted sets.
+
+        The optional `count` argument can be used to specify the number of elements to pop, and is set to 1 by default.
+
+        The number of popped elements is the minimum from the sorted set's cardinality and `count`.
+
+        `BZMPOP` is the blocking variant of `ZMPOP`.
+
+        See https://valkey.io/commands/bzmpop for more details.
+
+        Notes:
+            1. When in cluster mode, all `keys` must map to the same hash slot.
+            2. `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
+                members with the lowest/highest scores accordingly.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will
+                block indefinitely.
+            count (Optional[int]): The number of elements to pop.
+
+        Returns:
+            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+                which elements were popped, and a member-score mapping of the popped elements. If no members could be
+                popped and the timeout expired, returns None.
+
+        Examples:
+            >>> await client.zadd("zSet1", {"one": 1.0, "two": 2.0, "three": 3.0})
+            >>> await client.zadd("zSet2", {"four": 4.0})
+            >>> await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.5, 2)
+                ['zSet1', {'three': 3.0, 'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(timeout), str(len(keys))] + keys + [modifier.value]
+        if count is not None:
+            args = args + ["COUNT", str(count)]
+
+        return cast(
+            Optional[List[Union[str, Mapping[str, float]]]],
+            await self._execute_command(RequestType.BZMPop, args),
         )
 
     async def invoke_script(
