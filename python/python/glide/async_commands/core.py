@@ -1536,6 +1536,40 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SIsMember, [key, member]),
         )
 
+    async def smove(
+        self,
+        source: str,
+        destination: str,
+        member: str,
+    ) -> bool:
+        """
+        Moves `member` from the set at `source` to the set at `destination`, removing it from the source set. Creates a
+        new destination set if needed. The operation is atomic.
+
+        See https://valkey.io/commands/smove for more details.
+
+        Note:
+            When in cluster mode, `source` and `destination` must map to the same hash slot.
+
+        Args:
+            source (str): The key of the set to remove the element from.
+            destination (str): The key of the set to add the element to.
+            member (str): The set element to move.
+
+        Returns:
+            bool: True on success, or False if the `source` set does not exist or the element is not a member of the source set.
+
+        Examples:
+            >>> await client.smove("set1", "set2", "member1")
+                True  # "member1" was moved from "set1" to "set2".
+        """
+        return cast(
+            bool,
+            await self._execute_command(
+                RequestType.SMove, [source, destination, member]
+            ),
+        )
+
     async def ltrim(self, key: str, start: int, end: int) -> TOK:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.

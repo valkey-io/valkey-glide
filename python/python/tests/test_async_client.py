@@ -1098,6 +1098,53 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_smove(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        key4 = f"{{testKey}}:4-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        assert await redis_client.sadd(key1, ["1", "2", "3"]) == 3
+        assert await redis_client.sadd(key2, ["2", "3"]) == 2
+
+        # move an element
+        assert await redis_client.smove(key1, key2, "1") is True
+        assert await redis_client.smembers(key1) == {"2", "3"}
+        assert await redis_client.smembers(key2) == {"1", "2", "3"}
+
+        # moved element already exists in the destination set
+        assert await redis_client.smove(key2, key1, "2") is True
+        assert await redis_client.smembers(key1) == {"2", "3"}
+        assert await redis_client.smembers(key2) == {"1", "3"}
+
+        # attempt to move from a non-existing key
+        assert await redis_client.smove(non_existing_key, key1, "4") is False
+        assert await redis_client.smembers(key1) == {"2", "3"}
+
+        # move to a new set
+        assert await redis_client.smove(key1, key3, "2")
+        assert await redis_client.smembers(key1) == {"3"}
+        assert await redis_client.smembers(key3) == {"2"}
+
+        # attempt to move a missing element
+        assert await redis_client.smove(key1, key3, "42") is False
+        assert await redis_client.smembers(key1) == {"3"}
+        assert await redis_client.smembers(key3) == {"2"}
+
+        # move missing element to missing key
+        assert await redis_client.smove(key1, non_existing_key, "42") is False
+        assert await redis_client.smembers(key1) == {"3"}
+        assert await redis_client.type(non_existing_key) == "none"
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.smove(string_key, key1, "_")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ltrim(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -3033,6 +3080,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zunionstore("{xyz}", ["{abc}", "{def}"]),
             redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
             redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
+            redis_client.smove("abc", "def", "_"),
         ]
 
         if not check_if_server_version_lt(redis_client, "7.0.0"):
