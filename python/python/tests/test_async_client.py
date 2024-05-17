@@ -3040,6 +3040,7 @@ class TestMultiKeyCommandCrossSlot:
                 [
                     redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
                     redis_client.zintercard(["abc", "def"]),
+                    redis_client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
                 ]
             )
 
