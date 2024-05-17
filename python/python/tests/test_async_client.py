@@ -2707,8 +2707,8 @@ class TestCommands:
 
         assert await redis_client.zadd(key2, entries) == 10
         result = await redis_client.bzmpop([key2], ScoreFilter.MIN, 0.1, 10)
-        assert result is not None and type(result[1]) is Mapping
-        result_map: Mapping[str, float] = result[1]
+        assert result is not None
+        result_map = cast(Mapping[str, float], result[1])
         assert compare_maps(entries, result_map) is True
 
         async def endless_bzmpop_call():

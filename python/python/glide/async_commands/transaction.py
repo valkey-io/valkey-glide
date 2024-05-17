@@ -2183,7 +2183,7 @@ class BaseTransaction:
         See https://valkey.io/commands/bzmpop for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted set.
+            keys (List[str]): The keys of the sorted sets.
             modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
                 members with the lowest/highest scores accordingly.
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will
