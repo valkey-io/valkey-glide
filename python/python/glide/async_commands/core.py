@@ -1578,9 +1578,10 @@ class CoreCommands(Protocol):
         """
         Stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
 
-        When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
-
         See https://valkey.io/commands/sunionstore for more details.
+
+        Note:
+            When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
 
         Args:
             destination (str): The key of the destination set.
