@@ -1223,14 +1223,12 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
-     * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
-     * algorithm will exit early and yield <code>limit</code> as the cardinality.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
-     * @param keys The keys of sorted sets to intersect.
-     * @return The number of members in the intersection.
+     * @param keys The keys of the sorted sets to intersect.
+     * @return The cardinality of the intersection of the given sorted sets.
      * @example
      *     <pre>{@code
      * Long length = client.zintercard(new String[] {"mySortedSet1", "mySortedSet2"}).get();
@@ -1241,14 +1239,17 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
+     * algorithm will exit early and yield <code>limit</code> as the cardinality.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
-     * @param keys The keys of sorted sets to intersect.
+     * @param keys The keys of the sorted sets to intersect.
      * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
      *     <code>0</code> the range will be unlimited.
-     * @return The number of members in the intersection, or the <code>limit</code> if reached.
+     * @return The cardinality of the intersection of the given sorted sets, or the <code>limit</code>
+     *     if reached.
      * @example
      *     <pre>{@code
      * Long length1 = client.zintercard(new String[] {"mySortedSet1", "mySortedSet2"}, 5).get();

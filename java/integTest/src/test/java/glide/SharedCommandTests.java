@@ -2503,6 +2503,14 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zintercard(new String[] {key3}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // incorrect arguments
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zintercard(new String[0]).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zintercard(new String[0], 42).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
