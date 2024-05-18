@@ -1570,6 +1570,37 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def sunionstore(
+        self,
+        destination: str,
+        keys: List[str],
+    ) -> int:
+        """
+        Stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
+
+        See https://valkey.io/commands/sunionstore for more details.
+
+        Note:
+            When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys from which to retrieve the set members.
+
+        Returns:
+            int: The number of elements in the resulting set.
+
+        Examples:
+            >>> await client.sadd("set1", ["member1"])
+            >>> await client.sadd("set2", ["member2"])
+            >>> await client.sunionstore("my_set", ["set1", "set2"])
+                2  # Two elements were stored in "my_set", and those two members are the union of "set1" and "set2".
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.SUnionStore, [destination] + keys),
+        )
+
     async def ltrim(self, key: str, start: int, end: int) -> TOK:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.

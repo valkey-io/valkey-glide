@@ -32,6 +32,7 @@
 * Python: Added ZINTERCARD command ([#1418](https://github.com/aws/glide-for-redis/pull/1418))
 * Python: Added ZMPOP command ([#1417](https://github.com/aws/glide-for-redis/pull/1417))
 * Python: Added SMOVE command ([#1421](https://github.com/aws/glide-for-redis/pull/1421))
+* Python: Added SUNIONSTORE command ([#1423](https://github.com/aws/glide-for-redis/pull/1423))
 
 
 #### Fixes

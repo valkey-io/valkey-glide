@@ -203,6 +203,8 @@ async def transaction_test(
     args.append("bar")
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
+    transaction.sunionstore(key7, [key7, key7])
+    args.append(2)
     transaction.spop_count(key7, 4)
     args.append({"foo", "bar"})
     transaction.smove(key7, key7, "non_existing_member")

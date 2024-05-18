@@ -1033,6 +1033,25 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SMove, [source, destination, member])
 
+    def sunionstore(
+        self: TTransaction,
+        destination: str,
+        keys: List[str],
+    ) -> TTransaction:
+        """
+        Stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
+
+        See https://valkey.io/commands/sunionstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys from which to retrieve the set members.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SUnionStore, [destination] + keys)
+
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
