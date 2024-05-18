@@ -70,7 +70,10 @@ public class TransactionTestUtilities {
         return Stream.of(
                 Arguments.of(
                         "Server Management Commands",
-                        (TransactionBuilder) TransactionTestUtilities::serverManagementCommands));
+                        (TransactionBuilder) TransactionTestUtilities::serverManagementCommands),
+                Arguments.of(
+                        "Scripting and Function Commands",
+                        (TransactionBuilder) TransactionTestUtilities::scriptingAndFunctionsCommands));
     }
 
     private static Object[] genericCommands(BaseTransaction<?> transaction) {
@@ -460,6 +463,23 @@ public class TransactionTestUtilities {
                 {13.36138933897018433, 38.11555639549629859},
                 {15.08726745843887329, 37.50266842333162032},
             }, // geopos(new String[]{"Palermo", "Catania"})
+        };
+    }
+
+    private static Object[] scriptingAndFunctionsCommands(BaseTransaction<?> transaction) {
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+            return new Object[0];
+        }
+
+        final String code =
+                "#!lua name=mylib1T \n"
+                        + " redis.register_function('myfunc1T', function(keys, args) return args[1] end)";
+
+        transaction.functionLoad(code).functionLoadWithReplace(code);
+
+        return new Object[] {
+            "mylib1T", // functionLoad(code)
+            "mylib1T" // functionLoadWithReplace(code)
         };
     }
 }
