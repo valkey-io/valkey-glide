@@ -281,10 +281,15 @@ public interface ListBaseCommands {
      * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
+     * @apiNote
+     *     <ul>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BLPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ul>
+     *
      * @see <a href="https://redis.io/commands/blpop/">redis.io</a> for details.
-     * @apiNote <code>BLPOP</code> is a client blocking command, see <a
-     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
-     *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -306,10 +311,15 @@ public interface ListBaseCommands {
      * </code> being checked in the order that they are given.<br>
      * Blocks the connection when there are no elements to pop from any of the given lists.
      *
+     * @apiNote
+     *     <ul>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BRPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ul>
+     *
      * @see <a href="https://redis.io/commands/brpop/">redis.io</a> for details.
-     * @apiNote <code>BRPOP</code> is a client blocking command, see <a
-     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
-     *     Commands</a> for more details and best practices.
      * @param keys The <code>keys</code> of the lists to pop from.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
