@@ -16,7 +16,7 @@ public interface ScriptingAndFunctionsCommands {
      * Loads a library to Redis unless a library with the same name exists. Use {@link
      * #functionLoadWithReplace} to replace existing libraries.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @return The library name that was loaded.
@@ -32,7 +32,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Loads a library to Redis and overwrites a library with the same name if it exists.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @return The library name that was loaded.
