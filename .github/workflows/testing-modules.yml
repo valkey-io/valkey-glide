@@ -1,23 +1,29 @@
 name: Modules Testing
 
 on:
-    pull_request:
+    pull_request_target:
       paths:
-        - ./python/python/*
+        -  python/**
         - .github/workflows/testing-modules.yml
         - .github/workflows/start-self-hosted-runner/action.yml
 
-concurrency:
-        group: pypi-${{ github.head_ref || github.ref }}
-        cancel-in-progress: true
 
 jobs:
     start-self-hosted-runner:
-        if: github.repository_owner == 'aws'
         runs-on: ubuntu-latest
         steps:
-          - name: Checkout
+          - name: Check access
+            if: ${{ github.event.pull_request.author_association != 'MEMBER' }}
+            run: |
+              echo "Event not triggered by a collaborator."
+              echo ${{github.event.pull_request.author_association}}
+              exit 1
+
+          - name: Checkout code
             uses: actions/checkout@v4
+            with:
+              ref: ${{ github.event.pull_request.head.sha }} # This is dangerous without the first access check
+          
           - name: Start self hosted EC2 runner
             uses: ./.github/workflows/start-self-hosted-runner
             with:
@@ -28,17 +34,16 @@ jobs:
     
     test-python-modules:
         needs: start-self-hosted-runner
-        if: github.repository_owner == 'aws'
         name: test python modules
         runs-on: [self-hosted, Linux, ARM64]
         steps:
             - name: Setup self-hosted runner access
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
-            
-            - uses: actions/checkout@v4
+      
+            - name: Checkout code
+              uses: actions/checkout@v4
               with:
-                  submodules: recursive
-
+                ref: ${{ github.event.pull_request.head.sha }} # This is dangerous without the first access check
             - name: Set up Python 3.10
               run: |
                   sudo apt update -y
@@ -65,37 +70,6 @@ jobs:
                   source .env/bin/activate
                   cd python/tests/tests_redis_modules/
                   pytest --asyncio-mode=auto --override-ini=addopts= --cluster-endpoints=${{ secrets.CLUSTER_ENDPOINT }} --standalone-endpoints=${{ secrets.STANDALONE_ENDPOINT }}
-    
-    test-node-modules:
-        needs: start-self-hosted-runner
-        if: github.repository_owner == 'aws'
-        name: test node modules
-        runs-on: [self-hosted, Linux, ARM64]
-        steps:
-              - name: Setup self-hosted runner access
-                run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
-          
-              - uses: actions/checkout@v4
-                with:
-                  submodules: recursive
-              
-              - name: Use Node.js 16.x
-                uses: actions/setup-node@v3
-                with:
-                    node-version: 16.x
-
-              - name: Build Node wrapper
-                uses: ./.github/workflows/build-node-wrapper
-                with:
-                  os: ubuntu
-                  arch: arm64
-                  target: aarch64-unknown-linux-gnu
-                  publish: "false"
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-              
-              - name: test redis modules
-                run: npm run test-modules -- --cluster-endpoints=${{ secrets.CLUSTER_ENDPOINT }} --standalone-endpoints=${{ secrets.STANDALONE_ENDPOINT }}
-                working-directory: ./node
 
 
             
