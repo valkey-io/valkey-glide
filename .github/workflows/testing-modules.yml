@@ -2,6 +2,7 @@ name: Modules Testing
 
 on:
   pull_request:
+
     paths:
       - python/**
       - .github/workflows/testing-modules.yml
@@ -16,6 +17,7 @@ jobs:
         uses: actions/checkout@v4
         with:
                   submodules: recursive
+
       - name: Check access
         if: ${{ github.event.pull_request.author_association != 'MEMBER' }}
         run: |
@@ -23,7 +25,6 @@ jobs:
           echo ${{ github.event.pull_request.author_association }}
           exit 1
 
-      
 
       - name: Start self-hosted EC2 runner
         uses: ./.github/workflows/start-self-hosted-runner
