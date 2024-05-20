@@ -300,6 +300,8 @@ export async function transactionTest(
     args.push("bar");
     baseTransaction.spopCount(key7, 2);
     args.push(new Set());
+    baseTransaction.smove(key7, key7, "non_existing_member");
+    args.push(false);
     baseTransaction.scard(key7);
     args.push(0);
     baseTransaction.zadd(key8, {

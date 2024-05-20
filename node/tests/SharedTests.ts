@@ -1047,6 +1047,72 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `smove test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const key3 = "{key}" + uuidv4();
+                const string_key = "{key}" + uuidv4();
+                const non_existing_key = "{key}" + uuidv4();
+
+                expect(await client.sadd(key1, ["1", "2", "3"])).toEqual(3);
+                expect(await client.sadd(key2, ["2", "3"])).toEqual(2);
+
+                // move an element
+                expect(await client.smove(key1, key2, "1"));
+                expect(await client.smembers(key1)).toEqual(
+                    new Set(["2", "3"]),
+                );
+                expect(await client.smembers(key2)).toEqual(
+                    new Set(["1", "2", "3"]),
+                );
+
+                // moved element already exists in the destination set
+                expect(await client.smove(key2, key1, "2"));
+                expect(await client.smembers(key1)).toEqual(
+                    new Set(["2", "3"]),
+                );
+                expect(await client.smembers(key2)).toEqual(
+                    new Set(["1", "3"]),
+                );
+
+                // attempt to move from a non-existing key
+                expect(await client.smove(non_existing_key, key1, "4")).toEqual(
+                    false,
+                );
+                expect(await client.smembers(key1)).toEqual(
+                    new Set(["2", "3"]),
+                );
+
+                // move to a new set
+                expect(await client.smove(key1, key3, "2"));
+                expect(await client.smembers(key1)).toEqual(new Set(["3"]));
+                expect(await client.smembers(key3)).toEqual(new Set(["2"]));
+
+                // attempt to move a missing element
+                expect(await client.smove(key1, key3, "42")).toEqual(false);
+                expect(await client.smembers(key1)).toEqual(new Set(["3"]));
+                expect(await client.smembers(key3)).toEqual(new Set(["2"]));
+
+                // move missing element to missing key
+                expect(
+                    await client.smove(key1, non_existing_key, "42"),
+                ).toEqual(false);
+                expect(await client.smembers(key1)).toEqual(new Set(["3"]));
+                expect(await client.type(non_existing_key)).toEqual("none");
+
+                // key exists, but it is not a set
+                expect(await client.set(string_key, "value")).toEqual("OK");
+                await expect(
+                    client.smove(string_key, key1, "_"),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `srem, scard and smembers with non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
