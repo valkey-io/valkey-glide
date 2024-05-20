@@ -23,6 +23,10 @@ on:
             - .github/workflows/build-python-wrapper/action.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/install-redis-modules/action.yml
+    pull_request_target:
+      paths:
+        - .github/workflows/testing-modules.yml
+        - .github/workflows/python.yml
 
 concurrency:
     group: python-${{ github.head_ref || github.ref }}
