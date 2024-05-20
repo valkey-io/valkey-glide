@@ -1,0 +1,76 @@
+name: Modules Testing
+
+on:
+    pull_request_target:
+      paths:
+        -  python/**
+        - .github/workflows/testing-modules.yml
+        - .github/workflows/start-self-hosted-runner/action.yml
+
+
+jobs:
+    start-self-hosted-runner:
+        runs-on: ubuntu-latest
+        steps:
+          - name: Check access
+            if: ${{ github.event.pull_request.author_association != 'MEMBER' }}
+            run: |
+              echo "Event not triggered by a collaborator."
+              echo ${{github.event.pull_request.author_association}}
+              exit 1
+
+          - name: Checkout code
+            uses: actions/checkout@v4
+            with:
+              ref: ${{ github.event.pull_request.head.sha }} # This is dangerous without the first access check
+          
+          
+          - name: Start self hosted EC2 runner
+            uses: ./.github/workflows/start-self-hosted-runner
+            with:
+                aws-access-key-id: ${{ secrets.AWS_EC2_ACCESS_KEY_ID }}
+                aws-secret-access-key: ${{ secrets.AWS_EC2_SECRET_ACCESS_KEY }}
+                aws-region: ${{ secrets.AWS_REGION }}
+                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+    
+    test-python-modules:
+        needs: start-self-hosted-runner
+        name: test python modules
+        runs-on: [self-hosted, Linux, ARM64]
+        steps:
+            - name: Setup self-hosted runner access
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+      
+            - name: Checkout code
+              uses: actions/checkout@v4
+              with:
+                ref: ${{ github.event.pull_request.head.sha }} # This is dangerous without the first access check
+            - name: Set up Python 3.10
+              run: |
+                  sudo apt update -y
+                  sudo apt upgrade -y
+                  sudo apt install python3 python3-venv python3-pip -y
+
+            - name: Install dependencies
+              working-directory: ./python
+              run: |
+                  python3 -m pip install --upgrade pip
+                  pip3 install flake8 isort black mypy-protobuf
+
+            - name: Build Python wrapper
+              uses: ./.github/workflows/build-python-wrapper
+              with:
+                    os: ubuntu
+                    target: aarch64-unknown-linux-gnu
+                    publish: "false"
+                    github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Test with pytest
+              working-directory: ./python
+              run: |
+                  source .env/bin/activate
+                  cd python/tests/tests_redis_modules/
+                  pytest --asyncio-mode=auto --override-ini=addopts= --cluster-endpoints=${{ secrets.CLUSTER_ENDPOINT }} --standalone-endpoints=${{ secrets.STANDALONE_ENDPOINT }}
+
+
+            

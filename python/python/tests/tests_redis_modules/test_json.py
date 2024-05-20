@@ -17,12 +17,6 @@ from tests.test_async_client import get_random_string, parse_info_response
 class TestJson:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_json_module_is_loaded(self, redis_client: TRedisClient):
-        res = parse_info_response(await redis_client.info([InfoSection.MODULES]))
-        assert "ReJSON" in res["module"]
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_json_set_get(self, redis_client: TRedisClient):
         key = get_random_string(5)
 

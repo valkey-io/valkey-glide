@@ -31,6 +31,7 @@ concurrency:
 permissions:
     contents: read
 
+
 jobs:
     test-ubuntu-latest:
         runs-on: ubuntu-latest
@@ -43,6 +44,8 @@ jobs:
                     - 7.2.3
 
         steps:
+            - name: New Step
+              run: echo blbla
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
