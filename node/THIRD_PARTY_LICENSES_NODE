@@ -4800,7 +4800,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crossbeam-channel:0.5.12
+Package: crossbeam-channel:0.5.13
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -5029,7 +5029,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: crossbeam-utils:0.8.19
+Package: crossbeam-utils:0.8.20
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -18436,7 +18436,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: proc-macro2:1.0.82
+Package: proc-macro2:1.0.83
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24061,7 +24061,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: syn:2.0.64
+Package: syn:2.0.65
 
 The following copyrights and licenses were found in the source code of this package:
 
