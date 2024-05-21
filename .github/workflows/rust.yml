@@ -51,7 +51,6 @@ jobs:
                   os: "ubuntu"
                   target: "x86_64-unknown-linux-gnu"
 
-            - uses: dtolnay/rust-toolchain@stable
             - uses: Swatinem/rust-cache@v2
 
             - name: Run tests
@@ -83,6 +82,7 @@ jobs:
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./glide-core
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-core
 
             - uses: ./.github/workflows/lint-rust

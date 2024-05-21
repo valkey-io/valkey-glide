@@ -19,10 +19,13 @@ inputs:
             - aarch64-unknown-linux-gnu
             - x86_64-apple-darwin
             - aarch64-apple-darwin
+            - aarch64-unknown-linux-musl
+            - x86_64-unknown-linux-musl
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
         type: string
+
 
 runs:
     using: "composite"
@@ -35,12 +38,21 @@ runs:
               brew upgrade || true
               brew install git gcc pkgconfig openssl redis coreutils
 
-        - name: Install software dependencies for Ubuntu
+        - name: Install software dependencies for Ubuntu GNU
           shell: bash
-          if: "${{ inputs.os == 'ubuntu' }}"
+          if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
               sudo apt update -y
               sudo apt install -y git gcc pkg-config openssl libssl-dev
+          
+        - name: Install software dependencies for Ubuntu MUSL
+          shell: bash
+          if: "${{ contains(inputs.target, 'musl') }}"
+          run: |
+              apk update
+              wget -O - https://sh.rustup.rs | sh -s -- -y
+              source "$HOME/.cargo/env"
+              apk add protobuf-dev musl-dev make gcc redis envsubst
 
         - name: Install software dependencies for Amazon-Linux
           shell: bash
@@ -48,13 +60,9 @@ runs:
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl redis6 gettext --allowerasing
 
-        - name: Install Rust toolchain
-          uses: dtolnay/rust-toolchain@stable
+        - name: Install Rust toolchain and protoc
+          if: "${{ !contains(inputs.target, 'musl') }}"
+          uses: ./.github/workflows/install-rust-and-protoc
           with:
-              targets: ${{ inputs.target }}
-
-        - name: Install protoc (protobuf)
-          uses: arduino/setup-protoc@v3
-          with:
-              version: "25.1"
-              repo-token: ${{ inputs.github-token }}
+            target: ${{ inputs.target }}
+            github-token: ${{ inputs.github-token }}
