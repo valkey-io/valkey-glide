@@ -5,6 +5,10 @@ inputs:
         description: "folder that contains the target Cargo.toml file"
         required: true
         type: string
+    github-token:
+        description: "github token"
+        required: false
+        type: string
 
 runs:
     using: "composite"
@@ -16,6 +20,8 @@ runs:
 
         - name: Install Rust toolchain and protoc
           uses: ./.github/workflows/install-rust-and-protoc
+          with:
+              github-token: ${{ inputs.github-token }}
 
         - uses: Swatinem/rust-cache@v2
 

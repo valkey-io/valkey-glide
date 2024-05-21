@@ -82,6 +82,7 @@ jobs:
             - uses: ./.github/workflows/lint-rust
               with:
                   cargo-toml-folder: ./glide-core
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
               name: lint glide-core
 
             - uses: ./.github/workflows/lint-rust
