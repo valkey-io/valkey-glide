@@ -272,6 +272,19 @@ jobs:
                     fi
                   done
 
+            - name: Check if RC and set a distribution tag for the package
+              shell: bash
+              run: |
+                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  then
+                    echo "This is a release candidate"
+                    export npm_tag="next"
+                  else
+                    echo "This is a stable release"
+                    export npm_tag="latest"
+                  fi
+                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+                  
             - name: Publish the base package
               if: github.event_name != 'pull_request'
               shell: bash
@@ -281,6 +294,6 @@ jobs:
                   cp ../../README.md .
                   npm install
                   npm run build
-                  npm publish --access public
+                  npm publish --access public --tag ${{ env.NPM_TAG }}
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
