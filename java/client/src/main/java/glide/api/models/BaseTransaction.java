@@ -15,7 +15,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -129,7 +129,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -157,6 +156,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -2925,7 +2925,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T bitcount(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -2948,7 +2948,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T bitcount(@NonNull String key, long start, long end) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
 
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -2975,7 +2975,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs =
                 buildArgs(key, Long.toString(start), Long.toString(end), options.toString());
 
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 

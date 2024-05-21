@@ -13,7 +13,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -124,7 +124,6 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.RangeOptions;
@@ -138,6 +137,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -1272,13 +1272,13 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> bitcount(@NonNull String key) {
-        return commandManager.submitNewCommand(Bitcount, new String[] {key}, this::handleLongResponse);
+        return commandManager.submitNewCommand(BitCount, new String[] {key}, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<Long> bitcount(@NonNull String key, long start, long end) {
         return commandManager.submitNewCommand(
-                Bitcount,
+                BitCount,
                 new String[] {key, Long.toString(start), Long.toString(end)},
                 this::handleLongResponse);
     }
@@ -1288,7 +1288,7 @@ public abstract class BaseClient
             @NonNull String key, long start, long end, @NonNull BitmapIndexType options) {
         String[] arguments =
                 new String[] {key, Long.toString(start), Long.toString(end), options.toString()};
-        return commandManager.submitNewCommand(Bitcount, arguments, this::handleLongResponse);
+        return commandManager.submitNewCommand(BitCount, arguments, this::handleLongResponse);
     }
 
     @Override
