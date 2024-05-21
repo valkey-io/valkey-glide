@@ -130,6 +130,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
@@ -3229,6 +3230,115 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Map<String, Double>> response =
                 service.zunionWithScores(weightedKeys, aggregate);
+        Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zinter_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        KeyArray keyArray = new KeyArray(keys);
+        String[] arguments = keyArray.toArgs();
+        String[] value = new String[] {"elem1", "elem2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.zinter(keyArray);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zinter_with_aggregation_returns_success() {
+        // setup
+        List<Pair<String, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of("key1", 10.0));
+        keysWeights.add(Pair.of("key2", 20.0));
+        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
+        Aggregate aggregate = Aggregate.MIN;
+        String[] arguments = concatenateArrays(weightedKeys.toArgs(), aggregate.toArgs());
+        String[] value = new String[] {"elem1", "elem2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.zinter(weightedKeys, aggregate);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zinterWithScores_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        KeyArray keyArray = new KeyArray(keys);
+        String[] arguments = concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
+
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Double>> response = service.zinterWithScores(keyArray);
+        Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zinterWithScores_with_aggregation_returns_success() {
+        // setup
+        List<Pair<String, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of("key1", 10.0));
+        keysWeights.add(Pair.of("key2", 20.0));
+        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
+        Aggregate aggregate = Aggregate.MIN;
+        String[] arguments =
+                concatenateArrays(
+                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
+
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Double>> response =
+                service.zinterWithScores(weightedKeys, aggregate);
         Map<String, Double> payload = response.get();
 
         // verify

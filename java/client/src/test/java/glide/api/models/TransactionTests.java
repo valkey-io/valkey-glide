@@ -120,6 +120,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
@@ -571,6 +572,41 @@ public class TransactionTests {
         results.add(
                 Pair.of(
                         ZUnion,
+                        buildArgs(
+                                "2",
+                                "key1",
+                                "key2",
+                                WEIGHTS_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                AGGREGATE_REDIS_API,
+                                Aggregate.MAX.toString(),
+                                WITH_SCORES_REDIS_API)));
+
+        transaction.zinter(new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2")));
+
+        transaction.zinterWithScores(new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+
+        transaction.zinter(new WeightedKeys(weightedKeys), Aggregate.MAX);
+        results.add(
+                Pair.of(
+                        ZInter,
+                        buildArgs(
+                                "2",
+                                "key1",
+                                "key2",
+                                WEIGHTS_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                AGGREGATE_REDIS_API,
+                                Aggregate.MAX.toString())));
+
+        transaction.zinterWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
+        results.add(
+                Pair.of(
+                        ZInter,
                         buildArgs(
                                 "2",
                                 "key1",

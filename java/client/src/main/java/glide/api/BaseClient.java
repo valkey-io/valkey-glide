@@ -93,6 +93,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
@@ -1045,6 +1046,39 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API});
         return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> zinter(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        String[] arguments = concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs());
+        return commandManager.submitNewCommand(
+                ZInter, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        return commandManager.submitNewCommand(
+                ZInter,
+                keysOrWeightedKeys.toArgs(),
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zinterWithScores(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        String[] arguments =
+                concatenateArrays(
+                        keysOrWeightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        return commandManager.submitNewCommand(ZInter, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Double>> zinterWithScores(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        String[] arguments =
+                concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        return commandManager.submitNewCommand(ZInter, arguments, this::handleMapResponse);
     }
 
     @Override
