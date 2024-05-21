@@ -90,7 +90,7 @@ public interface BitmapBaseCommands {
      * @return The bit value that was previously stored at <code>offset</code>.
      * @example
      *     <pre>{@code
-     * Long payload = client.bitcount("myKey1", 1, 1).get();
+     * Long payload = client.setbit("myKey1", 1, 1).get();
      * assert payload == 0L; // The second bit value was 0 before setting to 1.
      * }</pre>
      */
