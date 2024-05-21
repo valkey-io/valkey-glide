@@ -8,6 +8,7 @@ on:
         - .github/workflows/npm-cd.yml
         - .github/workflows/build-node-wrapper/action.yml
         - .github/workflows/start-self-hosted-runner/action.yml
+        - .github/workflows/install-rust-and-protoc/action.yml
     push:
         tags:
             - "v*.*"
@@ -23,6 +24,9 @@ jobs:
         steps:
           - name: Checkout
             uses: actions/checkout@v4
+            with:
+                fetch-depth: 0
+
           - name: Start self hosted EC2 runner
             uses: ./.github/workflows/start-self-hosted-runner
             with:
@@ -36,6 +40,9 @@ jobs:
         if: github.repository_owner == 'aws'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER }}
+        container:
+            image: ${{ matrix.build.IMAGE || '' }}
+            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
         strategy:
             fail-fast: false
             matrix:
@@ -53,7 +60,6 @@ jobs:
                           RUNNER: [self-hosted, Linux, ARM64],
                           ARCH: arm64,
                           TARGET: aarch64-unknown-linux-gnu,
-                          CONTAINER: "2_28",
                       }
                     - {
                           OS: macos,
@@ -69,15 +75,51 @@ jobs:
                           arch: arm64,
                           TARGET: aarch64-apple-darwin,
                       }
+                    - {
+                          OS: ubuntu,
+                          NAMED_OS: linux,
+                          ARCH: arm64,
+                          TARGET: aarch64-unknown-linux-musl,
+                          RUNNER: [self-hosted, Linux, ARM64],
+                          IMAGE: 'node:alpine',
+                          CONTAINER_OPTIONS: '--user root --privileged --rm',
+                      }
+                    - {
+                          OS: ubuntu,
+                          NAMED_OS: linux,
+                          ARCH: x64,
+                          TARGET: x86_64-unknown-linux-musl,
+                          RUNNER: ubuntu-latest,
+                          IMAGE: 'node:alpine',
+                          CONTAINER_OPTIONS: '--user root --privileged',
+                      }
         steps:
             - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
 
+            # For MUSL on X64 we need to install git since we use the checkout action
+            - name: Install git for musl
+              if: ${{ contains(matrix.build.TARGET, 'x86_64-unknown-linux-musl')}}
+              run: |
+                  apk update
+                  apk add git
+              
             - name: Checkout
+              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
               uses: actions/checkout@v4
               with:
                   submodules: "true"
+                  fetch-depth: 0
+
+            - name: Setup for musl
+              if: ${{ contains(matrix.build.TARGET, 'musl')}}
+              uses: ./.github/workflows/setup-musl-on-linux
+              with:
+                  workspace: $GITHUB_WORKSPACE
+                  npm-scope: ${{ vars.NPM_SCOPE }}
+                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
+                  arch: ${{ matrix.build.ARCH }}       
 
             - name: Set the release version
               shell: bash
@@ -86,6 +128,7 @@ jobs:
                   echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Setup node
+              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
               uses: actions/setup-node@v3
               with:
                   node-version: "16"
@@ -100,7 +143,7 @@ jobs:
               with:
                   folder_path: "${{ github.workspace }}/node/rust-client/.cargo"
                   named_os: ${{ matrix.build.NAMED_OS }}
-                
+
             - name: Build Node wrapper
               uses: ./.github/workflows/build-node-wrapper
               with:
@@ -151,6 +194,15 @@ jobs:
                   name: ${{ matrix.build.TARGET }}
                   path: ./node/bin
                   if-no-files-found: error
+
+            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
+            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
+            - name: Reset repository
+              if: ${{ matrix.build.ARCH == 'arm64' }}
+              shell: bash
+              run: |
+                git reset --hard
+                git clean -xdf
 
     publish-base-to-npm:
         if: github.event_name != 'pull_request'
