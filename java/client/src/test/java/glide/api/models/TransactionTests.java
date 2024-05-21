@@ -106,6 +106,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
+import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
@@ -733,6 +734,9 @@ public class TransactionTests {
 
         transaction.bitcount("key", 1, 1, BitmapIndexType.BIT);
         results.add(Pair.of(Bitcount, buildArgs("key", "1", "1", BitmapIndexType.BIT.toString())));
+
+        transaction.setbit("key", 8, 1);
+        results.add(Pair.of(SetBit, buildArgs("key", "8", "1")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
