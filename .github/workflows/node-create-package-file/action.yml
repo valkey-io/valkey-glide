@@ -34,6 +34,17 @@ inputs:
         required: false
         type: string
         default: "@aws"
+    target:
+        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
+        type: string
+        required: true
+        options:
+            - x86_64-unknown-linux-gnu
+            - aarch64-unknown-linux-gnu
+            - x86_64-apple-darwin
+            - aarch64-apple-darwin
+            - aarch64-unknown-linux-musl
+            - x86_64-unknown-linux-musl
 
 runs:
     using: "composite"
@@ -42,6 +53,8 @@ runs:
           shell: bash
           working-directory: ./node
           run: |
+              # echo -musl if inputs.target is musl
+              export MUSL_FLAG=`if [[ "${{ inputs.target }}" =~ .*"musl".*  ]]; then echo "-musl"; fi`
               # set the package name
               name="glide-for-redis"
               # derive the OS and architecture from the inputs
@@ -50,7 +63,7 @@ runs:
               # set the version
               export package_version="${{ inputs.release_version }}"
               # set the package name
-              export pkg_name="${name}-${node_os}-${node_arch}"
+              export pkg_name="${name}-${node_os}${MUSL_FLAG}-${node_arch}"
               # set the scope
               export scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}/"; fi`
               # set the registry scope

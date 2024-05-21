@@ -1,0 +1,32 @@
+name: Install Rust tool chain and protoc
+
+inputs:
+    target:
+        description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
+        type: string
+        required: false
+        default: "x86_64-unknown-linux-gnu"
+        options:
+            - x86_64-unknown-linux-gnu
+            - aarch64-unknown-linux-gnu
+            - x86_64-apple-darwin
+            - aarch64-apple-darwin
+    github-token:
+        description: "GitHub token"
+        type: string
+        required: true
+
+
+runs:
+    using: "composite"
+    steps:
+        - name: Install Rust toolchain
+          uses: dtolnay/rust-toolchain@stable
+          with:
+              targets: ${{ inputs.target }}
+
+        - name: Install protoc (protobuf)
+          uses: arduino/setup-protoc@v3
+          with:
+              version: "25.1"
+              repo-token: ${{ inputs.github-token }}
