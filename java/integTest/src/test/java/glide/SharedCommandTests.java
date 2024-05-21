@@ -3404,7 +3404,7 @@ public class SharedCommandTests {
         assertEquals(value1.length() * 2L, client.append(key1, value1).get());
         assertEquals(value1 + value1, client.get(key1).get());
 
-        // Non Existing Key
+        // Append on non-existing string(similar to SET)
         assertEquals(1L, client.append(key2, "b").get());
 
         // key exists but holding the wrong kind of value
