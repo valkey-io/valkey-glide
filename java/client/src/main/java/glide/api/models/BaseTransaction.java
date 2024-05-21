@@ -3122,13 +3122,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
+     * <code>offset</code> should be greater than or equal to zero.
      *
      * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
-     * @param key The key for the string.
+     * @param key The key of the string.
      * @param offset The index of the bit to return.
      * @return Command Response - The bit at offset of the string. Returns zero if the key is empty or
-     *     if the positive <code>offset</code> exceeds the length of the string. An error is thrown
-     *     when the <code>offset</code> is negative.
+     *     if the positive <code>offset</code> exceeds the length of the string.
      */
     public T getbit(@NonNull String key, long offset) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(offset));

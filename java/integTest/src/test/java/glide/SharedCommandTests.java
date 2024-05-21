@@ -30,7 +30,6 @@ import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.Script;
-import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -3621,13 +3620,17 @@ public class SharedCommandTests {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
         String missingKey = UUID.randomUUID().toString();
-        ;
         String value = "foobar";
 
         assertEquals(OK, client.set(key1, value).get());
         assertEquals(1, client.getbit(key1, 1).get());
         assertEquals(0, client.getbit(key1, 1000).get());
         assertEquals(0, client.getbit(missingKey, 1).get());
+        if (client instanceof RedisClient) {
+            assertEquals(
+                    1L, ((RedisClient) client).customCommand(new String[] {"SETBIT", key1, "5", "0"}).get());
+            assertEquals(0, client.getbit(key1, 5).get());
+        }
 
         // Exception thrown due to the negative offset
         ExecutionException executionException =
