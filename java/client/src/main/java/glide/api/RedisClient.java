@@ -197,7 +197,7 @@ public class RedisClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> functionLoadWithReplace(@NonNull String libraryCode) {
+    public CompletableFuture<String> functionLoadReplace(@NonNull String libraryCode) {
         return commandManager.submitNewCommand(
                 FunctionLoad,
                 new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},

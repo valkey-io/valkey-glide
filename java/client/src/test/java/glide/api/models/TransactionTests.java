@@ -718,7 +718,7 @@ public class TransactionTests {
         transaction.geopos("key", new String[] {"Place"});
         results.add(Pair.of(GeoPos, buildArgs("key", "Place")));
 
-        transaction.functionLoad("pewpew").functionLoadWithReplace("ololo");
+        transaction.functionLoad("pewpew").functionLoadReplace("ololo");
         results.add(Pair.of(FunctionLoad, buildArgs("pewpew")));
         results.add(Pair.of(FunctionLoad, buildArgs("REPLACE", "ololo")));
 

@@ -14,7 +14,7 @@ public interface ScriptingAndFunctionsClusterCommands {
 
     /**
      * Loads a library to Redis unless a library with the same name exists. Use {@link
-     * #functionLoadWithReplace(String)} to replace existing libraries.<br>
+     * #functionLoadReplace(String)} to replace existing libraries.<br>
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
@@ -41,15 +41,15 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @example
      *     <pre>{@code
      * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * String response = client.functionLoadWithReplace(code).get();
+     * String response = client.functionLoadReplace(code).get();
      * assert response.equals("mylib");
      * }</pre>
      */
-    CompletableFuture<String> functionLoadWithReplace(String libraryCode);
+    CompletableFuture<String> functionLoadReplace(String libraryCode);
 
     /**
      * Loads a library to Redis unless a library with the same name exists. Use {@link
-     * #functionLoadWithReplace(String, Route)} to replace existing libraries.<br>
+     * #functionLoadReplace(String, Route)} to replace existing libraries.<br>
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
@@ -79,9 +79,9 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @example
      *     <pre>{@code
      * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * String response = client.functionLoadWithReplace(code, ALL_NODES).get();
+     * String response = client.functionLoadReplace(code, ALL_NODES).get();
      * assert response.equals("mylib");
      * }</pre>
      */
-    CompletableFuture<String> functionLoadWithReplace(String libraryCode, Route route);
+    CompletableFuture<String> functionLoadReplace(String libraryCode, Route route);
 }

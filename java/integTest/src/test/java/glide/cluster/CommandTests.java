@@ -775,8 +775,8 @@ public class CommandTests {
         // re-load library with overwriting
         var promise2 =
                 withRoute
-                        ? clusterClient.functionLoadWithReplace(code, route)
-                        : clusterClient.functionLoadWithReplace(code);
+                        ? clusterClient.functionLoadReplace(code, route)
+                        : clusterClient.functionLoadReplace(code);
         assertEquals(libName, promise2.get());
         String newCode =
                 code
@@ -785,8 +785,8 @@ public class CommandTests {
                         + "', function(keys, args) return #args end)";
         promise2 =
                 withRoute
-                        ? clusterClient.functionLoadWithReplace(newCode, route)
-                        : clusterClient.functionLoadWithReplace(newCode);
+                        ? clusterClient.functionLoadReplace(newCode, route)
+                        : clusterClient.functionLoadReplace(newCode);
         assertEquals(libName, promise2.get());
         // TODO test with FCALL
     }

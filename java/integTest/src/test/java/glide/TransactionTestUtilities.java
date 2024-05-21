@@ -509,11 +509,11 @@ public class TransactionTestUtilities {
                 "#!lua name=mylib1T \n"
                         + " redis.register_function('myfunc1T', function(keys, args) return args[1] end)";
 
-        transaction.functionLoad(code).functionLoadWithReplace(code);
+        transaction.functionLoad(code).functionLoadReplace(code);
 
         return new Object[] {
             "mylib1T", // functionLoad(code)
-            "mylib1T" // functionLoadWithReplace(code)
+            "mylib1T" // functionLoadReplace(code)
         };
     }
 

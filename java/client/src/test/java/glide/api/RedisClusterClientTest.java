@@ -1103,7 +1103,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadWithReplace_returns_success() {
+    public void functionLoadReplace_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -1116,7 +1116,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadWithReplace(code);
+        CompletableFuture<String> response = service.functionLoadReplace(code);
         String payload = response.get();
 
         // verify
@@ -1149,7 +1149,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadWithReplaceWithRoute_returns_success() {
+    public void functionLoadReplaceRoute_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -1162,7 +1162,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadWithReplace(code, RANDOM);
+        CompletableFuture<String> response = service.functionLoadReplace(code, RANDOM);
         String payload = response.get();
 
         // verify

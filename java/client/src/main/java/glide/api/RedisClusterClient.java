@@ -424,7 +424,7 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> functionLoadWithReplace(@NonNull String libraryCode) {
+    public CompletableFuture<String> functionLoadReplace(@NonNull String libraryCode) {
         return commandManager.submitNewCommand(
                 FunctionLoad,
                 new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
@@ -438,7 +438,7 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> functionLoadWithReplace(
+    public CompletableFuture<String> functionLoadReplace(
             @NonNull String libraryCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionLoad,

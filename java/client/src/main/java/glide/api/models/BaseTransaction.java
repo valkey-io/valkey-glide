@@ -3101,7 +3101,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Loads a library to Redis unless a library with the same name exists. Use {@link
-     * #functionLoadWithReplace} to replace existing libraries.
+     * #functionLoadReplace} to replace existing libraries.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
@@ -3122,7 +3122,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param libraryCode The source code that implements the library.
      * @return Command Response - The library name that was loaded.
      */
-    public T functionLoadWithReplace(@NonNull String libraryCode) {
+    public T functionLoadReplace(@NonNull String libraryCode) {
         ArgsArray commandArgs = buildArgs(FunctionLoadOptions.REPLACE.toString(), libraryCode);
         protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
         return getThis();
