@@ -5,6 +5,10 @@ inputs:
         description: "folder that contains the target Cargo.toml file"
         required: true
         type: string
+    github-token:
+        description: "github token"
+        required: false
+        type: string
 
 runs:
     using: "composite"
@@ -14,13 +18,12 @@ runs:
           with:
               submodules: recursive
 
-        - uses: dtolnay/rust-toolchain@stable
-        - uses: Swatinem/rust-cache@v2
-
-        - name: Install protoc (protobuf)
-          uses: arduino/setup-protoc@v3
+        - name: Install Rust toolchain and protoc
+          uses: ./.github/workflows/install-rust-and-protoc
           with:
-            version: "25.1"
+              github-token: ${{ inputs.github-token }}
+
+        - uses: Swatinem/rust-cache@v2
 
         - run: cargo fmt --all -- --check
           working-directory: ${{ inputs.cargo-toml-folder }}
