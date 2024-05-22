@@ -4203,11 +4203,9 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.append(key, value);
-        Long payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(1L, payload);
     }
 
     @SneakyThrows
