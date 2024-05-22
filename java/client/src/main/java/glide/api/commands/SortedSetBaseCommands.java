@@ -1186,7 +1186,7 @@ public interface SortedSetBaseCommands {
     CompletableFuture<String[]> zinter(KeysOrWeightedKeys keysOrWeightedKeys);
 
     /**
-     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * Returns the intersection of members from sorted sets specified by the given
      * <code>keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
      * #zinterWithScores}.
      *
@@ -1239,7 +1239,7 @@ public interface SortedSetBaseCommands {
      * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
      * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
-     * Map<String, Double> payload2 = client.zinterWithScores(keyArray).get();
+     * Map<String, Double> payload2 = client.zinterWithScores(weightedKeys).get();
      * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
      */
@@ -1269,7 +1269,7 @@ public interface SortedSetBaseCommands {
      * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
      *
      * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
-     * Map<String, Double> payload2 = client.zinterWithScores(keyArray, Aggregate.SUM).get();
+     * Map<String, Double> payload2 = client.zinterWithScores(weightedKeys, Aggregate.SUM).get();
      * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
      * }</pre>
      */

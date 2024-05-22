@@ -2312,7 +2312,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * Returns the intersection of members from sorted sets specified by the given
      * <code>keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
      * #zinterWithScores}.
      *
