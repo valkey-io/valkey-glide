@@ -11,6 +11,8 @@ import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.POSITIVE_INFINITY;
+import static glide.api.models.commands.ScoreFilter.MAX;
+import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
@@ -22,11 +24,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.Script;
+import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -42,8 +46,9 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
-import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
@@ -55,6 +60,7 @@ import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -160,6 +166,27 @@ public class SharedCommandTests {
     public void get_missing_value(BaseClient client) {
         String data = client.get("invalid").get();
         assertNull(data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void append(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String value1 = String.valueOf(UUID.randomUUID());
+        String key2 = UUID.randomUUID().toString();
+
+        // Append on non-existing string(similar to SET)
+        assertEquals(value1.length(), client.append(key1, value1).get());
+
+        assertEquals(value1.length() * 2L, client.append(key1, value1).get());
+        assertEquals(value1.concat(value1), client.get(key1).get());
+
+        // key exists but holding the wrong kind of value
+        assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
+        ExecutionException executionException =
+            assertThrows(ExecutionException.class, () -> client.append(key2, "z").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
@@ -339,6 +366,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void mset_mget_existing_non_existing_key(BaseClient client) {
+        // keys are from different slots
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
         String key3 = UUID.randomUUID().toString();
@@ -1001,14 +1029,6 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(ExecutionException.class, () -> client.smove(setKey1, nonSetKey, "_").get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(ExecutionException.class, () -> client.smove("abc", "zxy", "lkn").get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -1036,14 +1056,6 @@ public class SharedCommandTests {
 
         // this one remains unchanged
         assertEquals("key3", client.get(key3).get());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(ExecutionException.class, () -> client.renamenx("abc", "zxy").get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -1137,16 +1149,6 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sdiff(new String[] {key1, key3}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.sdiff(new String[] {"abc", "zxy", "lkn"}).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -1221,16 +1223,6 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(ExecutionException.class, () -> client.sdiffstore(key5, new String[0]).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.sdiffstore("abc", new String[] {"zxy", "lkn"}).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -1251,16 +1243,6 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sinter(new String[] {key3}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.sinter(new String[] {"abc", "zxy", "lkn"}).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -1304,16 +1286,6 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(ExecutionException.class, () -> client.sunionstore(key5, new String[0]).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.sunionstore("abc", new String[] {"zxy", "lkn"}).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -1568,13 +1540,13 @@ public class SharedCommandTests {
         String key = UUID.randomUUID().toString();
         Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0, "three", 3.0);
 
-        ZaddOptions onlyIfExistsOptions =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
+        ZAddOptions onlyIfExistsOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
                         .build();
-        ZaddOptions onlyIfDoesNotExistOptions =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+        ZAddOptions onlyIfDoesNotExistOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
                         .build();
 
         assertEquals(0, client.zadd(key, membersScores, onlyIfExistsOptions).get());
@@ -1596,13 +1568,13 @@ public class SharedCommandTests {
         assertEquals(3, client.zadd(key, membersScores).get());
         membersScores.put("one", 10.0);
 
-        ZaddOptions scoreGreaterThanOptions =
-                ZaddOptions.builder()
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+        ZAddOptions scoreGreaterThanOptions =
+                ZAddOptions.builder()
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
                         .build();
-        ZaddOptions scoreLessThanOptions =
-                ZaddOptions.builder()
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+        ZAddOptions scoreLessThanOptions =
+                ZAddOptions.builder()
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
                         .build();
 
         assertEquals(1, client.zadd(key, membersScores, scoreGreaterThanOptions, true).get());
@@ -1614,33 +1586,33 @@ public class SharedCommandTests {
     // TODO move to another class
     @Test
     public void zadd_illegal_arguments() {
-        ZaddOptions existsGreaterThanOptions =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+        ZAddOptions existsGreaterThanOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
                         .build();
         assertThrows(IllegalArgumentException.class, existsGreaterThanOptions::toArgs);
-        ZaddOptions existsLessThanOptions =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+        ZAddOptions existsLessThanOptions =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
                         .build();
         assertThrows(IllegalArgumentException.class, existsLessThanOptions::toArgs);
-        ZaddOptions options =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
+        ZAddOptions options =
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_DOES_NOT_EXIST)
                         .build();
         options.toArgs();
         options =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_GREATER_THAN_CURRENT)
                         .build();
         options.toArgs();
         options =
-                ZaddOptions.builder()
-                        .conditionalChange(ZaddOptions.ConditionalChange.ONLY_IF_EXISTS)
-                        .updateOptions(ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
+                ZAddOptions.builder()
+                        .conditionalChange(ZAddOptions.ConditionalChange.ONLY_IF_EXISTS)
+                        .updateOptions(ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT)
                         .build();
         options.toArgs();
     }
@@ -1732,16 +1704,6 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class, () -> client.bzpopmin(new String[] {key3}, .5).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -1814,16 +1776,6 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class, () -> client.bzpopmax(new String[] {key3}, .5).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -2546,16 +2498,6 @@ public class SharedCommandTests {
                         ExecutionException.class,
                         () -> client.zunion(new KeyArray(new String[] {key1, key3})).get());
         assertTrue(executionException.getCause() instanceof RequestException);
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.zunion(new KeyArray(new String[] {"abc", "zxy", "lkn"})).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows
@@ -2618,18 +2560,78 @@ public class SharedCommandTests {
                         ExecutionException.class,
                         () -> client.zinterstore(key3, new KeyArray(new String[] {key4, key2})).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
 
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () ->
-                                    client
-                                            .zinterstore("foo", new KeyArray(new String[] {"abc", "zxy", "lkn"}))
-                                            .get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bzmpop(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String key1 = "{bzmpop}-1-" + UUID.randomUUID();
+        String key2 = "{bzmpop}-2-" + UUID.randomUUID();
+        String key3 = "{bzmpop}-3-" + UUID.randomUUID();
+
+        assertEquals(2, client.zadd(key1, Map.of("a1", 1., "b1", 2.)).get());
+        assertEquals(2, client.zadd(key2, Map.of("a2", .1, "b2", .2)).get());
+
+        assertArrayEquals(
+                new Object[] {key1, Map.of("b1", 2.)},
+                client.bzmpop(new String[] {key1, key2}, MAX, 0.1).get());
+        assertArrayEquals(
+                new Object[] {key2, Map.of("b2", .2, "a2", .1)},
+                client.bzmpop(new String[] {key2, key1}, MAX, 0.1, 10).get());
+
+        // nothing popped out
+        assertNull(client.bzmpop(new String[] {key3}, MIN, 0.001).get());
+        assertNull(client.bzmpop(new String[] {key3}, MIN, 0.001, 1).get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.bzmpop(new String[] {key3}, MAX, .1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.bzmpop(new String[] {key3}, MAX, .1, 1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // incorrect argument
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.bzmpop(new String[] {key1}, MAX, .1, 0).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // check that order of entries in the response is preserved
+        var entries = new LinkedHashMap<String, Double>();
+        for (int i = 0; i < 10; i++) {
+            // a => 1., b => 2. etc
+            entries.put("" + ('a' + i), (double) i);
+        }
+        assertEquals(10, client.zadd(key2, entries).get());
+        assertEquals(entries, client.bzmpop(new String[] {key2}, MIN, .1, 10).get()[1]);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bzmpop_timeout_check(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String key = UUID.randomUUID().toString();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.bzmpop(new String[] {key}, MAX, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.bzmpop(new String[] {key}, MAX, 0).get(3, TimeUnit.SECONDS));
         }
     }
 
@@ -2736,6 +2738,96 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.xtrim(key2, new MinId("0-1")).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrandmember(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0);
+        assertEquals(2, client.zadd(key1, membersScores).get());
+
+        String randMember = client.zrandmember(key1).get();
+        assertTrue(membersScores.containsKey(randMember));
+        assertNull(client.zrandmember("nonExistentKey").get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrandmember(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrandmemberWithCount(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0);
+        assertEquals(2, client.zadd(key1, membersScores).get());
+
+        // Unique values are expected as count is positive
+        List<String> randMembers = Arrays.asList(client.zrandmemberWithCount(key1, 4).get());
+        assertEquals(2, randMembers.size());
+        assertEquals(2, new HashSet<>(randMembers).size());
+        randMembers.forEach(member -> assertTrue(membersScores.containsKey(member)));
+
+        // Duplicate values are expected as count is negative
+        randMembers = Arrays.asList(client.zrandmemberWithCount(key1, -4).get());
+        assertEquals(4, randMembers.size());
+        randMembers.forEach(member -> assertTrue(membersScores.containsKey(member)));
+
+        assertEquals(0, client.zrandmemberWithCount(key1, 0).get().length);
+        assertEquals(0, client.zrandmemberWithCount("nonExistentKey", 4).get().length);
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zrandmemberWithCount(key2, 5).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zrandmemberWithCountWithScores(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        Map<String, Double> membersScores = Map.of("one", 1.0, "two", 2.0);
+        assertEquals(2, client.zadd(key1, membersScores).get());
+
+        // Unique values are expected as count is positive
+        Object[][] randMembersWithScores = client.zrandmemberWithCountWithScores(key1, 4).get();
+        assertEquals(2, randMembersWithScores.length);
+        for (Object[] membersWithScore : randMembersWithScores) {
+            String member = (String) membersWithScore[0];
+            Double score = (Double) membersWithScore[1];
+
+            assertEquals(score, membersScores.get(member));
+        }
+
+        // Duplicate values are expected as count is negative
+        randMembersWithScores = client.zrandmemberWithCountWithScores(key1, -4).get();
+        assertEquals(4, randMembersWithScores.length);
+        for (Object[] randMembersWithScore : randMembersWithScores) {
+            String member = (String) randMembersWithScore[0];
+            Double score = (Double) randMembersWithScore[1];
+
+            assertEquals(score, membersScores.get(member));
+        }
+
+        assertEquals(0, client.zrandmemberWithCountWithScores(key1, 0).get().length);
+        assertEquals(0, client.zrandmemberWithCountWithScores("nonExistentKey", 4).get().length);
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zrandmemberWithCountWithScores(key2, 5).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -3394,22 +3486,125 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void append(BaseClient client) {
+    public void geodist(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
-        String value1 = String.valueOf(UUID.randomUUID());
         String key2 = UUID.randomUUID().toString();
-        String key3 = UUID.randomUUID().toString();
+        String member1 = "Palermo";
+        String member2 = "Catania";
+        String member3 = "NonExisting";
+        GeoUnit geoUnitKM = GeoUnit.KILOMETERS;
+        Double expected = 166274.1516;
+        Double expectedKM = 166.2742;
+        Double delta = 1e-9;
 
-        // Append on non-existing string(similar to SET)
-        assertEquals(value1.length(), client.append(key1, value1).get());
+        // adding locations
+        Map<String, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put("Palermo", new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put("Catania", new GeospatialData(15.087269, 37.502669));
+        assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
 
-        assertEquals(value1.length() * 2L, client.append(key1, value1).get());
-        assertEquals(value1.concat(value1), client.get(key1).get());
+        // assert correct result with default metric
+        Double actual = client.geodist(key1, member1, member2).get();
+        assertEquals(expected, actual, delta);
 
-        // key exists but holding the wrong kind of value
-        assertEquals(1, client.sadd(key3, new String[] {"a"}).get());
+        // assert correct result with manual metric specification kilometers
+        Double actualKM = client.geodist(key1, member1, member2, geoUnitKM).get();
+        assertEquals(expectedKM, actualKM, delta);
+
+        // assert null result when member index is missing
+        Double actualMissing = client.geodist(key1, member1, member3).get();
+        assertNull(actualMissing);
+
+        // key exists but holds a non-ZSET value
+        assertEquals(OK, client.set(key2, "geodist").get());
         ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.append(key3, "z").get());
+                assertThrows(ExecutionException.class, () -> client.geodist(key2, member1, member2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geohash(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String[] members = {"Palermo", "Catania", "NonExisting"};
+        String[] empty = {};
+        String[] expected = {"sqc8b49rny0", "sqdtr74hyu0", null};
+
+        // adding locations
+        Map<String, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put("Palermo", new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put("Catania", new GeospatialData(15.087269, 37.502669));
+        assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
+
+        String[] actual = client.geohash(key1, members).get();
+        assertArrayEquals(expected, actual);
+
+        // members array is empty
+        assertEquals(client.geohash(key1, empty).get().length, 0);
+
+        // key exists but holding the wrong kind of value (non-ZSET)
+        assertEquals(OK, client.set(key2, "geohash").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.geohash(key2, members).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bitcount(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String missingKey = "missing";
+        String value = "foobar";
+
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(1, client.sadd(key2, new String[] {value}).get());
+        assertEquals(26, client.bitcount(key1).get());
+        assertEquals(6, client.bitcount(key1, 1, 1).get());
+        assertEquals(10, client.bitcount(key1, 0, -5).get());
+        assertEquals(0, client.bitcount(missingKey, 5, 30).get());
+        assertEquals(0, client.bitcount(missingKey).get());
+
+        // Exception thrown due to the key holding a value with the wrong type
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.bitcount(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Exception thrown due to the key holding a value with the wrong type
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.bitcount(key2, 1, 1).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(16L, client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
+            assertEquals(17L, client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
+            assertEquals(23, client.bitcount(key1, 5, -5, BitmapIndexType.BIT).get());
+            assertEquals(0, client.bitcount(missingKey, 5, 30, BitmapIndexType.BIT).get());
+
+            // Exception thrown due to the key holding a value with the wrong type
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitcount(key2, 1, 1, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        } else {
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitcount(key1, 2, 5, BitmapIndexType.BYTE).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        }
+    }
+>>>>>>> java/integ_cyip10_append
 }

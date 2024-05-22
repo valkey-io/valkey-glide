@@ -40,6 +40,7 @@ public interface HyperLogLogBaseCommands {
      * Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
      * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/pfcount/">redis.io</a> for details.
      * @param keys The keys of the HyperLogLog data structures to be analyzed.
      * @return The approximated cardinality of given HyperLogLog data structures.<br>
@@ -57,6 +58,8 @@ public interface HyperLogLogBaseCommands {
      * If the destination variable exists, it is treated as one of the source HyperLogLog data sets,
      * otherwise a new HyperLogLog is created.
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>sourceKeys</code>
+     *     must map to the same hash slot.
      * @see <a href="https://redis.io/commands/pfmerge/">redis.io</a> for details.
      * @param destination The key of the destination HyperLogLog where the merged data sets will be
      *     stored.

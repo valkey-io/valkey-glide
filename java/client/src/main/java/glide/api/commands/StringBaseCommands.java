@@ -73,6 +73,8 @@ public interface StringBaseCommands {
     /**
      * Retrieves the values of multiple <code>keys</code>.
      *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
      * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
      * @param keys A list of keys to retrieve values for.
      * @return An array of values corresponding to the provided <code>keys</code>.<br>
@@ -89,6 +91,8 @@ public interface StringBaseCommands {
     /**
      * Sets multiple keys to multiple values in a single operation.
      *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>
+     *     keyValueMap</code> map to different hash slots.
      * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
      * @return Always <code>OK</code>.
