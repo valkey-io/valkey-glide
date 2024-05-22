@@ -1251,6 +1251,7 @@ public abstract class BaseClient
                 response -> castArrayofArrays(handleArrayResponse(response), Double.class));
     }
 
+    @Override
     public CompletableFuture<Double> geodist(
             @NonNull String key,
             @NonNull String member1,
