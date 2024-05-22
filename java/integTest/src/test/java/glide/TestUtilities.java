@@ -83,7 +83,7 @@ public class TestUtilities {
 
     /**
      * Deep traverse and compare two objects, including comparing content of all nested collections
-     * recursively.
+     * recursively. Floating point numbers comparison performed with <code>1e-6</code> delta.
      *
      * @apiNote Maps and Set comparison ignores their order, regardless of `orderMatters` argument.
      *     Their entries could be reordered, but values stored in them compared according to this
