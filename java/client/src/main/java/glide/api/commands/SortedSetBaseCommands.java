@@ -1252,8 +1252,8 @@ public interface SortedSetBaseCommands {
      *     if reached.
      * @example
      *     <pre>{@code
-     * Long length1 = client.zintercard(new String[] {"mySortedSet1", "mySortedSet2"}, 5).get();
-     * assert payload1 == 3L;
+     * Long length = client.zintercard(new String[] {"mySortedSet1", "mySortedSet2"}, 5).get();
+     * assert length == 3L;
      * }</pre>
      */
     CompletableFuture<Long> zintercard(String[] keys, long limit);
