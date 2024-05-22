@@ -1621,7 +1621,7 @@ class CoreCommands(Protocol):
             >>> await client.sadd("my_set1", ["member1", "member2"])
             >>> await client.sadd("my_set2", ["member2", "member3"])
             >>> await client.sinter(["my_set1", "my_set2"])
-                 {"member2"} # matched member
+                 {"member2"} # sets "my_set1" and "my_set2" have one commom member
             >>> await client.sinter([my_set1", "non_existing_set"])
                 None
         """
