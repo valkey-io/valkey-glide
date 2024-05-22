@@ -165,6 +165,7 @@ pub enum RequestType {
     PExpireTime = 157,
     BLMPop = 158,
     XLen = 159,
+    Sort = 160,
     LSet = 165,
     XDel = 166,
     XRange = 167,
@@ -349,6 +350,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GetDel => RequestType::GetDel,
             ProtobufRequestType::SRandMember => RequestType::SRandMember,
             ProtobufRequestType::SInterCard => RequestType::SInterCard,
+            ProtobufRequestType::Sort => RequestType::Sort,
         }
     }
 }
@@ -521,6 +523,7 @@ impl RequestType {
             RequestType::GetDel => Some(cmd("GETDEL")),
             RequestType::SRandMember => Some(cmd("SRANDMEMBER")),
             RequestType::SInterCard => Some(cmd("SINTERCARD")),
+            RequestType::Sort => Some(cmd("SORT")),
         }
     }
 }

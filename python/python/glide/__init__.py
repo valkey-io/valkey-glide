@@ -14,6 +14,7 @@ from glide.async_commands.core import (
     TrimByMaxLen,
     TrimByMinId,
     UpdateOptions,
+    SortOrder,
 )
 from glide.async_commands.redis_modules import json
 from glide.async_commands.sorted_set import (
@@ -107,6 +108,7 @@ __all__ = [
     "TrimByMaxLen",
     "TrimByMinId",
     "UpdateOptions",
+    "SortOrder",
     # Logger
     "Logger",
     "LogLevel",

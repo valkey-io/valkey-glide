@@ -2,9 +2,14 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast
+from typing import Dict, List, Mapping, Optional, cast, Tuple
 
-from glide.async_commands.core import CoreCommands, InfoSection
+from glide.async_commands.core import (
+    CoreCommands,
+    InfoSection,
+    SortOrder,
+    _build_sort_args,
+)
 from glide.async_commands.transaction import BaseTransaction, Transaction
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -264,3 +269,91 @@ class StandaloneCommands(CoreCommands):
             int,
             await self._execute_command(RequestType.LastSave, []),
         )
+
+    async def sort(
+        self,
+        key: str,
+        by_pattern: Optional[str] = None,
+        limit: Optional[Tuple[int, int]] = None,
+        get_patterns: Optional[List[str]] = None,
+        order: Optional[SortOrder] = None,
+        alpha: Optional[bool] = None,
+    ) -> List[Optional[str]]:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        To store the result into a new key, see `sort_store`.
+
+        see https://valkey-io.github.io/commands/sort/ for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
+            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
+            get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
+            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+
+        Returns:
+            List[Optional[str]]: Returns a list of sorted elements.
+
+        Examples:
+            >>> await client.lpush("mylist", 3, 1, 2)
+            >>> await client.sort("mylist")
+            ['1', '2', '3']
+            >>> await client.sort("mylist", order=SortOrder.DESC)
+            ['3', '2', '1']
+            >>> await client.lpush("mylist", 2, 1, 2, 3, 3, 1)
+            >>> await client.sort("mylist", limit=(2, 3))
+            ['2', '2', '3']
+            >>> await client.hset("user:1", "name", "Alice", "age", 30)
+            >>> await client.hset("user:2", "name", "Bob", "age", 25)
+            >>> await client.lpush("user_ids", 2, 1)
+            >>> await client.sort("user_ids", by_pattern="user:*->age", get_patterns=["user:*->name"])
+            ['Bob', 'Alice']
+        """
+        args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
+        result = await self._execute_command(RequestType.Sort, args)
+        return cast(List[Optional[str]], result)
+
+    async def sort_store(
+        self,
+        key: str,
+        store: str,
+        by_pattern: Optional[str] = None,
+        limit: Optional[Tuple[int, int]] = None,
+        get_patterns: Optional[List[str]] = None,
+        order: Optional[SortOrder] = None,
+        alpha: Optional[bool] = None,
+    ) -> int:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
+        The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements, and store the result in a new key.
+        To get the sort result, see `sort`.
+
+        see https://valkey-io.github.io/commands/sort/ for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            store (str): The key where the sorted result will be stored.
+            by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
+            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
+            get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
+            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+
+        Returns:
+            int: The number of elements in the sorted key stored at `store`.
+
+        Examples:
+            >>> await client.lpush("mylist", 3, 1, 2)
+            >>> await client.sort_store("mylist", "sorted_list")
+            3  # Indicates that the sorted list "sorted_list" contains three elements.
+            >>> await client.lrange("sorted_list", 0, -1)
+            ['1', '2', '3']
+        """
+        args = _build_sort_args(
+            key, by_pattern, limit, get_patterns, order, alpha, store=store
+        )
+        result = await self._execute_command(RequestType.Sort, args)
+        return cast(int, result)

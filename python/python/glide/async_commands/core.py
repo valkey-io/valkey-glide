@@ -135,6 +135,18 @@ class UpdateOptions(Enum):
     GREATER_THAN = "GT"
 
 
+class SortOrder(Enum):
+    """
+    SORT order options: options for sorting elements.
+
+    - ASC: Sort in ascending order.
+    - DESC: Sort in descending order.
+    """
+
+    ASC = "ASC"
+    DESC = "DESC"
+
+
 class GeospatialData:
     def __init__(self, longitude: float, latitude: float):
         """
@@ -359,6 +371,39 @@ class ExpirySet:
 class InsertPosition(Enum):
     BEFORE = "BEFORE"
     AFTER = "AFTER"
+
+
+def _build_sort_args(
+    key: str,
+    by_pattern: Optional[str] = None,
+    limit: Optional[Tuple[int, int]] = None,
+    get_patterns: Optional[List[str]] = None,
+    order: Optional[SortOrder] = None,
+    alpha: Optional[bool] = None,
+    store: Optional[str] = None,
+) -> List[str]:
+    args = [key]
+
+    if by_pattern:
+        args.extend(["BY", by_pattern])
+
+    if limit:
+        args.extend(["LIMIT", str(limit[0]), str(limit[1])])
+
+    if get_patterns:
+        for pattern in get_patterns:
+            args.extend(["GET", pattern])
+
+    if order:
+        args.append(order.value)
+
+    if alpha:
+        args.append("ALPHA")
+
+    if store:
+        args.extend(["STORE", store])
+
+    return args
 
 
 class CoreCommands(Protocol):

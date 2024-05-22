@@ -14,6 +14,8 @@ from glide.async_commands.core import (
     StreamAddOptions,
     StreamTrimOptions,
     UpdateOptions,
+    SortOrder,
+    _build_sort_args,
 )
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -2745,6 +2747,70 @@ class Transaction(BaseTransaction):
         """
         return self.append_command(RequestType.Select, [str(index)])
 
+    def sort(
+        self: TTransaction,
+        key: str,
+        by_pattern: Optional[str] = None,
+        limit: Optional[Tuple[int, int]] = None,
+        get_patterns: Optional[List[str]] = None,
+        order: Optional[SortOrder] = None,
+        alpha: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        To store the result into a new key, see `sort_store`.
+
+        see https://valkey-io.github.io/commands/sort/ for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
+            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
+            get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
+            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+
+        Command response:
+            List[Optional[str]]: Returns a list of sorted elements.
+        """
+        args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
+        return self.append_command(RequestType.Sort, args)
+
+    def sort_store(
+        self: TTransaction,
+        key: str,
+        store: str,
+        by_pattern: Optional[str] = None,
+        limit: Optional[Tuple[int, int]] = None,
+        get_patterns: Optional[List[str]] = None,
+        order: Optional[SortOrder] = None,
+        alpha: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
+        The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements, and store the result in a new key.
+        To get the sort result, see `sort`.
+
+        see https://valkey-io.github.io/commands/sort/ for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            store (str): The key where the sorted result will be stored.
+            by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
+            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
+            get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
+            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+
+        Command response:
+            int: The number of elements in the sorted key stored at `store`.
+        """
+        args = _build_sort_args(
+            key, by_pattern, limit, get_patterns, order, alpha, store=store
+        )
+        return self.append_command(RequestType.Sort, args)
+
 
 class ClusterTransaction(BaseTransaction):
     """
@@ -2754,6 +2820,59 @@ class ClusterTransaction(BaseTransaction):
         The response for each command depends on the executed Redis command. Specific response types
         are documented alongside each method.
     """
+
+    def sort(
+        self,
+        key: str,
+        limit: Optional[Tuple[int, int]] = None,
+        order: Optional[SortOrder] = None,
+        alpha: Optional[bool] = None,
+    ) -> List[Optional[str]]:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        To store the result into a new key, see `sort_store`.
+
+        see https://valkey-io.github.io/commands/sort/ for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
+            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+
+        Command response:
+            List[Optional[str]]: A list of sorted elements.
+        """
+        args = _build_sort_args(key, None, limit, None, order, alpha)
+        return self.append_command(RequestType.Sort, args)
+
+    def sort_store(
+        self,
+        key: str,
+        store: str,
+        limit: Optional[Tuple[int, int]] = None,
+        order: Optional[SortOrder] = None,
+        alpha: Optional[bool] = None,
+    ) -> int:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
+        When in cluster mode, `key` and `store` must map to the same hash slot.
+        To get the sort result, see `sort`.
+
+        see https://valkey-io.github.io/commands/sort/ for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            store (str): The key where the sorted result will be stored.
+            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
+            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+
+        Command response:
+            int: The number of elements in the sorted key stored at `store`.
+        """
+        args = _build_sort_args(key, None, limit, None, order, alpha, store=store)
+        return self.append_command(RequestType.Sort, args)
 
     # TODO: add all CLUSTER commands
     pass
