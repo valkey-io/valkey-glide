@@ -543,14 +543,14 @@ public class TransactionTestUtilities {
                 .setbit(key2, 1, 1)
                 .setbit(key2, 1, 0)
                 .getbit(key1, 1)
-                .bitpos(key, 1)
-                .bitpos(key, 1, 3)
-                .bitpos(key, 1, 3, 5);
+                .bitpos(key1, 1)
+                .bitpos(key1, 1, 3)
+                .bitpos(key1, 1, 3, 5);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
-                .bitcount(key1, 5, 30, BitmapIndexType.BIT)
-                .bitpos(key, 1, 44, 50, BitmapIndexType.BIT);
+                    .bitcount(key1, 5, 30, BitmapIndexType.BIT)
+                    .bitpos(key1, 1, 44, 50, BitmapIndexType.BIT);
         }
 
         var expectedResults =
