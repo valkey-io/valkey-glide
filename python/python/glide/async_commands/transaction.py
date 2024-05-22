@@ -2226,7 +2226,7 @@ class BaseTransaction:
         Command response:
             Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
                 which elements were popped, and a member-score mapping of the popped elements. If no members could be
-                popped and the timeout expired, returns None.
+                popped, returns None.
 
         Since: Redis version 7.0.0.
         """
