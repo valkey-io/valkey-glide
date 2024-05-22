@@ -1192,6 +1192,33 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sinter(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:{get_random_string(10)}"
+        key2 = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:non_existing_key"
+        member1_list = ["a", "b", "c"]
+        member2_list = ["c", "d", "e"]
+
+        # positive test case
+        assert await redis_client.sadd(key1, member1_list) == 3
+        assert await redis_client.sadd(key2, member2_list) == 3
+        assert await redis_client.sinter([key1, key2]) == set(["c"])
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.sinter([])
+
+        # non-existing key returns empty set
+        assert await redis_client.sinter([key1, non_existing_key]) == set()
+
+        # non-set key
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError) as e:
+            await redis_client.sinter([key2])
+        assert "Operation against a key holding the wrong kind of value" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ltrim(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -3129,6 +3156,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
             redis_client.smove("abc", "def", "_"),
             redis_client.sunionstore("abc", ["zxy", "lkn"]),
+            redis_client.sinter(["abc", "zxy", "lkn"]),
         ]
 
         if not check_if_server_version_lt(redis_client, "7.0.0"):
