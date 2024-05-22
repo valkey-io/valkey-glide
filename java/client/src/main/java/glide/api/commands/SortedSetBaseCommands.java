@@ -1186,8 +1186,8 @@ public interface SortedSetBaseCommands {
     CompletableFuture<String[]> zinter(KeysOrWeightedKeys keysOrWeightedKeys);
 
     /**
-     * Returns the intersection of members from sorted sets specified by the given
-     * <code>keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
      * #zinterWithScores}.
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
