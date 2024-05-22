@@ -28,7 +28,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -48,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
+import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -141,7 +142,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.RangeOptions;
@@ -157,6 +157,7 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -708,6 +709,9 @@ public class TransactionTests {
         transaction.geoadd("key", Map.of("Place", new GeospatialData(10.0, 20.0)));
         results.add(Pair.of(GeoAdd, buildArgs("key", "10.0", "20.0", "Place")));
 
+        transaction.getbit("key", 1);
+        results.add(Pair.of(GetBit, buildArgs("key", "1")));
+
         transaction.geoadd(
                 "key",
                 Map.of("Place", new GeospatialData(10.0, 20.0)),
@@ -734,13 +738,13 @@ public class TransactionTests {
         results.add(Pair.of(GeoHash, buildArgs("key", "Place")));
 
         transaction.bitcount("key");
-        results.add(Pair.of(Bitcount, buildArgs("key")));
+        results.add(Pair.of(BitCount, buildArgs("key")));
 
         transaction.bitcount("key", 1, 1);
-        results.add(Pair.of(Bitcount, buildArgs("key", "1", "1")));
+        results.add(Pair.of(BitCount, buildArgs("key", "1", "1")));
 
         transaction.bitcount("key", 1, 1, BitmapIndexType.BIT);
-        results.add(Pair.of(Bitcount, buildArgs("key", "1", "1", BitmapIndexType.BIT.toString())));
+        results.add(Pair.of(BitCount, buildArgs("key", "1", "1", BitmapIndexType.BIT.toString())));
 
         transaction.setbit("key", 8, 1);
         results.add(Pair.of(SetBit, buildArgs("key", "8", "1")));
