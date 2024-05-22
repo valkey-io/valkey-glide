@@ -1605,7 +1605,7 @@ class CoreCommands(Protocol):
         """
         Gets the intersection of all the given sets.
 
-        See https://valkey.io/docs/latest/commands/sinter/ for more details.
+        See https://valkey.io/docs/latest/commands/sinter for more details.
 
         Args:
             keys (List[str]): The keys of the sets.
