@@ -4198,8 +4198,8 @@ public class RedisClientTest {
         String value = "testValue";
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(1L);
-        when(commandManager.<Long>submitNewCommand(eq(Append), eq(new String[]{key, value}), any()))
-            .thenReturn(testResponse);
+        when(commandManager.<Long>submitNewCommand(eq(Append), eq(new String[] {key, value}), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Long> response = service.append(key, value);
@@ -4224,7 +4224,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<String[]>submitNewCommand(eq(GeoHash), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String[]> response = service.geohash(key, members);

@@ -185,7 +185,7 @@ public class SharedCommandTests {
         // key exists but holding the wrong kind of value
         assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
         ExecutionException executionException =
-            assertThrows(ExecutionException.class, () -> client.append(key2, "z").get());
+                assertThrows(ExecutionException.class, () -> client.append(key2, "z").get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -3606,5 +3606,4 @@ public class SharedCommandTests {
             assertTrue(executionException.getCause() instanceof RequestException);
         }
     }
->>>>>>> java/integ_cyip10_append
 }
