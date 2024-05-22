@@ -3,6 +3,8 @@ package glide;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import glide.api.models.ClusterValue;
@@ -11,7 +13,9 @@ import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import java.security.SecureRandom;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.experimental.UtilityClass;
 
@@ -75,5 +79,54 @@ public class TestUtilities {
             commonClusterClientConfig() {
         return RedisClusterClientConfiguration.builder()
                 .address(NodeAddress.builder().port(CLUSTER_PORTS[0]).build());
+    }
+
+    /**
+     * Deep traverse and compare two objects, including comparing content of all nested collections
+     * recursively.
+     *
+     * @apiNote Maps and Set comparison ignores their order, regardless of `orderMatters` argument.
+     *     Their entries could be reordered, but values stored in them compared according to this
+     *     parameter.
+     */
+    public static void assertDeepEquals(Object expected, Object actual, boolean orderMatters) {
+        if (expected == null || actual == null) {
+            assertEquals(expected, actual);
+        } else if (expected.getClass().isArray()) {
+            var expectedArray = (Object[]) expected;
+            var actualArray = (Object[]) actual;
+            assertEquals(expectedArray.length, actualArray.length);
+            for (int i = 0; i < expectedArray.length; i++) {
+                assertDeepEquals(expectedArray[i], actualArray[i], orderMatters);
+            }
+        } else if (expected instanceof List) {
+            var expectedList = (List<?>) expected;
+            var actualList = (List<?>) actual;
+            assertEquals(expectedList.size(), actualList.size());
+            if (orderMatters) {
+                for (int i = 0; i < expectedList.size(); i++) {
+                    assertDeepEquals(expectedList.get(i), actualList.get(i), orderMatters);
+                }
+            } else {
+                assertTrue(expectedList.containsAll(actualList) && actualList.containsAll(expectedList));
+            }
+        } else if (expected instanceof Set) {
+            var expectedSet = (Set<?>) expected;
+            var actualSet = (Set<?>) actual;
+            assertEquals(expectedSet.size(), actualSet.size());
+            assertTrue(expectedSet.containsAll(actualSet) && actualSet.containsAll(expectedSet));
+        } else if (expected instanceof Map) {
+            var expectedMap = (Map<?, ?>) expected;
+            var actualMap = (Map<?, ?>) actual;
+            assertEquals(expectedMap.size(), actualMap.size());
+            assertDeepEquals(expectedMap.keySet(), actualMap.keySet(), false);
+            for (var key : expectedMap.keySet()) {
+                assertDeepEquals(expectedMap.get(key), actualMap.get(key), orderMatters);
+            }
+        } else if (expected instanceof Double || actual instanceof Double) {
+            assertEquals((Double) expected, (Double) actual, 1e-6);
+        } else {
+            assertEquals(expected, actual);
+        }
     }
 }
