@@ -972,9 +972,9 @@ public interface SortedSetBaseCommands {
      * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
-     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
-     * @return A two-element <code>array</code> containing the key name of the set from which an
-     *     element was popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
+     * @return A two-element <code>array</code> containing the key name of the set from which the
+     *     element was popped, and a member-score <code>Map</code> of the popped element.<br>
      *     If no member could be popped, returns <code>null</code>.
      * @example
      *     <pre>{@code

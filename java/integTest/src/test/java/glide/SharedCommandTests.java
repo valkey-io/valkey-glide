@@ -2612,6 +2612,9 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class, () -> client.zmpop(new String[] {key1}, MAX, 0).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zmpop(new String[0], MAX).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
         // check that order of entries in the response is preserved
         var entries = new LinkedHashMap<String, Double>();
