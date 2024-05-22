@@ -149,11 +149,12 @@ pub enum RequestType {
     BZPopMin = 137,
     FlushAll = 138,
     ZRandMember = 139,
-    Bitcount = 140,
+    BitCount = 140,
     BZMPop = 141,
     SetBit = 142,
     ZInterCard = 143,
     ZMPop = 144,
+    GetBit = 145,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -306,11 +307,12 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BZPopMin => RequestType::BZPopMin,
             ProtobufRequestType::FlushAll => RequestType::FlushAll,
             ProtobufRequestType::ZRandMember => RequestType::ZRandMember,
-            ProtobufRequestType::Bitcount => RequestType::Bitcount,
+            ProtobufRequestType::BitCount => RequestType::BitCount,
             ProtobufRequestType::BZMPop => RequestType::BZMPop,
             ProtobufRequestType::SetBit => RequestType::SetBit,
             ProtobufRequestType::ZInterCard => RequestType::ZInterCard,
             ProtobufRequestType::ZMPop => RequestType::ZMPop,
+            ProtobufRequestType::GetBit => RequestType::GetBit,
         }
     }
 }
@@ -459,11 +461,12 @@ impl RequestType {
             RequestType::BZPopMin => Some(cmd("BZPOPMIN")),
             RequestType::FlushAll => Some(cmd("FLUSHALL")),
             RequestType::ZRandMember => Some(cmd("ZRANDMEMBER")),
-            RequestType::Bitcount => Some(cmd("BITCOUNT")),
+            RequestType::BitCount => Some(cmd("BITCOUNT")),
             RequestType::BZMPop => Some(cmd("BZMPOP")),
             RequestType::SetBit => Some(cmd("SETBIT")),
             RequestType::ZInterCard => Some(cmd("ZINTERCARD")),
             RequestType::ZMPop => Some(cmd("ZMPOP")),
+            RequestType::GetBit => Some(cmd("GETBIT")),
         }
     }
 }

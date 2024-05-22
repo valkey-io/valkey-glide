@@ -10,7 +10,6 @@ import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -20,6 +19,7 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -513,7 +513,8 @@ public class TransactionTestUtilities {
                 .bitcount(key1)
                 .bitcount(key1, 1, 1)
                 .setbit(key2, 1, 1)
-                .setbit(key2, 1, 0);
+                .setbit(key2, 1, 0)
+                .getbit(key1, 1);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction.bitcount(key1, 5, 30, BitmapIndexType.BIT);
@@ -521,11 +522,12 @@ public class TransactionTestUtilities {
 
         var expectedResults =
                 new Object[] {
-                    OK, // set(key, "foobar")
-                    26L, // bitcount(key)
-                    6L, // bitcount(key, 1, 1)
-                    0L, // setbit(key, 1, 1)
-                    1L, // setbit(key, 1, 0)
+                    OK, // set(key1, "foobar")
+                    26L, // bitcount(key1)
+                    6L, // bitcount(key1, 1, 1)
+                    0L, // setbit(key2, 1, 1)
+                    1L, // setbit(key2, 1, 0)
+                    1L, // getbit(key1, 1)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {

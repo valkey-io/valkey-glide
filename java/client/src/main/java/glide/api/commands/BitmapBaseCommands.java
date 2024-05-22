@@ -1,7 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import glide.api.models.commands.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -95,4 +95,22 @@ public interface BitmapBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> setbit(String key, long offset, long value);
+
+    /**
+     * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
+     * <code>offset</code> should be greater than or equal to zero.
+     *
+     * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param offset The index of the bit to return.
+     * @return The bit at offset of the string. Returns zero if the key is empty or if the positive
+     *     <code>offset</code> exceeds the length of the string.
+     * @example
+     *     <pre>{@code
+     * client.set("sampleKey", "A"); // "A" has binary value 01000001
+     * Long payload = client.getbit("sampleKey", 1).get();
+     * assert payload == 1L; // The second bit for string stored at "sampleKey" is set to 1.
+     * }</pre>
+     */
+    CompletableFuture<Long> getbit(String key, long offset);
 }

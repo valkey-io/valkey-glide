@@ -16,7 +16,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -37,6 +37,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
+import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -130,7 +131,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -158,6 +158,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -2964,7 +2965,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T bitcount(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -2987,7 +2988,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T bitcount(@NonNull String key, long start, long end) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
 
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -3014,7 +3015,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs =
                 buildArgs(key, Long.toString(start), Long.toString(end), options.toString());
 
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -3156,6 +3157,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T setbit(@NonNull String key, long offset, long value) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(offset), Long.toString(value));
         protobufTransaction.addCommands(buildCommand(SetBit, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
+     * <code>offset</code> should be greater than or equal to zero.
+     *
+     * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param offset The index of the bit to return.
+     * @return Command Response - The bit at offset of the string. Returns zero if the key is empty or
+     *     if the positive <code>offset</code> exceeds the length of the string.
+     */
+    public T getbit(@NonNull String key, long offset) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(offset));
+        protobufTransaction.addCommands(buildCommand(GetBit, commandArgs));
         return getThis();
     }
 
