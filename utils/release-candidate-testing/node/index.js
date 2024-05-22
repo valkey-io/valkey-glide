@@ -1,121 +1,107 @@
-import { RedisClusterClient } from "@aws/glide-for-redis";
-import { exec } from "child_process";
+import { RedisClient, RedisClusterClient } from "@aws/glide-for-redis";
+import { RedisCluster } from "../../TestUtils.js";
 
-const PYTHON_CLUSTER_SCRIPT_PATH = "../../../utils/cluster_manager.py";
-const PYTHON = "python3";
-const PYTHON_SCRIPT_RUN = `${PYTHON} ${PYTHON_CLUSTER_SCRIPT_PATH}`;
-const CLUSTER_NODES_AND_REPLICAS_PARAMS = `-r 3 -n 3 --cluster-mode`;
-let clusterFolder = "";
 
-function parseOutput(input) {
-    const lines = input.split(/\r\n|\r|\n/);
-    const clusterFolder = lines
-        .find((line) => line.startsWith("CLUSTER_FOLDER"))
-        ?.split("=")[1];
-    const ports = lines
-        .find((line) => line.startsWith("CLUSTER_NODES"))
-        ?.split("=")[1]
-        .split(",")
-        .map((address) => address.split(":"))
-        .map((address) => [address[0], Number(address[1])]);
-
-    if (clusterFolder === undefined || ports === undefined) {
-        throw new Error(`Insufficient data in input: ${input}`);
+async function runCommands(client) {
+    console.log("Executing commands");
+    // Set a bunch of keys
+    for (let i = 0; i < 100; i++) {
+        let res = await client.set(`foo${i}`, "bar");
+        if (res !== "OK") {
+            throw new Error("Unexpected set response");
+        }
     }
-
-    return {
-        clusterFolder,
-        addresses: ports,
-    };
+    // Get some keys
+    for (let i = 0; i < 10; i++) {
+        let val = await client.get(`foo${i}`);
+        if (val !== "bar") {
+            throw new Error("Unexpected value");
+        }
+    }
+    // Run some commands
+    let pong = await client.ping();
+    if (pong !== "PONG") {
+        throw new Error("Unexpected pong");
+    }
+    let time = await client.time();
+    if (time.length !== 2) {
+        throw new Error("Unexpected time response");
+    }
+    console.log("Commands executed");
 }
 
-function createCluster() {
-    return new Promise((resolve, reject) => {
-        exec(
-            `${PYTHON_SCRIPT_RUN} start ${CLUSTER_NODES_AND_REPLICAS_PARAMS}`,
-            (error, stdout, stderr) => {
-                if (error) {
-                    console.error(stderr, stdout, error);
-                    try {
-                        // Need this part just when running in our self-hosted runner
-                        if (
-                            process.platform === "linux" &&
-                            process.arch in ["arm", "arm64"]
-                        ) {
-                            exec(`pkill -f redis`);
-                            exec(`rm -rf ${clusterFolder}`);
-                            exec(`rm -rf /tmp/redis*`);
-                        }
-                    } catch {
-                        (e) => console.error(e);
-                    }
-                    reject(error);
-                } else {
-                    const { clusterFolder, addresses } = parseOutput(stdout);
-                    resolve({ clusterFolder, addresses });
-                }
-            }
-        );
-    });
-}
-function closeClient() {
-    return new Promise((resolve, reject) => {
-        exec(
-            `${PYTHON_SCRIPT_RUN} stop --cluster-folder ${clusterFolder}`,
-            (error, _, stderr) => {
-                if (error) {
-                    console.error(stderr, stdout, error);
-                    exec(`pkill -f redis`);
-                    exec(`rm -rf ${clusterFolder}`);
-                    exec(`rm -rf /tmp/redis*`);
-                    reject(error);
-                } else {
-                    resolve();
-                }
-            }
-        );
-    });
+async function closeClintAndServers(client, server) {
+    console.log("Closing client");
+    client.close();
+    console.log("Client closed");
+
+    console.log("Closing servers");
+    await server.close();
+
 }
 
-async function main() {
+async function testingCluster() {
     try {
+        console.log("Testing cluster");
         console.log("Creating cluster");
-        let addresses;
-        ({ clusterFolder, addresses } = await createCluster());
+        let redisCluster = await RedisCluster.createCluster(true,
+            3,
+            1,
+        );
         console.log("Cluster created");
-        addresses = addresses.map((address) => {
-            return { host: address[0], port: address[1] };
-        });
+
         console.log("Connecting to cluster");
-        const client = await RedisClusterClient.createClient({
-            addresses,
-        });
+        let addresses = redisCluster.getAddresses().map((address) => { return { host: address[0], port: address[1] } });
+        const client = await RedisClusterClient.createClient({ addresses: addresses });
         console.log("Connected to cluster");
-        console.log("Executing commands");
-        // Set a bunch of keys
-        for (let i = 0; i < 100; i++) {
-            await client.set(`foo${i}`, "bar");
-        }
-        // Get some keys
-        for (let i = 0; i < 10; i++) {
-            await client.get(`foo${i}`);
-        }
-        // Run some commands
-        await client.ping();
-        await client.time();
-        console.log("Commands executed");
-        console.log("Closing client");
-        client.close();
-        // Need this part just when running in our self-hosted runner
-        if (process.platform === "linux" && process.arch in ["arm", "arm64"]) {
-            console.log("Client closed");
-            console.log("Closing cluster");
-            await closeClient();
-            console.log("Cluster closed");
-        }
+
+        await runCommands(client);
+
+        await closeClintAndServers(client, redisCluster);
         console.log("Done");
     } catch (error) {
+        // Need this part just when running in our self-hosted runner
+        if (process.platform === "linux" && process.arch in ["arm", "arm64"]) {
+            exec(`pkill -f redis`);
+            exec(`rm -rf ${clusterFolder}`);
+            exec(`rm -rf /tmp/redis*`);
+        }
         console.error(error);
     }
 }
+
+async function testingStandalone() {
+    try {
+        console.log("Testing standalone server")
+        console.log("Creating Server");
+        let redisServer = await RedisCluster.createCluster(false,
+            1,
+            1,
+        );
+        console.log("Server created");
+
+        console.log("Connecting to Server");
+        let addresses = redisServer.getAddresses().map((address) => { return { host: address[0], port: address[1] } });
+        const client = await RedisClient.createClient({ addresses: addresses });
+        console.log("Connected to Server");
+
+        await closeClintAndServers(client, redisServer);
+        console.log("Done");
+
+    } catch (error) {
+        // Need this part just when running in our self-hosted runner
+        if (process.platform === "linux" && process.arch in ["arm", "arm64"]) {
+            exec(`pkill -f redis`);
+            exec(`rm -rf /tmp/redis*`);
+        }
+        console.error(error);
+    }
+}
+
+
+async function main() {
+    await testingCluster();
+    await testingStandalone();
+}
+
 await main();

@@ -5,14 +5,15 @@
     "main": "index.ts",
     "type": "module",
     "scripts": {
-        "test": "node index.js",
+        "test": "npm run build-utils && node index.js",
+        "build-utils": "cd ../../ && tsc",
         "prettier:check:ci": "./node_modules/.bin/prettier --check .",
         "prettier:format": "./node_modules/.bin/prettier --write . "
     },
     "author": "",
     "license": "Apache-2.0",
     "dependencies": {
-        "@aws/glide-for-redis": "^0.3.3",
+        "@aws/glide-for-redis": "latest",
         "child_process": "^1.0.2",
         "find-free-ports": "^3.1.1"
     },

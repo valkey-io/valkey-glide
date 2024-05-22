@@ -334,18 +334,24 @@ jobs:
                           RUNNER: [self-hosted, Linux, ARM64],
                           IMAGE: 'node:alpine',
                           CONTAINER_OPTIONS: '--user root --privileged --rm',
+                          ARCH: arm64,
                       }
                     - {
                           RUNNER: ubuntu-latest,
                           IMAGE: 'node:alpine',
                           CONTAINER_OPTIONS: '--user root --privileged',
+                          ARCH: x64,
                       }
         steps:
-            - name: install Redis, Python and git for alpine
+            - name: Setup self-hosted runner access
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.IMAGE != 'node:alpine' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+
+            - name: install Redis and git for alpine
               if: ${{ matrix.build.IMAGE == 'node:alpine' }}
               run: |
                 apk update
-                apk add redis python3 git
+                apk add redis git
                 redis-server --daemonize yes
             
             - name: install Redis and Python for ubuntu
@@ -361,28 +367,17 @@ jobs:
                 brew install redis python3
                 brew services start redis
 
-            # Currently "Checkout" action is not supported for musl on ARM64, so the checkout is happening on the runner and 
-            # here we just making sure we getting the clean repo
-            - name: Clean repository for musl on ARM64
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.IMAGE == 'node:alpine' }}
-              run: |
-                  git config --global --add safe.directory $GITHUB_WORKSPACE
-                  git clean -xdf
-                  git reset --hard
-                  git submodule sync
-                  git submodule update --init --recursive
-            
-            - name: Set up access for musl on ARM
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.IMAGE == 'node:alpine' }}
-              run: |
-                chown -R $(whoami):$(whoami) $GITHUB_WORKSPACE
-
-            - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.IMAGE != 'node:alpine' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+            - name: Setup for musl
+              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+              uses: ./.github/workflows/setup-musl-on-linux
+              with:
+                  workspace: $GITHUB_WORKSPACE
+                  npm-scope: ${{ vars.NPM_SCOPE }}
+                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
+                  arch: ${{ matrix.build.ARCH }}
 
             - name: Checkout
-              if: ${{ matrix.build.IMAGE != 'node:alpine' }}
+              if: ${{ matrix.build.IMAGE != 'node:alpine' && matrix.build.ARCH != 'arm64' }}
               uses: actions/checkout@v4
               with:
                   submodules: "true"
@@ -395,14 +390,6 @@ jobs:
                   registry-url: "https://registry.npmjs.org"
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
-
-            - name: Setup node
-              if: ${{ matrix.build.IMAGE == 'node:alpine' }}
-              working-directory: ./node
-              run: |
-                npm config set registry https://registry.npmjs.org/
-                npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
-                npm config set scope ${{ vars.NPM_SCOPE }}
 
             - name: Run the tests
               shell: bash
