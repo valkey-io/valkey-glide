@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
@@ -106,6 +107,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
+import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
@@ -120,6 +122,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
@@ -586,6 +589,11 @@ public class TransactionTests {
                                 AGGREGATE_REDIS_API,
                                 Aggregate.MAX.toString(),
                                 WITH_SCORES_REDIS_API)));
+        transaction.zintercard(new String[] {"key1", "key2"}, 5);
+        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2", LIMIT_REDIS_API, "5")));
+
+        transaction.zintercard(new String[] {"key1", "key2"});
+        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2")));
 
         transaction.xadd("key", Map.of("field1", "foo1"));
         results.add(Pair.of(XAdd, buildArgs("key", "*", "field1", "foo1")));
@@ -738,6 +746,9 @@ public class TransactionTests {
 
         transaction.bitcount("key", 1, 1, BitmapIndexType.BIT);
         results.add(Pair.of(Bitcount, buildArgs("key", "1", "1", BitmapIndexType.BIT.toString())));
+
+        transaction.setbit("key", 8, 1);
+        results.add(Pair.of(SetBit, buildArgs("key", "8", "1")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

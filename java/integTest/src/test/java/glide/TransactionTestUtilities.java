@@ -323,6 +323,7 @@ public class TransactionTestUtilities {
                 .zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
                 .zpopmin(zSetKey1)
                 .zpopmax(zSetKey1)
+                // zSetKey1 is now empty
                 .zremrangebyrank(zSetKey1, 5, 10)
                 .zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
                 .zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
@@ -340,8 +341,9 @@ public class TransactionTestUtilities {
                 .zrandmember(zSetKey2)
                 .zrandmemberWithCount(zSetKey2, 1)
                 .zrandmemberWithCountWithScores(zSetKey2, 1)
-                .bzpopmin(new String[] {zSetKey2}, .1);
-        // zSetKey2 is now empty
+                .bzpopmin(new String[] {zSetKey2}, .1)
+                // zSetKey2 is now empty
+                .zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.));
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
@@ -349,7 +351,10 @@ public class TransactionTestUtilities {
                     .zmpop(new String[] {zSetKey3}, MAX)
                     .zmpop(new String[] {zSetKey3}, MIN, 2)
                     .bzmpop(new String[] {zSetKey3}, MAX, .1)
-                    .bzmpop(new String[] {zSetKey3}, MIN, .1, 2);
+                    .bzmpop(new String[] {zSetKey3}, MIN, .1, 2)
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
+                    .zintercard(new String[] {zSetKey2, zSetKey3})
+                    .zintercard(new String[] {zSetKey2, zSetKey3}, 2);
         }
 
         var expectedResults =
@@ -387,6 +392,7 @@ public class TransactionTestUtilities {
                     new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
                     new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
                     new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
+                    4L, // zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -398,6 +404,9 @@ public class TransactionTestUtilities {
                         new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
                         new Object[] {zSetKey3, Map.of("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
                         new Object[] {zSetKey3, Map.of("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                        6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                        4L, // zintercard(new String[] {zSetKey2, zSetKey3})
+                        2L, // zintercard(new String[] {zSetKey2, zSetKey3}, 2)
                     });
         }
         return expectedResults;
@@ -502,12 +511,18 @@ public class TransactionTestUtilities {
     }
 
     private static Object[] bitmapCommands(BaseTransaction<?> transaction) {
-        String key = "{key-" + UUID.randomUUID();
+        String key1 = "{bitmapKey}-1" + UUID.randomUUID();
+        String key2 = "{bitmapKey}-2" + UUID.randomUUID();
 
-        transaction.set(key, "foobar").bitcount(key).bitcount(key, 1, 1);
+        transaction
+                .set(key1, "foobar")
+                .bitcount(key1)
+                .bitcount(key1, 1, 1)
+                .setbit(key2, 1, 1)
+                .setbit(key2, 1, 0);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction.bitcount(key, 5, 30, BitmapIndexType.BIT);
+            transaction.bitcount(key1, 5, 30, BitmapIndexType.BIT);
         }
 
         var expectedResults =
@@ -515,6 +530,8 @@ public class TransactionTestUtilities {
                     OK, // set(key, "foobar")
                     26L, // bitcount(key)
                     6L, // bitcount(key, 1, 1)
+                    0L, // setbit(key, 1, 1)
+                    1L, // setbit(key, 1, 0)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {

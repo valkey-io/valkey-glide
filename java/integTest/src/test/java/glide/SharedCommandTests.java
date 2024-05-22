@@ -2482,6 +2482,40 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zintercard(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        String key1 = "{zintercard}-" + UUID.randomUUID();
+        String key2 = "{zintercard}-" + UUID.randomUUID();
+        String key3 = "{zintercard}-" + UUID.randomUUID();
+
+        assertEquals(3, client.zadd(key1, Map.of("a", 1.0, "b", 2.0, "c", 3.0)).get());
+        assertEquals(3, client.zadd(key2, Map.of("b", 1.0, "c", 2.0, "d", 3.0)).get());
+
+        assertEquals(2L, client.zintercard(new String[] {key1, key2}).get());
+        assertEquals(0, client.zintercard(new String[] {key1, key3}).get());
+
+        assertEquals(2L, client.zintercard(new String[] {key1, key2}, 0).get());
+        assertEquals(1L, client.zintercard(new String[] {key1, key2}, 1).get());
+        assertEquals(2L, client.zintercard(new String[] {key1, key2}, 3).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zintercard(new String[] {key3}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // incorrect arguments
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zintercard(new String[0]).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zintercard(new String[0], 42).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zinterstore(BaseClient client) {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
@@ -3632,5 +3666,32 @@ public class SharedCommandTests {
                             () -> client.bitcount(key1, 5, 30, BitmapIndexType.BIT).get());
             assertTrue(executionException.getCause() instanceof RequestException);
         }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void setbit(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        assertEquals(0, client.setbit(key1, 0, 1).get());
+        assertEquals(1, client.setbit(key1, 0, 0).get());
+
+        // Exception thrown due to the negative offset
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.setbit(key1, -1, 1).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Exception thrown due to the value set not being 0 or 1
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.setbit(key1, 1, 2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Exception thrown: key is not a string
+        assertEquals(1, client.sadd(key2, new String[] {"value"}).get());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.setbit(key2, 1, 1).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }

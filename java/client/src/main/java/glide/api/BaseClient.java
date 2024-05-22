@@ -80,6 +80,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
+import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
@@ -93,6 +94,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
@@ -1073,6 +1075,22 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zintercard(@NonNull String[] keys) {
+        String[] arguments = ArrayUtils.addFirst(keys, Integer.toString(keys.length));
+        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zintercard(@NonNull String[] keys, long limit) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {Integer.toString(keys.length)},
+                        keys,
+                        new String[] {LIMIT_REDIS_API, Long.toString(limit)});
+        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<String> xadd(@NonNull String key, @NonNull Map<String, String> values) {
         return xadd(key, values, StreamAddOptions.builder().build());
     }
@@ -1307,5 +1325,11 @@ public abstract class BaseClient
         String[] arguments =
                 new String[] {key, Long.toString(start), Long.toString(end), options.toString()};
         return commandManager.submitNewCommand(Bitcount, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> setbit(@NonNull String key, long offset, long value) {
+        String[] arguments = new String[] {key, Long.toString(offset), Long.toString(value)};
+        return commandManager.submitNewCommand(SetBit, arguments, this::handleLongResponse);
     }
 }
