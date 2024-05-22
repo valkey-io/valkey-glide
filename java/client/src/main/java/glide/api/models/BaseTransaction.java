@@ -2872,7 +2872,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
      * @param key The key of the string.
      * @param value The value to append.
-     * @return The length of the string after appending the value.
+     * @return Command Response - The length of the string after appending the value.
      */
     public T append(@NonNull String key, @NonNull String value) {
         ArgsArray commandArgs = buildArgs(key, value);
