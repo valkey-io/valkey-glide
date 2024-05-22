@@ -672,6 +672,8 @@ public class CommandTests {
                         "zinterstore",
                         null,
                         clusterClient.zinterstore("foo", new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                Arguments.of(
+                        "zintercard", "7.0.0", clusterClient.zintercard(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("brpop", null, clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("pfcount", null, clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
