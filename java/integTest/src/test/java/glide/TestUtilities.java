@@ -85,11 +85,10 @@ public class TestUtilities {
      * Deep traverse and compare two objects, including comparing content of all nested collections
      * recursively. Floating point numbers comparison performed with <code>1e-6</code> delta.
      *
-     * @apiNote Maps and Set comparison ignores their order, regardless of `orderMatters` argument.
-     *     Their entries could be reordered, but values stored in them compared according to this
-     *     parameter.
+     * @apiNote <code>Map</code> and <code>Set</code> comparison ignores element order.<br>
+     *     <code>List</code> and <code>Array</code> comparison is order-sensitive.
      */
-    public static void assertDeepEquals(Object expected, Object actual, boolean orderMatters) {
+    public static void assertDeepEquals(Object expected, Object actual) {
         if (expected == null || actual == null) {
             assertEquals(expected, actual);
         } else if (expected.getClass().isArray()) {
@@ -97,18 +96,14 @@ public class TestUtilities {
             var actualArray = (Object[]) actual;
             assertEquals(expectedArray.length, actualArray.length);
             for (int i = 0; i < expectedArray.length; i++) {
-                assertDeepEquals(expectedArray[i], actualArray[i], orderMatters);
+                assertDeepEquals(expectedArray[i], actualArray[i]);
             }
         } else if (expected instanceof List) {
             var expectedList = (List<?>) expected;
             var actualList = (List<?>) actual;
             assertEquals(expectedList.size(), actualList.size());
-            if (orderMatters) {
-                for (int i = 0; i < expectedList.size(); i++) {
-                    assertDeepEquals(expectedList.get(i), actualList.get(i), orderMatters);
-                }
-            } else {
-                assertTrue(expectedList.containsAll(actualList) && actualList.containsAll(expectedList));
+            for (int i = 0; i < expectedList.size(); i++) {
+                assertDeepEquals(expectedList.get(i), actualList.get(i));
             }
         } else if (expected instanceof Set) {
             var expectedSet = (Set<?>) expected;
@@ -119,9 +114,8 @@ public class TestUtilities {
             var expectedMap = (Map<?, ?>) expected;
             var actualMap = (Map<?, ?>) actual;
             assertEquals(expectedMap.size(), actualMap.size());
-            assertDeepEquals(expectedMap.keySet(), actualMap.keySet(), false);
             for (var key : expectedMap.keySet()) {
-                assertDeepEquals(expectedMap.get(key), actualMap.get(key), orderMatters);
+                assertDeepEquals(expectedMap.get(key), actualMap.get(key));
             }
         } else if (expected instanceof Double || actual instanceof Double) {
             assertEquals((Double) expected, (Double) actual, 1e-6);

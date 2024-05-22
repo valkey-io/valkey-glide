@@ -105,7 +105,7 @@ public class TransactionTests {
         Object[] expectedResult = builder.apply(transaction);
 
         Object[] results = client.exec(transaction).get();
-        assertDeepEquals(expectedResult, results, true);
+        assertDeepEquals(expectedResult, results);
     }
 
     @SneakyThrows
@@ -117,7 +117,7 @@ public class TransactionTests {
         Object[] expectedResult = builder.apply(transaction);
 
         Object[] results = client.exec(transaction).get();
-        assertDeepEquals(expectedResult, results, true);
+        assertDeepEquals(expectedResult, results);
     }
 
     @SneakyThrows

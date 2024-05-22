@@ -92,7 +92,7 @@ public class ClusterTransactionTests {
         Object[] expectedResult = builder.apply(transaction);
 
         Object[] results = clusterClient.exec(transaction).get();
-        assertDeepEquals(expectedResult, results, true);
+        assertDeepEquals(expectedResult, results);
     }
 
     @SneakyThrows
@@ -105,7 +105,7 @@ public class ClusterTransactionTests {
 
         SingleNodeRoute route = new SlotIdRoute(1, SlotType.PRIMARY);
         Object[] results = clusterClient.exec(transaction, route).get();
-        assertDeepEquals(expectedResult, results, true);
+        assertDeepEquals(expectedResult, results);
     }
 
     @Test
