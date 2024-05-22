@@ -30,7 +30,6 @@ import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.Script;
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -47,6 +46,7 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -3644,6 +3644,36 @@ public class SharedCommandTests {
         assertEquals(1, client.sadd(key2, new String[] {"value"}).get());
         executionException =
                 assertThrows(ExecutionException.class, () -> client.setbit(key2, 1, 1).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void getbit(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String missingKey = UUID.randomUUID().toString();
+        String value = "foobar";
+
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(1, client.getbit(key1, 1).get());
+        assertEquals(0, client.getbit(key1, 1000).get());
+        assertEquals(0, client.getbit(missingKey, 1).get());
+        if (client instanceof RedisClient) {
+            assertEquals(
+                    1L, ((RedisClient) client).customCommand(new String[] {"SETBIT", key1, "5", "0"}).get());
+            assertEquals(0, client.getbit(key1, 5).get());
+        }
+
+        // Exception thrown due to the negative offset
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.getbit(key1, -1).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Exception thrown due to the key holding a value with the wrong type
+        assertEquals(1, client.sadd(key2, new String[] {value}).get());
+        executionException = assertThrows(ExecutionException.class, () -> client.getbit(key2, 1).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 }
