@@ -33,6 +33,7 @@
 * Python: Added ZMPOP command ([#1417](https://github.com/aws/glide-for-redis/pull/1417))
 * Python: Added SMOVE command ([#1421](https://github.com/aws/glide-for-redis/pull/1421))
 * Python: Added SUNIONSTORE command ([#1423](https://github.com/aws/glide-for-redis/pull/1423))
+* Python: Added SINTER command ([#1434](https://github.com/aws/glide-for-redis/pull/1434))
 
 
 #### Fixes
