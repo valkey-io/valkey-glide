@@ -2544,6 +2544,54 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zmpop(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String key1 = "{zmpop}-1-" + UUID.randomUUID();
+        String key2 = "{zmpop}-2-" + UUID.randomUUID();
+        String key3 = "{zmpop}-3-" + UUID.randomUUID();
+
+        assertEquals(2, client.zadd(key1, Map.of("a1", 1., "b1", 2.)).get());
+        assertEquals(2, client.zadd(key2, Map.of("a2", .1, "b2", .2)).get());
+
+        assertArrayEquals(
+                new Object[] {key1, Map.of("b1", 2.)}, client.zmpop(new String[] {key1, key2}, MAX).get());
+        assertArrayEquals(
+                new Object[] {key2, Map.of("b2", .2, "a2", .1)},
+                client.zmpop(new String[] {key2, key1}, MAX, 10).get());
+
+        // nothing popped out
+        assertNull(client.zmpop(new String[] {key3}, MIN).get());
+        assertNull(client.zmpop(new String[] {key3}, MIN, 1).get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zmpop(new String[] {key3}, MAX).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zmpop(new String[] {key3}, MAX, 1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // incorrect argument
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zmpop(new String[] {key1}, MAX, 0).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // check that order of entries in the response is preserved
+        var entries = new LinkedHashMap<String, Double>();
+        for (int i = 0; i < 10; i++) {
+            // a => 1., b => 2. etc
+            entries.put("" + ('a' + i), (double) i);
+        }
+        assertEquals(10, client.zadd(key2, entries).get());
+        assertEquals(entries, client.zmpop(new String[] {key2}, MIN, 10).get()[1]);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void bzmpop(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         String key1 = "{bzmpop}-1-" + UUID.randomUUID();

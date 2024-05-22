@@ -95,6 +95,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -1171,6 +1172,25 @@ public abstract class BaseClient
     public CompletableFuture<Map<String, Double>> zrangeWithScores(
             @NonNull String key, @NonNull ScoredRangeQuery rangeQuery) {
         return zrangeWithScores(key, rangeQuery, false);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {Integer.toString(keys.length)}, keys, new String[] {modifier.toString()});
+        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zmpop(
+            @NonNull String[] keys, @NonNull ScoreFilter modifier, long count) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {Integer.toString(keys.length)},
+                        keys,
+                        new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)});
+        return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
     }
 
     @Override

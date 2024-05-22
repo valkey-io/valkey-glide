@@ -122,6 +122,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -469,6 +470,10 @@ public class TransactionTests {
 
         transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
+
+        transaction.zmpop(new String[] {"key1", "key2"}, MAX).zmpop(new String[] {"key"}, MIN, 42);
+        results.add(Pair.of(ZMPop, buildArgs("2", "key1", "key2", "MAX")));
+        results.add(Pair.of(ZMPop, buildArgs("1", "key", "MIN", "COUNT", "42")));
 
         transaction
                 .bzmpop(new String[] {"key1", "key2"}, MAX, .1)

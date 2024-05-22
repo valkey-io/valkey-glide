@@ -960,23 +960,68 @@ public interface SortedSetBaseCommands {
      */
     CompletableFuture<Long> zinterstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys);
 
-    // TODO add @link to ZMPOP when implemented
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given <code>keys</code>
+     * being checked in the order they are provided.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @return A two-element <code>array</code> containing the key name of the set from which an
+     *     element was popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX).get();
+     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * String element = data.keySet().toArray(String[]::new)[0];
+     * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zmpop(String[] keys, ScoreFilter modifier);
+
+    /**
+     * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
+     * </code> being checked in the order they are provided.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param count The number of elements to pop.
+     * @return A two-element <code>array</code> containing the key name of the set from which elements
+     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX, 2).get();
+     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * for (Map.Entry<String, Double> entry : data.entrySet()) {
+     *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zmpop(String[] keys, ScoreFilter modifier, long count);
+
     /**
      * Blocks the connection until it pops and returns a member-score pair from the first non-empty
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
-     * To pop more than one element use {@link #bzmpop(String[], ScoreFilter, double, long)}.<br>
-     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
      *
      * @apiNote
      *     <ol>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZMPOP</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -996,23 +1041,21 @@ public interface SortedSetBaseCommands {
      */
     CompletableFuture<Object[]> bzmpop(String[] keys, ScoreFilter modifier, double timeout);
 
-    // TODO add @link to ZMPOP when implemented
     /**
      * Blocks the connection until it pops and returns multiple member-score pairs from the first
      * non-empty sorted set, with the given <code>keys</code> being checked in the order they are
      * provided.<br>
-     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
      *
      * @apiNote
      *     <ol>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZMPOP</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
