@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
@@ -122,6 +123,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
@@ -583,6 +585,11 @@ public class TransactionTests {
                                 AGGREGATE_REDIS_API,
                                 Aggregate.MAX.toString(),
                                 WITH_SCORES_REDIS_API)));
+        transaction.zintercard(new String[] {"key1", "key2"}, 5);
+        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2", LIMIT_REDIS_API, "5")));
+
+        transaction.zintercard(new String[] {"key1", "key2"});
+        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2")));
 
         transaction.zinter(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2")));
