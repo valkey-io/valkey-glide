@@ -6,16 +6,14 @@
     "type": "module",
     "scripts": {
         "test": "npm run build-utils && node index.js",
-        "build-utils": "cd ../../ && tsc",
+        "build-utils": "cd ../../ && npm run build",
         "prettier:check:ci": "./node_modules/.bin/prettier --check .",
         "prettier:format": "./node_modules/.bin/prettier --write . "
     },
     "author": "",
     "license": "Apache-2.0",
     "dependencies": {
-        "@aws/glide-for-redis": "latest",
-        "child_process": "^1.0.2",
-        "find-free-ports": "^3.1.1"
+        "@aws/glide-for-redis": "latest"
     },
     "devDependencies": {
         "prettier": "^2.8.8"

@@ -1,5 +1,5 @@
-import { exec } from "child_process";
-const PY_SCRIPT_PATH = "~/glide-for-redis/utils/cluster_manager.py";
+const PY_SCRIPT_PATH = __dirname + "/cluster_manager.py";
+import { execFile } from "child_process";
 
 function parseOutput(input: string): {
     clusterFolder: string;
@@ -45,7 +45,7 @@ export class RedisCluster {
         loadModule?: string[]
     ): Promise<RedisCluster> {
         return new Promise<RedisCluster>((resolve, reject) => {
-            let command = `python3 ${PY_SCRIPT_PATH} start -r ${replicaCount} -n ${shardCount}`;
+            let command = `start -r ${replicaCount} -n ${shardCount}`;
 
             if (cluster_mode) {
                 command += " --cluster-mode";
@@ -64,16 +64,20 @@ export class RedisCluster {
             }
 
             console.log(command);
-            exec(command, (error, stdout, stderr) => {
-                if (error) {
-                    console.error(stderr);
-                    reject(error);
-                } else {
-                    const { clusterFolder, addresses: ports } =
-                        parseOutput(stdout);
-                    resolve(new RedisCluster(ports, clusterFolder));
+            execFile(
+                "python3",
+                [PY_SCRIPT_PATH, ...command.split(" ")],
+                (error, stdout, stderr) => {
+                    if (error) {
+                        console.error(stderr);
+                        reject(error);
+                    } else {
+                        const { clusterFolder, addresses: ports } =
+                            parseOutput(stdout);
+                        resolve(new RedisCluster(ports, clusterFolder));
+                    }
                 }
-            });
+            );
         });
     }
 
@@ -94,8 +98,14 @@ export class RedisCluster {
     public async close() {
         if (this.clusterFolder) {
             await new Promise<void>((resolve, reject) => {
-                exec(
-                    `python3 ${PY_SCRIPT_PATH} stop --cluster-folder ${this.clusterFolder}`,
+                execFile(
+                    "python3",
+                    [
+                        PY_SCRIPT_PATH,
+                        `stop`,
+                        `--cluster-folder`,
+                        `${this.clusterFolder}`,
+                    ],
                     (error, _, stderr) => {
                         if (error) {
                             console.error(stderr);
@@ -109,3 +119,5 @@ export class RedisCluster {
         }
     }
 }
+
+export default RedisCluster;

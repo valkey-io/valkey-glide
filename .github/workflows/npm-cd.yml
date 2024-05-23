@@ -2,6 +2,56 @@
 
 name: Continuous Deployment
 
+env:
+  MATRIX: |
+    build:
+      - {
+            OS: ubuntu,
+            NAMED_OS: linux,
+            RUNNER: ubuntu-latest,
+            ARCH: x64,
+            TARGET: x86_64-unknown-linux-gnu,
+        }
+      - {
+            OS: ubuntu,
+            NAMED_OS: linux,
+            RUNNER: [self-hosted, Linux, ARM64],
+            ARCH: arm64,
+            TARGET: aarch64-unknown-linux-gnu,
+        }
+      - {
+            OS: macos,
+            NAMED_OS: darwin,
+            RUNNER: macos-12,
+            ARCH: x64,
+            TARGET: x86_64-apple-darwin,
+        }
+      - {
+            OS: macos,
+            NAMED_OS: darwin,
+            RUNNER: macos-13-xlarge,
+            arch: arm64,
+            TARGET: aarch64-apple-darwin,
+        }
+      - {
+            OS: ubuntu,
+            NAMED_OS: linux,
+            ARCH: arm64,
+            TARGET: aarch64-unknown-linux-musl,
+            RUNNER: [self-hosted, Linux, ARM64],
+            IMAGE: 'node:alpine',
+            CONTAINER_OPTIONS: '--user root --privileged --rm',
+        }
+      - {
+            OS: ubuntu,
+            NAMED_OS: linux,
+            ARCH: x64,
+            TARGET: x86_64-unknown-linux-musl,
+            RUNNER: ubuntu-latest,
+            IMAGE: 'node:alpine',
+            CONTAINER_OPTIONS: '--user root --privileged',
+        }
+
 on:
     pull_request:
       paths:
@@ -18,6 +68,15 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    output-matrix:
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.set-matrix.outputs.matrix }}
+        steps:
+            - name: Set matrix
+              id: set-matrix
+              run: echo "::set-output name=matrix::${{ env.MATRIX }}"
+
     start-self-hosted-runner:
         if: github.repository_owner == 'aws'
         runs-on: ubuntu-latest
@@ -36,7 +95,7 @@ jobs:
                 ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     publish-binaries:
-        needs: start-self-hosted-runner
+        needs: [start-self-hosted-runner, output-matrix]
         if: github.repository_owner == 'aws'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER }}
@@ -46,53 +105,8 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build:
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          RUNNER: ubuntu-latest,
-                          ARCH: x64,
-                          TARGET: x86_64-unknown-linux-gnu,
-                      }
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          RUNNER: [self-hosted, Linux, ARM64],
-                          ARCH: arm64,
-                          TARGET: aarch64-unknown-linux-gnu,
-                      }
-                    - {
-                          OS: macos,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-12,
-                          ARCH: x64,
-                          TARGET: x86_64-apple-darwin,
-                      }
-                    - {
-                          OS: macos,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-13-xlarge,
-                          arch: arm64,
-                          TARGET: aarch64-apple-darwin,
-                      }
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          ARCH: arm64,
-                          TARGET: aarch64-unknown-linux-musl,
-                          RUNNER: [self-hosted, Linux, ARM64],
-                          IMAGE: 'node:alpine',
-                          CONTAINER_OPTIONS: '--user root --privileged --rm',
-                      }
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          ARCH: x64,
-                          TARGET: x86_64-unknown-linux-musl,
-                          RUNNER: ubuntu-latest,
-                          IMAGE: 'node:alpine',
-                          CONTAINER_OPTIONS: '--user root --privileged',
-                      }
+                ${{needs.output-matrix.outputs.matrix}}
+                    
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
@@ -138,7 +152,7 @@ jobs:
                   always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
             
-            - name: Setup node
+            - name: Setup node for publishing
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-musl' }}
               working-directory: ./node
               run: |
@@ -309,7 +323,7 @@ jobs:
     test-release-candidate:
         if: github.event_name != 'pull_request' && contains(github.ref, 'rc')
         name: Test the release candidate
-        needs: publish-base-to-npm
+        needs: [publish-base-to-npm, output-matrix]
         runs-on: ${{ matrix.build.RUNNER }}
         container:
             image: ${{ matrix.build.IMAGE || '' }}
@@ -317,31 +331,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build:
-                    - {
-                          RUNNER: ubuntu-latest,
-                      }
-                    - {
-                          RUNNER: [self-hosted, Linux, ARM64],
-                      }
-                    - {
-                          RUNNER: macos-12,
-                      }
-                    - {
-                          RUNNER: macos-13-xlarge,
-                      }
-                    - {
-                          RUNNER: [self-hosted, Linux, ARM64],
-                          IMAGE: 'node:alpine',
-                          CONTAINER_OPTIONS: '--user root --privileged --rm',
-                          ARCH: arm64,
-                      }
-                    - {
-                          RUNNER: ubuntu-latest,
-                          IMAGE: 'node:alpine',
-                          CONTAINER_OPTIONS: '--user root --privileged',
-                          ARCH: x64,
-                      }
+                ${{needs.output-matrix.outputs.matrix}}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.IMAGE != 'node:alpine' }}
@@ -352,20 +342,17 @@ jobs:
               run: |
                 apk update
                 apk add redis git
-                redis-server --daemonize yes
             
             - name: install Redis and Python for ubuntu
               if: ${{ ! matrix.build.IMAGE == 'node:alpine' && ! contains(matrix.build.RUNNER, 'mac') }}
               run: |
                 sudo apt-get update
                 sudo apt-get install redis-server python3
-                sudo systemctl start redis-server
 
             - name: install Redis and Python for macos
               if: ${{ contains(matrix.build.RUNNER, 'mac') }}
               run: |
                 brew install redis python3
-                brew services start redis
 
             - name: Setup for musl
               if: ${{ contains(matrix.build.TARGET, 'musl') }}

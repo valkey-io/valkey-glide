@@ -3,7 +3,7 @@
     "version": "1.0.0",
     "description": "Test utils",
     "main": "TestUtils.js",
-    "type": "module",
+    "type": "commonjs",
     "scripts": {
         "build": "tsc",
         "prettier:check:ci": "./node_modules/.bin/prettier --check .",

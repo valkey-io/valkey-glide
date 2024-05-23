@@ -18,7 +18,7 @@ import {
     ProtocolVersion,
     RedisClusterClient,
 } from "..";
-import { RedisCluster } from "../../utils/TestUtils";
+import { RedisCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
 import {
     flushAndCloseClient,

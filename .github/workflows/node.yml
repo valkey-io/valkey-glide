@@ -185,6 +185,7 @@ jobs:
         container:
             image: node:alpine
             options: --user root --privileged
+
         steps:
           - name: Install git
             run: |

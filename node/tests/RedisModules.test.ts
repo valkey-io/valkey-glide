@@ -16,7 +16,7 @@ import {
     RedisClusterClient,
     parseInfoResponse,
 } from "../";
-import { RedisCluster } from "../../utils/TestUtils";
+import { RedisCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
 import { flushallOnPort, getFirstResult } from "./TestUtilities";
 
