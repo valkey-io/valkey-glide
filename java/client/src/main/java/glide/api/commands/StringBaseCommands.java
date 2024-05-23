@@ -247,4 +247,21 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> getrange(String key, int start, int end);
+
+    /**
+     * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
+     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
+     * this special case.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param value The value to append.
+     * @return The length of the string after appending the value.
+     * @example
+     *     <pre>{@code
+     * Long value = client.append("key", "value").get();
+     * assert value.equals(5L);
+     * }</pre>
+     */
+    CompletableFuture<Long> append(String key, String value);
 }

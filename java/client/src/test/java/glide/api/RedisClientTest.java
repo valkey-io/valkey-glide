@@ -32,6 +32,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -4357,6 +4358,26 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void append() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(1L);
+        when(commandManager.<Long>submitNewCommand(eq(Append), eq(new String[] {key, value}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.append(key, value);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(1L, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void geohash_returns_success() {
         // setup
         String key = "testKey";
@@ -4498,6 +4519,7 @@ public class RedisClientTest {
 
         // verify
         assertEquals(testResponse, response);
+        assertEquals(1L, payload);
         assertEquals(bitcount, payload);
     }
 

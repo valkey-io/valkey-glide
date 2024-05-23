@@ -23,6 +23,7 @@ import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_A
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -198,6 +199,9 @@ public class TransactionTests {
 
         transaction.set("key", "value", SetOptions.builder().returnOldValue(true).build());
         results.add(Pair.of(Set, buildArgs("key", "value", RETURN_OLD_VALUE)));
+
+        transaction.append("key", "value");
+        results.add(Pair.of(Append, buildArgs("key", "value")));
 
         transaction.del(new String[] {"key1", "key2"});
         results.add(Pair.of(Del, buildArgs("key1", "key2")));

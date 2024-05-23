@@ -8,6 +8,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -361,6 +362,12 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
         return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> append(@NonNull String key, @NonNull String value) {
+        return commandManager.submitNewCommand(
+                Append, new String[] {key, value}, this::handleLongResponse);
     }
 
     @Override
