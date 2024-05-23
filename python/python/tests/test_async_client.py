@@ -1244,6 +1244,51 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sdiffstore(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        assert await redis_client.sadd(key1, ["a", "b", "c"]) == 3
+        assert await redis_client.sadd(key2, ["c", "d", "e"]) == 3
+
+        # Store diff in new key
+        assert await redis_client.sdiffstore(key3, [key1, key2]) == 2
+        assert await redis_client.smembers(key3) == {"a", "b"}
+
+        # Overwrite existing set
+        assert await redis_client.sdiffstore(key3, [key2, key1]) == 2
+        assert await redis_client.smembers(key3) == {"d", "e"}
+
+        # Overwrite one of the source sets
+        assert await redis_client.sdiffstore(key3, [key2, key3]) == 1
+        assert await redis_client.smembers(key3) == {"c"}
+
+        # Diff between non-empty set and empty set
+        assert await redis_client.sdiffstore(key3, [key1, non_existing_key]) == 3
+        assert await redis_client.smembers(key3) == {"a", "b", "c"}
+
+        # Diff between empty set and non-empty set
+        assert await redis_client.sdiffstore(key3, [non_existing_key, key1]) == 0
+        assert await redis_client.smembers(key3) == set()
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.sdiffstore(key3, [])
+
+        # source key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.sdiffstore(key3, [string_key])
+
+        # Overwrite a key holding a non-set value
+        assert await redis_client.sdiffstore(string_key, [key1, key2]) == 2
+        assert await redis_client.smembers(string_key) == {"a", "b"}
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ltrim(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -3183,6 +3228,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.sunionstore("abc", ["zxy", "lkn"]),
             redis_client.sinter(["abc", "zxy", "lkn"]),
             redis_client.sdiff(["abc", "zxy", "lkn"]),
+            redis_client.sdiffstore("abc", ["def", "ghi"]),
         ]
 
         if not check_if_server_version_lt(redis_client, "7.0.0"):

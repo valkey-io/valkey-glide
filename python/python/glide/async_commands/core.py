@@ -1601,6 +1601,34 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SUnionStore, [destination] + keys),
         )
 
+    async def sdiffstore(self, destination: str, keys: List[str]) -> int:
+        """
+        Stores the difference between the first set and all the successive sets in `keys` into a new set at
+        `destination`.
+
+        See https://valkey.io/docs/latest/commands/sdiffstore for more details.
+
+        Note:
+            When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys of the sets to diff.
+
+        Returns:
+            int: The number of elements in the resulting set.
+
+        Examples:
+            >>> await client.sadd("set1", ["member1", "member2"])
+            >>> await client.sadd("set2", ["member1"])
+            >>> await client.sdiffstore("set3", ["set1", "set2"])
+                1  # Indicates that one member was stored in "set3", and that member is the diff between "set1" and "set2".
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.SDiffStore, [destination] + keys),
+        )
+
     async def sinter(self, keys: List[str]) -> Set[str]:
         """
         Gets the intersection of all the given sets.
@@ -2613,7 +2641,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zrangestore for more details.
 
         Note:
-            When in Cluster mode, all `keys` must map to the same hash slot.
+            When in Cluster mode, `source` and `destination` must map to the same hash slot.
 
         Args:
             destination (str): The key for the destination sorted set.
