@@ -17,6 +17,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -3112,7 +3113,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     start</code>, <code>end</code>, and <code>options</code>. Returns zero if the key is
      *     missing as it is treated as an empty string.
      */
-    public T bitcount(@NonNull String key, long start, long end, BitmapIndexType options) {
+    public T bitcount(@NonNull String key, long start, long end, @NonNull BitmapIndexType options) {
         ArgsArray commandArgs =
                 buildArgs(key, Long.toString(start), Long.toString(end), options.toString());
 
@@ -3303,6 +3304,102 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T getbit(@NonNull String key, long offset) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(offset));
         protobufTransaction.addCommands(buildCommand(GetBit, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the position of the first bit matching the given <code>bit</code> value.
+     *
+     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
+     * @return Command Response - The position of the first occurrence matching <code>bit</code> in
+     *     the binary value of the string held at <code>key</code>. If <code>bit</code> is not found,
+     *     a <code>-1</code> is returned.
+     */
+    public T bitpos(@NonNull String key, long bit) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(bit));
+        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the position of the first bit matching the given <code>bit</code> value. The offset
+     * <code>start</code> is a zero-based index, with <code>0</code> being the first byte of the list,
+     * <code>1</code> being the next byte and so on. These offsets can also be negative numbers
+     * indicating offsets starting at the end of the list, with <code>-1</code> being the last byte of
+     * the list, <code>-2</code> being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
+     * @param start The starting offset.
+     * @return Command Response - The position of the first occurrence beginning at the <code>start
+     *     </code> offset of the <code>bit</code> in the binary value of the string held at <code>key
+     *     </code>. If <code>bit</code> is not found, a <code>-1</code> is returned.
+     */
+    public T bitpos(@NonNull String key, long bit, long start) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(bit), Long.toString(start));
+        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the position of the first bit matching the given <code>bit</code> value. The offsets
+     * <code>start</code> and <code>end</code> are zero-based indexes, with <code>0</code> being the
+     * first byte of the list, <code>1</code> being the next byte and so on. These offsets can also be
+     * negative numbers indicating offsets starting at the end of the list, with <code>-1</code> being
+     * the last byte of the list, <code>-2</code> being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
+     * @param start The starting offset.
+     * @param end The ending offset.
+     * @return Command Response - The position of the first occurrence from the <code>start</code> to
+     *     the <code>end</code> offsets of the <code>bit</code> in the binary value of the string held
+     *     at <code>key</code>. If <code>bit</code> is not found, a <code>-1</code> is returned.
+     */
+    public T bitpos(@NonNull String key, long bit, long start, long end) {
+        ArgsArray commandArgs =
+                buildArgs(key, Long.toString(bit), Long.toString(start), Long.toString(end));
+        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the position of the first bit matching the given <code>bit</code> value. The offset
+     * <code>offsetType</code> specifies whether the offset is a BIT or BYTE. If BIT is specified,
+     * <code>start==0</code> and <code>end==2</code> means to look at the first three bits. If BYTE is
+     * specified, <code>start==0</code> and <code>end==2</code> means to look at the first three bytes
+     * The offsets are zero-based indexes, with <code>0</code> being the first element of the list,
+     * <code>1</code> being the next, and so on. These offsets can also be negative numbers indicating
+     * offsets starting at the end of the list, with <code>-1</code> being the last element of the
+     * list, <code>-2</code> being the penultimate, and so on.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
+     * @param start The starting offset.
+     * @param end The ending offset.
+     * @param offsetType The index offset type. Could be either {@link BitmapIndexType#BIT} or {@link
+     *     BitmapIndexType#BYTE}.
+     * @return Command Response - The position of the first occurrence from the <code>start</code> to
+     *     the <code>end</code> offsets of the <code>bit</code> in the binary value of the string held
+     *     at <code>key</code>. If <code>bit</code> is not found, a <code>-1</code> is returned.
+     */
+    public T bitpos(
+            @NonNull String key, long bit, long start, long end, @NonNull BitmapIndexType offsetType) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        key,
+                        Long.toString(bit),
+                        Long.toString(start),
+                        Long.toString(end),
+                        offsetType.toString());
+
+        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
         return getThis();
     }
 

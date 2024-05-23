@@ -156,6 +156,7 @@ pub enum RequestType {
     ZMPop = 144,
     GetBit = 145,
     ZInter = 146,
+    BitPos = 147,
     FunctionLoad = 150,
 }
 
@@ -317,6 +318,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GetBit => RequestType::GetBit,
             ProtobufRequestType::ZInter => RequestType::ZInter,
             ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
+            ProtobufRequestType::BitPos => RequestType::BitPos,
         }
     }
 }
@@ -473,6 +475,7 @@ impl RequestType {
             RequestType::GetBit => Some(cmd("GETBIT")),
             RequestType::ZInter => Some(cmd("ZINTER")),
             RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
+            RequestType::BitPos => Some(cmd("BITPOS")),
         }
     }
 }
