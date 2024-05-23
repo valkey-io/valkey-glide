@@ -689,6 +689,8 @@ public class CommandTests {
                 Arguments.of(
                         "bzpopmin", "5.0.0", clusterClient.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of(
+                        "zmpop", "7.0.0", clusterClient.zmpop(new String[] {"abc", "zxy", "lkn"}, MAX)),
+                Arguments.of(
                         "bzmpop", "7.0.0", clusterClient.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1)));
     }
 

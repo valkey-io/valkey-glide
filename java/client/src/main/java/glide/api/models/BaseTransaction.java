@@ -119,6 +119,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -2862,14 +2863,63 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return zrangeWithScores(key, rangeQuery, false);
     }
 
-    // TODO add @link to ZMPOP when implemented
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given <code>keys</code>
+     * being checked in the order they are provided.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
+     * @return Command Response - A two-element <code>array</code> containing the key name of the set
+     *     from which the element was popped, and a member-score <code>Map</code> of the popped
+     *     element.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     */
+    public T zmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Integer.toString(keys.length)},
+                                keys,
+                                new String[] {modifier.toString()}));
+        protobufTransaction.addCommands(buildCommand(ZMPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
+     * </code> being checked in the order they are provided.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param count The number of elements to pop.
+     * @return Command Response - A two-element <code>array</code> containing the key name of the set
+     *     from which elements were popped, and a member-score <code>Map</code> of the popped
+     *     elements.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     */
+    public T zmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier, long count) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Integer.toString(keys.length)},
+                                keys,
+                                new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)}));
+        protobufTransaction.addCommands(buildCommand(ZMPop, commandArgs));
+        return getThis();
+    }
+
     /**
      * Blocks the connection until it pops and returns a member-score pair from the first non-empty
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
-     * To pop more than one element use {@link #bzmpop(String[], ScoreFilter, double, long)}.<br>
-     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
@@ -2895,14 +2945,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return getThis();
     }
 
-    // TODO add @link to ZMPOP when implemented
     /**
      * Blocks the connection until it pops and returns multiple member-score pairs from the first
      * non-empty sorted set, with the given <code>keys</code> being checked in the order they are
      * provided.<br>
-     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.<br>
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
