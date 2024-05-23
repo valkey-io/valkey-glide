@@ -667,6 +667,10 @@ public class CommandTests {
                 Arguments.of(
                         "zunion", null, clusterClient.zunion(new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
                 Arguments.of(
+                        "zinter",
+                        "6.2.0",
+                        clusterClient.zinter(new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                Arguments.of(
                         "zrangestore", null, clusterClient.zrangestore("abc", "zxy", new RangeByIndex(3, 1))),
                 Arguments.of(
                         "zinterstore",

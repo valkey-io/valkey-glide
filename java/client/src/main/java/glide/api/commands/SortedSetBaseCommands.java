@@ -1158,6 +1158,128 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
 
     /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.<br>
+     * To perform a <code>zinter</code> operation while specifying aggregation settings, use {@link
+     * #zinter(KeysOrWeightedKeys, Aggregate)}.<br>
+     * To get the elements with their scores, see {@link #zinterWithScores}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return The resulting sorted set from the intersection.
+     * @example
+     *     <pre>{@code
+     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
+     * String[] payload = client.zinter(keyArray).get()
+     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     *
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * String[] payload = client.zinter(weightedKeys).get()
+     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     * }</pre>
+     */
+    CompletableFuture<String[]> zinter(KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
+     * #zinterWithScores}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return The resulting sorted set from the intersection.
+     * @example
+     *     <pre>{@code
+     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
+     * String[] payload = client.zinter(keyArray, Aggregate.MAX).get()
+     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     *
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * String[] payload = client.zinter(weightedKeys, Aggregate.MAX).get()
+     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     * }</pre>
+     */
+    CompletableFuture<String[]> zinter(KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>. To perform a <code>zinter</code> operation while specifying
+     * aggregation settings, use {@link #zinterWithScores(KeysOrWeightedKeys, Aggregate)}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return The resulting sorted set from the intersection.
+     * @example
+     *     <pre>{@code
+     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
+     * Map<String, Double> payload1 = client.zinterWithScores(keyArray).get();
+     * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
+     *
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * Map<String, Double> payload2 = client.zinterWithScores(weightedKeys).get();
+     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zinterWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return The resulting sorted set from the intersection.
+     * @example
+     *     <pre>{@code
+     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
+     * Map<String, Double> payload1 = client.zinterWithScores(keyArray, Aggregate.MAX).get();
+     * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
+     *
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * Map<String, Double> payload2 = client.zinterWithScores(weightedKeys, Aggregate.SUM).get();
+     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zinterWithScores(
+            KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
+
+    /**
      * Returns a random element from the sorted set stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/zrandmember/">redis.io</a> for more details.

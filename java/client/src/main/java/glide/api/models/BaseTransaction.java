@@ -112,6 +112,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
@@ -2325,6 +2326,104 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 buildArgs(
                         concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API}));
         protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.<br>
+     * To perform a <code>zinter</code> operation while specifying aggregation settings, use {@link
+     * #zinter(KeysOrWeightedKeys, Aggregate)}.<br>
+     * To get the elements with their scores, see {@link #zinterWithScores}.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
+     * #zinterWithScores}.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys intersection.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>. To perform a <code>zinter</code> operation while specifying
+     * aggregation settings, use {@link #zinterWithScores(KeysOrWeightedKeys, Aggregate)}.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinterWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API}));
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinterWithScores(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                keysOrWeightedKeys.toArgs(),
+                                aggregate.toArgs(),
+                                new String[] {WITH_SCORES_REDIS_API}));
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
         return getThis();
     }
 

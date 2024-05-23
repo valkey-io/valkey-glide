@@ -2482,6 +2482,97 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zinter(BaseClient client) {
+        String key1 = "{testKey}:1-" + UUID.randomUUID();
+        String key2 = "{testKey}:2-" + UUID.randomUUID();
+        String key3 = "{testKey}:3-" + UUID.randomUUID();
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
+        Map<String, Double> membersScores2 = Map.of("two", 3.5, "three", 3.0);
+
+        assertEquals(2, client.zadd(key1, membersScores1).get());
+        assertEquals(2, client.zadd(key2, membersScores2).get());
+
+        // Intersection results are aggregated by the sum of the scores of elements by default
+        assertArrayEquals(
+                new String[] {"two"}, client.zinter(new KeyArray(new String[] {key1, key2})).get());
+        assertEquals(
+                Map.of("two", 5.5), client.zinterWithScores(new KeyArray(new String[] {key1, key2})).get());
+
+        // Intersection results are aggregated by the max score of elements
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
+        assertEquals(
+                Map.of("two", 3.5),
+                client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
+
+        // Intersection results are aggregated by the min score of elements
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
+        assertEquals(
+                Map.of("two", 2.0),
+                client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
+
+        // Intersection results are aggregated by the sum of the scores of elements
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
+        assertEquals(
+                Map.of("two", 5.5),
+                client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0)))).get());
+        assertEquals(
+                Map.of("two", 11.0),
+                client
+                        .zinterWithScores(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
+
+        // Intersection results are aggregated by the minimum score,
+        // with scores for key1 multiplied by 1.0 and for key2 by -2.0.
+        assertArrayEquals(
+                new String[] {"two"},
+                client
+                        .zinter(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
+                        .get());
+        assertEquals(
+                Map.of("two", -7.0),
+                client
+                        .zinterWithScores(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
+                        .get());
+
+        // Non-existing Key - empty intersection
+        assertEquals(0, client.zinter(new KeyArray(new String[] {key1, key3})).get().length);
+        assertEquals(0, client.zinterWithScores(new KeyArray(new String[] {key1, key3})).get().size());
+
+        // empty key list
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zinter(new KeyArray(new String[0])).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zinter(new WeightedKeys(List.of())).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "value").get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zinter(new KeyArray(new String[] {key1, key3})).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zintercard(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String key1 = "{zintercard}-" + UUID.randomUUID();
