@@ -599,6 +599,36 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.IncrByFloat, [key, str(amount)]),
         )
 
+    async def setrange(self, key: str, offset: int, value: str) -> int:
+        """
+        Overwrites part of the string stored at `key`, starting at the specified
+        `offset`, for the entire length of `value`.
+        If the `offset` is larger than the current length of the string at `key`,
+        the string is padded with zero bytes to make `offset` fit. Create the `key`
+        if it doesn't exist.
+
+        See https://valkey.io/commands/setrange for more details.
+
+        Args:
+            key (str): The key of the string to update.
+            offset (int): The position in the string where `value` should be written.
+            value (str): The string written with `offset`.
+
+        Returns:
+            int: The length of the string stored at `key` after it was modified.
+
+        Examples:
+            >>> await client.set("key", "Hello World")
+            >>> await client.setrange("key", 6, "Redis")
+                11  # The length of the string stored at `key` after it was modified.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.SetRange, [key, str(offset), value]
+            ),
+        )
+
     async def mset(self, key_value_map: Mapping[str, str]) -> TOK:
         """
         Set multiple keys to multiple values in a single atomic operation.

@@ -564,6 +564,28 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_setrange(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+
+        # test new key and existing key
+        assert await redis_client.setrange(key1, 0, "Hello World") == 11
+        assert await redis_client.setrange(key1, 6, "GLIDE") == 11
+
+        # offset > len
+        assert await redis_client.setrange(key1, 15, "GLIDE") == 20
+
+        # negative offset
+        with pytest.raises(RequestError):
+            assert await redis_client.setrange(key1, -1, "GLIDE")
+
+        # non-string key
+        assert await redis_client.lpush(key2, ["_"]) == 1
+        with pytest.raises(RequestError):
+            assert await redis_client.setrange(key2, 0, "_")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_hset_hget_hgetall(self, redis_client: TRedisClient):
         key = get_random_string(10)
         field = get_random_string(5)

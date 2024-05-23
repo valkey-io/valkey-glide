@@ -403,6 +403,26 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.DecrBy, [key, str(amount)])
 
+    def setrange(self: TTransaction, key: str, offset: int, value: str) -> TTransaction:
+        """
+        Overwrites part of the string stored at `key`, starting at the specified
+        `offset`, for the entire length of `value`.
+        If the `offset` is larger than the current length of the string at `key`,
+        the string is padded with zero bytes to make `offset` fit. Create the `key`
+        if it doesn't exist.
+
+        See https://valkey.io/commands/setrange for more details.
+
+        Args:
+            key (str): The key of the string to update.
+            offset (int): The position in the string where `value` should be written.
+            value (str): The string written with `offset`.
+
+        Command response:
+            int: The length of the string stored at `key` after it was modified.
+        """
+        return self.append_command(RequestType.SetRange, [key, str(offset), value])
+
     def hset(
         self: TTransaction, key: str, field_value_map: Mapping[str, str]
     ) -> TTransaction:
