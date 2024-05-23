@@ -1102,7 +1102,6 @@ class TestCommands:
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
-        key4 = f"{{testKey}}:4-{get_random_string(10)}"
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
@@ -1216,6 +1215,32 @@ class TestCommands:
         with pytest.raises(RequestError) as e:
             await redis_client.sinter([key2])
         assert "Operation against a key holding the wrong kind of value" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sdiff(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        assert await redis_client.sadd(key1, ["a", "b", "c"]) == 3
+        assert await redis_client.sadd(key2, ["c", "d", "e"]) == 3
+
+        assert await redis_client.sdiff([key1, key2]) == {"a", "b"}
+        assert await redis_client.sdiff([key2, key1]) == {"d", "e"}
+
+        assert await redis_client.sdiff([key1, non_existing_key]) == {"a", "b", "c"}
+        assert await redis_client.sdiff([non_existing_key, key1]) == set()
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.sdiff([])
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.sdiff([string_key])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3157,6 +3182,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.smove("abc", "def", "_"),
             redis_client.sunionstore("abc", ["zxy", "lkn"]),
             redis_client.sinter(["abc", "zxy", "lkn"]),
+            redis_client.sdiff(["abc", "zxy", "lkn"]),
         ]
 
         if not check_if_server_version_lt(redis_client, "7.0.0"):
