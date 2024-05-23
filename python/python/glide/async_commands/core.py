@@ -1627,6 +1627,33 @@ class CoreCommands(Protocol):
         """
         return cast(Set[str], await self._execute_command(RequestType.SInter, keys))
 
+    async def sdiff(self, keys: List[str]) -> Set[str]:
+        """
+        Computes the difference between the first set and all the successive sets in `keys`.
+
+        See https://valkey.io/commands/sdiff for more details.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the sets to diff.
+
+        Returns:
+            Set[str]: A set of elements representing the difference between the sets.
+                If any of the keys in `keys` do not exist, they are treated as empty sets.
+
+        Examples:
+            >>> await client.sadd("set1", ["member1", "member2"])
+            >>> await client.sadd("set2", ["member1"])
+            >>> await client.sdiff("set1", "set2")
+                {"member2"}  # "member2" is in "set1" but not "set2"
+        """
+        return cast(
+            Set[str],
+            await self._execute_command(RequestType.SDiff, keys),
+        )
+
     async def ltrim(self, key: str, start: int, end: int) -> TOK:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
