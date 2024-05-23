@@ -3767,4 +3767,65 @@ public class SharedCommandTests {
         executionException = assertThrows(ExecutionException.class, () -> client.getbit(key2, 1).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bitpos(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+        String value = "?f0obar"; // 00111111 01100110 00110000 01101111 01100010 01100001 01110010
+
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(0, client.bitpos(key1, 0).get());
+        assertEquals(2, client.bitpos(key1, 1).get());
+        assertEquals(9, client.bitpos(key1, 1, 1).get());
+        assertEquals(24, client.bitpos(key1, 0, 3, 5).get());
+
+        // Bitpos returns -1 for empty strings
+        assertEquals(-1, client.bitpos(key2, 1).get());
+        assertEquals(-1, client.bitpos(key2, 1, 1).get());
+        assertEquals(-1, client.bitpos(key2, 1, 3, 5).get());
+
+        // Exception thrown due to the key holding a value with the wrong type
+        assertEquals(1, client.sadd(key3, new String[] {value}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.bitpos(key3, 0).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.bitpos(key3, 1, 2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.bitpos(key3, 0, 1, 4).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(24, client.bitpos(key1, 0, 3, 5, BitmapIndexType.BYTE).get());
+            assertEquals(47, client.bitpos(key1, 1, 43, -2, BitmapIndexType.BIT).get());
+            assertEquals(-1, client.bitpos(key2, 1, 3, 5, BitmapIndexType.BYTE).get());
+            assertEquals(-1, client.bitpos(key2, 1, 3, 5, BitmapIndexType.BIT).get());
+
+            // Exception thrown due to the key holding a value with the wrong type
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitpos(key3, 1, 4, 5, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        } else {
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitpos(key1, 0, 3, 5, BitmapIndexType.BYTE).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitpos(key1, 1, 43, -2, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        }
+    }
 }

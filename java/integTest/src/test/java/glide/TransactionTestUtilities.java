@@ -542,10 +542,15 @@ public class TransactionTestUtilities {
                 .bitcount(key1, 1, 1)
                 .setbit(key2, 1, 1)
                 .setbit(key2, 1, 0)
-                .getbit(key1, 1);
+                .getbit(key1, 1)
+                .bitpos(key1, 1)
+                .bitpos(key1, 1, 3)
+                .bitpos(key1, 1, 3, 5);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction.bitcount(key1, 5, 30, BitmapIndexType.BIT);
+            transaction
+                    .bitcount(key1, 5, 30, BitmapIndexType.BIT)
+                    .bitpos(key1, 1, 44, 50, BitmapIndexType.BIT);
         }
 
         var expectedResults =
@@ -556,6 +561,9 @@ public class TransactionTestUtilities {
                     0L, // setbit(key2, 1, 1)
                     1L, // setbit(key2, 1, 0)
                     1L, // getbit(key1, 1)
+                    1L, // bitpos(key, 1)
+                    25L, // bitpos(key, 1, 3)
+                    25L, // bitpos(key, 1, 3, 5)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -563,6 +571,7 @@ public class TransactionTestUtilities {
                     expectedResults,
                     new Object[] {
                         17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
+                        46L, // bitpos(key, 1, 44, 50, BitmapIndexType.BIT)
                     });
         }
         return expectedResults;

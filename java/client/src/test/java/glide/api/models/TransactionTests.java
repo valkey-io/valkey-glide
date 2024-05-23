@@ -29,6 +29,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -789,6 +790,15 @@ public class TransactionTests {
 
         transaction.setbit("key", 8, 1);
         results.add(Pair.of(SetBit, buildArgs("key", "8", "1")));
+
+        transaction.bitpos("key", 1);
+        results.add(Pair.of(BitPos, buildArgs("key", "1")));
+        transaction.bitpos("key", 0, 8);
+        results.add(Pair.of(BitPos, buildArgs("key", "0", "8")));
+        transaction.bitpos("key", 1, 8, 10);
+        results.add(Pair.of(BitPos, buildArgs("key", "1", "8", "10")));
+        transaction.bitpos("key", 1, 8, 10, BitmapIndexType.BIT);
+        results.add(Pair.of(BitPos, buildArgs("key", "1", "8", "10", BitmapIndexType.BIT.toString())));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
