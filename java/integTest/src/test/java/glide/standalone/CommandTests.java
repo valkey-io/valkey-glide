@@ -385,14 +385,14 @@ public class CommandTests {
                 executionException.getMessage().contains("Library '" + libName + "' already exists"));
 
         // re-load library with overwriting
-        assertEquals(libName, regularClient.functionLoadWithReplace(code).get());
+        assertEquals(libName, regularClient.functionLoadReplace(code).get());
         String newFuncName = "myfunc2c";
         String newCode =
                 code
                         + "\n redis.register_function('"
                         + newFuncName
                         + "', function(keys, args) return #args end)";
-        assertEquals(libName, regularClient.functionLoadWithReplace(newCode).get());
+        assertEquals(libName, regularClient.functionLoadReplace(newCode).get());
 
         flist = regularClient.functionList(libName).get();
         expectedDescription.put(newFuncName, null);

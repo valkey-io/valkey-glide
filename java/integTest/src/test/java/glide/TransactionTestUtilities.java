@@ -5,6 +5,8 @@ import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
+import static glide.api.models.commands.ScoreFilter.MAX;
+import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
@@ -17,6 +19,8 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -63,7 +67,9 @@ public class TransactionTestUtilities {
                         (TransactionBuilder) TransactionTestUtilities::connectionManagementCommands),
                 Arguments.of(
                         "Geospatial Commands",
-                        (TransactionBuilder) TransactionTestUtilities::geospatialCommands));
+                        (TransactionBuilder) TransactionTestUtilities::geospatialCommands),
+                Arguments.of(
+                        "Bitmap Commands", (TransactionBuilder) TransactionTestUtilities::bitmapCommands));
     }
 
     /** Generate test samples for parametrized tests. Could be routed to primary nodes only. */
@@ -303,6 +309,7 @@ public class TransactionTestUtilities {
     private static Object[] sortedSetCommands(BaseTransaction<?> transaction) {
         String zSetKey1 = "{ZSetKey}-1-" + UUID.randomUUID();
         String zSetKey2 = "{ZSetKey}-2-" + UUID.randomUUID();
+        String zSetKey3 = "{ZSetKey}-3-" + UUID.randomUUID();
 
         transaction
                 .zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
@@ -320,6 +327,7 @@ public class TransactionTestUtilities {
                 .zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
                 .zpopmin(zSetKey1)
                 .zpopmax(zSetKey1)
+                // zSetKey1 is now empty
                 .zremrangebyrank(zSetKey1, 5, 10)
                 .zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
                 .zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
@@ -333,48 +341,81 @@ public class TransactionTestUtilities {
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .zinterstore(zSetKey1, new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
+                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .bzpopmax(new String[] {zSetKey2}, .1)
                 .zrandmember(zSetKey2)
                 .zrandmemberWithCount(zSetKey2, 1)
                 .zrandmemberWithCountWithScores(zSetKey2, 1)
-                .bzpopmin(new String[] {zSetKey2}, .1);
-        // zSetKey2 is now empty
+                .bzpopmin(new String[] {zSetKey2}, .1)
+                // zSetKey2 is now empty
+                .zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.));
 
-        return new Object[] {
-            3L, // zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
-            0L, // zrank(zSetKey1, "one")
-            2L, // zrevrank(zSetKey1, "one")
-            4.0, // zaddIncr(zSetKey1, "one", 3)
-            1L, // zrem(zSetKey1, new String[] {"one"})
-            2L, // zcard(zSetKey1)
-            new Double[] {2.0, 3.0}, // zmscore(zSetKey1, new String[] {"two", "three"})
-            new String[] {"two", "three"}, // zrange(zSetKey1, new RangeByIndex(0, 1))
-            Map.of("two", 2.0, "three", 3.0), // zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
-            2L, // zrangestore(zSetKey1, zSetKey1, new RangeByIndex(0, -1))
-            2.0, // zscore(zSetKey1, "two")
-            2L, // zcount(zSetKey1, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
-            2L, // zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
-            Map.of("two", 2.0), // zpopmin(zSetKey1)
-            Map.of("three", 3.0), // zpopmax(zSetKey1)
-            0L, // zremrangebyrank(zSetKey1, 5, 10)
-            0L, // zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
-            0L, // zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
-            0L, // zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
-            2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
-            new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, zSetKey1})
-            Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, zSetKey1})
-            2L, // zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
-            new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}))
-            new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX);
-            Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, zSetKey1}));
-            Map.of("one", 1.0, "two", 2.0), // zunionWithScores(new KeyArray({zSetKey2, zSetKey1}), MAX)
-            0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
-            new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
-            "one", // .zrandmember(zSetKey2)
-            new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
-            new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
-            new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
+                    .bzmpop(new String[] {zSetKey3}, MAX, .1)
+                    .bzmpop(new String[] {zSetKey3}, MIN, .1, 2)
+                    .zintercard(new String[] {zSetKey2, zSetKey3})
+                    .zintercard(new String[] {zSetKey2, zSetKey3}, 1);
+        }
+
+        var expectedResults =
+                new Object[] {
+                    3L, // zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
+                    0L, // zrank(zSetKey1, "one")
+                    2L, // zrevrank(zSetKey1, "one")
+                    4.0, // zaddIncr(zSetKey1, "one", 3)
+                    1L, // zrem(zSetKey1, new String[] {"one"})
+                    2L, // zcard(zSetKey1)
+                    new Double[] {2.0, 3.0}, // zmscore(zSetKey1, new String[] {"two", "three"})
+                    new String[] {"two", "three"}, // zrange(zSetKey1, new RangeByIndex(0, 1))
+                    Map.of("two", 2.0, "three", 3.0), // zrangeWithScores(zSetKey1, new RangeByIndex(0, 1))
+                    2L, // zrangestore(zSetKey1, zSetKey1, new RangeByIndex(0, -1))
+                    2.0, // zscore(zSetKey1, "two")
+                    2L, // zcount(zSetKey1, new ScoreBoundary(2, true), InfScoreBound.POSITIVE_INFINITY)
+                    2L, // zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
+                    Map.of("two", 2.0), // zpopmin(zSetKey1)
+                    Map.of("three", 3.0), // zpopmax(zSetKey1)
+                    0L, // zremrangebyrank(zSetKey1, 5, 10)
+                    0L, // zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
+                    0L, // zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
+                    0L, // zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
+                    2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
+                    new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, zSetKey1})
+                    Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, zSetKey1})
+                    2L, // zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                    new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}))
+                    new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX);
+                    Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}));
+                    Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}), MAX)
+                    0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
+                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}))
+                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
+                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}))
+                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
+                    new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
+                    "one", // .zrandmember(zSetKey2)
+                    new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
+                    new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
+                    new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
+                    4L, // zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            return concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        5L, // zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
+                        new Object[] {zSetKey3, Map.of("e", 5.)}, // bzmpop(zSetKey3, MAX, .1)
+                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                        2L, // zintercard(new String[] {zSetKey2, zSetKey3})
+                        1L, // zintercard(new String[] {zSetKey2, zSetKey3}, 1)
+                    });
+        }
+        return expectedResults;
     }
 
     private static Object[] serverManagementCommands(BaseTransaction<?> transaction) {
@@ -456,14 +497,22 @@ public class TransactionTestUtilities {
                                 new GeospatialData(13.361389, 38.115556),
                                 "Catania",
                                 new GeospatialData(15.087269, 37.502669)))
-                .geopos(geoKey1, new String[] {"Palermo", "Catania"});
+                .geopos(geoKey1, new String[] {"Palermo", "Catania"})
+                .geodist(geoKey1, "Palermo", "Catania")
+                .geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
+                .geohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"});
 
         return new Object[] {
             2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
             new Double[][] {
                 {13.36138933897018433, 38.11555639549629859},
                 {15.08726745843887329, 37.50266842333162032},
-            }, // geopos(new String[]{"Palermo", "Catania"})
+            }, // geopos(geoKey1, new String[]{"Palermo", "Catania"})
+            166274.1516, // geodist(geoKey1, "Palermo", "Catania")
+            166.2742, // geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
+            new String[] {
+                "sqc8b49rny0", "sqdtr74hyu0", null
+            } // eohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"})
         };
     }
 
@@ -489,7 +538,7 @@ public class TransactionTestUtilities {
                 .functionList()
                 .functionListWithCode()
                 .functionLoad(code)
-                .functionLoadWithReplace(code)
+                .functionLoadReplace(code)
                 .functionList("otherLib")
                 .functionListWithCode("mylib1T")
                 .customCommand(new String[] {"function", "flush", "sync"});
@@ -499,7 +548,7 @@ public class TransactionTestUtilities {
             new Map[0], // functionList()
             new Map[0], // functionListWithCode()
             "mylib1T", // functionLoad(code)
-            "mylib1T", // functionLoadWithReplace(code)
+            "mylib1T", // functionLoadReplace(code)
             new Map[0], // functionList("otherLib")
             new Map[] {
                 Map.<String, Object>of(
@@ -515,5 +564,41 @@ public class TransactionTestUtilities {
             // functionListWithCode("mylib1T")
             OK, // customCommand("function", "flush", "sync")
         };
+    }
+
+    private static Object[] bitmapCommands(BaseTransaction<?> transaction) {
+        String key1 = "{bitmapKey}-1" + UUID.randomUUID();
+        String key2 = "{bitmapKey}-2" + UUID.randomUUID();
+
+        transaction
+                .set(key1, "foobar")
+                .bitcount(key1)
+                .bitcount(key1, 1, 1)
+                .setbit(key2, 1, 1)
+                .setbit(key2, 1, 0)
+                .getbit(key1, 1);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction.bitcount(key1, 5, 30, BitmapIndexType.BIT);
+        }
+
+        var expectedResults =
+                new Object[] {
+                    OK, // set(key1, "foobar")
+                    26L, // bitcount(key1)
+                    6L, // bitcount(key1, 1, 1)
+                    0L, // setbit(key2, 1, 1)
+                    1L, // setbit(key2, 1, 0)
+                    1L, // getbit(key1, 1)
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            return concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
+                    });
+        }
+        return expectedResults;
     }
 }

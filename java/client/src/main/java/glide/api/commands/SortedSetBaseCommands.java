@@ -12,11 +12,12 @@ import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
-import glide.api.models.commands.ZaddOptions;
+import glide.api.models.commands.ZAddOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -27,8 +28,17 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=sorted-set">Sorted Set Commands</a>
  */
 public interface SortedSetBaseCommands {
-    public static final String WITH_SCORES_REDIS_API = "WITHSCORES";
-    public static final String WITH_SCORE_REDIS_API = "WITHSCORE";
+    /** Redis API keyword used to query sorted set members with their scores. */
+    String WITH_SCORES_REDIS_API = "WITHSCORES";
+
+    /** Redis API keyword used to query a sorted set member with its score. */
+    String WITH_SCORE_REDIS_API = "WITHSCORE";
+
+    /** Redis API keyword used to extract specific count of members from a sorted set. */
+    String COUNT_REDIS_API = "COUNT";
+
+    /** Redis API keyword used to limit calculation of intersection of sorted sets. */
+    String LIMIT_REDIS_API = "LIMIT";
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
@@ -37,7 +47,7 @@ public interface SortedSetBaseCommands {
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
-     * @param options The Zadd options.
+     * @param options The ZAdd options.
      * @param changed Modify the return value from the number of new elements added, to the total
      *     number of elements changed.
      * @return The number of elements added to the sorted set.<br>
@@ -54,7 +64,7 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zadd(
-            String key, Map<String, Double> membersScoresMap, ZaddOptions options, boolean changed);
+            String key, Map<String, Double> membersScoresMap, ZAddOptions options, boolean changed);
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
@@ -63,7 +73,7 @@ public interface SortedSetBaseCommands {
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersScoresMap A <code>Map</code> of members to their corresponding scores.
-     * @param options The Zadd options.
+     * @param options The ZAdd options.
      * @return The number of elements added to the sorted set.
      * @example
      *     <pre>{@code
@@ -77,7 +87,7 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zadd(
-            String key, Map<String, Double> membersScoresMap, ZaddOptions options);
+            String key, Map<String, Double> membersScoresMap, ZAddOptions options);
 
     /**
      * Adds members with their scores to the sorted set stored at <code>key</code>.<br>
@@ -126,7 +136,7 @@ public interface SortedSetBaseCommands {
      * @param key The key of the sorted set.
      * @param member A member in the sorted set to increment.
      * @param increment The score to increment the member.
-     * @param options The Zadd options.
+     * @param options The ZAdd options.
      * @return The score of the member.<br>
      *     If there was a conflict with the options, the operation aborts and <code>null</code> is
      *     returned.
@@ -142,7 +152,7 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> zaddIncr(
-            String key, String member, double increment, ZaddOptions options);
+            String key, String member, double increment, ZAddOptions options);
 
     /**
      * Increments the score of member in the sorted set stored at <code>key</code> by <code>increment
@@ -252,8 +262,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote
      *     <ul>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZPOPMIN</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
@@ -265,7 +274,7 @@ public interface SortedSetBaseCommands {
      *     <code>0</code> will block indefinitely.
      * @return An <code>array</code> containing the key where the member was popped out, the member
      *     itself, and the member score.<br>
-     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
      *     </code>.
      * @example
      *     <pre>{@code
@@ -321,8 +330,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote
      *     <ul>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZPOPMAX</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
@@ -334,7 +342,7 @@ public interface SortedSetBaseCommands {
      *     <code>0</code> will block indefinitely.
      * @return An <code>array</code> containing the key where the member was popped out, the member
      *     itself, and the member score.<br>
-     *     If no member could be popped and the <code>timeout</code> expired, returns </code>null
+     *     If no member could be popped and the <code>timeout</code> expired, returns <code>null
      *     </code>.
      * @example
      *     <pre>{@code
@@ -490,6 +498,8 @@ public interface SortedSetBaseCommands {
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
      *
+     * @apiNote When in cluster mode, <code>destination</code> and <code>source</code> must map to the
+     *     same hash slot.
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
@@ -522,6 +532,8 @@ public interface SortedSetBaseCommands {
      * sorted set at <code>destination</code>. If <code>destination</code> doesn't exist, a new sorted
      * set is created; if it exists, it's overwritten.<br>
      *
+     * @apiNote When in cluster mode, <code>destination</code> and <code>source</code> must map to the
+     *     same hash slot.
      * @see <a href="https://redis.io/commands/zrangestore/">redis.io</a> for more details.
      * @param destination The key for the destination sorted set.
      * @param source The key of the source sorted set.
@@ -658,6 +670,7 @@ public interface SortedSetBaseCommands {
      * Returns the difference between the first sorted set and all the successive sorted sets.<br>
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return An <code>array</code> of elements representing the difference between the sorted sets.
@@ -675,6 +688,7 @@ public interface SortedSetBaseCommands {
     /**
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return A <code>Map</code> of elements and their scores representing the difference between the
@@ -694,6 +708,8 @@ public interface SortedSetBaseCommands {
      * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
      * overwriting it if it already exists. Non-existent keys are treated as empty sets.
      *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same hash slot.
      * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
@@ -846,8 +862,8 @@ public interface SortedSetBaseCommands {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -874,8 +890,8 @@ public interface SortedSetBaseCommands {
      * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
      * is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -899,8 +915,8 @@ public interface SortedSetBaseCommands {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -927,8 +943,8 @@ public interface SortedSetBaseCommands {
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.
      *
-     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
-     *     the same <code>hash slot</code>.
+     * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
+     *     keysOrWeightedKeys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
@@ -947,13 +963,88 @@ public interface SortedSetBaseCommands {
      */
     CompletableFuture<Long> zinterstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys);
 
+    // TODO add @link to ZMPOP when implemented
+    /**
+     * Blocks the connection until it pops and returns a member-score pair from the first non-empty
+     * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
+     * To pop more than one element use {@link #bzmpop(String[], ScoreFilter, double, long)}.<br>
+     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *           </code>.
+     *       <li><code>BZMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A two-element <code>array</code> containing the key name of the set from which an
+     *     element was popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1).get();
+     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * String element = data.keySet().toArray(String[]::new)[0];
+     * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> bzmpop(String[] keys, ScoreFilter modifier, double timeout);
+
+    // TODO add @link to ZMPOP when implemented
+    /**
+     * Blocks the connection until it pops and returns multiple member-score pairs from the first
+     * non-empty sorted set, with the given <code>keys</code> being checked in the order they are
+     * provided.<br>
+     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
+     *           </code>.
+     *       <li><code>BZMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @param count The number of elements to pop.
+     * @return A two-element <code>array</code> containing the key name of the set from which elements
+     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no members could be popped and the timeout expired, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.bzmpop(new String[] { "zSet1", "zSet2" }, MAX, 0.1, 2).get();
+     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * for (Map.Entry<String, Double> entry : data.entrySet()) {
+     *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object[]> bzmpop(
+            String[] keys, ScoreFilter modifier, double timeout, long count);
+
     /**
      * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
      * </code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
-     * @apiNote When in cluster mode, all keys listed in <code>keysOrWeightedKeys</code> must map to
-     *     the same <code>hash slot</code>.
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -984,8 +1075,8 @@ public interface SortedSetBaseCommands {
      * #zunion(KeysOrWeightedKeys, Aggregate)}.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
-     * @apiNote When in cluster mode, all keys listed in <code>keysOrWeightedKeys</code> must map to
-     *     the same <code>hash slot</code>.
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1011,8 +1102,8 @@ public interface SortedSetBaseCommands {
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      * keysOrWeightedKeys</code>.
      *
-     * @apiNote When in cluster mode, all keys listed in <code>keysOrWeightedKeys</code> must map to
-     *     the same <code>hash slot</code>.
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1043,8 +1134,8 @@ public interface SortedSetBaseCommands {
      * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
      * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
-     * @apiNote When in cluster mode, all keys listed in <code>keysOrWeightedKeys</code> must map to
-     *     the same <code>hash slot</code>.
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1065,6 +1156,128 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.<br>
+     * To perform a <code>zinter</code> operation while specifying aggregation settings, use {@link
+     * #zinter(KeysOrWeightedKeys, Aggregate)}.<br>
+     * To get the elements with their scores, see {@link #zinterWithScores}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return The resulting sorted set from the intersection.
+     * @example
+     *     <pre>{@code
+     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
+     * String[] payload = client.zinter(keyArray).get()
+     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     *
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * String[] payload = client.zinter(weightedKeys).get()
+     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     * }</pre>
+     */
+    CompletableFuture<String[]> zinter(KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
+     * #zinterWithScores}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return The resulting sorted set from the intersection.
+     * @example
+     *     <pre>{@code
+     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
+     * String[] payload = client.zinter(keyArray, Aggregate.MAX).get()
+     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     *
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * String[] payload = client.zinter(weightedKeys, Aggregate.MAX).get()
+     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
+     * }</pre>
+     */
+    CompletableFuture<String[]> zinter(KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>. To perform a <code>zinter</code> operation while specifying
+     * aggregation settings, use {@link #zinterWithScores(KeysOrWeightedKeys, Aggregate)}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return The resulting sorted set from the intersection.
+     * @example
+     *     <pre>{@code
+     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
+     * Map<String, Double> payload1 = client.zinterWithScores(keyArray).get();
+     * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
+     *
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * Map<String, Double> payload2 = client.zinterWithScores(weightedKeys).get();
+     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zinterWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
+     *     hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return The resulting sorted set from the intersection.
+     * @example
+     *     <pre>{@code
+     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
+     * Map<String, Double> payload1 = client.zinterWithScores(keyArray, Aggregate.MAX).get();
+     * assert payload1.equals(Map.of("elem1", 1.0, "elem2", 2.0, "elem3", 3.0));
+     *
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
+     * Map<String, Double> payload2 = client.zinterWithScores(weightedKeys, Aggregate.SUM).get();
+     * assert payload2.equals(Map.of("elem1", 2.0, "elem2", 4.0, "elem3", 6.0));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Double>> zinterWithScores(
+            KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
 
     /**
      * Returns a random element from the sorted set stored at <code>key</code>.
@@ -1129,4 +1342,41 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[][]> zrandmemberWithCountWithScores(String key, long count);
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets to intersect.
+     * @return The cardinality of the intersection of the given sorted sets.
+     * @example
+     *     <pre>{@code
+     * Long length = client.zintercard(new String[] {"mySortedSet1", "mySortedSet2"}).get();
+     * assert length == 3L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zintercard(String[] keys);
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
+     * algorithm will exit early and yield <code>limit</code> as the cardinality.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets to intersect.
+     * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
+     *     <code>0</code> the range will be unlimited.
+     * @return The cardinality of the intersection of the given sorted sets, or the <code>limit</code>
+     *     if reached.
+     * @example
+     *     <pre>{@code
+     * Long length = client.zintercard(new String[] {"mySortedSet1", "mySortedSet2"}, 5).get();
+     * assert length == 3L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zintercard(String[] keys, long limit);
 }

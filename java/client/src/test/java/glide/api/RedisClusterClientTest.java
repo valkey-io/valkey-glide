@@ -28,8 +28,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LOLWUT;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
+import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
@@ -917,7 +917,7 @@ public class RedisClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(LOLWUT), eq(new String[0]), any()))
+        when(commandManager.<String>submitNewCommand(eq(Lolwut), eq(new String[0]), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -939,7 +939,7 @@ public class RedisClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(LOLWUT), eq(arguments), any()))
+        when(commandManager.<String>submitNewCommand(eq(Lolwut), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -960,7 +960,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(
-                        eq(LOLWUT), eq(new String[] {VERSION_REDIS_API, "42"}), any()))
+                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -982,7 +982,7 @@ public class RedisClusterClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(LOLWUT), eq(arguments), any()))
+        when(commandManager.<String>submitNewCommand(eq(Lolwut), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1003,7 +1003,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(LOLWUT), eq(new String[0]), eq(RANDOM), any()))
+                        eq(Lolwut), eq(new String[0]), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1026,7 +1026,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(LOLWUT), eq(arguments), eq(RANDOM), any()))
+                        eq(Lolwut), eq(arguments), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1047,7 +1047,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(LOLWUT), eq(new String[] {VERSION_REDIS_API, "42"}), eq(RANDOM), any()))
+                        eq(Lolwut), eq(new String[] {VERSION_REDIS_API, "42"}), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1070,7 +1070,7 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(LOLWUT), eq(arguments), eq(RANDOM), any()))
+                        eq(Lolwut), eq(arguments), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1106,7 +1106,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadWithReplace_returns_success() {
+    public void functionLoadReplace_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -1119,7 +1119,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadWithReplace(code);
+        CompletableFuture<String> response = service.functionLoadReplace(code);
         String payload = response.get();
 
         // verify
@@ -1152,7 +1152,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadWithReplaceWithRout_returns_success() {
+    public void functionLoadReplaceRoute_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -1165,7 +1165,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadWithReplace(code, RANDOM);
+        CompletableFuture<String> response = service.functionLoadReplace(code, RANDOM);
         String payload = response.get();
 
         // verify

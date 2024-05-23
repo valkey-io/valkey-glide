@@ -16,12 +16,15 @@ from glide.async_commands.core import (
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
+    AggregationType,
     InfBound,
     LexBoundary,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
+    ScoreFilter,
+    _create_z_cmd_store_args,
     _create_zrange_args,
     _create_zrangestore_args,
 )
@@ -74,7 +77,7 @@ class BaseTransaction:
         Command response:
             Optional[str]: If the key exists, returns the value of the key as a string. Otherwise, return None.
         """
-        return self.append_command(RequestType.GetString, [key])
+        return self.append_command(RequestType.Get, [key])
 
     def set(
         self: TTransaction,
@@ -119,7 +122,7 @@ class BaseTransaction:
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        return self.append_command(RequestType.SetString, args)
+        return self.append_command(RequestType.Set, args)
 
     def strlen(self: TTransaction, key: str) -> TTransaction:
         """
@@ -418,7 +421,7 @@ class BaseTransaction:
         field_value_list: List[str] = [key]
         for pair in field_value_map.items():
             field_value_list.extend(pair)
-        return self.append_command(RequestType.HashSet, field_value_list)
+        return self.append_command(RequestType.HSet, field_value_list)
 
     def hget(self: TTransaction, key: str, field: str) -> TTransaction:
         """
@@ -433,7 +436,7 @@ class BaseTransaction:
             Optional[str]: The value associated `field` in the hash.
             Returns None if `field` is not presented in the hash or `key` does not exist.
         """
-        return self.append_command(RequestType.HashGet, [key, field])
+        return self.append_command(RequestType.HGet, [key, field])
 
     def hsetnx(
         self: TTransaction,
@@ -473,7 +476,7 @@ class BaseTransaction:
         Command response:
             int: The value of the specified field in the hash stored at `key` after the increment or decrement.
         """
-        return self.append_command(RequestType.HashIncrBy, [key, field, str(amount)])
+        return self.append_command(RequestType.HIncrBy, [key, field, str(amount)])
 
     def hincrbyfloat(
         self: TTransaction, key: str, field: str, amount: float
@@ -494,9 +497,7 @@ class BaseTransaction:
         Command response:
             float: The value of the specified field in the hash stored at `key` after the increment as a string.
         """
-        return self.append_command(
-            RequestType.HashIncrByFloat, [key, field, str(amount)]
-        )
+        return self.append_command(RequestType.HIncrByFloat, [key, field, str(amount)])
 
     def hexists(self: TTransaction, key: str, field: str) -> TTransaction:
         """
@@ -511,7 +512,7 @@ class BaseTransaction:
             bool: Returns 'True' if the hash contains the specified field. If the hash does not contain the field,
                 or if the key does not exist, it returns 'False'.
         """
-        return self.append_command(RequestType.HashExists, [key, field])
+        return self.append_command(RequestType.HExists, [key, field])
 
     def hlen(self: TTransaction, key: str) -> TTransaction:
         """
@@ -552,7 +553,7 @@ class BaseTransaction:
             its value.
             If `key` does not exist, it returns an empty dictionary.
         """
-        return self.append_command(RequestType.HashGetAll, [key])
+        return self.append_command(RequestType.HGetAll, [key])
 
     def hmget(self: TTransaction, key: str, fields: List[str]) -> TTransaction:
         """
@@ -568,7 +569,7 @@ class BaseTransaction:
             For every field that does not exist in the hash, a null value is returned.
             If `key` does not exist, it is treated as an empty hash, and the function returns a list of null values.
         """
-        return self.append_command(RequestType.HashMGet, [key] + fields)
+        return self.append_command(RequestType.HMGet, [key] + fields)
 
     def hdel(self: TTransaction, key: str, fields: List[str]) -> TTransaction:
         """
@@ -583,7 +584,7 @@ class BaseTransaction:
             int: The number of fields that were removed from the hash, excluding specified but non-existing fields.
             If `key` does not exist, it is treated as an empty hash, and the function returns 0.
         """
-        return self.append_command(RequestType.HashDel, [key] + fields)
+        return self.append_command(RequestType.HDel, [key] + fields)
 
     def hvals(self: TTransaction, key: str) -> TTransaction:
         """
@@ -597,7 +598,7 @@ class BaseTransaction:
         Command response:
             List[str]: A list of values in the hash, or an empty list when the key does not exist.
         """
-        return self.append_command(RequestType.Hvals, [key])
+        return self.append_command(RequestType.HVals, [key])
 
     def hkeys(self: TTransaction, key: str) -> TTransaction:
         """
@@ -611,7 +612,7 @@ class BaseTransaction:
         Command response:
             List[str]: A list of field names for the hash, or an empty list when the key does not exist.
         """
-        return self.append_command(RequestType.Hkeys, [key])
+        return self.append_command(RequestType.HKeys, [key])
 
     def hrandfield(self: TTransaction, key: str) -> TTransaction:
         """
@@ -638,7 +639,7 @@ class BaseTransaction:
             key (str): The key of the hash.
             count (int): The number of field names to return.
                 If `count` is positive, returns unique elements.
-                If negative, allows for duplicates.
+                If `count` is negative, allows for duplicates elements.
 
         Command response:
             List[str]: A list of random field names from the hash.
@@ -656,7 +657,7 @@ class BaseTransaction:
             key (str): The key of the hash.
             count (int): The number of field names to return.
                 If `count` is positive, returns unique elements.
-                If negative, allows for duplicates.
+                If `count` is negative, allows for duplicates elements.
 
         Command response:
             List[List[str]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
@@ -746,7 +747,7 @@ class BaseTransaction:
             Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
                 popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
         """
-        return self.append_command(RequestType.Blpop, keys + [str(timeout)])
+        return self.append_command(RequestType.BLPop, keys + [str(timeout)])
 
     def lrange(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
@@ -791,7 +792,7 @@ class BaseTransaction:
             Optional[str]: The element at `index` in the list stored at `key`.
                 If `index` is out of range or if `key` does not exist, None is returned.
         """
-        return self.append_command(RequestType.Lindex, [key, str(index)])
+        return self.append_command(RequestType.LIndex, [key, str(index)])
 
     def rpush(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """Inserts all the specified values at the tail of the list stored at `key`.
@@ -872,7 +873,7 @@ class BaseTransaction:
             Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
                 popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
         """
-        return self.append_command(RequestType.Brpop, keys + [str(timeout)])
+        return self.append_command(RequestType.BRPop, keys + [str(timeout)])
 
     def linsert(
         self: TTransaction, key: str, position: InsertPosition, pivot: str, element: str
@@ -971,7 +972,7 @@ class BaseTransaction:
             Optional[str]: The value of the popped member.
             If `key` does not exist, None will be returned.
         """
-        return self.append_command(RequestType.Spop, [key])
+        return self.append_command(RequestType.SPop, [key])
 
     def spop_count(self: TTransaction, key: str, count: int) -> TTransaction:
         """
@@ -988,7 +989,7 @@ class BaseTransaction:
             Set[str]: A set of popped elements will be returned depending on the set's length.
                   If `key` does not exist, an empty set will be returned.
         """
-        return self.append_command(RequestType.Spop, [key, str(count)])
+        return self.append_command(RequestType.SPop, [key, str(count)])
 
     def sismember(
         self: TTransaction,
@@ -1009,6 +1010,95 @@ class BaseTransaction:
             If `key` doesn't exist, it is treated as an empty set and the command returns False.
         """
         return self.append_command(RequestType.SIsMember, [key, member])
+
+    def smove(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        member: str,
+    ) -> TTransaction:
+        """
+        Moves `member` from the set at `source` to the set at `destination`, removing it from the source set. Creates a
+        new destination set if needed. The operation is atomic.
+
+        See https://valkey.io/commands/smove for more details.
+
+        Args:
+            source (str): The key of the set to remove the element from.
+            destination (str): The key of the set to add the element to.
+            member (str): The set element to move.
+
+        Command response:
+            bool: True on success, or False if the `source` set does not exist or the element is not a member of the source set.
+        """
+        return self.append_command(RequestType.SMove, [source, destination, member])
+
+    def sunionstore(
+        self: TTransaction,
+        destination: str,
+        keys: List[str],
+    ) -> TTransaction:
+        """
+        Stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
+
+        See https://valkey.io/commands/sunionstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys from which to retrieve the set members.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SUnionStore, [destination] + keys)
+
+    def sinter(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Gets the intersection of all the given sets.
+
+        See https://valkey.io/docs/latest/commands/sinter for more details.
+
+        Args:
+            keys (List[str]): The keys of the sets.
+
+        Command response:
+            Set[str]: A set of members which are present in all given sets.
+                If one or more sets do not exist, an empty set will be returned.
+        """
+        return self.append_command(RequestType.SInter, keys)
+
+    def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Computes the difference between the first set and all the successive sets in `keys`.
+
+        See https://valkey.io/commands/sdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sets to diff.
+
+        Command response:
+            Set[str]: A set of elements representing the difference between the sets.
+                If any of the keys in `keys` do not exist, they are treated as empty sets.
+        """
+        return self.append_command(RequestType.SDiff, keys)
+
+    def sdiffstore(
+        self: TTransaction, destination: str, keys: List[str]
+    ) -> TTransaction:
+        """
+        Stores the difference between the first set and all the successive sets in `keys` into a new set at
+        `destination`.
+
+        See https://valkey.io/docs/latest/commands/sdiffstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys of the sets to diff.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SDiffStore, [destination] + keys)
 
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
@@ -1500,7 +1590,7 @@ class BaseTransaction:
         ]
         args += members_scores_list
 
-        return self.append_command(RequestType.Zadd, args)
+        return self.append_command(RequestType.ZAdd, args)
 
     def zadd_incr(
         self: TTransaction,
@@ -1549,7 +1639,7 @@ class BaseTransaction:
                 )
 
         args += [str(increment), member]
-        return self.append_command(RequestType.Zadd, args)
+        return self.append_command(RequestType.ZAdd, args)
 
     def zcard(self: TTransaction, key: str) -> TTransaction:
         """
@@ -1564,7 +1654,7 @@ class BaseTransaction:
             int: The number of elements in the sorted set.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
         """
-        return self.append_command(RequestType.Zcard, [key])
+        return self.append_command(RequestType.ZCard, [key])
 
     def zcount(
         self: TTransaction,
@@ -1601,7 +1691,7 @@ class BaseTransaction:
             if type(max_score) == InfBound
             else max_score.value
         )
-        return self.append_command(RequestType.Zcount, [key, score_min, score_max])
+        return self.append_command(RequestType.ZCount, [key, score_min, score_max])
 
     def zpopmax(
         self: TTransaction, key: str, count: Optional[int] = None
@@ -1626,6 +1716,29 @@ class BaseTransaction:
             RequestType.ZPopMax, [key, str(count)] if count else [key]
         )
 
+    def bzpopmax(self: TTransaction, keys: List[str], timeout: float) -> TTransaction:
+        """
+        Pops the member with the highest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
+
+        `BZPOPMAX` is the blocking variant of `ZPOPMAX`.
+
+        `BZPOPMAX` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/bzpopmax for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
+
+        Command response:
+            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+                and the member score. If no member could be popped and the `timeout` expired, returns None.
+        """
+        return self.append_command(RequestType.BZPopMax, keys + [str(timeout)])
+
     def zpopmin(
         self: TTransaction, key: str, count: Optional[int] = None
     ) -> TTransaction:
@@ -1648,6 +1761,29 @@ class BaseTransaction:
         return self.append_command(
             RequestType.ZPopMin, [key, str(count)] if count else [key]
         )
+
+    def bzpopmin(self: TTransaction, keys: List[str], timeout: float) -> TTransaction:
+        """
+        Pops the member with the lowest score from the first non-empty sorted set, with the given keys being checked in
+        the order that they are given. Blocks the connection when there are no members to remove from any of the given
+        sorted sets.
+
+        `BZPOPMIN` is the blocking variant of `ZPOPMIN`.
+
+        `BZPOPMIN` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/bzpopmin for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            timeout (float): The number of seconds to wait for a blocking operation to complete.
+                A value of 0 will block indefinitely.
+
+        Command response:
+            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+                and the member score. If no member could be popped and the `timeout` expired, returns None.
+        """
+        return self.append_command(RequestType.BZPopMin, keys + [str(timeout)])
 
     def zrange(
         self: TTransaction,
@@ -1676,7 +1812,7 @@ class BaseTransaction:
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=False)
 
-        return self.append_command(RequestType.Zrange, args)
+        return self.append_command(RequestType.ZRange, args)
 
     def zrange_withscores(
         self: TTransaction,
@@ -1703,7 +1839,7 @@ class BaseTransaction:
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
 
-        return self.append_command(RequestType.Zrange, args)
+        return self.append_command(RequestType.ZRange, args)
 
     def zrangestore(
         self: TTransaction,
@@ -1757,7 +1893,7 @@ class BaseTransaction:
             Optional[int]: The rank of `member` in the sorted set.
             If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
         """
-        return self.append_command(RequestType.Zrank, [key, member])
+        return self.append_command(RequestType.ZRank, [key, member])
 
     def zrank_withscore(
         self: TTransaction,
@@ -1779,7 +1915,7 @@ class BaseTransaction:
 
         Since: Redis version 7.2.0.
         """
-        return self.append_command(RequestType.Zrank, [key, member, "WITHSCORE"])
+        return self.append_command(RequestType.ZRank, [key, member, "WITHSCORE"])
 
     def zrem(
         self: TTransaction,
@@ -1800,7 +1936,7 @@ class BaseTransaction:
             int: The number of members that were removed from the sorted set, not including non-existing members.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns 0.
         """
-        return self.append_command(RequestType.Zrem, [key] + members)
+        return self.append_command(RequestType.ZRem, [key] + members)
 
     def zremrangebyscore(
         self: TTransaction,
@@ -1947,6 +2083,41 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZMScore, [key] + members)
 
+    def zdiff(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets.
+        To get the elements with their scores, see `zdiff_withscores`.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            List[str]: A list of elements representing the difference between the sorted sets.
+                If the first key does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+        """
+        return self.append_command(RequestType.ZDiff, [str(len(keys))] + keys)
+
+    def zdiff_withscores(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
+
+        See https://valkey.io/commands/zdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            Mapping[str, float]: A mapping of elements and their scores representing the difference between the sorted sets.
+                If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
+                empty list.
+        """
+        return self.append_command(
+            RequestType.ZDiff, [str(len(keys))] + keys + ["WITHSCORES"]
+        )
+
     def zdiffstore(
         self: TTransaction, destination: str, keys: List[str]
     ) -> TTransaction:
@@ -1967,6 +2138,220 @@ class BaseTransaction:
         return self.append_command(
             RequestType.ZDiffStore, [destination, str(len(keys))] + keys
         )
+
+    def zinterstore(
+        self: TTransaction,
+        destination: str,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> TTransaction:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+
+        When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zinterstore/ for more details.
+
+        Args:
+            destination (str): The key of the destination sorted set.
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Command response:
+            int: The number of elements in the resulting sorted set stored at `destination`.
+        """
+        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        return self.append_command(RequestType.ZInterStore, args)
+
+    def zunionstore(
+        self: TTransaction,
+        destination: str,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> TTransaction:
+        """
+        Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+
+        When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+
+        see https://valkey.io/commands/zunionstore/ for more details.
+
+        Args:
+            destination (str): The key of the destination sorted set.
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Command response:
+            int: The number of elements in the resulting sorted set stored at `destination`.
+        """
+        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        return self.append_command(RequestType.ZUnionStore, args)
+
+    def zrandmember(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns a random member from the sorted set stored at 'key'.
+
+        See https://valkey.io/commands/zrandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+
+        Command response:
+            Optional[str]: A random member from the sorted set.
+                If the sorted set does not exist or is empty, the response will be None.
+        """
+        return self.append_command(RequestType.ZRandMember, [key])
+
+    def zrandmember_count(self: TTransaction, key: str, count: int) -> TTransaction:
+        """
+        Retrieves up to the absolute value of `count` random members from the sorted set stored at 'key'.
+
+        See https://valkey.io/commands/zrandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
+
+        Command response:
+            List[str]: A list of members from the sorted set.
+                If the sorted set does not exist or is empty, the response will be an empty list.
+        """
+        return self.append_command(RequestType.ZRandMember, [key, str(count)])
+
+    def zrandmember_withscores(
+        self: TTransaction, key: str, count: int
+    ) -> TTransaction:
+        """
+        Retrieves up to the absolute value of `count` random members along with their scores from the sorted set
+        stored at 'key'.
+
+        See https://valkey.io/commands/zrandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
+
+        Command response:
+            List[List[Union[str, float]]]: A list of `[member, score]` lists, where `member` is a random member from
+                the sorted set and `score` is the associated score.
+                If the sorted set does not exist or is empty, the response will be an empty list.
+        """
+        return self.append_command(
+            RequestType.ZRandMember, [key, str(count), "WITHSCORES"]
+        )
+
+    def zmpop(
+        self: TTransaction,
+        keys: List[str],
+        filter: ScoreFilter,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
+        that they are given. The optional `count` argument can be used to specify the number of elements to pop, and is
+        set to 1 by default. The number of popped elements is the minimum from the sorted set's cardinality and `count`.
+
+        See https://valkey.io/commands/zmpop for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
+                members with the lowest/highest scores accordingly.
+            count (Optional[int]): The number of elements to pop.
+
+        Command response:
+            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+                which elements were popped, and a member-score mapping of the popped elements. If no members could be
+                popped, returns None.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(len(keys))] + keys + [filter.value]
+        if count is not None:
+            args = args + ["COUNT", str(count)]
+
+        return self.append_command(RequestType.ZMPop, args)
+
+    def bzmpop(
+        self: TTransaction,
+        keys: List[str],
+        modifier: ScoreFilter,
+        timeout: float,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
+        that they are given. Blocks the connection when there are no members to pop from any of the given sorted sets.
+
+        The optional `count` argument can be used to specify the number of elements to pop, and is set to 1 by default.
+
+        The number of popped elements is the minimum from the sorted set's cardinality and `count`.
+
+        `BZMPOP` is the blocking variant of `ZMPOP`.
+
+        See https://valkey.io/commands/bzmpop for more details.
+
+        Note:
+            `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+            modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
+                members with the lowest/highest scores accordingly.
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will
+                block indefinitely.
+            count (Optional[int]): The number of elements to pop.
+
+        Command response:
+            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+                which elements were popped, and a member-score mapping. If no members could be popped and the timeout
+                expired, returns None.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(timeout), str(len(keys))] + keys + [modifier.value]
+        if count is not None:
+            args = args + ["COUNT", str(count)]
+
+        return self.append_command(RequestType.BZMPop, args)
+
+    def zintercard(
+        self: TTransaction, keys: List[str], limit: Optional[int] = None
+    ) -> TTransaction:
+        """
+        Returns the cardinality of the intersection of the sorted sets specified by `keys`. When provided with the
+        optional `limit` argument, if the intersection cardinality reaches `limit` partway through the computation, the
+        algorithm will exit early and yield `limit` as the cardinality.
+
+        See https://valkey.io/commands/zintercard for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets to intersect.
+            limit (Optional[int]): An optional argument that can be used to specify a maximum number for the
+                intersection cardinality. If limit is not supplied, or if it is set to 0, there will be no limit.
+
+        Command response:
+            int: The cardinality of the intersection of the given sorted sets, or the `limit` if reached.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(len(keys))] + keys
+        if limit is not None:
+            args.extend(["LIMIT", str(limit)])
+
+        return self.append_command(RequestType.ZInterCard, args)
 
     def dbsize(self: TTransaction) -> TTransaction:
         """

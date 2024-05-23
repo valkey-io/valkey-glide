@@ -1,7 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
 from enum import Enum
-from typing import List, Optional, Union
+from typing import List, Optional, Tuple, Union
 
 
 class InfBound(Enum):
@@ -20,6 +20,43 @@ class InfBound(Enum):
     Negative infinity bound for sorted set.
         score_arg: represents numeric negative infinity (-inf).
         lex_arg: represents lexicographic negative infinity (-).
+    """
+
+
+class AggregationType(Enum):
+    """
+    Enumeration representing aggregation types for `ZINTERSTORE` and `ZUNIONSTORE` sorted set commands.
+    """
+
+    SUM = "SUM"
+    """
+    Represents aggregation by summing the scores of elements across inputs where they exist.
+    """
+    MIN = "MIN"
+    """
+    Represents aggregation by selecting the minimum score of an element across inputs where it exists.
+    """
+    MAX = "MAX"
+    """
+    Represents aggregation by selecting the maximum score of an element across inputs where it exists.
+    """
+
+
+class ScoreFilter(Enum):
+    """
+    Defines which elements to pop from a sorted set.
+
+    ScoreFilter is a mandatory option for ZMPOP (https://valkey.io/commands/zmpop)
+    and BZMPOP (https://valkey.io/commands/bzmpop).
+    """
+
+    MIN = "MIN"
+    """
+    Pop elements with the lowest scores.
+    """
+    MAX = "MAX"
+    """
+    Pop elements with the highest scores.
     """
 
 
@@ -156,6 +193,50 @@ def _create_zrange_args(
         )
     if with_scores:
         args.append("WITHSCORES")
+
+    return args
+
+
+def separate_keys(
+    keys: Union[List[str], List[Tuple[str, float]]]
+) -> Tuple[List[str], List[str]]:
+    """
+    Returns seperate lists of keys and weights in case of weighted keys.
+    """
+    if not keys:
+        return [], []
+
+    key_list: List[str] = []
+    weight_list: List[str] = []
+
+    if isinstance(keys[0], tuple):
+        key_list = [item[0] for item in keys]
+        weight_list = [str(item[1]) for item in keys]
+    # elif isinstance(keys[0], str):
+    else:
+        key_list = keys  # type: ignore
+
+    return key_list, weight_list
+
+
+def _create_z_cmd_store_args(
+    destination: str,
+    keys: Union[List[str], List[Tuple[str, float]]],
+    aggregation_type: Optional[AggregationType] = None,
+) -> List[str]:
+    args = [destination, str(len(keys))]
+
+    only_keys, weights = separate_keys(keys)
+
+    args += only_keys
+
+    if weights:
+        args.append("WEIGHTS")
+        args += weights
+
+    if aggregation_type:
+        args.append("AGGREGATE")
+        args.append(aggregation_type.value)
 
     return args
 

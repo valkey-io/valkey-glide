@@ -14,9 +14,11 @@ import java.util.concurrent.CompletableFuture;
 public interface ScriptingAndFunctionsClusterCommands {
 
     /**
-     * Loads a library to Redis.<br>
+     * Loads a library to Redis unless a library with the same name exists. Use {@link
+     * #functionLoadReplace(String)} to replace existing libraries.<br>
      * The command will be routed to all primary nodes.
      *
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @return The library name that was loaded.
@@ -30,24 +32,27 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<String> functionLoad(String libraryCode);
 
     /**
-     * Loads a library to Redis and overwrites the existing library with the new contents.<br>
+     * Loads a library to Redis and overwrites a library with the same name if it exists.<br>
      * The command will be routed to all primary nodes.
      *
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @return The library name that was loaded.
      * @example
      *     <pre>{@code
      * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * String response = client.functionLoadWithReplace(code).get();
+     * String response = client.functionLoadReplace(code).get();
      * assert response.equals("mylib");
      * }</pre>
      */
-    CompletableFuture<String> functionLoadWithReplace(String libraryCode);
+    CompletableFuture<String> functionLoadReplace(String libraryCode);
 
     /**
-     * Loads a library to Redis.
+     * Loads a library to Redis unless a library with the same name exists. Use {@link
+     * #functionLoadReplace(String, Route)} to replace existing libraries.<br>
      *
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -64,8 +69,9 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<String> functionLoad(String libraryCode, Route route);
 
     /**
-     * Loads a library to Redis and overwrites the existing library with the new contents.
+     * Loads a library to Redis and overwrites a library with the same name if it exists.
      *
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -74,11 +80,11 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @example
      *     <pre>{@code
      * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * String response = client.functionLoadWithReplace(code, ALL_NODES).get();
+     * String response = client.functionLoadReplace(code, ALL_NODES).get();
      * assert response.equals("mylib");
      * }</pre>
      */
-    CompletableFuture<String> functionLoadWithReplace(String libraryCode, Route route);
+    CompletableFuture<String> functionLoadReplace(String libraryCode, Route route);
 
     /**
      * Returns information about the functions and libraries.<br>

@@ -24,6 +24,18 @@
 * Python: Added BLPOP and BRPOP commands ([#1369](https://github.com/aws/glide-for-redis/pull/1369))
 * Python: Added ZRANGESTORE command ([#1377](https://github.com/aws/glide-for-redis/pull/1377))
 * Python: Added ZDIFFSTORE command ([#1378](https://github.com/aws/glide-for-redis/pull/1378))
+* Python: Added ZDIFF command ([#1401](https://github.com/aws/glide-for-redis/pull/1401))
+* Python: Added BZPOPMIN and BZPOPMAX commands ([#1399](https://github.com/aws/glide-for-redis/pull/1399))
+* Python: Added ZUNIONSTORE, ZINTERSTORE commands ([#1388](https://github.com/aws/glide-for-redis/pull/1388))
+* Python: Added ZRANDMEMBER command ([#1413](https://github.com/aws/glide-for-redis/pull/1413))
+* Python: Added BZMPOP command ([#1412](https://github.com/aws/glide-for-redis/pull/1412))
+* Python: Added ZINTERCARD command ([#1418](https://github.com/aws/glide-for-redis/pull/1418))
+* Python: Added ZMPOP command ([#1417](https://github.com/aws/glide-for-redis/pull/1417))
+* Python: Added SMOVE command ([#1421](https://github.com/aws/glide-for-redis/pull/1421))
+* Python: Added SUNIONSTORE command ([#1423](https://github.com/aws/glide-for-redis/pull/1423))
+* Python: Added SINTER command ([#1434](https://github.com/aws/glide-for-redis/pull/1434))
+* Python: Added SDIFF command ([#1437](https://github.com/aws/glide-for-redis/pull/1437))
+* Python: Added SDIFFSTORE command ([#1449](https://github.com/aws/glide-for-redis/pull/1449))
 
 
 #### Fixes
@@ -32,6 +44,9 @@
 
 ### Breaking Changes
 * Node: Changed `smembers` and `spopCount` functions to return Set instead of string[] ([#1299](https://github.com/aws/glide-for-redis/pull/1299))
+
+#### Features
+* Node: Added support for alpine based platform (Or any x64-musl or arm64-musl based platforms) ([#1379](https://github.com/aws/glide-for-redis/pull/1379))
 
 ## 0.3.3 (2024-03-28)
 
