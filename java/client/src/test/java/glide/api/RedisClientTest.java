@@ -4207,6 +4207,7 @@ public class RedisClientTest {
 
         // verify
         assertEquals(testResponse, response);
+        assertEquals(1L, payload);
     }
 
     @SneakyThrows
