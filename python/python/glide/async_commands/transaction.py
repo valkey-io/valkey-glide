@@ -1067,6 +1067,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SInter, keys)
 
+    def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Computes the difference between the first set and all the successive sets in `keys`.
+
+        See https://valkey.io/commands/sdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sets to diff.
+
+        Command response:
+            Set[str]: A set of elements representing the difference between the sets.
+                If any of the keys in `keys` do not exist, they are treated as empty sets.
+        """
+        return self.append_command(RequestType.SDiff, keys)
+
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
