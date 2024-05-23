@@ -78,7 +78,7 @@ public interface ScriptingAndFunctionsCommands {
      * @return Info about all libraries, their functions, and their code.
      * @example
      *     <pre>{@code
-     * Map<String, Object>[] response = client.functionList().get();
+     * Map<String, Object>[] response = client.functionListWithCode().get();
      * for (Map<String, Object> libraryInfo : response) {
      *   System.out.printf("Server has library '%s' which runs on %s engine%n",
      *       libraryInfo.get("library_name"), libraryInfo.get("engine"));
@@ -129,7 +129,7 @@ public interface ScriptingAndFunctionsCommands {
      * @return Info about queried libraries, their functions, and their code.
      * @example
      *     <pre>{@code
-     * Map<String, Object>[] response = client.functionList("GLIDE*").get();
+     * Map<String, Object>[] response = client.functionListWithCode("GLIDE*").get();
      * for (Map<String, Object> libraryInfo : response) {
      *   System.out.printf("Server has library '%s' which runs on %s engine%n",
      *       libraryInfo.get("library_name"), libraryInfo.get("engine"));

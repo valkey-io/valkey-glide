@@ -388,7 +388,7 @@ pub(crate) fn convert_to_expected_type(
             Value::Array(array) => {
                 convert_array_of_flat_maps(array, Some(ExpectedReturnType::ArrayOfMaps))
             }
-            _ => Err((ErrorKind::TypeError, "Response couldn't be converted").into()),
+            _ => Err((ErrorKind::TypeError, "Response couldn't be converted into a recursive array of maps").into()),
         },
         // Not used for a command, but used as a helper for `ArrayOfMapsRecursive` to process the inner map.
         ExpectedReturnType::ArrayOfMaps => match value {
@@ -441,7 +441,7 @@ fn convert_array_elements(
     Ok(Value::Array(converted_array))
 }
 
-/// Converts an array of flatten maps into an array of maps.
+/// Converts an array of flat maps into an array of maps.
 /// Input:
 /// ```text
 /// 1) 1) "map 1 key 1"
@@ -462,8 +462,8 @@ fn convert_array_elements(
 ///     ...
 /// ```
 ///
-/// `array` is an input.
-/// `value_expected_return_type` is the type of the values stored in the maps to convert to.
+/// `array` is an array of arrays, where each inner array represents data for a map. The inner arrays contain map keys at even-positioned elements and map values at odd-positioned elements.
+/// `value_expected_return_type` is the desired type for the map values.
 fn convert_array_of_flat_maps(
     array: Vec<Value>,
     value_expected_return_type: Option<ExpectedReturnType>,

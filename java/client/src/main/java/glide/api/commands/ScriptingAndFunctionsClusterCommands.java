@@ -120,7 +120,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @return Info about all libraries, their functions, and their code.
      * @example
      *     <pre>{@code
-     * Map<String, Object>[] response = client.functionList().get();
+     * Map<String, Object>[] response = client.functionListWithCode().get();
      * for (Map<String, Object> libraryInfo : response) {
      *   System.out.printf("Server has library '%s' which runs on %s engine%n",
      *       libraryInfo.get("library_name"), libraryInfo.get("engine"));
@@ -173,7 +173,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @return Info about queried libraries, their functions, and their code.
      * @example
      *     <pre>{@code
-     * Map<String, Object>[] response = client.functionList("GLIDE*").get();
+     * Map<String, Object>[] response = client.functionListWithCode("GLIDE*").get();
      * for (Map<String, Object> libraryInfo : response) {
      *   System.out.printf("Server has library '%s' which runs on %s engine%n",
      *       libraryInfo.get("library_name"), libraryInfo.get("engine"));
@@ -226,7 +226,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @return Info about all libraries, their functions, and their code.
      * @example
      *     <pre>{@code
-     * Map<String, Object>[] response = client.functionList(RANDOM).get();
+     * Map<String, Object>[] response = client.functionListWithCode(RANDOM).get();
      * for (Map<String, Object> libraryInfo : response) {
      *   System.out.printf("Server has library '%s' which runs on %s engine%n",
      *       libraryInfo.get("library_name"), libraryInfo.get("engine"));
@@ -281,7 +281,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @return Info about queried libraries, their functions, and their code.
      * @example
      *     <pre>{@code
-     * Map<String, Object>[] response = client.functionList("GLIDE*", RANDOM).get();
+     * Map<String, Object>[] response = client.functionListWithCode("GLIDE*", RANDOM).get();
      * for (Map<String, Object> libraryInfo : response) {
      *   System.out.printf("Server has library '%s' which runs on %s engine%n",
      *       libraryInfo.get("library_name"), libraryInfo.get("engine"));
