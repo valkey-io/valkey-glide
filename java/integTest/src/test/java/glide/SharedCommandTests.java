@@ -3517,7 +3517,7 @@ public class SharedCommandTests {
     public void objectIdletime(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "").get());
-        Thread.sleep(1000);
+        Thread.sleep(2000);
         assertTrue(client.objectIdletime(key).get() > 0L);
     }
 
