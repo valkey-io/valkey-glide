@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
@@ -57,6 +58,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
@@ -276,6 +278,14 @@ public class TransactionTests {
 
         transaction.hkeys("key");
         results.add(Pair.of(HKeys, buildArgs("key")));
+
+        transaction
+                .hrandfield("key")
+                .hrandfieldWithCount("key", 2)
+                .hrandfieldWithCountWithValues("key", 3);
+        results.add(Pair.of(HRandField, buildArgs("key")));
+        results.add(Pair.of(HRandField, buildArgs("key", "2")));
+        results.add(Pair.of(HRandField, buildArgs("key", "3", WITH_VALUES_REDIS_API)));
 
         transaction.lpush("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPush, buildArgs("key", "element1", "element2")));

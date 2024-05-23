@@ -200,6 +200,11 @@ public class TransactionTestUtilities {
                 .hgetall(hashKey1)
                 .hdel(hashKey1, new String[] {field1})
                 .hvals(hashKey1)
+                .hrandfield(hashKey1)
+                .hrandfieldWithCount(hashKey1, 2)
+                .hrandfieldWithCount(hashKey1, -2)
+                .hrandfieldWithCountWithValues(hashKey1, 2)
+                .hrandfieldWithCountWithValues(hashKey1, -2)
                 .hincrBy(hashKey1, field3, 5)
                 .hincrByFloat(hashKey1, field3, 5.5)
                 .hkeys(hashKey1);
@@ -214,6 +219,13 @@ public class TransactionTestUtilities {
             Map.of(field1, value1, field2, value2), // hgetall(hashKey1)
             1L, // hdel(hashKey1, new String[] {field1})
             new String[] {value2}, // hvals(hashKey1)
+            field2, // hrandfield(hashKey1)
+            new String[] {field2}, // hrandfieldWithCount(hashKey1, 2)
+            new String[] {field2, field2}, // hrandfieldWithCount(hashKey1, -2)
+            new String[][] {{field2, value2}}, // hrandfieldWithCountWithValues(hashKey1, 2)
+            new String[][] {
+                {field2, value2}, {field2, value2}
+            }, // hrandfieldWithCountWithValues(hashKey1, -2)
             5L, // hincrBy(hashKey1, field3, 5)
             10.5, // hincrByFloat(hashKey1, field3, 5.5)
             new String[] {field2, field3}, // hkeys(hashKey1)

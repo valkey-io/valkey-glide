@@ -35,6 +35,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
@@ -524,6 +525,29 @@ public abstract class BaseClient
                 HKeys,
                 new String[] {key},
                 response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String> hrandfield(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                HRandField, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> hrandfieldWithCount(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                HRandField,
+                new String[] {key, Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[][]> hrandfieldWithCountWithValues(
+            @NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                HRandField,
+                new String[] {key, Long.toString(count), WITH_VALUES_REDIS_API},
+                response -> castArrayofArrays(handleArrayResponse(response), String.class));
     }
 
     @Override
