@@ -356,11 +356,14 @@ public class TransactionTestUtilities {
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
-                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
+                    .zmpop(new String[] {zSetKey3}, MAX)
+                    .zmpop(new String[] {zSetKey3}, MIN, 2)
                     .bzmpop(new String[] {zSetKey3}, MAX, .1)
                     .bzmpop(new String[] {zSetKey3}, MIN, .1, 2)
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
                     .zintercard(new String[] {zSetKey2, zSetKey3})
-                    .zintercard(new String[] {zSetKey2, zSetKey3}, 1);
+                    .zintercard(new String[] {zSetKey2, zSetKey3}, 2);
         }
 
         var expectedResults =
@@ -409,11 +412,14 @@ public class TransactionTestUtilities {
             return concatenateArrays(
                     expectedResults,
                     new Object[] {
-                        5L, // zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
-                        new Object[] {zSetKey3, Map.of("e", 5.)}, // bzmpop(zSetKey3, MAX, .1)
-                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // bzmpop(zSetKey3, MIN, .1, 2)
-                        2L, // zintercard(new String[] {zSetKey2, zSetKey3})
-                        1L, // zintercard(new String[] {zSetKey2, zSetKey3}, 1)
+                        7L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                        new Object[] {zSetKey3, Map.of("g", 7.)}, // zmpop(zSetKey3, MAX)
+                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
+                        new Object[] {zSetKey3, Map.of("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
+                        new Object[] {zSetKey3, Map.of("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                        6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                        4L, // zintercard(new String[] {zSetKey2, zSetKey3})
+                        2L, // zintercard(new String[] {zSetKey2, zSetKey3}, 2)
                     });
         }
         return expectedResults;
