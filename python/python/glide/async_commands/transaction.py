@@ -1082,6 +1082,24 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SDiff, keys)
 
+    def sdiffstore(
+        self: TTransaction, destination: str, keys: List[str]
+    ) -> TTransaction:
+        """
+        Stores the difference between the first set and all the successive sets in `keys` into a new set at
+        `destination`.
+
+        See https://valkey.io/docs/latest/commands/sdiffstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys of the sets to diff.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SDiffStore, [destination] + keys)
+
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
