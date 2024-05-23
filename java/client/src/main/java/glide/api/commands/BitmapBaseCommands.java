@@ -119,7 +119,7 @@ public interface BitmapBaseCommands {
      *
      * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
      * @param key The key of the string.
-     * @param bit The bit value to match.
+     * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @return The position of the first occurrence matching <code>bit</code> in the binary value of
      *     the string held at <code>key</code>. If <code>bit</code> is not found, a <code>-1</code> is
      *     returned.
@@ -158,7 +158,7 @@ public interface BitmapBaseCommands {
     CompletableFuture<Long> bitpos(String key, long bit, long start);
 
     /**
-     * Return the position of the first bit matching the given <code>bit</code> value. The offsets
+     * Returns the position of the first bit matching the given <code>bit</code> value. The offsets
      * <code>start</code> and <code>end</code> are zero-based indexes, with <code>0</code> being the
      * first byte of the list, <code>1</code> being the next byte and so on. These offsets can also be
      * negative numbers indicating offsets starting at the end of the list, with <code>-1</code> being
