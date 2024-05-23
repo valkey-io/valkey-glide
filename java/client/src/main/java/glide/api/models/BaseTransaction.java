@@ -11,6 +11,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -3422,5 +3423,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         }
 
         return commandArgs.build();
+    }
+
+    /**
+     * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
+     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
+     * this special case.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param value The value to append.
+     * @return Command Response - The length of the string after appending the value.
+     */
+    public T append(@NonNull String key, @NonNull String value) {
+        ArgsArray commandArgs = buildArgs(key, value);
+        protobufTransaction.addCommands(buildCommand(Append, commandArgs));
+        return getThis();
     }
 }
