@@ -15,6 +15,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
@@ -23,11 +24,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
+import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -47,7 +50,8 @@ import response.ResponseOuterClass.Response;
 public class RedisClusterClient extends BaseClient
         implements ConnectionManagementClusterCommands,
                 GenericClusterCommands,
-                ServerManagementClusterCommands {
+                ServerManagementClusterCommands,
+                ScriptingAndFunctionsClusterCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -411,5 +415,35 @@ public class RedisClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.ofSingleValue(handleStringResponse(response))
                                 : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> functionLoad(@NonNull String libraryCode) {
+        return commandManager.submitNewCommand(
+                FunctionLoad, new String[] {libraryCode}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionLoadReplace(@NonNull String libraryCode) {
+        return commandManager.submitNewCommand(
+                FunctionLoad,
+                new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionLoad(@NonNull String libraryCode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionLoad, new String[] {libraryCode}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionLoadReplace(
+            @NonNull String libraryCode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionLoad,
+                new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
+                route,
+                this::handleStringResponse);
     }
 }
