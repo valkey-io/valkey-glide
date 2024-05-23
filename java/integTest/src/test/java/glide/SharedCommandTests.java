@@ -171,6 +171,27 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void append(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String value1 = String.valueOf(UUID.randomUUID());
+        String key2 = UUID.randomUUID().toString();
+
+        // Append on non-existing string(similar to SET)
+        assertEquals(value1.length(), client.append(key1, value1).get());
+
+        assertEquals(value1.length() * 2L, client.append(key1, value1).get());
+        assertEquals(value1.concat(value1), client.get(key1).get());
+
+        // key exists but holding the wrong kind of value
+        assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.append(key2, "z").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void del_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
