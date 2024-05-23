@@ -10,7 +10,6 @@ import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -20,6 +19,7 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -326,6 +326,7 @@ public class TransactionTestUtilities {
                 .zlexcount(zSetKey1, new LexBoundary("a", true), InfLexBound.POSITIVE_INFINITY)
                 .zpopmin(zSetKey1)
                 .zpopmax(zSetKey1)
+                // zSetKey1 is now empty
                 .zremrangebyrank(zSetKey1, 5, 10)
                 .zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
                 .zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
@@ -339,18 +340,25 @@ public class TransactionTestUtilities {
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .zinterstore(zSetKey1, new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
+                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .bzpopmax(new String[] {zSetKey2}, .1)
                 .zrandmember(zSetKey2)
                 .zrandmemberWithCount(zSetKey2, 1)
                 .zrandmemberWithCountWithScores(zSetKey2, 1)
-                .bzpopmin(new String[] {zSetKey2}, .1);
-        // zSetKey2 is now empty
+                .bzpopmin(new String[] {zSetKey2}, .1)
+                // zSetKey2 is now empty
+                .zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.));
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
-                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
                     .bzmpop(new String[] {zSetKey3}, MAX, .1)
-                    .bzmpop(new String[] {zSetKey3}, MIN, .1, 2);
+                    .bzmpop(new String[] {zSetKey3}, MIN, .1, 2)
+                    .zintercard(new String[] {zSetKey2, zSetKey3})
+                    .zintercard(new String[] {zSetKey2, zSetKey3}, 1);
         }
 
         var expectedResults =
@@ -383,20 +391,27 @@ public class TransactionTestUtilities {
                     Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}));
                     Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}), MAX)
                     0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
+                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}))
+                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
+                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}))
+                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
                     new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
                     "one", // .zrandmember(zSetKey2)
                     new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
                     new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
                     new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
+                    4L, // zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             return concatenateArrays(
                     expectedResults,
                     new Object[] {
-                        4L, // zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
-                        new Object[] {zSetKey3, Map.of("d", 4.)}, // bzmpop(zSetKey3, MAX, .1)
+                        5L, // zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
+                        new Object[] {zSetKey3, Map.of("e", 5.)}, // bzmpop(zSetKey3, MAX, .1)
                         new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                        2L, // zintercard(new String[] {zSetKey2, zSetKey3})
+                        1L, // zintercard(new String[] {zSetKey2, zSetKey3}, 1)
                     });
         }
         return expectedResults;
@@ -526,7 +541,8 @@ public class TransactionTestUtilities {
                 .bitcount(key1)
                 .bitcount(key1, 1, 1)
                 .setbit(key2, 1, 1)
-                .setbit(key2, 1, 0);
+                .setbit(key2, 1, 0)
+                .getbit(key1, 1);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction.bitcount(key1, 5, 30, BitmapIndexType.BIT);
@@ -534,11 +550,12 @@ public class TransactionTestUtilities {
 
         var expectedResults =
                 new Object[] {
-                    OK, // set(key, "foobar")
-                    26L, // bitcount(key)
-                    6L, // bitcount(key, 1, 1)
-                    0L, // setbit(key, 1, 1)
-                    1L, // setbit(key, 1, 0)
+                    OK, // set(key1, "foobar")
+                    26L, // bitcount(key1)
+                    6L, // bitcount(key1, 1, 1)
+                    0L, // setbit(key2, 1, 1)
+                    1L, // setbit(key2, 1, 0)
+                    1L, // getbit(key1, 1)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {

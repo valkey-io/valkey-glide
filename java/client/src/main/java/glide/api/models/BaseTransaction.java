@@ -3,6 +3,7 @@ package glide.api.models;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
@@ -15,7 +16,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -37,6 +38,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
+import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -111,6 +113,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
@@ -129,7 +133,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -157,6 +160,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
@@ -2169,6 +2173,44 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets to intersect.
+     * @return Command Response - The cardinality of the intersection of the given sorted sets.
+     */
+    public T zintercard(@NonNull String[] keys) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, Integer.toString(keys.length)));
+        protobufTransaction.addCommands(buildCommand(ZInterCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
+     * algorithm will exit early and yield <code>limit</code> as the cardinality.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets to intersect.
+     * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
+     *     <code>0</code> the range will be unlimited.
+     * @return Command Response - The cardinality of the intersection of the given sorted sets, or the
+     *     <code>limit</code> if reached.
+     */
+    public T zintercard(@NonNull String[] keys, long limit) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Integer.toString(keys.length)},
+                                keys,
+                                new String[] {LIMIT_REDIS_API, Long.toString(limit)}));
+        protobufTransaction.addCommands(buildCommand(ZInterCard, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Computes the intersection of sorted sets given by the specified <code>KeysOrWeightedKeys</code>
      * , and stores the result in <code>destination</code>. If <code>destination</code> already
      * exists, it is overwritten. Otherwise, a new sorted set will be created.<br>
@@ -2286,6 +2328,104 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                 buildArgs(
                         concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API}));
         protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.<br>
+     * To perform a <code>zinter</code> operation while specifying aggregation settings, use {@link
+     * #zinter(KeysOrWeightedKeys, Aggregate)}.<br>
+     * To get the elements with their scores, see {@link #zinterWithScores}.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
+     * #zinterWithScores}.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys intersection.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>. To perform a <code>zinter</code> operation while specifying
+     * aggregation settings, use {@link #zinterWithScores(KeysOrWeightedKeys, Aggregate)}.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinterWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API}));
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinterWithScores(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                keysOrWeightedKeys.toArgs(),
+                                aggregate.toArgs(),
+                                new String[] {WITH_SCORES_REDIS_API}));
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
         return getThis();
     }
 
@@ -2926,7 +3066,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T bitcount(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -2949,7 +3089,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T bitcount(@NonNull String key, long start, long end) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
 
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -2976,7 +3116,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs =
                 buildArgs(key, Long.toString(start), Long.toString(end), options.toString());
 
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -3147,6 +3287,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T setbit(@NonNull String key, long offset, long value) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(offset), Long.toString(value));
         protobufTransaction.addCommands(buildCommand(SetBit, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
+     * <code>offset</code> should be greater than or equal to zero.
+     *
+     * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param offset The index of the bit to return.
+     * @return Command Response - The bit at offset of the string. Returns zero if the key is empty or
+     *     if the positive <code>offset</code> exceeds the length of the string.
+     */
+    public T getbit(@NonNull String key, long offset) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(offset));
+        protobufTransaction.addCommands(buildCommand(GetBit, commandArgs));
         return getThis();
     }
 

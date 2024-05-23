@@ -669,11 +669,17 @@ public class CommandTests {
                 Arguments.of(
                         "zunion", null, clusterClient.zunion(new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
                 Arguments.of(
+                        "zinter",
+                        "6.2.0",
+                        clusterClient.zinter(new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                Arguments.of(
                         "zrangestore", null, clusterClient.zrangestore("abc", "zxy", new RangeByIndex(3, 1))),
                 Arguments.of(
                         "zinterstore",
                         null,
                         clusterClient.zinterstore("foo", new KeyArray(new String[] {"abc", "zxy", "lkn"}))),
+                Arguments.of(
+                        "zintercard", "7.0.0", clusterClient.zintercard(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("brpop", null, clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("pfcount", null, clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),

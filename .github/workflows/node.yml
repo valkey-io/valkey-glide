@@ -178,46 +178,25 @@ jobs:
             - name: Test compatibility
               run: npm test -- -t "set and get flow works"
               working-directory: ./node                   
-
-    start-self-hosted-runner:
-        if: github.repository_owner == 'aws'
-        runs-on: ubuntu-latest
-        steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                aws-access-key-id: ${{ secrets.AWS_EC2_ACCESS_KEY_ID }}
-                aws-secret-access-key: ${{ secrets.AWS_EC2_SECRET_ACCESS_KEY }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
-
-    # Since we are running a docker on a self-hosted runner, we need to make sure that the docker container has the same permissions as the self-hosted runner
-    # This is done by changing the ownership of the actions-runner directory to the user that is running the docker container
-    # We also need to checkout the repository, but since it is not possible to use checkout action with musl on arm we are doing it outside of the container,
-    # and later on in the container we just need to reset the repo to make sure we get the clean checkout of the action.
-    checkout-self-hosted-runner:
-      if: github.repository_owner == 'aws'
-      runs-on: [self-hosted, Linux, ARM64]
-      needs: start-self-hosted-runner
-      steps:
-        - name: Setup self-hosted runner access
-          run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
-        - name: Checkout
-          uses: actions/checkout@v4
-      
-    build-and-test-linux-musl-latest:
-        if: github.repository_owner == 'aws'
-        needs: [start-self-hosted-runner, checkout-self-hosted-runner]
+        
+    build-and-test-linux-musl-on-x86:
         name: Build and test Node wrapper on Linux musl
-        runs-on: [self-hosted, Linux, ARM64]
+        runs-on: ubuntu-latest
         container:
             image: node:alpine
-            options: --user root --privileged --rm
+            options: --user root --privileged
+
         steps:
-          - name: Setup musl on Linux ARM
+          - name: Install git
+            run: |
+                apk update
+                apk add git
+
+          - uses: actions/checkout@v4
+            with:
+                submodules: recursive
+
+          - name: Setup musl on Linux
             uses: ./.github/workflows/setup-musl-on-linux
             with:
                 workspace: $GITHUB_WORKSPACE
@@ -229,23 +208,11 @@ jobs:
             with:
                 os: ubuntu
                 named_os: linux
-                arch: arm64
-                target: aarch64-unknown-linux-musl
+                arch: x64
+                target: x86_64-unknown-linux-musl
                 github-token: ${{ secrets.GITHUB_TOKEN }}
-                npm_scope: ${{ vars.NPM_SCOPE }}
-                publish: false
           
           - name: Test compatibility
             shell: bash
             run: npm test -- -t "set and get flow works"
             working-directory: ./node
-
-          # Reset the repository to make sure we get the clean checkout of the action later in other actions.
-          # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
-          - name: Reset repository
-            if: always()
-            shell: bash
-            run: |
-                git reset --hard
-                git clean -xdf
-              
