@@ -11,10 +11,14 @@ import org.apache.commons.lang3.tuple.Pair;
 
 /**
  * Arguments for {@link SortedSetBaseCommands#zunion}, {@link
- * SortedSetBaseCommands#zunionWithScores}, and {@link SortedSetBaseCommands#zinterstore}.
+ * SortedSetBaseCommands#zunionWithScores}, {@link SortedSetBaseCommands#zinter}, {@link
+ * SortedSetBaseCommands#zinterWithScores}, {@link SortedSetBaseCommands#zunionstore}, and {@link
+ * SortedSetBaseCommands#zinterstore}.
  *
  * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+ * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
  * @see <a href="https://redis.io/commands/zinterstore/">redis.io</a> for more details.
+ * @see <a href="https://redis.io/commands/zunionstore/">redis.io</a> for more details.
  */
 public abstract class WeightAggregateOptions {
     public static final String WEIGHTS_REDIS_API = "WEIGHTS";
