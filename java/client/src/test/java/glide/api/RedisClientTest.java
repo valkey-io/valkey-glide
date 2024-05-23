@@ -53,6 +53,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -175,6 +176,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -4424,6 +4426,52 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Double> response = service.geodist(key, member1, member2, geoUnit);
         Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionLoad_returns_success() {
+        // setup
+        String code = "The best code ever";
+        String[] args = new String[] {code};
+        String value = "42";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionLoad), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionLoad(code);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionLoadReplace_returns_success() {
+        // setup
+        String code = "The best code ever";
+        String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
+        String value = "42";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionLoad), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionLoadReplace(code);
+        String payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

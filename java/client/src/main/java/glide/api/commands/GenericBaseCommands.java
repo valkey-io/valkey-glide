@@ -278,6 +278,8 @@ public interface GenericBaseCommands {
      */
     CompletableFuture<Long> ttl(String key);
 
+    // TODO move ScriptingAndFunctionsBaseCommands
+    // TODO add note about routing on cluster client
     /**
      * Invokes a Lua script.<br>
      * This method simplifies the process of invoking scripts on a Redis server by using an object

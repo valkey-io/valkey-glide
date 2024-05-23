@@ -40,6 +40,7 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
+import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RedisException;
 import glide.api.models.exceptions.RequestException;
@@ -60,6 +61,7 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.ValueSource;
 
 @Timeout(10) // seconds
 public class CommandTests {
@@ -746,5 +748,52 @@ public class CommandTests {
                         .getMessage()
                         .toLowerCase()
                         .contains("can't write against a read only replica"));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void functionLoad(boolean withRoute) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String libName = "mylib1C" + withRoute;
+        String code =
+                "#!lua name="
+                        + libName
+                        + " \n redis.register_function('myfunc1c"
+                        + withRoute
+                        + "', function(keys, args) return args[1] end)";
+        Route route = new SlotKeyRoute("1", PRIMARY);
+
+        var promise =
+                withRoute ? clusterClient.functionLoad(code, route) : clusterClient.functionLoad(code);
+        assertEquals(libName, promise.get());
+        // TODO test function with FCALL when fixed in redis-rs and implemented
+        // TODO test with FUNCTION LIST
+
+        // re-load library without overwriting
+        promise =
+                withRoute ? clusterClient.functionLoad(code, route) : clusterClient.functionLoad(code);
+        var executionException = assertThrows(ExecutionException.class, promise::get);
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("Library '" + libName + "' already exists"));
+
+        // re-load library with overwriting
+        var promise2 =
+                withRoute
+                        ? clusterClient.functionLoadReplace(code, route)
+                        : clusterClient.functionLoadReplace(code);
+        assertEquals(libName, promise2.get());
+        String newCode =
+                code
+                        + "\n redis.register_function('myfunc2c"
+                        + withRoute
+                        + "', function(keys, args) return #args end)";
+        promise2 =
+                withRoute
+                        ? clusterClient.functionLoadReplace(newCode, route)
+                        : clusterClient.functionLoadReplace(newCode);
+        assertEquals(libName, promise2.get());
+        // TODO test with FCALL
     }
 }

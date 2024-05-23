@@ -13,6 +13,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
@@ -22,10 +23,12 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
 import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
+import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -39,7 +42,10 @@ import lombok.NonNull;
  * client to Redis.
  */
 public class RedisClient extends BaseClient
-        implements GenericCommands, ServerManagementCommands, ConnectionManagementCommands {
+        implements GenericCommands,
+                ServerManagementCommands,
+                ConnectionManagementCommands,
+                ScriptingAndFunctionsCommands {
 
     protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -182,5 +188,19 @@ public class RedisClient extends BaseClient
                         new String[] {VERSION_REDIS_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
         return commandManager.submitNewCommand(Lolwut, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionLoad(@NonNull String libraryCode) {
+        return commandManager.submitNewCommand(
+                FunctionLoad, new String[] {libraryCode}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionLoadReplace(@NonNull String libraryCode) {
+        return commandManager.submitNewCommand(
+                FunctionLoad,
+                new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
+                this::handleStringResponse);
     }
 }
