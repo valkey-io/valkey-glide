@@ -16,6 +16,8 @@ import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
 import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
 import static glide.api.models.commands.ZaddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
@@ -38,6 +40,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
@@ -707,6 +710,12 @@ public class TransactionTests {
         transaction.functionLoad("pewpew").functionLoadWithReplace("ololo");
         results.add(Pair.of(FunctionLoad, buildArgs("pewpew")));
         results.add(Pair.of(FunctionLoad, buildArgs("REPLACE", "ololo")));
+
+        transaction.functionList().functionList("*").functionListWithCode().functionListWithCode("*");
+        results.add(Pair.of(FunctionList, buildArgs()));
+        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*")));
+        results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_REDIS_API)));
+        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*", WITH_CODE_REDIS_API)));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

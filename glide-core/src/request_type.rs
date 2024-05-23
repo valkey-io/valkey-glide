@@ -150,6 +150,7 @@ pub enum RequestType {
     FlushAll = 138,
     ZRandMember = 139,
     FunctionLoad = 150,
+    FunctionList = 151,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -303,6 +304,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FlushAll => RequestType::FlushAll,
             ProtobufRequestType::ZRandMember => RequestType::ZRandMember,
             ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
+            ProtobufRequestType::FunctionList => RequestType::FunctionList,
         }
     }
 }
@@ -452,6 +454,7 @@ impl RequestType {
             RequestType::FlushAll => Some(cmd("FLUSHALL")),
             RequestType::ZRandMember => Some(cmd("ZRANDMEMBER")),
             RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
+            RequestType::FunctionList => Some(get_two_word_command("FUNCTION", "LIST")),
         }
     }
 }

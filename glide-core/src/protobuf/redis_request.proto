@@ -182,6 +182,7 @@ enum RequestType {
     FlushAll = 138;
     ZRandMember = 139;
     FunctionLoad = 150;
+    FunctionList = 151;
 }
 
 message Command {

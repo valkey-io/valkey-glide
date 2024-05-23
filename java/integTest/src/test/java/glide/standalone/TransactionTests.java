@@ -2,6 +2,7 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.assertDeepEquals;
 import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -116,7 +117,7 @@ public class TransactionTests {
         Object[] expectedResult = builder.apply(transaction);
 
         Object[] results = client.exec(transaction).get();
-        assertArrayEquals(expectedResult, results);
+        assertDeepEquals(expectedResult, results, true);
     }
 
     @SneakyThrows

@@ -5,7 +5,7 @@ use redis::{
     cluster_routing::Routable, from_owned_redis_value, Cmd, ErrorKind, RedisResult, Value,
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub(crate) enum ExpectedReturnType {
     Map,
     MapOfStringToDouble,
@@ -21,6 +21,9 @@ pub(crate) enum ExpectedReturnType {
     Lolwut,
     ArrayOfArraysOfDoubleOrNull,
     ArrayOfKeyValuePairs,
+    ArrayOfMapsRecursive,
+    ArrayOfMaps,
+    StringOrSet,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -287,6 +290,66 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
+        // `FUNCTION LIST` returns an array of maps with nested list of maps.
+        // In RESP2 these maps are represented by arrays - we're going to convert them.
+        /* RESP2 response
+        1) 1) "library_name"
+           2) "mylib"
+           3) "engine"
+           4) "LUA"
+           5) "functions"
+           6) 1) 1) "name"
+                 2) "myfunc2"
+                 3) "description"
+                 4) (nil)
+                 5) "flags"
+                 6) (empty array)
+              2) 1) "name"
+                 ...
+        2) 1) "library_name"
+           ...
+
+        RESP3 response
+        1) 1# "library_name" => "mylib"
+           2# "engine" => "LUA"
+           3# "functions" =>
+              1) 1# "name" => "myfunc2"
+                 2# "description" => (nil)
+                 3# "flags" => (empty set)
+              2) 1# "name" => "myfunc"
+                 ...
+        2) 1# "library_name" => "mylib1"
+           ...
+        */
+        ExpectedReturnType::ArrayOfMapsRecursive => match value {
+            // empty array, or it is already contains a map (RESP3 response) - no conversion needed
+            Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Map(_)) => {
+                Ok(value)
+            }
+            Value::Array(array) => {
+                convert_array_of_flat_maps(array, Some(ExpectedReturnType::ArrayOfMaps))
+            }
+            _ => Err((ErrorKind::TypeError, "Response couldn't be converted").into()),
+        },
+        // Not used for a command, but used as a helper for `ArrayOfMapsRecursive` to process the inner map.
+        ExpectedReturnType::ArrayOfMaps => match value {
+            Value::Array(array) => {
+                convert_array_of_flat_maps(array, Some(ExpectedReturnType::StringOrSet))
+            }
+            // Due to recursion, it would be called to convert every map value, including simple strings, do nothing with them
+            Value::BulkString(_) | Value::SimpleString(_) | Value::VerbatimString { .. } => {
+                Ok(value)
+            }
+            _ => Err((ErrorKind::TypeError, "Response couldn't be converted").into()),
+        },
+        // Not used for a command, but used as a helper for `ArrayOfMaps` to process the inner map.
+        // It may contain a string (name, description) or set (flags), or nil (description).
+        // The set is stored as array. See comment for `ArrayOfMapsRecursive`.
+        ExpectedReturnType::StringOrSet => match value {
+            Value::Nil => Ok(value),
+            Value::Array(_) => convert_to_expected_type(value, Some(ExpectedReturnType::Set)),
+            _ => convert_to_expected_type(value, Some(ExpectedReturnType::BulkString)),
+        },
     }
 }
 
@@ -317,6 +380,48 @@ fn convert_array_elements(
         .map(|v| convert_to_expected_type(v.clone(), Some(element_type)).unwrap())
         .collect();
     Ok(Value::Array(converted_array))
+}
+
+/// Converts an array of flatten maps into an array of maps.
+/// Input:
+/// ```text
+/// 1) 1) "map 1 key 1"
+///    2) "map 1 value 1"
+///    3) "map 1 key 2"
+///    4) "map 1 value 2"
+///    ...
+/// 1) 1) "map 2 key 1"
+///    2) "map 2 value 1"
+///    ...
+/// ```
+/// Output:
+/// ```text
+///  1) 1# "map 1 key 1" => "map 1 value 1"
+///     2# "map 1 key 2" => "map 1 value 2"
+///     ...
+///  2) 1# "map 2 key 1" => "map 2 value 1"
+///     ...
+/// ```
+///
+/// `array` is an input.
+/// `value_expected_return_type` is the type of the values stored in the maps to convert to.
+fn convert_array_of_flat_maps(
+    array: Vec<Value>,
+    value_expected_return_type: Option<ExpectedReturnType>,
+) -> RedisResult<Value> {
+    let mut result: Vec<Value> = Vec::with_capacity(array.len());
+    for entry in array {
+        let Value::Array(entry_as_array) = entry else {
+            return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+        };
+        let map = convert_array_to_map(
+            entry_as_array,
+            Some(ExpectedReturnType::BulkString),
+            value_expected_return_type,
+        )?;
+        result.push(map);
+    }
+    Ok(Value::Array(result))
 }
 
 fn convert_array_to_map(
@@ -428,6 +533,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             }
         }
         b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
+        b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMapsRecursive),
         _ => None,
     }
 }
@@ -435,6 +541,140 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn convert_function_list() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("FUNCTION").arg("LIST")),
+            Some(ExpectedReturnType::ArrayOfMapsRecursive)
+        ));
+
+        let resp2_response = Value::Array(vec![
+            Value::Array(vec![
+                Value::BulkString("library_name".to_string().into_bytes()),
+                Value::BulkString("mylib1".to_string().into_bytes()),
+                Value::BulkString("engine".to_string().into_bytes()),
+                Value::BulkString("LUA".to_string().into_bytes()),
+                Value::BulkString("functions".to_string().into_bytes()),
+                Value::Array(vec![
+                    Value::Array(vec![
+                        Value::BulkString("name".to_string().into_bytes()),
+                        Value::BulkString("myfunc1".to_string().into_bytes()),
+                        Value::BulkString("description".to_string().into_bytes()),
+                        Value::Nil,
+                        Value::BulkString("flags".to_string().into_bytes()),
+                        Value::Array(vec![
+                            Value::BulkString("read".to_string().into_bytes()),
+                            Value::BulkString("write".to_string().into_bytes()),
+                        ]),
+                    ]),
+                    Value::Array(vec![
+                        Value::BulkString("name".to_string().into_bytes()),
+                        Value::BulkString("myfunc2".to_string().into_bytes()),
+                        Value::BulkString("description".to_string().into_bytes()),
+                        Value::BulkString("blahblah".to_string().into_bytes()),
+                        Value::BulkString("flags".to_string().into_bytes()),
+                        Value::Array(vec![]),
+                    ]),
+                ]),
+            ]),
+            Value::Array(vec![
+                Value::BulkString("library_name".to_string().into_bytes()),
+                Value::BulkString("mylib2".to_string().into_bytes()),
+                Value::BulkString("engine".to_string().into_bytes()),
+                Value::BulkString("LUA".to_string().into_bytes()),
+                Value::BulkString("functions".to_string().into_bytes()),
+                Value::Array(vec![]),
+                Value::BulkString("library_code".to_string().into_bytes()),
+                Value::BulkString("<code>".to_string().into_bytes()),
+            ]),
+        ]);
+
+        let resp3_response = Value::Array(vec![
+            Value::Map(vec![
+                (
+                    Value::BulkString("library_name".to_string().into_bytes()),
+                    Value::BulkString("mylib1".to_string().into_bytes()),
+                ),
+                (
+                    Value::BulkString("engine".to_string().into_bytes()),
+                    Value::BulkString("LUA".to_string().into_bytes()),
+                ),
+                (
+                    Value::BulkString("functions".to_string().into_bytes()),
+                    Value::Array(vec![
+                        Value::Map(vec![
+                            (
+                                Value::BulkString("name".to_string().into_bytes()),
+                                Value::BulkString("myfunc1".to_string().into_bytes()),
+                            ),
+                            (
+                                Value::BulkString("description".to_string().into_bytes()),
+                                Value::Nil,
+                            ),
+                            (
+                                Value::BulkString("flags".to_string().into_bytes()),
+                                Value::Set(vec![
+                                    Value::BulkString("read".to_string().into_bytes()),
+                                    Value::BulkString("write".to_string().into_bytes()),
+                                ]),
+                            ),
+                        ]),
+                        Value::Map(vec![
+                            (
+                                Value::BulkString("name".to_string().into_bytes()),
+                                Value::BulkString("myfunc2".to_string().into_bytes()),
+                            ),
+                            (
+                                Value::BulkString("description".to_string().into_bytes()),
+                                Value::BulkString("blahblah".to_string().into_bytes()),
+                            ),
+                            (
+                                Value::BulkString("flags".to_string().into_bytes()),
+                                Value::Set(vec![]),
+                            ),
+                        ]),
+                    ]),
+                ),
+            ]),
+            Value::Map(vec![
+                (
+                    Value::BulkString("library_name".to_string().into_bytes()),
+                    Value::BulkString("mylib2".to_string().into_bytes()),
+                ),
+                (
+                    Value::BulkString("engine".to_string().into_bytes()),
+                    Value::BulkString("LUA".to_string().into_bytes()),
+                ),
+                (
+                    Value::BulkString("functions".to_string().into_bytes()),
+                    Value::Array(vec![]),
+                ),
+                (
+                    Value::BulkString("library_code".to_string().into_bytes()),
+                    Value::BulkString("<code>".to_string().into_bytes()),
+                ),
+            ]),
+        ]);
+
+        assert_eq!(
+            convert_to_expected_type(
+                resp2_response.clone(),
+                Some(ExpectedReturnType::ArrayOfMapsRecursive)
+            )
+            .unwrap(),
+            resp3_response.clone()
+        );
+
+        assert_eq!(
+            convert_to_expected_type(
+                resp3_response.clone(),
+                Some(ExpectedReturnType::ArrayOfMapsRecursive)
+            )
+            .unwrap(),
+            resp3_response.clone()
+        );
+    }
 
     #[test]
     fn convert_lolwut() {

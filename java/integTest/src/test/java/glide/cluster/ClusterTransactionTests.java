@@ -2,6 +2,7 @@
 package glide.cluster;
 
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.assertDeepEquals;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -104,7 +105,7 @@ public class ClusterTransactionTests {
 
         SingleNodeRoute route = new SlotIdRoute(1, SlotType.PRIMARY);
         Object[] results = clusterClient.exec(transaction, route).get();
-        assertArrayEquals(expectedResult, results);
+        assertDeepEquals(expectedResult, results, true);
     }
 
     @Test

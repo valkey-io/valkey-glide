@@ -5,6 +5,8 @@ import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -28,6 +30,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
@@ -2916,6 +2919,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Loads a library to Redis and overwrites the existing library with the new contents.
      *
+     * @since Redis 7.0 and above
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @return Command Response - The library name that was loaded.
@@ -2923,6 +2927,58 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T functionLoadWithReplace(@NonNull String libraryCode) {
         ArgsArray commandArgs = buildArgs(FunctionLoadOptions.REPLACE.toString(), libraryCode);
         protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @return Command Response - Info about all libraries and their functions.
+     */
+    public T functionList() {
+        protobufTransaction.addCommands(buildCommand(FunctionList));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @return Command Response - Info about all libraries, their functions, and their code.
+     */
+    public T functionListWithCode() {
+        ArgsArray commandArgs = buildArgs(WITH_CODE_REDIS_API);
+        protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @param libNamePattern A wildcard pattern for matching library names.
+     * @return Command Response - Info about queried libraries and their functions.
+     */
+    public T functionList(@NonNull String libNamePattern) {
+        ArgsArray commandArgs = buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern);
+        protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @param libNamePattern A wildcard pattern for matching library names.
+     * @return Command Response - Info about queried libraries, their functions, and their code.
+     */
+    public T functionListWithCode(@NonNull String libNamePattern) {
+        ArgsArray commandArgs = buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API);
+        protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
         return getThis();
     }
 
