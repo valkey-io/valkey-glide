@@ -1259,11 +1259,11 @@ class TestCommands:
         assert await redis_client.smembers(key3) == {"a", "b"}
 
         # Overwrite existing set
-        assert await redis_client.sdiffstore(key3, [key1, key2]) == 2
-        assert await redis_client.smembers(key3) == {"a", "b"}
+        assert await redis_client.sdiffstore(key3, [key2, key1]) == 2
+        assert await redis_client.smembers(key3) == {"d", "e"}
 
         # Overwrite one of the source sets
-        assert await redis_client.sdiffstore(key3, [key1, key3]) == 1
+        assert await redis_client.sdiffstore(key3, [key2, key3]) == 1
         assert await redis_client.smembers(key3) == {"c"}
 
         # Diff between non-empty set and empty set
