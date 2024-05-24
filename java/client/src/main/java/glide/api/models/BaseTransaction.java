@@ -3556,7 +3556,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Pops one or more elements from the first non-empty list from the list of provided <code>keys
+     * Pops one or more elements from the first non-empty list from the provided <code>keys
      * </code>.
      *
      * @since Redis 7.0 and above.
@@ -3582,7 +3582,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Pops one element from the first non-empty list from the list of provided <code>keys</code>.
+     * Pops one element from the first non-empty list from the provided <code>keys</code>.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.

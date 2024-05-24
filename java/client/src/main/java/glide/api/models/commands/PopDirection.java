@@ -4,8 +4,7 @@ package glide.api.models.commands;
 import glide.api.commands.ListBaseCommands;
 
 /**
- * Enumeration representing element pop direction and count for the {@link ListBaseCommands#lmpop}
- * command.
+ * Enumeration representing element pop direction for the {@link ListBaseCommands#lmpop} command.
  */
 public enum PopDirection {
     /** Represents the option that elements should be popped from the left side of a list. */

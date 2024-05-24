@@ -375,7 +375,7 @@ public interface ListBaseCommands {
     CompletableFuture<Long> lpushx(String key, String[] elements);
 
     /**
-     * Pops one or more elements from the first non-empty list from the list of provided <code>keys
+     * Pops one or more elements from the first non-empty list from the provided <code>keys
      * </code>.
      *
      * @since Redis 7.0 and above.
@@ -388,16 +388,16 @@ public interface ListBaseCommands {
      * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.
      * @example
      *     <pre>{@code
-     * client.lpush("testKey", new String[] {"one", "two", "three"}.get();
-     * String[] result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L).get();
-     * String resultValue = result.get("testKey");
+     * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
+     * Map<String, String[]> result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L).get();
+     * String[] resultValue = result.get("testKey");
      * assertArrayEquals(new String[] {"three"}, resultValue);
      * }</pre>
      */
     CompletableFuture<Map<String, String[]>> lmpop(String[] keys, PopDirection direction, long count);
 
     /**
-     * Pops one element from the first non-empty list from the list of provided <code>keys</code>.
+     * Pops one element from the first non-empty list from the provided <code>keys</code>.
      *
      * @since Redis 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
@@ -408,9 +408,9 @@ public interface ListBaseCommands {
      * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
      * @example
      *     <pre>{@code
-     * client.lpush("testKey", new String[] {"one", "two", "three"}.get();
-     * String[] result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L).get();
-     * String resultValue = result.get("testKey");
+     * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
+     * Map<String, String[]> result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT).get();
+     * String[] resultValue = result.get("testKey");
      * assertArrayEquals(new String[] {"three"}, resultValue);
      * }</pre>
      */
