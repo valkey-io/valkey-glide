@@ -1117,6 +1117,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SDiffStore, [destination] + keys)
 
+    def smismember(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Checks whether each member is contained in the members of the set stored at `key`.
+
+        See https://valkey.io/commands/smismember for more details.
+
+        Args:
+            key (str): The key of the set to check.
+            members (List[str]): A list of members to check for existence in the set.
+
+        Command response:
+            List[bool]: A list of bool values, each indicating if the respective member exists in the set.
+        """
+        return self.append_command(RequestType.SMIsMember, [key] + members)
+
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.

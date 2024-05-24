@@ -191,6 +191,8 @@ async def transaction_test(
 
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
+    transaction.smismember(key7, ["foo", "baz"])
+    args.append([True, False])
     transaction.sdiffstore(key7, [key7])
     args.append(2)
     transaction.srem(key7, ["foo"])
