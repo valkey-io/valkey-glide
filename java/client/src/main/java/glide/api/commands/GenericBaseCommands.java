@@ -266,7 +266,7 @@ public interface GenericBaseCommands {
      * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
      * @param key The <code>key</code> to return its timeout.
      * @return TTL in seconds, <code>-2</code> if <code>key</code> does not exist, or <code>-1</code>
-     *     if <code>key</code> exists but has no associated expire.
+     *     if <code>key</code> exists but has no associated expiration.
      * @example
      *     <pre>{@code
      * Long timeRemaining = client.ttl("my_key").get();
@@ -281,13 +281,13 @@ public interface GenericBaseCommands {
     /**
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
      * will expire, in seconds.<br>
-     * To get expiration with millisecond precision, use {@link #pexpiretime(String)}.
+     * To get the expiration with millisecond precision, use {@link #pexpiretime(String)}.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/expiretime/">redis.io</a> for details.
      * @param key The <code>key</code> to return its expiration.
      * @return The expiration Unix timestamp in seconds. <code>-2</code> if <code>key</code> does not
-     *     exist, or <code>-1</code> if <code>key</code> exists but has no associated expire.
+     *     exist, or <code>-1</code> if <code>key</code> exists but has no associated expiration.
      * @example
      *     <pre>{@code
      * Long expiration = client.expiretime("my_key").get();
@@ -304,7 +304,7 @@ public interface GenericBaseCommands {
      * @see <a href="https://redis.io/commands/pexpiretime/">redis.io</a> for details.
      * @param key The <code>key</code> to return its expiration.
      * @return The expiration Unix timestamp in milliseconds. <code>-2</code> if <code>key</code> does
-     *     not exist, or <code>-1</code> if <code>key</code> exists but has no associated expire.
+     *     not exist, or <code>-1</code> if <code>key</code> exists but has no associated expiration.
      * @example
      *     <pre>{@code
      * Long expiration = client.pexpiretime("my_key").get();
