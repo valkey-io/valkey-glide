@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
@@ -18,6 +19,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
 import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
@@ -51,6 +53,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
@@ -115,6 +118,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
@@ -164,6 +168,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
@@ -704,6 +709,59 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hkeys(@NonNull String key) {
         protobufTransaction.addCommands(buildCommand(HKeys, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns a random field name from the hash value stored at <code>key</code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return Command Response - A random field name from the hash stored at <code>key</code>, or
+     *     <code>null</code> when the key does not exist.
+     */
+    public T hrandfield(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(HRandField, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Retrieves up to <code>count</code> random field names from the hash value stored at <code>key
+     * </code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param count The number of field names to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.
+     * @return Command Response - An <code>array</code> of random field names from the hash stored at
+     *     <code>key</code>, or an <code>empty array</code> when the key does not exist.
+     */
+    public T hrandfieldWithCount(@NonNull String key, long count) {
+        protobufTransaction.addCommands(buildCommand(HRandField, buildArgs(key, Long.toString(count))));
+        return getThis();
+    }
+
+    /**
+     * Retrieves up to <code>count</code> random field names along with their values from the hash
+     * value stored at <code>key</code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param count The number of field names to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.
+     * @return Command Response - A 2D <code>array</code> of <code>[fieldName, value]</code> <code>
+     *     arrays</code>, where <code>fieldName</code> is a random field name from the hash and <code>
+     *     value</code> is the associated value of the field name.<br>
+     *     If the hash does not exist or is empty, the response will be an empty <code>array</code>.
+     */
+    public T hrandfieldWithCountWithValues(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count), WITH_VALUES_REDIS_API);
+        protobufTransaction.addCommands(buildCommand(HRandField, commandArgs));
         return getThis();
     }
 
@@ -1511,7 +1569,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * If <code>member</code> does not exist in the sorted set, it is added with <code>
      * increment</code> as its score (as if its previous score was 0.0).<br>
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
-     * member is created.
+     * member is created.<br>
+     * <code>zaddIncr</code> with empty option acts as {@link #zincrby(String, double, String)}.
      *
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -1520,7 +1579,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param options The ZAdd options.
      * @return Command Response - The score of the member.<br>
      *     If there was a conflict with the options, the operation aborts and <code>null</code> is
-     *     returned.<br>
+     *     returned.
      */
     public T zaddIncr(
             @NonNull String key, @NonNull String member, double increment, @NonNull ZAddOptions options) {
@@ -1674,6 +1733,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
         ArgsArray commandArgs = buildArgs(arguments);
         protobufTransaction.addCommands(buildCommand(ZRandMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increments the score of <code>member</code> in the sorted set stored at <code>key</code> by
+     * <code>increment</code>.<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code>increment
+     * </code> as its score. If <code>key</code> does not exist, a new sorted set with the specified
+     * member as its sole member is created.
+     *
+     * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param increment The score increment.
+     * @param member A member of the sorted set.
+     * @return Command Response - The new score of <code>member</code>.
+     */
+    public T zincrby(@NonNull String key, double increment, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(key, Double.toString(increment), member);
+        protobufTransaction.addCommands(buildCommand(ZIncrBy, commandArgs));
         return getThis();
     }
 
@@ -3450,6 +3528,27 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         offsetType.toString());
 
         protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Perform a bitwise operation between multiple keys (containing string values) and store the
+     * result in the <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/bitop/">redis.io</a> for details.
+     * @param bitwiseOperation The bitwise operation to perform.
+     * @param destination The key that will store the resulting string.
+     * @param keys The list of keys to perform the bitwise operation on.
+     * @return Command Response - The size of the string stored in <code>destination</code>.
+     */
+    public T bitop(
+            @NonNull BitwiseOperation bitwiseOperation,
+            @NonNull String destination,
+            @NonNull String[] keys) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {bitwiseOperation.toString(), destination}, keys));
+
+        protobufTransaction.addCommands(buildCommand(BitOp, commandArgs));
         return getThis();
     }
 

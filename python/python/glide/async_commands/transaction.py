@@ -1076,7 +1076,7 @@ class BaseTransaction:
         """
         Gets the intersection of all the given sets.
 
-        See https://valkey.io/docs/latest/commands/sinter for more details.
+        See https://valkey.io/commands/sinter for more details.
 
         Args:
             keys (List[str]): The keys of the sets.
@@ -1086,6 +1086,23 @@ class BaseTransaction:
                 If one or more sets do not exist, an empty set will be returned.
         """
         return self.append_command(RequestType.SInter, keys)
+
+    def sinterstore(
+        self: TTransaction, destination: str, keys: List[str]
+    ) -> TTransaction:
+        """
+        Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+
+        See https://valkey.io/commands/sinterstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys from which to retrieve the set members.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SInterStore, [destination] + keys)
 
     def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
         """
@@ -1109,7 +1126,7 @@ class BaseTransaction:
         Stores the difference between the first set and all the successive sets in `keys` into a new set at
         `destination`.
 
-        See https://valkey.io/docs/latest/commands/sdiffstore for more details.
+        See https://valkey.io/commands/sdiffstore for more details.
 
         Args:
             destination (str): The key of the destination set.
@@ -1119,6 +1136,21 @@ class BaseTransaction:
             int: The number of elements in the resulting set.
         """
         return self.append_command(RequestType.SDiffStore, [destination] + keys)
+
+    def smismember(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Checks whether each member is contained in the members of the set stored at `key`.
+
+        See https://valkey.io/commands/smismember for more details.
+
+        Args:
+            key (str): The key of the set to check.
+            members (List[str]): A list of members to check for existence in the set.
+
+        Command response:
+            List[bool]: A list of bool values, each indicating if the respective member exists in the set.
+        """
+        return self.append_command(RequestType.SMIsMember, [key] + members)
 
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """

@@ -15,6 +15,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
 import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
@@ -38,6 +39,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
@@ -97,6 +99,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
@@ -143,6 +146,7 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -536,6 +540,29 @@ public abstract class BaseClient
                 HKeys,
                 new String[] {key},
                 response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String> hrandfield(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                HRandField, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> hrandfieldWithCount(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                HRandField,
+                new String[] {key, Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[][]> hrandfieldWithCountWithValues(
+            @NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                HRandField,
+                new String[] {key, Long.toString(count), WITH_VALUES_REDIS_API},
+                response -> castArrayofArrays(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -1118,6 +1145,13 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Double> zincrby(
+            @NonNull String key, double increment, @NonNull String member) {
+        String[] arguments = new String[] {key, Double.toString(increment), member};
+        return commandManager.submitNewCommand(ZIncrBy, arguments, this::handleDoubleResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zintercard(@NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, Integer.toString(keys.length));
         return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
@@ -1409,5 +1443,15 @@ public abstract class BaseClient
                     key, Long.toString(bit), Long.toString(start), Long.toString(end), options.toString()
                 };
         return commandManager.submitNewCommand(BitPos, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> bitop(
+            @NonNull BitwiseOperation bitwiseOperation,
+            @NonNull String destination,
+            @NonNull String[] keys) {
+        String[] arguments =
+                concatenateArrays(new String[] {bitwiseOperation.toString(), destination}, keys);
+        return commandManager.submitNewCommand(BitOp, arguments, this::handleLongResponse);
     }
 }

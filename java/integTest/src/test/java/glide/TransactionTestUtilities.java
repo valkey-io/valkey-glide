@@ -20,6 +20,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -205,6 +206,11 @@ public class TransactionTestUtilities {
                 .hgetall(hashKey1)
                 .hdel(hashKey1, new String[] {field1})
                 .hvals(hashKey1)
+                .hrandfield(hashKey1)
+                .hrandfieldWithCount(hashKey1, 2)
+                .hrandfieldWithCount(hashKey1, -2)
+                .hrandfieldWithCountWithValues(hashKey1, 2)
+                .hrandfieldWithCountWithValues(hashKey1, -2)
                 .hincrBy(hashKey1, field3, 5)
                 .hincrByFloat(hashKey1, field3, 5.5)
                 .hkeys(hashKey1);
@@ -219,6 +225,13 @@ public class TransactionTestUtilities {
             Map.of(field1, value1, field2, value2), // hgetall(hashKey1)
             1L, // hdel(hashKey1, new String[] {field1})
             new String[] {value2}, // hvals(hashKey1)
+            field2, // hrandfield(hashKey1)
+            new String[] {field2}, // hrandfieldWithCount(hashKey1, 2)
+            new String[] {field2, field2}, // hrandfieldWithCount(hashKey1, -2)
+            new String[][] {{field2, value2}}, // hrandfieldWithCountWithValues(hashKey1, 2)
+            new String[][] {
+                {field2, value2}, {field2, value2}
+            }, // hrandfieldWithCountWithValues(hashKey1, -2)
             5L, // hincrBy(hashKey1, field3, 5)
             10.5, // hincrByFloat(hashKey1, field3, 5.5)
             new String[] {field2, field3}, // hkeys(hashKey1)
@@ -317,6 +330,7 @@ public class TransactionTestUtilities {
                 .zrank(zSetKey1, "one")
                 .zrevrank(zSetKey1, "one")
                 .zaddIncr(zSetKey1, "one", 3)
+                .zincrby(zSetKey1, -3., "one")
                 .zrem(zSetKey1, new String[] {"one"})
                 .zcard(zSetKey1)
                 .zmscore(zSetKey1, new String[] {"two", "three"})
@@ -372,6 +386,7 @@ public class TransactionTestUtilities {
                     0L, // zrank(zSetKey1, "one")
                     2L, // zrevrank(zSetKey1, "one")
                     4.0, // zaddIncr(zSetKey1, "one", 3)
+                    1., // zincrby(zSetKey1, -3.3, "one")
                     1L, // zrem(zSetKey1, new String[] {"one"})
                     2L, // zcard(zSetKey1)
                     new Double[] {2.0, 3.0}, // zmscore(zSetKey1, new String[] {"two", "three"})
@@ -543,6 +558,8 @@ public class TransactionTestUtilities {
     private static Object[] bitmapCommands(BaseTransaction<?> transaction) {
         String key1 = "{bitmapKey}-1" + UUID.randomUUID();
         String key2 = "{bitmapKey}-2" + UUID.randomUUID();
+        String key3 = "{bitmapKey}-3" + UUID.randomUUID();
+        String key4 = "{bitmapKey}-4" + UUID.randomUUID();
 
         transaction
                 .set(key1, "foobar")
@@ -553,7 +570,10 @@ public class TransactionTestUtilities {
                 .getbit(key1, 1)
                 .bitpos(key1, 1)
                 .bitpos(key1, 1, 3)
-                .bitpos(key1, 1, 3, 5);
+                .bitpos(key1, 1, 3, 5)
+                .set(key3, "abcdef")
+                .bitop(BitwiseOperation.AND, key4, new String[] {key1, key3})
+                .get(key4);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
@@ -572,6 +592,9 @@ public class TransactionTestUtilities {
                     1L, // bitpos(key, 1)
                     25L, // bitpos(key, 1, 3)
                     25L, // bitpos(key, 1, 3, 5)
+                    OK, // set(key3, "abcdef")
+                    6L, // bitop(BitwiseOperation.AND, key4, new String[] {key1, key3})
+                    "`bc`ab", // get(key4)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {

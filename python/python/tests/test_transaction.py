@@ -193,6 +193,8 @@ async def transaction_test(
 
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
+    transaction.smismember(key7, ["foo", "baz"])
+    args.append([True, False])
     transaction.sdiffstore(key7, [key7])
     args.append(2)
     transaction.srem(key7, ["foo"])
@@ -211,6 +213,8 @@ async def transaction_test(
     args.append(2)
     transaction.sinter([key7, key7])
     args.append({"foo", "bar"})
+    transaction.sinterstore(key7, [key7, key7])
+    args.append(2)
     transaction.sdiff([key7, key7])
     args.append(set())
     transaction.spop_count(key7, 4)
