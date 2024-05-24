@@ -1052,6 +1052,86 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SUnionStore, [destination] + keys)
 
+    def sinter(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Gets the intersection of all the given sets.
+
+        See https://valkey.io/commands/sinter for more details.
+
+        Args:
+            keys (List[str]): The keys of the sets.
+
+        Command response:
+            Set[str]: A set of members which are present in all given sets.
+                If one or more sets do not exist, an empty set will be returned.
+        """
+        return self.append_command(RequestType.SInter, keys)
+
+    def sinterstore(
+        self: TTransaction, destination: str, keys: List[str]
+    ) -> TTransaction:
+        """
+        Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+
+        See https://valkey.io/commands/sinterstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys from which to retrieve the set members.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SInterStore, [destination] + keys)
+
+    def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Computes the difference between the first set and all the successive sets in `keys`.
+
+        See https://valkey.io/commands/sdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sets to diff.
+
+        Command response:
+            Set[str]: A set of elements representing the difference between the sets.
+                If any of the keys in `keys` do not exist, they are treated as empty sets.
+        """
+        return self.append_command(RequestType.SDiff, keys)
+
+    def sdiffstore(
+        self: TTransaction, destination: str, keys: List[str]
+    ) -> TTransaction:
+        """
+        Stores the difference between the first set and all the successive sets in `keys` into a new set at
+        `destination`.
+
+        See https://valkey.io/commands/sdiffstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys of the sets to diff.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SDiffStore, [destination] + keys)
+
+    def smismember(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Checks whether each member is contained in the members of the set stored at `key`.
+
+        See https://valkey.io/commands/smismember for more details.
+
+        Args:
+            key (str): The key of the set to check.
+            members (List[str]): A list of members to check for existence in the set.
+
+        Command response:
+            List[bool]: A list of bool values, each indicating if the respective member exists in the set.
+        """
+        return self.append_command(RequestType.SMIsMember, [key] + members)
+
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.

@@ -179,12 +179,16 @@ enum RequestType {
     BZPopMin = 137;
     FlushAll = 138;
     ZRandMember = 139;
-    Bitcount = 140;
+    BitCount = 140;
     BZMPop = 141;
     SetBit = 142;
     ZInterCard = 143;
     ZMPop = 144;
+    GetBit = 145;
+    ZInter = 146;
+    BitPos = 147;
     HStrlen = 148;
+    FunctionLoad = 150;
 }
 
 message Command {
