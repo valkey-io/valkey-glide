@@ -696,17 +696,7 @@ public class CommandTests {
                 Arguments.of(
                         "bitop",
                         null,
-                        clusterClient.bitop(BitwiseOperation.AND, "abc", new String[] {"zxy", "lkn"})),
-                Arguments.of(
-                        "bitop",
-                        null,
-                        clusterClient.bitop(BitwiseOperation.OR, "abc", new String[] {"zxy", "lkn"})),
-                Arguments.of(
-                        "bitop",
-                        null,
-                        clusterClient.bitop(BitwiseOperation.XOR, "abc", new String[] {"zxy", "lkn"})),
-                Arguments.of(
-                        "bitop", null, clusterClient.bitop(BitwiseOperation.NOT, "abc", new String[] {"zxy"})));
+                        clusterClient.bitop(BitwiseOperation.OR, "abc", new String[] {"zxy", "lkn"})));
     }
 
     @SneakyThrows

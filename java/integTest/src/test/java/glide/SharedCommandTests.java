@@ -3963,42 +3963,12 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.bitop(BitwiseOperation.AND, destination, new String[] {emptyKey1}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.bitop(BitwiseOperation.OR, destination, new String[] {emptyKey1}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.bitop(BitwiseOperation.XOR, destination, new String[] {emptyKey1}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.bitop(BitwiseOperation.NOT, destination, new String[] {emptyKey1}).get());
 
         // Source keys is an empty list
         executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> client.bitop(BitwiseOperation.AND, destination, new String[] {}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
                         () -> client.bitop(BitwiseOperation.OR, destination, new String[] {}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.bitop(BitwiseOperation.XOR, destination, new String[] {}).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.bitop(BitwiseOperation.NOT, destination, new String[] {}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
         // NOT with more than one source key

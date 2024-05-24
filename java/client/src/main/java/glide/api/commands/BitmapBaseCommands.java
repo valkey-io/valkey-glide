@@ -231,7 +231,7 @@ public interface BitmapBaseCommands {
      * client.set("key1", "A"); // "A" has binary value 01000001
      * client.set("key2", "B"); // "B" has binary value 01000010
      * Long payload = client.bitop(BitwiseOperation.AND, "destination", new String[] {key1, key2}).get();
-     * assert "@" == client.get("destination").get(); // "@" has binary value 01000000
+     * assert "@".equals(client.get("destination").get()); // "@" has binary value 01000000
      * assert payload == 1L; // The size of the resulting string is 1.
      * }</pre>
      */
