@@ -36,6 +36,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.PopDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitwiseOperation;
@@ -693,6 +694,10 @@ public class CommandTests {
                         "zmpop", "7.0.0", clusterClient.zmpop(new String[] {"abc", "zxy", "lkn"}, MAX)),
                 Arguments.of(
                         "bzmpop", "7.0.0", clusterClient.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1)),
+                Arguments.of(
+                        "lmpop",
+                        "7.0.0",
+                        clusterClient.lmpop(new String[] {"abc", "def"}, PopDirection.LEFT, 1L)),
                 Arguments.of(
                         "bitop",
                         null,
