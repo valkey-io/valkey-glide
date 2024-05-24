@@ -318,9 +318,9 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ZMPop => RequestType::ZMPop,
             ProtobufRequestType::GetBit => RequestType::GetBit,
             ProtobufRequestType::ZInter => RequestType::ZInter,
+            ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
             ProtobufRequestType::BitPos => RequestType::BitPos,
             ProtobufRequestType::HStrlen => RequestType::HStrlen,
-            ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
         }
     }
 }
@@ -476,9 +476,9 @@ impl RequestType {
             RequestType::ZMPop => Some(cmd("ZMPOP")),
             RequestType::GetBit => Some(cmd("GETBIT")),
             RequestType::ZInter => Some(cmd("ZINTER")),
+            RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
             RequestType::BitPos => Some(cmd("BITPOS")),
             RequestType::HStrlen => Some(cmd("HSTRLEN")),
-            RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
         }
     }
 }

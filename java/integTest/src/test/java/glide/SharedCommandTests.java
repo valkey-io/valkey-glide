@@ -798,7 +798,7 @@ public class SharedCommandTests {
         // Key exists, but it is not a hash
         assertEquals(OK, client.set(key2, "value").get());
         Exception executionException =
-                assertThrows(ExecutionException.class, () -> client.hkeys(key2).get());
+                assertThrows(ExecutionException.class, () -> client.hstrlen(key2, "field").get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 

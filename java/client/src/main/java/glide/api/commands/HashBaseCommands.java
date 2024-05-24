@@ -225,7 +225,7 @@ public interface HashBaseCommands {
     /**
      * Returns all field names in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://valkey.io/commands/hkeys/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return An <code>array</code> of field names in the hash, or an <code>empty array</code> when
      *     the key does not exist.
@@ -241,7 +241,7 @@ public interface HashBaseCommands {
      * Returns the string length of the value associated with <code>field</code> in the hash stored at
      * <code>key</code>.
      *
-     * @see <a href="https://valkey.io/commands/hstrlen/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hstrlen/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash.
      * @return The string length or <code>0</code> if <code>field</code> or <code>key</code> does not
