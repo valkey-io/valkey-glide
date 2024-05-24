@@ -3,54 +3,12 @@
 name: Continuous Deployment
 
 env:
-  MATRIX: |
-    build:
-      - {
-            OS: ubuntu,
-            NAMED_OS: linux,
-            RUNNER: ubuntu-latest,
-            ARCH: x64,
-            TARGET: x86_64-unknown-linux-gnu,
-        }
-      - {
-            OS: ubuntu,
-            NAMED_OS: linux,
-            RUNNER: [self-hosted, Linux, ARM64],
-            ARCH: arm64,
-            TARGET: aarch64-unknown-linux-gnu,
-        }
-      - {
-            OS: macos,
-            NAMED_OS: darwin,
-            RUNNER: macos-12,
-            ARCH: x64,
-            TARGET: x86_64-apple-darwin,
-        }
-      - {
-            OS: macos,
-            NAMED_OS: darwin,
-            RUNNER: macos-13-xlarge,
-            arch: arm64,
-            TARGET: aarch64-apple-darwin,
-        }
-      - {
-            OS: ubuntu,
-            NAMED_OS: linux,
-            ARCH: arm64,
-            TARGET: aarch64-unknown-linux-musl,
-            RUNNER: [self-hosted, Linux, ARM64],
-            IMAGE: 'node:alpine',
-            CONTAINER_OPTIONS: '--user root --privileged --rm',
-        }
-      - {
-            OS: ubuntu,
-            NAMED_OS: linux,
-            ARCH: x64,
-            TARGET: x86_64-unknown-linux-musl,
-            RUNNER: ubuntu-latest,
-            IMAGE: 'node:alpine',
-            CONTAINER_OPTIONS: '--user root --privileged',
-        }
+  MATRIX: '[{"OS": "ubuntu","NAMED_OS": "linux","RUNNER": "ubuntu-latest","ARCH": "x64","TARGET": "x86_64-unknown-linux-gnu"},
+          {"OS": "ubuntu","NAMED_OS": "linux","RUNNER": ["self-hosted", "Linux", "ARM64"],"ARCH": "arm64","TARGET": "aarch64-unknown-linux-gnu"},
+          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-12","ARCH": "x64","TARGET": "x86_64-apple-darwin"},
+          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-13-xlarge","ARCH": "arm64","TARGET": "aarch64-apple-darwin"},
+          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "arm64","TARGET": "aarch64-unknown-linux-musl","RUNNER": ["self-hosted", "Linux", "ARM64"],"IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged --rm"},
+          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "x64","TARGET": "x86_64-unknown-linux-musl","RUNNER": "ubuntu-latest","IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged"}]'
 
 on:
     pull_request:
@@ -75,7 +33,8 @@ jobs:
         steps:
             - name: Set matrix
               id: set-matrix
-              run: echo "::set-output name=matrix::${{ env.MATRIX }}"
+              run: |
+               echo "::set-output name=matrix::${{toJson( env.MATRIX )}}"
 
     start-self-hosted-runner:
         if: github.repository_owner == 'aws'
@@ -105,7 +64,8 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                ${{needs.output-matrix.outputs.matrix}}
+                build:
+                  ${{fromJson(needs.output-matrix.outputs.matrix)}}
                     
         steps:
             - name: Setup self-hosted runner access
@@ -331,20 +291,21 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                ${{needs.output-matrix.outputs.matrix}}
+                build:
+                  ${{fromJson(needs.output-matrix.outputs.matrix)}}
         steps:
             - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.IMAGE != 'node:alpine' }}
+              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
               run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
 
             - name: install Redis and git for alpine
-              if: ${{ matrix.build.IMAGE == 'node:alpine' }}
+              if: ${{ contains(matrix.build.TARGET, 'musl') }}
               run: |
                 apk update
                 apk add redis git
             
             - name: install Redis and Python for ubuntu
-              if: ${{ ! matrix.build.IMAGE == 'node:alpine' && ! contains(matrix.build.RUNNER, 'mac') }}
+              if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
               run: |
                 sudo apt-get update
                 sudo apt-get install redis-server python3
@@ -364,13 +325,13 @@ jobs:
                   arch: ${{ matrix.build.ARCH }}
 
             - name: Checkout
-              if: ${{ matrix.build.IMAGE != 'node:alpine' && matrix.build.ARCH != 'arm64' }}
+              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
               uses: actions/checkout@v4
               with:
                   submodules: "true"
 
             - name: Install node
-              if: ${{ matrix.build.IMAGE != 'node:alpine' }}
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
               uses: actions/setup-node@v3
               with:
                   node-version: "16"
@@ -388,7 +349,7 @@ jobs:
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
             - name: Reset repository
-              if: ${{ matrix.build.ARCH == 'arm64' }}
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
               shell: bash
               run: |
                 git reset --hard
