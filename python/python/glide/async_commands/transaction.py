@@ -1056,7 +1056,7 @@ class BaseTransaction:
         """
         Gets the intersection of all the given sets.
 
-        See https://valkey.io/docs/latest/commands/sinter for more details.
+        See https://valkey.io/commands/sinter for more details.
 
         Args:
             keys (List[str]): The keys of the sets.
@@ -1073,7 +1073,7 @@ class BaseTransaction:
         """
         Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
 
-        See https://valkey.io/docs/latest/commands/sinterstore for more details.
+        See https://valkey.io/commands/sinterstore for more details.
 
         Args:
             destination (str): The key of the destination set.
@@ -1106,7 +1106,7 @@ class BaseTransaction:
         Stores the difference between the first set and all the successive sets in `keys` into a new set at
         `destination`.
 
-        See https://valkey.io/docs/latest/commands/sdiffstore for more details.
+        See https://valkey.io/commands/sdiffstore for more details.
 
         Args:
             destination (str): The key of the destination set.

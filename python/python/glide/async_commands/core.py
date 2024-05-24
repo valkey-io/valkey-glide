@@ -1606,7 +1606,7 @@ class CoreCommands(Protocol):
         Stores the difference between the first set and all the successive sets in `keys` into a new set at
         `destination`.
 
-        See https://valkey.io/docs/latest/commands/sdiffstore for more details.
+        See https://valkey.io/commands/sdiffstore for more details.
 
         Note:
             When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
@@ -1633,7 +1633,7 @@ class CoreCommands(Protocol):
         """
         Gets the intersection of all the given sets.
 
-        See https://valkey.io/docs/latest/commands/sinter for more details.
+        See https://valkey.io/commands/sinter for more details.
 
         Note:
             When in cluster mode, all `keys` must map to the same hash slot.
@@ -1659,7 +1659,7 @@ class CoreCommands(Protocol):
         """
         Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
 
-        See https://valkey.io/docs/latest/commands/sinterstore for more details.
+        See https://valkey.io/commands/sinterstore for more details.
 
         Note:
             When in Cluster mode, all `keys` and `destination` must map to the same hash slot.
