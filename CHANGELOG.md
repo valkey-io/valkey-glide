@@ -36,6 +36,7 @@
 * Python: Added SINTER command ([#1434](https://github.com/aws/glide-for-redis/pull/1434))
 * Python: Added SDIFF command ([#1437](https://github.com/aws/glide-for-redis/pull/1437))
 * Python: Added SDIFFSTORE command ([#1449](https://github.com/aws/glide-for-redis/pull/1449))
+* Python: Added SINTERSTORE command (TODO: add PR link)
 
 
 #### Fixes

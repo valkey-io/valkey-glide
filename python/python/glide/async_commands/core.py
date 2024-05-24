@@ -1635,11 +1635,11 @@ class CoreCommands(Protocol):
 
         See https://valkey.io/docs/latest/commands/sinter for more details.
 
-        Args:
-            keys (List[str]): The keys of the sets.
-
         Note:
             When in cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the sets.
 
         Returns:
             Set[str]: A set of members which are present in all given sets.
@@ -1654,6 +1654,33 @@ class CoreCommands(Protocol):
                 None
         """
         return cast(Set[str], await self._execute_command(RequestType.SInter, keys))
+
+    async def sinterstore(self, destination: str, keys: List[str]) -> int:
+        """
+        Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+
+        See https://valkey.io/docs/latest/commands/sinterstore for more details.
+
+        Note:
+            When in Cluster mode, all `keys` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys from which to retrieve the set members.
+
+        Returns:
+            int: The number of elements in the resulting set.
+
+        Examples:
+            >>> await client.sadd("my_set1", ["member1", "member2"])
+            >>> await client.sadd("my_set2", ["member2", "member3"])
+            >>> await client.sinterstore("my_set3", ["my_set1", "my_set2"])
+                1  # One element was stored at "my_set3", and that element is the intersection of "my_set1" and "myset2".
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.SInterStore, [destination] + keys),
+        )
 
     async def sdiff(self, keys: List[str]) -> Set[str]:
         """
