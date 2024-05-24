@@ -37,6 +37,7 @@
 * Python: Added SDIFF command ([#1437](https://github.com/aws/glide-for-redis/pull/1437))
 * Python: Added SDIFFSTORE command ([#1449](https://github.com/aws/glide-for-redis/pull/1449))
 * Python: Added SINTERSTORE command ([#1459](https://github.com/aws/glide-for-redis/pull/1459))
+* Python: Added SMISMEMBER command ([#1461](https://github.com/aws/glide-for-redis/pull/1461))
 
 
 #### Fixes
