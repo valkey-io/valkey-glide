@@ -157,9 +157,11 @@ pub enum RequestType {
     GetBit = 145,
     ZInter = 146,
     BitPos = 147,
+    BitOp = 148,
     FunctionLoad = 150,
-    ExpireTime = 407,
-    PExpireTime = 418,
+    LMPop = 155,
+    ExpireTime = 160,
+    PExpireTime = 161,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -315,12 +317,14 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BitCount => RequestType::BitCount,
             ProtobufRequestType::BZMPop => RequestType::BZMPop,
             ProtobufRequestType::SetBit => RequestType::SetBit,
+            ProtobufRequestType::LMPop => RequestType::LMPop,
             ProtobufRequestType::ZInterCard => RequestType::ZInterCard,
             ProtobufRequestType::ZMPop => RequestType::ZMPop,
             ProtobufRequestType::GetBit => RequestType::GetBit,
             ProtobufRequestType::ZInter => RequestType::ZInter,
             ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
             ProtobufRequestType::BitPos => RequestType::BitPos,
+            ProtobufRequestType::BitOp => RequestType::BitOp,
             ProtobufRequestType::ExpireTime => RequestType::ExpireTime,
             ProtobufRequestType::PExpireTime => RequestType::PExpireTime,
         }
@@ -473,6 +477,7 @@ impl RequestType {
             RequestType::ZRandMember => Some(cmd("ZRANDMEMBER")),
             RequestType::BitCount => Some(cmd("BITCOUNT")),
             RequestType::BZMPop => Some(cmd("BZMPOP")),
+            RequestType::LMPop => Some(cmd("LMPOP")),
             RequestType::SetBit => Some(cmd("SETBIT")),
             RequestType::ZInterCard => Some(cmd("ZINTERCARD")),
             RequestType::ZMPop => Some(cmd("ZMPOP")),
@@ -480,6 +485,7 @@ impl RequestType {
             RequestType::ZInter => Some(cmd("ZINTER")),
             RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
             RequestType::BitPos => Some(cmd("BITPOS")),
+            RequestType::BitOp => Some(cmd("BITOP")),
             RequestType::ExpireTime => Some(cmd("EXPIRETIME")),
             RequestType::PExpireTime => Some(cmd("PEXPIRETIME")),
         }

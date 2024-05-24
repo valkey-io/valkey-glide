@@ -403,6 +403,26 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.DecrBy, [key, str(amount)])
 
+    def setrange(self: TTransaction, key: str, offset: int, value: str) -> TTransaction:
+        """
+        Overwrites part of the string stored at `key`, starting at the specified
+        `offset`, for the entire length of `value`.
+        If the `offset` is larger than the current length of the string at `key`,
+        the string is padded with zero bytes to make `offset` fit. Creates the `key`
+        if it doesn't exist.
+
+        See https://valkey.io/commands/setrange for more details.
+
+        Args:
+            key (str): The key of the string to update.
+            offset (int): The position in the string where `value` should be written.
+            value (str): The string written with `offset`.
+
+        Command response:
+            int: The length of the string stored at `key` after it was modified.
+        """
+        return self.append_command(RequestType.SetRange, [key, str(offset), value])
+
     def hset(
         self: TTransaction, key: str, field_value_map: Mapping[str, str]
     ) -> TTransaction:
@@ -1116,6 +1136,21 @@ class BaseTransaction:
             int: The number of elements in the resulting set.
         """
         return self.append_command(RequestType.SDiffStore, [destination] + keys)
+
+    def smismember(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Checks whether each member is contained in the members of the set stored at `key`.
+
+        See https://valkey.io/commands/smismember for more details.
+
+        Args:
+            key (str): The key of the set to check.
+            members (List[str]): A list of members to check for existence in the set.
+
+        Command response:
+            List[bool]: A list of bool values, each indicating if the respective member exists in the set.
+        """
+        return self.append_command(RequestType.SMIsMember, [key] + members)
 
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """

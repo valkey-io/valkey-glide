@@ -564,6 +564,28 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_setrange(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+
+        # test new key and existing key
+        assert await redis_client.setrange(key1, 0, "Hello World") == 11
+        assert await redis_client.setrange(key1, 6, "GLIDE") == 11
+
+        # offset > len
+        assert await redis_client.setrange(key1, 15, "GLIDE") == 20
+
+        # negative offset
+        with pytest.raises(RequestError):
+            assert await redis_client.setrange(key1, -1, "GLIDE")
+
+        # non-string key throws RequestError
+        assert await redis_client.lpush(key2, ["_"]) == 1
+        with pytest.raises(RequestError):
+            assert await redis_client.setrange(key2, 0, "_")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_hset_hget_hgetall(self, redis_client: TRedisClient):
         key = get_random_string(10)
         field = get_random_string(5)
@@ -1329,6 +1351,27 @@ class TestCommands:
         # Overwrite a key holding a non-set value
         assert await redis_client.sdiffstore(string_key, [key1, key2]) == 2
         assert await redis_client.smembers(string_key) == {"a", "b"}
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_smismember(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+
+        assert await redis_client.sadd(key1, ["one", "two"]) == 2
+        assert await redis_client.smismember(key1, ["two", "three"]) == [True, False]
+
+        assert await redis_client.smismember(non_existing_key, ["two"]) == [False]
+
+        # invalid argument - member list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.smismember(key1, [])
+
+        # source key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.smismember(string_key, ["two"])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

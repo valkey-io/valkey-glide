@@ -599,6 +599,36 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.IncrByFloat, [key, str(amount)]),
         )
 
+    async def setrange(self, key: str, offset: int, value: str) -> int:
+        """
+        Overwrites part of the string stored at `key`, starting at the specified
+        `offset`, for the entire length of `value`.
+        If the `offset` is larger than the current length of the string at `key`,
+        the string is padded with zero bytes to make `offset` fit. Creates the `key`
+        if it doesn't exist.
+
+        See https://valkey.io/commands/setrange for more details.
+
+        Args:
+            key (str): The key of the string to update.
+            offset (int): The position in the string where `value` should be written.
+            value (str): The string written with `offset`.
+
+        Returns:
+            int: The length of the string stored at `key` after it was modified.
+
+        Examples:
+            >>> await client.set("key", "Hello World")
+            >>> await client.setrange("key", 6, "Redis")
+                11  # The length of the string stored at `key` after it was modified.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.SetRange, [key, str(offset), value]
+            ),
+        )
+
     async def mset(self, key_value_map: Mapping[str, str]) -> TOK:
         """
         Set multiple keys to multiple values in a single atomic operation.
@@ -1707,6 +1737,29 @@ class CoreCommands(Protocol):
         return cast(
             Set[str],
             await self._execute_command(RequestType.SDiff, keys),
+        )
+
+    async def smismember(self, key: str, members: List[str]) -> List[bool]:
+        """
+        Checks whether each member is contained in the members of the set stored at `key`.
+
+        See https://valkey.io/commands/smismember for more details.
+
+        Args:
+            key (str): The key of the set to check.
+            members (List[str]): A list of members to check for existence in the set.
+
+        Returns:
+            List[bool]: A list of bool values, each indicating if the respective member exists in the set.
+
+        Examples:
+            >>> await client.sadd("set1", ["a", "b", "c"])
+            >>> await client.smismember("set1", ["b", "c", "d"])
+                [True, True, False]  # "b" and "c" are members of "set1", but "d" is not.
+        """
+        return cast(
+            List[bool],
+            await self._execute_command(RequestType.SMIsMember, [key] + members),
         )
 
     async def ltrim(self, key: str, start: int, end: int) -> TOK:

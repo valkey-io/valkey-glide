@@ -187,9 +187,11 @@ enum RequestType {
     GetBit = 145;
     ZInter = 146;
     BitPos = 147;
+    BitOp = 148;
     FunctionLoad = 150;
-    ExpireTime = 407;
-    PExpireTime = 418;
+    LMPop = 155;
+    ExpireTime = 160;
+    PExpireTime = 161;
 }
 
 message Command {
