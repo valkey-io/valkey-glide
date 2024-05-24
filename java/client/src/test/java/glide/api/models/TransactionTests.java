@@ -67,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
+import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -294,6 +295,9 @@ public class TransactionTests {
 
         transaction.hkeys("key");
         results.add(Pair.of(HKeys, buildArgs("key")));
+
+        transaction.hstrlen("key", "field");
+        results.add(Pair.of(HStrlen, buildArgs("key", "field")));
 
         transaction
                 .hrandfield("key")
