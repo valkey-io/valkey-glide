@@ -47,6 +47,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -3981,5 +3982,83 @@ public class SharedCommandTests {
                             () -> client.bitpos(key1, 1, 43, -2, BitmapIndexType.BIT).get());
             assertTrue(executionException.getCause() instanceof RequestException);
         }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bitop(BaseClient client) {
+        String key1 = "{key}-1".concat(UUID.randomUUID().toString());
+        String key2 = "{key}-2".concat(UUID.randomUUID().toString());
+        String emptyKey1 = "{key}-3".concat(UUID.randomUUID().toString());
+        String emptyKey2 = "{key}-4".concat(UUID.randomUUID().toString());
+        String destination = "{key}-5".concat(UUID.randomUUID().toString());
+        String[] keys = new String[] {key1, key2};
+        String[] emptyKeys = new String[] {emptyKey1, emptyKey2};
+        String value1 = "foobar";
+        String value2 = "abcdef";
+
+        assertEquals(OK, client.set(key1, value1).get());
+        assertEquals(OK, client.set(key2, value2).get());
+        assertEquals(6L, client.bitop(BitwiseOperation.AND, destination, keys).get());
+        assertEquals("`bc`ab", client.get(destination).get());
+        assertEquals(6L, client.bitop(BitwiseOperation.OR, destination, keys).get());
+        assertEquals("goofev", client.get(destination).get());
+
+        // Reset values for simplicity of results in XOR
+        assertEquals(OK, client.set(key1, "a").get());
+        assertEquals(OK, client.set(key2, "b").get());
+        assertEquals(1L, client.bitop(BitwiseOperation.XOR, destination, keys).get());
+        assertEquals("\u0003", client.get(destination).get());
+
+        // Test single source key
+        assertEquals(1L, client.bitop(BitwiseOperation.AND, destination, new String[] {key1}).get());
+        assertEquals("a", client.get(destination).get());
+        assertEquals(1L, client.bitop(BitwiseOperation.OR, destination, new String[] {key1}).get());
+        assertEquals("a", client.get(destination).get());
+        assertEquals(1L, client.bitop(BitwiseOperation.XOR, destination, new String[] {key1}).get());
+        assertEquals("a", client.get(destination).get());
+        assertEquals(1L, client.bitop(BitwiseOperation.NOT, destination, new String[] {key1}).get());
+        // First bit is flipped to 1 and throws 'utf-8' codec can't decode byte 0x9e in position 0:
+        // invalid start byte
+        // TODO: update once fix is implemented for https://github.com/aws/glide-for-redis/issues/1447
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.get(destination).get());
+        assertTrue(executionException.getCause() instanceof RuntimeException);
+        assertEquals(0, client.setbit(key1, 0, 1).get());
+        assertEquals(1L, client.bitop(BitwiseOperation.NOT, destination, new String[] {key1}).get());
+        assertEquals("\u001e", client.get(destination).get());
+
+        // Returns null when all keys hold empty strings
+        assertEquals(0L, client.bitop(BitwiseOperation.AND, destination, emptyKeys).get());
+        assertEquals(null, client.get(destination).get());
+        assertEquals(0L, client.bitop(BitwiseOperation.OR, destination, emptyKeys).get());
+        assertEquals(null, client.get(destination).get());
+        assertEquals(0L, client.bitop(BitwiseOperation.XOR, destination, emptyKeys).get());
+        assertEquals(null, client.get(destination).get());
+        assertEquals(
+                0L, client.bitop(BitwiseOperation.NOT, destination, new String[] {emptyKey1}).get());
+        assertEquals(null, client.get(destination).get());
+
+        // Exception thrown due to the key holding a value with the wrong type
+        assertEquals(1, client.sadd(emptyKey1, new String[] {value1}).get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.bitop(BitwiseOperation.AND, destination, new String[] {emptyKey1}).get());
+
+        // Source keys is an empty list
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.bitop(BitwiseOperation.OR, destination, new String[] {}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // NOT with more than one source key
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.bitop(BitwiseOperation.NOT, destination, new String[] {key1, key2}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 }
