@@ -497,11 +497,11 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"HGETALL" | b"XREAD" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => {
             Some(ExpectedReturnType::Map)
         }
-        b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
+        b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
         b"HEXISTS" | b"HSETNX" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT"
         | b"SISMEMBER" | b"PERSIST" | b"SMOVE" | b"RENAMENX" => Some(ExpectedReturnType::Boolean),
         b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
-        b"SMEMBERS" | b"SINTER" => Some(ExpectedReturnType::Set),
+        b"SMEMBERS" | b"SINTER" | b"SDIFF" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
@@ -517,7 +517,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"ZADD" => cmd
             .position(b"INCR")
             .map(|_| ExpectedReturnType::DoubleOrNull),
-        b"ZRANGE" | b"ZDIFF" | b"ZUNION" => cmd
+        b"ZRANGE" | b"ZDIFF" | b"ZUNION" | b"ZINTER" => cmd
             .position(b"WITHSCORES")
             .map(|_| ExpectedReturnType::MapOfStringToDouble),
         b"ZRANK" | b"ZREVRANK" => cmd

@@ -16,6 +16,7 @@ import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -334,5 +335,33 @@ public class CommandTests {
 
         assertEquals(OK, regularClient.flushall().get());
         assertEquals(OK, regularClient.flushall(FlushMode.ASYNC).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionLoad() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String libName = "mylib1C";
+        String code =
+                "#!lua name="
+                        + libName
+                        + " \n redis.register_function('myfunc1c', function(keys, args) return args[1] end)";
+        assertEquals(libName, regularClient.functionLoad(code).get());
+        // TODO test function with FCALL when fixed in redis-rs and implemented
+        // TODO test with FUNCTION LIST
+
+        // re-load library without overwriting
+        var executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.functionLoad(code).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("Library '" + libName + "' already exists"));
+
+        // re-load library with overwriting
+        assertEquals(libName, regularClient.functionLoadReplace(code).get());
+        String newCode =
+                code + "\n redis.register_function('myfunc2c', function(keys, args) return #args end)";
+        assertEquals(libName, regularClient.functionLoadReplace(newCode).get());
+        // TODO test with FCALL
     }
 }

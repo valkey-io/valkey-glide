@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
@@ -11,12 +12,14 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
+import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -33,11 +36,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
+import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -48,6 +53,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
@@ -113,9 +119,12 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -132,7 +141,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -160,6 +168,8 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -699,6 +709,59 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hkeys(@NonNull String key) {
         protobufTransaction.addCommands(buildCommand(HKeys, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns a random field name from the hash value stored at <code>key</code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return Command Response - A random field name from the hash stored at <code>key</code>, or
+     *     <code>null</code> when the key does not exist.
+     */
+    public T hrandfield(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(HRandField, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Retrieves up to <code>count</code> random field names from the hash value stored at <code>key
+     * </code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param count The number of field names to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.
+     * @return Command Response - An <code>array</code> of random field names from the hash stored at
+     *     <code>key</code>, or an <code>empty array</code> when the key does not exist.
+     */
+    public T hrandfieldWithCount(@NonNull String key, long count) {
+        protobufTransaction.addCommands(buildCommand(HRandField, buildArgs(key, Long.toString(count))));
+        return getThis();
+    }
+
+    /**
+     * Retrieves up to <code>count</code> random field names along with their values from the hash
+     * value stored at <code>key</code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param count The number of field names to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.
+     * @return Command Response - A 2D <code>array</code> of <code>[fieldName, value]</code> <code>
+     *     arrays</code>, where <code>fieldName</code> is a random field name from the hash and <code>
+     *     value</code> is the associated value of the field name.<br>
+     *     If the hash does not exist or is empty, the response will be an empty <code>array</code>.
+     */
+    public T hrandfieldWithCountWithValues(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count), WITH_VALUES_REDIS_API);
+        protobufTransaction.addCommands(buildCommand(HRandField, commandArgs));
         return getThis();
     }
 
@@ -1538,7 +1601,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * If <code>member</code> does not exist in the sorted set, it is added with <code>
      * increment</code> as its score (as if its previous score was 0.0).<br>
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
-     * member is created.
+     * member is created.<br>
+     * <code>zaddIncr</code> with empty option acts as {@link #zincrby(String, double, String)}.
      *
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -1547,7 +1611,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param options The ZAdd options.
      * @return Command Response - The score of the member.<br>
      *     If there was a conflict with the options, the operation aborts and <code>null</code> is
-     *     returned.<br>
+     *     returned.
      */
     public T zaddIncr(
             @NonNull String key, @NonNull String member, double increment, @NonNull ZAddOptions options) {
@@ -1701,6 +1765,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
         ArgsArray commandArgs = buildArgs(arguments);
         protobufTransaction.addCommands(buildCommand(ZRandMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increments the score of <code>member</code> in the sorted set stored at <code>key</code> by
+     * <code>increment</code>.<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code>increment
+     * </code> as its score. If <code>key</code> does not exist, a new sorted set with the specified
+     * member as its sole member is created.
+     *
+     * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param increment The score increment.
+     * @param member A member of the sorted set.
+     * @return Command Response - The new score of <code>member</code>.
+     */
+    public T zincrby(@NonNull String key, double increment, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(key, Double.toString(increment), member);
+        protobufTransaction.addCommands(buildCommand(ZIncrBy, commandArgs));
         return getThis();
     }
 
@@ -2362,6 +2445,104 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>.<br>
+     * To perform a <code>zinter</code> operation while specifying aggregation settings, use {@link
+     * #zinter(KeysOrWeightedKeys, Aggregate)}.<br>
+     * To get the elements with their scores, see {@link #zinterWithScores}.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members from sorted sets specified by the given <code>
+     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
+     * #zinterWithScores}.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys intersection.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>. To perform a <code>zinter</code> operation while specifying
+     * aggregation settings, use {@link #zinterWithScores(KeysOrWeightedKeys, Aggregate)}.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinterWithScores(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API}));
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the intersection of members and their scores from sorted sets specified by the given
+     * <code>keysOrWeightedKeys</code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
+     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
+     *     <ul>
+     *       <li>Use {@link KeyArray} for keys only.
+     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
+     *     </ul>
+     *
+     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
+     *     elements.
+     * @return Command Response - The resulting sorted set from the intersection.
+     */
+    public T zinterWithScores(
+            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                keysOrWeightedKeys.toArgs(),
+                                aggregate.toArgs(),
+                                new String[] {WITH_SCORES_REDIS_API}));
+        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
      * If the <code>key</code> doesn't exist, the stream is created.
      *
@@ -2792,14 +2973,63 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return zrangeWithScores(key, rangeQuery, false);
     }
 
-    // TODO add @link to ZMPOP when implemented
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given <code>keys</code>
+     * being checked in the order they are provided.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
+     * @return Command Response - A two-element <code>array</code> containing the key name of the set
+     *     from which the element was popped, and a member-score <code>Map</code> of the popped
+     *     element.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     */
+    public T zmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Integer.toString(keys.length)},
+                                keys,
+                                new String[] {modifier.toString()}));
+        protobufTransaction.addCommands(buildCommand(ZMPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
+     * </code> being checked in the order they are provided.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param count The number of elements to pop.
+     * @return Command Response - A two-element <code>array</code> containing the key name of the set
+     *     from which elements were popped, and a member-score <code>Map</code> of the popped
+     *     elements.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     */
+    public T zmpop(@NonNull String[] keys, @NonNull ScoreFilter modifier, long count) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Integer.toString(keys.length)},
+                                keys,
+                                new String[] {modifier.toString(), COUNT_REDIS_API, Long.toString(count)}));
+        protobufTransaction.addCommands(buildCommand(ZMPop, commandArgs));
+        return getThis();
+    }
+
     /**
      * Blocks the connection until it pops and returns a member-score pair from the first non-empty
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
-     * To pop more than one element use {@link #bzmpop(String[], ScoreFilter, double, long)}.<br>
-     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
@@ -2825,14 +3055,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return getThis();
     }
 
-    // TODO add @link to ZMPOP when implemented
     /**
      * Blocks the connection until it pops and returns multiple member-score pairs from the first
      * non-empty sorted set, with the given <code>keys</code> being checked in the order they are
      * provided.<br>
-     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.<br>
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @apiNote <code>BZMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
@@ -2998,7 +3227,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T bitcount(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -3021,7 +3250,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T bitcount(@NonNull String key, long start, long end) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
 
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -3044,11 +3273,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     start</code>, <code>end</code>, and <code>options</code>. Returns zero if the key is
      *     missing as it is treated as an empty string.
      */
-    public T bitcount(@NonNull String key, long start, long end, BitmapIndexType options) {
+    public T bitcount(@NonNull String key, long start, long end, @NonNull BitmapIndexType options) {
         ArgsArray commandArgs =
                 buildArgs(key, Long.toString(start), Long.toString(end), options.toString());
 
-        protobufTransaction.addCommands(buildCommand(Bitcount, commandArgs));
+        protobufTransaction.addCommands(buildCommand(BitCount, commandArgs));
         return getThis();
     }
 
@@ -3173,6 +3402,35 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Loads a library to Redis unless a library with the same name exists. Use {@link
+     * #functionLoadReplace} to replace existing libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
+     * @param libraryCode The source code that implements the library.
+     * @return Command Response - The library name that was loaded.
+     */
+    public T functionLoad(@NonNull String libraryCode) {
+        ArgsArray commandArgs = buildArgs(libraryCode);
+        protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Loads a library to Redis and overwrites a library with the same name if it exists.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
+     * @param libraryCode The source code that implements the library.
+     * @return Command Response - The library name that was loaded.
+     */
+    public T functionLoadReplace(@NonNull String libraryCode) {
+        ArgsArray commandArgs = buildArgs(FunctionLoadOptions.REPLACE.toString(), libraryCode);
+        protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Sets or clears the bit at <code>offset</code> in the string value stored at <code>key</code>.
      * The <code>offset</code> is a zero-based index, with <code>0</code> being the first element of
      * the list, <code>1</code> being the next element, and so on. The <code>offset</code> must be
@@ -3190,6 +3448,118 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T setbit(@NonNull String key, long offset, long value) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(offset), Long.toString(value));
         protobufTransaction.addCommands(buildCommand(SetBit, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
+     * <code>offset</code> should be greater than or equal to zero.
+     *
+     * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param offset The index of the bit to return.
+     * @return Command Response - The bit at offset of the string. Returns zero if the key is empty or
+     *     if the positive <code>offset</code> exceeds the length of the string.
+     */
+    public T getbit(@NonNull String key, long offset) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(offset));
+        protobufTransaction.addCommands(buildCommand(GetBit, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the position of the first bit matching the given <code>bit</code> value.
+     *
+     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
+     * @return Command Response - The position of the first occurrence matching <code>bit</code> in
+     *     the binary value of the string held at <code>key</code>. If <code>bit</code> is not found,
+     *     a <code>-1</code> is returned.
+     */
+    public T bitpos(@NonNull String key, long bit) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(bit));
+        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the position of the first bit matching the given <code>bit</code> value. The offset
+     * <code>start</code> is a zero-based index, with <code>0</code> being the first byte of the list,
+     * <code>1</code> being the next byte and so on. These offsets can also be negative numbers
+     * indicating offsets starting at the end of the list, with <code>-1</code> being the last byte of
+     * the list, <code>-2</code> being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
+     * @param start The starting offset.
+     * @return Command Response - The position of the first occurrence beginning at the <code>start
+     *     </code> offset of the <code>bit</code> in the binary value of the string held at <code>key
+     *     </code>. If <code>bit</code> is not found, a <code>-1</code> is returned.
+     */
+    public T bitpos(@NonNull String key, long bit, long start) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(bit), Long.toString(start));
+        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the position of the first bit matching the given <code>bit</code> value. The offsets
+     * <code>start</code> and <code>end</code> are zero-based indexes, with <code>0</code> being the
+     * first byte of the list, <code>1</code> being the next byte and so on. These offsets can also be
+     * negative numbers indicating offsets starting at the end of the list, with <code>-1</code> being
+     * the last byte of the list, <code>-2</code> being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
+     * @param start The starting offset.
+     * @param end The ending offset.
+     * @return Command Response - The position of the first occurrence from the <code>start</code> to
+     *     the <code>end</code> offsets of the <code>bit</code> in the binary value of the string held
+     *     at <code>key</code>. If <code>bit</code> is not found, a <code>-1</code> is returned.
+     */
+    public T bitpos(@NonNull String key, long bit, long start, long end) {
+        ArgsArray commandArgs =
+                buildArgs(key, Long.toString(bit), Long.toString(start), Long.toString(end));
+        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the position of the first bit matching the given <code>bit</code> value. The offset
+     * <code>offsetType</code> specifies whether the offset is a BIT or BYTE. If BIT is specified,
+     * <code>start==0</code> and <code>end==2</code> means to look at the first three bits. If BYTE is
+     * specified, <code>start==0</code> and <code>end==2</code> means to look at the first three bytes
+     * The offsets are zero-based indexes, with <code>0</code> being the first element of the list,
+     * <code>1</code> being the next, and so on. These offsets can also be negative numbers indicating
+     * offsets starting at the end of the list, with <code>-1</code> being the last element of the
+     * list, <code>-2</code> being the penultimate, and so on.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
+     * @param start The starting offset.
+     * @param end The ending offset.
+     * @param offsetType The index offset type. Could be either {@link BitmapIndexType#BIT} or {@link
+     *     BitmapIndexType#BYTE}.
+     * @return Command Response - The position of the first occurrence from the <code>start</code> to
+     *     the <code>end</code> offsets of the <code>bit</code> in the binary value of the string held
+     *     at <code>key</code>. If <code>bit</code> is not found, a <code>-1</code> is returned.
+     */
+    public T bitpos(
+            @NonNull String key, long bit, long start, long end, @NonNull BitmapIndexType offsetType) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        key,
+                        Long.toString(bit),
+                        Long.toString(start),
+                        Long.toString(end),
+                        offsetType.toString());
+
+        protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
         return getThis();
     }
 
@@ -3212,5 +3582,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         }
 
         return commandArgs.build();
+    }
+
+    /**
+     * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
+     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
+     * this special case.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param value The value to append.
+     * @return Command Response - The length of the string after appending the value.
+     */
+    public T append(@NonNull String key, @NonNull String value) {
+        ArgsArray commandArgs = buildArgs(key, value);
+        protobufTransaction.addCommands(buildCommand(Append, commandArgs));
+        return getThis();
     }
 }

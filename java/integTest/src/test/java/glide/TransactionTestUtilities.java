@@ -10,7 +10,6 @@ import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -20,6 +19,7 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -76,7 +76,10 @@ public class TransactionTestUtilities {
         return Stream.of(
                 Arguments.of(
                         "Server Management Commands",
-                        (TransactionBuilder) TransactionTestUtilities::serverManagementCommands));
+                        (TransactionBuilder) TransactionTestUtilities::serverManagementCommands),
+                Arguments.of(
+                        "Scripting and Function Commands",
+                        (TransactionBuilder) TransactionTestUtilities::scriptingAndFunctionsCommands));
     }
 
     private static Object[] genericCommands(BaseTransaction<?> transaction) {
@@ -164,6 +167,7 @@ public class TransactionTestUtilities {
                 .get(stringKey1)
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
                 .strlen(stringKey2)
+                .append(stringKey2, value2)
                 .mset(Map.of(stringKey1, value2, stringKey2, value1))
                 .mget(new String[] {stringKey1, stringKey2})
                 .incr(stringKey3)
@@ -179,6 +183,7 @@ public class TransactionTestUtilities {
             value1, // get(stringKey1)
             null, // set(stringKey2, value2, returnOldValue(true))
             (long) value1.length(), // strlen(key2)
+            Long.valueOf(value2.length() * 2), // append(key2, value2)
             OK, // mset(Map.of(stringKey1, value2, stringKey2, value1))
             new String[] {value2, value1}, // mget(new String[] {stringKey1, stringKey2})
             1L, // incr(stringKey3)
@@ -204,6 +209,11 @@ public class TransactionTestUtilities {
                 .hgetall(hashKey1)
                 .hdel(hashKey1, new String[] {field1})
                 .hvals(hashKey1)
+                .hrandfield(hashKey1)
+                .hrandfieldWithCount(hashKey1, 2)
+                .hrandfieldWithCount(hashKey1, -2)
+                .hrandfieldWithCountWithValues(hashKey1, 2)
+                .hrandfieldWithCountWithValues(hashKey1, -2)
                 .hincrBy(hashKey1, field3, 5)
                 .hincrByFloat(hashKey1, field3, 5.5)
                 .hkeys(hashKey1);
@@ -218,6 +228,13 @@ public class TransactionTestUtilities {
             Map.of(field1, value1, field2, value2), // hgetall(hashKey1)
             1L, // hdel(hashKey1, new String[] {field1})
             new String[] {value2}, // hvals(hashKey1)
+            field2, // hrandfield(hashKey1)
+            new String[] {field2}, // hrandfieldWithCount(hashKey1, 2)
+            new String[] {field2, field2}, // hrandfieldWithCount(hashKey1, -2)
+            new String[][] {{field2, value2}}, // hrandfieldWithCountWithValues(hashKey1, 2)
+            new String[][] {
+                {field2, value2}, {field2, value2}
+            }, // hrandfieldWithCountWithValues(hashKey1, -2)
             5L, // hincrBy(hashKey1, field3, 5)
             10.5, // hincrByFloat(hashKey1, field3, 5.5)
             new String[] {field2, field3}, // hkeys(hashKey1)
@@ -316,6 +333,7 @@ public class TransactionTestUtilities {
                 .zrank(zSetKey1, "one")
                 .zrevrank(zSetKey1, "one")
                 .zaddIncr(zSetKey1, "one", 3)
+                .zincrby(zSetKey1, -3., "one")
                 .zrem(zSetKey1, new String[] {"one"})
                 .zcard(zSetKey1)
                 .zmscore(zSetKey1, new String[] {"two", "three"})
@@ -341,6 +359,10 @@ public class TransactionTestUtilities {
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
                 .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .zinterstore(zSetKey1, new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
+                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
+                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .bzpopmax(new String[] {zSetKey2}, .1)
                 .zrandmember(zSetKey2)
                 .zrandmemberWithCount(zSetKey2, 1)
@@ -351,11 +373,14 @@ public class TransactionTestUtilities {
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
-                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
+                    .zmpop(new String[] {zSetKey3}, MAX)
+                    .zmpop(new String[] {zSetKey3}, MIN, 2)
                     .bzmpop(new String[] {zSetKey3}, MAX, .1)
                     .bzmpop(new String[] {zSetKey3}, MIN, .1, 2)
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
                     .zintercard(new String[] {zSetKey2, zSetKey3})
-                    .zintercard(new String[] {zSetKey2, zSetKey3}, 1);
+                    .zintercard(new String[] {zSetKey2, zSetKey3}, 2);
         }
 
         var expectedResults =
@@ -364,6 +389,7 @@ public class TransactionTestUtilities {
                     0L, // zrank(zSetKey1, "one")
                     2L, // zrevrank(zSetKey1, "one")
                     4.0, // zaddIncr(zSetKey1, "one", 3)
+                    1., // zincrby(zSetKey1, -3.3, "one")
                     1L, // zrem(zSetKey1, new String[] {"one"})
                     2L, // zcard(zSetKey1)
                     new Double[] {2.0, 3.0}, // zmscore(zSetKey1, new String[] {"two", "three"})
@@ -388,6 +414,10 @@ public class TransactionTestUtilities {
                     Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}));
                     Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}), MAX)
                     0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
+                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}))
+                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
+                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}))
+                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
                     new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
                     "one", // .zrandmember(zSetKey2)
                     new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
@@ -400,11 +430,14 @@ public class TransactionTestUtilities {
             return concatenateArrays(
                     expectedResults,
                     new Object[] {
-                        5L, // zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
-                        new Object[] {zSetKey3, Map.of("e", 5.)}, // bzmpop(zSetKey3, MAX, .1)
-                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // bzmpop(zSetKey3, MIN, .1, 2)
-                        2L, // zintercard(new String[] {zSetKey2, zSetKey3})
-                        1L, // zintercard(new String[] {zSetKey2, zSetKey3}, 1)
+                        7L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                        new Object[] {zSetKey3, Map.of("g", 7.)}, // zmpop(zSetKey3, MAX)
+                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
+                        new Object[] {zSetKey3, Map.of("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
+                        new Object[] {zSetKey3, Map.of("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                        6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                        4L, // zintercard(new String[] {zSetKey2, zSetKey3})
+                        2L, // zintercard(new String[] {zSetKey2, zSetKey3}, 2)
                     });
         }
         return expectedResults;
@@ -508,6 +541,23 @@ public class TransactionTestUtilities {
         };
     }
 
+    private static Object[] scriptingAndFunctionsCommands(BaseTransaction<?> transaction) {
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+            return new Object[0];
+        }
+
+        final String code =
+                "#!lua name=mylib1T \n"
+                        + " redis.register_function('myfunc1T', function(keys, args) return args[1] end)";
+
+        transaction.functionLoad(code).functionLoadReplace(code);
+
+        return new Object[] {
+            "mylib1T", // functionLoad(code)
+            "mylib1T" // functionLoadReplace(code)
+        };
+    }
+
     private static Object[] bitmapCommands(BaseTransaction<?> transaction) {
         String key1 = "{bitmapKey}-1" + UUID.randomUUID();
         String key2 = "{bitmapKey}-2" + UUID.randomUUID();
@@ -517,19 +567,29 @@ public class TransactionTestUtilities {
                 .bitcount(key1)
                 .bitcount(key1, 1, 1)
                 .setbit(key2, 1, 1)
-                .setbit(key2, 1, 0);
+                .setbit(key2, 1, 0)
+                .getbit(key1, 1)
+                .bitpos(key1, 1)
+                .bitpos(key1, 1, 3)
+                .bitpos(key1, 1, 3, 5);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction.bitcount(key1, 5, 30, BitmapIndexType.BIT);
+            transaction
+                    .bitcount(key1, 5, 30, BitmapIndexType.BIT)
+                    .bitpos(key1, 1, 44, 50, BitmapIndexType.BIT);
         }
 
         var expectedResults =
                 new Object[] {
-                    OK, // set(key, "foobar")
-                    26L, // bitcount(key)
-                    6L, // bitcount(key, 1, 1)
-                    0L, // setbit(key, 1, 1)
-                    1L, // setbit(key, 1, 0)
+                    OK, // set(key1, "foobar")
+                    26L, // bitcount(key1)
+                    6L, // bitcount(key1, 1, 1)
+                    0L, // setbit(key2, 1, 1)
+                    1L, // setbit(key2, 1, 0)
+                    1L, // getbit(key1, 1)
+                    1L, // bitpos(key, 1)
+                    25L, // bitpos(key, 1, 3)
+                    25L, // bitpos(key, 1, 3, 5)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -537,6 +597,7 @@ public class TransactionTestUtilities {
                     expectedResults,
                     new Object[] {
                         17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
+                        46L, // bitpos(key, 1, 44, 50, BitmapIndexType.BIT)
                     });
         }
         return expectedResults;

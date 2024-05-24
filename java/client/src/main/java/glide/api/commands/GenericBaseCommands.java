@@ -278,6 +278,8 @@ public interface GenericBaseCommands {
      */
     CompletableFuture<Long> ttl(String key);
 
+    // TODO move ScriptingAndFunctionsBaseCommands
+    // TODO add note about routing on cluster client
     /**
      * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
      * will expire.<br>
