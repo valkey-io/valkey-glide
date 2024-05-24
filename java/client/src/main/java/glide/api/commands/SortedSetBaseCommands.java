@@ -1391,8 +1391,8 @@ public interface SortedSetBaseCommands {
      * Increments the score of <code>member</code> in the sorted set stored at <code>key</code> by
      * <code>increment</code>.<br>
      * If <code>member</code> does not exist in the sorted set, it is added with <code>increment
-     * </code> as its score. If key does not exist, a new sorted set with the specified member as its
-     * sole member is created.
+     * </code> as its score. If <code>key</code> does not exist, a new sorted set with the specified
+     * member as its sole member is created.
      *
      * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
      * @param key The key of the sorted set.

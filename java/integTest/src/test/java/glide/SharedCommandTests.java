@@ -3026,7 +3026,7 @@ public class SharedCommandTests {
         assertEquals(3.5, client.zscore(key1, "value1").get());
 
         // Key exists, but it is not a sorted set
-        assertEquals(OK, client.set(key2, "bar").get());
+        assertEquals(2L, client.sadd(key2, new String[] {"one", "two"}).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.zincrby(key2, .5, "_").get());
         assertInstanceOf(RequestException.class, executionException.getCause());
