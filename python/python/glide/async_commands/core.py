@@ -1709,6 +1709,29 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SDiff, keys),
         )
 
+    async def smismember(self, key: str, members: List[str]) -> List[bool]:
+        """
+        Checks whether each member is contained in the members of the set stored at `key`.
+
+        See https://valkey.io/commands/smismember for more details.
+
+        Args:
+            key (str): The key of the set to check.
+            members (List[str]): A list of members to check for existence in the set.
+
+        Returns:
+            List[bool]: A list of bool values, each indicating if the respective member exists in the set.
+
+        Examples:
+            >>> await client.sadd("set1", ["a", "b", "c"])
+            >>> await client.smismember("set1", ["b", "c", "d"])
+                [True, True, False]  # "b" and "c" are members of "set1", but "d" is not.
+        """
+        return cast(
+            List[bool],
+            await self._execute_command(RequestType.SMIsMember, [key] + members),
+        )
+
     async def ltrim(self, key: str, start: int, end: int) -> TOK:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
