@@ -31,6 +31,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
@@ -73,6 +74,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
@@ -1370,6 +1372,38 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(TTL, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire.<br>
+     * To get expiration with millisecond precision, use {@link #pexpiretime(String)}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/expiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to return its expiration.
+     * @return Command response - Expiration timestamp in seconds, <code>-2</code> if <code>key</code>
+     *     does not exist, or <code>-1</code> if <code>key</code> exists but has no associated expire.
+     */
+    public T expiretime(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(ExpireTime, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/pexpiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to return its expiration.
+     * @return Command response - Expiration timestamp in milliseconds, <code>-2</code> if <code>key
+     *     </code> does not exist, or <code>-1</code> if <code>key</code> exists but has no associated
+     *     expire.
+     */
+    public T pexpiretime(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(PExpireTime, buildArgs(key)));
         return getThis();
     }
 

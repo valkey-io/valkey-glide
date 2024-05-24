@@ -184,6 +184,8 @@ enum RequestType {
     SetBit = 142;
     ZInterCard = 143;
     ZMPop = 144;
+    ExpireTime = 407;
+    PExpireTime = 418;
 }
 
 message Command {

@@ -1288,7 +1288,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void expire_pexpire_and_ttl_with_positive_timeout(BaseClient client) {
+    public void expire_pexpire_ttl_and_expiretime_with_positive_timeout(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "expire_timeout").get());
         assertTrue(client.expire(key, 10L).get());
@@ -1308,6 +1308,8 @@ public class SharedCommandTests {
             assertTrue(client.expire(key, 15L).get());
         } else {
             assertTrue(client.expire(key, 15L, ExpireOptions.HAS_EXISTING_EXPIRY).get());
+            assertTrue(client.expiretime(key).get() > Instant.now().getEpochSecond());
+            assertTrue(client.pexpiretime(key).get() > Instant.now().toEpochMilli());
         }
         assertTrue(client.ttl(key).get() <= 15L);
     }
@@ -1351,11 +1353,18 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void expire_pexpire_ttl_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+    public void expire_pexpire_ttl_and_expiretime_with_timestamp_in_the_past_or_negative_timeout(
+            BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertEquals(OK, client.set(key, "expire_with_past_timestamp").get());
+        // no timeout set yet
         assertEquals(-1L, client.ttl(key).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(-1L, client.expiretime(key).get());
+            assertEquals(-1L, client.pexpiretime(key).get());
+        }
+
         assertTrue(client.expire(key, -10L).get());
         assertEquals(-2L, client.ttl(key).get());
 
@@ -1385,13 +1394,17 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void expire_pexpire_and_ttl_with_non_existing_key(BaseClient client) {
+    public void expire_pexpire_ttl_and_expiretime_with_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertFalse(client.expire(key, 10L).get());
         assertFalse(client.pexpire(key, 10000L).get());
 
         assertEquals(-2L, client.ttl(key).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(-2L, client.expiretime(key).get());
+            assertEquals(-2L, client.pexpiretime(key).get());
+        }
     }
 
     @SneakyThrows
