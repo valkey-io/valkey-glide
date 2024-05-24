@@ -138,6 +138,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
@@ -3681,6 +3682,32 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Object[][]> response = service.zrandmemberWithCountWithScores(key, count);
         Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zincrby_returns_success() {
+        // setup
+        String key = "testKey";
+        double increment = 4.2;
+        String member = "member";
+        String[] arguments = new String[] {key, "4.2", member};
+        Double value = 3.14;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(ZIncrBy), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.zincrby(key, increment, member);
+        Double payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

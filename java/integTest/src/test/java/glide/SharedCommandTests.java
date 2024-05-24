@@ -3065,6 +3065,32 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zincrby(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        // key does not exist
+        assertEquals(2.5, client.zincrby(key1, 2.5, "value1").get());
+        assertEquals(2.5, client.zscore(key1, "value1").get());
+
+        // key exists, but value doesn't
+        assertEquals(-3.3, client.zincrby(key1, -3.3, "value2").get());
+        assertEquals(-3.3, client.zscore(key1, "value2").get());
+
+        // updating existing value in existing key
+        assertEquals(3.5, client.zincrby(key1, 1., "value1").get());
+        assertEquals(3.5, client.zscore(key1, "value1").get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(2L, client.sadd(key2, new String[] {"one", "two"}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zincrby(key2, .5, "_").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void type(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
         String stringKey = UUID.randomUUID().toString();

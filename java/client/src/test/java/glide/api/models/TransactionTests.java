@@ -128,6 +128,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
@@ -691,6 +692,9 @@ public class TransactionTests {
                                 .addArgs("5")
                                 .addArgs(WITH_SCORES_REDIS_API)
                                 .build()));
+
+        transaction.zincrby("key", 3.14, "value");
+        results.add(Pair.of(ZIncrBy, buildArgs("key", "3.14", "value")));
 
         transaction.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
