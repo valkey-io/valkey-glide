@@ -381,7 +381,7 @@ public interface ListBaseCommands {
      * @since Redis 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
-     * @param keys An of array of keys to lists.
+     * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     PopDirection}.
      * @param count The maximum number of popped elements.
@@ -402,7 +402,7 @@ public interface ListBaseCommands {
      * @since Redis 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
-     * @param keys An of array of keys to lists.
+     * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     PopDirection}.
      * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
