@@ -99,6 +99,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
@@ -694,6 +695,9 @@ public class TransactionTests {
 
         transaction.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
+
+        transaction.rename("key", "newKey");
+        results.add(Pair.of(Rename, buildArgs("key", "newKey")));
 
         transaction.renamenx("key", "newKey");
         results.add(Pair.of(RenameNX, buildArgs("key", "newKey")));
