@@ -1052,6 +1052,54 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SUnionStore, [destination] + keys)
 
+    def sinter(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Gets the intersection of all the given sets.
+
+        See https://valkey.io/docs/latest/commands/sinter for more details.
+
+        Args:
+            keys (List[str]): The keys of the sets.
+
+        Command response:
+            Set[str]: A set of members which are present in all given sets.
+                If one or more sets do not exist, an empty set will be returned.
+        """
+        return self.append_command(RequestType.SInter, keys)
+
+    def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Computes the difference between the first set and all the successive sets in `keys`.
+
+        See https://valkey.io/commands/sdiff for more details.
+
+        Args:
+            keys (List[str]): The keys of the sets to diff.
+
+        Command response:
+            Set[str]: A set of elements representing the difference between the sets.
+                If any of the keys in `keys` do not exist, they are treated as empty sets.
+        """
+        return self.append_command(RequestType.SDiff, keys)
+
+    def sdiffstore(
+        self: TTransaction, destination: str, keys: List[str]
+    ) -> TTransaction:
+        """
+        Stores the difference between the first set and all the successive sets in `keys` into a new set at
+        `destination`.
+
+        See https://valkey.io/docs/latest/commands/sdiffstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys of the sets to diff.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SDiffStore, [destination] + keys)
+
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
@@ -2226,7 +2274,7 @@ class BaseTransaction:
         Command response:
             Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
                 which elements were popped, and a member-score mapping of the popped elements. If no members could be
-                popped and the timeout expired, returns None.
+                popped, returns None.
 
         Since: Redis version 7.0.0.
         """

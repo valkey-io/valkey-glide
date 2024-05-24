@@ -30,7 +30,6 @@ import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.Script;
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -47,6 +46,7 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -166,6 +166,27 @@ public class SharedCommandTests {
     public void get_missing_value(BaseClient client) {
         String data = client.get("invalid").get();
         assertNull(data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void append(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String value1 = String.valueOf(UUID.randomUUID());
+        String key2 = UUID.randomUUID().toString();
+
+        // Append on non-existing string(similar to SET)
+        assertEquals(value1.length(), client.append(key1, value1).get());
+
+        assertEquals(value1.length() * 2L, client.append(key1, value1).get());
+        assertEquals(value1.concat(value1), client.get(key1).get());
+
+        // key exists but holding the wrong kind of value
+        assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.append(key2, "z").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
@@ -2482,6 +2503,131 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zinter(BaseClient client) {
+        String key1 = "{testKey}:1-" + UUID.randomUUID();
+        String key2 = "{testKey}:2-" + UUID.randomUUID();
+        String key3 = "{testKey}:3-" + UUID.randomUUID();
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
+        Map<String, Double> membersScores2 = Map.of("two", 3.5, "three", 3.0);
+
+        assertEquals(2, client.zadd(key1, membersScores1).get());
+        assertEquals(2, client.zadd(key2, membersScores2).get());
+
+        // Intersection results are aggregated by the sum of the scores of elements by default
+        assertArrayEquals(
+                new String[] {"two"}, client.zinter(new KeyArray(new String[] {key1, key2})).get());
+        assertEquals(
+                Map.of("two", 5.5), client.zinterWithScores(new KeyArray(new String[] {key1, key2})).get());
+
+        // Intersection results are aggregated by the max score of elements
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
+        assertEquals(
+                Map.of("two", 3.5),
+                client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
+
+        // Intersection results are aggregated by the min score of elements
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
+        assertEquals(
+                Map.of("two", 2.0),
+                client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
+
+        // Intersection results are aggregated by the sum of the scores of elements
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
+        assertEquals(
+                Map.of("two", 5.5),
+                client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0)))).get());
+        assertEquals(
+                Map.of("two", 11.0),
+                client
+                        .zinterWithScores(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
+
+        // Intersection results are aggregated by the minimum score,
+        // with scores for key1 multiplied by 1.0 and for key2 by -2.0.
+        assertArrayEquals(
+                new String[] {"two"},
+                client
+                        .zinter(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
+                        .get());
+        assertEquals(
+                Map.of("two", -7.0),
+                client
+                        .zinterWithScores(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
+                        .get());
+
+        // Non-existing Key - empty intersection
+        assertEquals(0, client.zinter(new KeyArray(new String[] {key1, key3})).get().length);
+        assertEquals(0, client.zinterWithScores(new KeyArray(new String[] {key1, key3})).get().size());
+
+        // empty key list
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zinter(new KeyArray(new String[0])).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zinter(new WeightedKeys(List.of())).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "value").get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zinter(new KeyArray(new String[] {key1, key3})).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zintercard(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
+        String key1 = "{zintercard}-" + UUID.randomUUID();
+        String key2 = "{zintercard}-" + UUID.randomUUID();
+        String key3 = "{zintercard}-" + UUID.randomUUID();
+
+        assertEquals(3, client.zadd(key1, Map.of("a", 1.0, "b", 2.0, "c", 3.0)).get());
+        assertEquals(3, client.zadd(key2, Map.of("b", 1.0, "c", 2.0, "d", 3.0)).get());
+
+        assertEquals(2L, client.zintercard(new String[] {key1, key2}).get());
+        assertEquals(0, client.zintercard(new String[] {key1, key3}).get());
+
+        assertEquals(2L, client.zintercard(new String[] {key1, key2}, 0).get());
+        assertEquals(1L, client.zintercard(new String[] {key1, key2}, 1).get());
+        assertEquals(2L, client.zintercard(new String[] {key1, key2}, 3).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zintercard(new String[] {key3}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // incorrect arguments
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zintercard(new String[0]).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zintercard(new String[0], 42).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zinterstore(BaseClient client) {
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
@@ -2539,6 +2685,57 @@ public class SharedCommandTests {
                         ExecutionException.class,
                         () -> client.zinterstore(key3, new KeyArray(new String[] {key4, key2})).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zmpop(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String key1 = "{zmpop}-1-" + UUID.randomUUID();
+        String key2 = "{zmpop}-2-" + UUID.randomUUID();
+        String key3 = "{zmpop}-3-" + UUID.randomUUID();
+
+        assertEquals(2, client.zadd(key1, Map.of("a1", 1., "b1", 2.)).get());
+        assertEquals(2, client.zadd(key2, Map.of("a2", .1, "b2", .2)).get());
+
+        assertArrayEquals(
+                new Object[] {key1, Map.of("b1", 2.)}, client.zmpop(new String[] {key1, key2}, MAX).get());
+        assertArrayEquals(
+                new Object[] {key2, Map.of("b2", .2, "a2", .1)},
+                client.zmpop(new String[] {key2, key1}, MAX, 10).get());
+
+        // nothing popped out
+        assertNull(client.zmpop(new String[] {key3}, MIN).get());
+        assertNull(client.zmpop(new String[] {key3}, MIN, 1).get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zmpop(new String[] {key3}, MAX).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zmpop(new String[] {key3}, MAX, 1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // incorrect argument
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zmpop(new String[] {key1}, MAX, 0).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zmpop(new String[0], MAX).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // check that order of entries in the response is preserved
+        var entries = new LinkedHashMap<String, Double>();
+        for (int i = 0; i < 10; i++) {
+            // a => 1., b => 2. etc
+            entries.put("" + ('a' + i), (double) i);
+        }
+        assertEquals(10, client.zadd(key2, entries).get());
+        assertEquals(entries, client.zmpop(new String[] {key2}, MIN, 10).get()[1]);
     }
 
     @SneakyThrows
@@ -3346,7 +3543,7 @@ public class SharedCommandTests {
     public void objectIdletime(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "").get());
-        Thread.sleep(1000);
+        Thread.sleep(2000);
         assertTrue(client.objectIdletime(key).get() > 0L);
     }
 
@@ -3637,5 +3834,96 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(ExecutionException.class, () -> client.setbit(key2, 1, 1).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void getbit(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String missingKey = UUID.randomUUID().toString();
+        String value = "foobar";
+
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(1, client.getbit(key1, 1).get());
+        assertEquals(0, client.getbit(key1, 1000).get());
+        assertEquals(0, client.getbit(missingKey, 1).get());
+        if (client instanceof RedisClient) {
+            assertEquals(
+                    1L, ((RedisClient) client).customCommand(new String[] {"SETBIT", key1, "5", "0"}).get());
+            assertEquals(0, client.getbit(key1, 5).get());
+        }
+
+        // Exception thrown due to the negative offset
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.getbit(key1, -1).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Exception thrown due to the key holding a value with the wrong type
+        assertEquals(1, client.sadd(key2, new String[] {value}).get());
+        executionException = assertThrows(ExecutionException.class, () -> client.getbit(key2, 1).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bitpos(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+        String value = "?f0obar"; // 00111111 01100110 00110000 01101111 01100010 01100001 01110010
+
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(0, client.bitpos(key1, 0).get());
+        assertEquals(2, client.bitpos(key1, 1).get());
+        assertEquals(9, client.bitpos(key1, 1, 1).get());
+        assertEquals(24, client.bitpos(key1, 0, 3, 5).get());
+
+        // Bitpos returns -1 for empty strings
+        assertEquals(-1, client.bitpos(key2, 1).get());
+        assertEquals(-1, client.bitpos(key2, 1, 1).get());
+        assertEquals(-1, client.bitpos(key2, 1, 3, 5).get());
+
+        // Exception thrown due to the key holding a value with the wrong type
+        assertEquals(1, client.sadd(key3, new String[] {value}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.bitpos(key3, 0).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.bitpos(key3, 1, 2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.bitpos(key3, 0, 1, 4).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(24, client.bitpos(key1, 0, 3, 5, BitmapIndexType.BYTE).get());
+            assertEquals(47, client.bitpos(key1, 1, 43, -2, BitmapIndexType.BIT).get());
+            assertEquals(-1, client.bitpos(key2, 1, 3, 5, BitmapIndexType.BYTE).get());
+            assertEquals(-1, client.bitpos(key2, 1, 3, 5, BitmapIndexType.BIT).get());
+
+            // Exception thrown due to the key holding a value with the wrong type
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitpos(key3, 1, 4, 5, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        } else {
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitpos(key1, 0, 3, 5, BitmapIndexType.BYTE).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitpos(key1, 1, 43, -2, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        }
     }
 }

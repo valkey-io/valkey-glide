@@ -1601,6 +1601,87 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SUnionStore, [destination] + keys),
         )
 
+    async def sdiffstore(self, destination: str, keys: List[str]) -> int:
+        """
+        Stores the difference between the first set and all the successive sets in `keys` into a new set at
+        `destination`.
+
+        See https://valkey.io/docs/latest/commands/sdiffstore for more details.
+
+        Note:
+            When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys of the sets to diff.
+
+        Returns:
+            int: The number of elements in the resulting set.
+
+        Examples:
+            >>> await client.sadd("set1", ["member1", "member2"])
+            >>> await client.sadd("set2", ["member1"])
+            >>> await client.sdiffstore("set3", ["set1", "set2"])
+                1  # Indicates that one member was stored in "set3", and that member is the diff between "set1" and "set2".
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.SDiffStore, [destination] + keys),
+        )
+
+    async def sinter(self, keys: List[str]) -> Set[str]:
+        """
+        Gets the intersection of all the given sets.
+
+        See https://valkey.io/docs/latest/commands/sinter for more details.
+
+        Args:
+            keys (List[str]): The keys of the sets.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
+
+        Returns:
+            Set[str]: A set of members which are present in all given sets.
+                If one or more sets do no exist, an empty set will be returned.
+
+        Examples:
+            >>> await client.sadd("my_set1", ["member1", "member2"])
+            >>> await client.sadd("my_set2", ["member2", "member3"])
+            >>> await client.sinter(["my_set1", "my_set2"])
+                 {"member2"} # sets "my_set1" and "my_set2" have one commom member
+            >>> await client.sinter([my_set1", "non_existing_set"])
+                None
+        """
+        return cast(Set[str], await self._execute_command(RequestType.SInter, keys))
+
+    async def sdiff(self, keys: List[str]) -> Set[str]:
+        """
+        Computes the difference between the first set and all the successive sets in `keys`.
+
+        See https://valkey.io/commands/sdiff for more details.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the sets to diff.
+
+        Returns:
+            Set[str]: A set of elements representing the difference between the sets.
+                If any of the keys in `keys` do not exist, they are treated as empty sets.
+
+        Examples:
+            >>> await client.sadd("set1", ["member1", "member2"])
+            >>> await client.sadd("set2", ["member1"])
+            >>> await client.sdiff("set1", "set2")
+                {"member2"}  # "member2" is in "set1" but not "set2"
+        """
+        return cast(
+            Set[str],
+            await self._execute_command(RequestType.SDiff, keys),
+        )
+
     async def ltrim(self, key: str, start: int, end: int) -> TOK:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
@@ -2560,7 +2641,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zrangestore for more details.
 
         Note:
-            When in Cluster mode, all `keys` must map to the same hash slot.
+            When in Cluster mode, `source` and `destination` must map to the same hash slot.
 
         Args:
             destination (str): The key for the destination sorted set.
@@ -3159,7 +3240,7 @@ class CoreCommands(Protocol):
         Returns:
             Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
                 which elements were popped, and a member-score mapping of the popped elements. If no members could be
-                popped and the timeout expired, returns None.
+                popped, returns None.
 
         Examples:
             >>> await client.zadd("zSet1", {"one": 1.0, "two": 2.0, "three": 3.0})

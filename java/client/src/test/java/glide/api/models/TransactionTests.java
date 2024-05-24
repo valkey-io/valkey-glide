@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
@@ -22,12 +23,14 @@ import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_A
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -42,11 +45,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
+import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -122,8 +127,11 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -140,7 +148,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.RangeOptions;
@@ -156,6 +163,7 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -193,6 +201,9 @@ public class TransactionTests {
 
         transaction.set("key", "value", SetOptions.builder().returnOldValue(true).build());
         results.add(Pair.of(Set, buildArgs("key", "value", RETURN_OLD_VALUE)));
+
+        transaction.append("key", "value");
+        results.add(Pair.of(Append, buildArgs("key", "value")));
 
         transaction.del(new String[] {"key1", "key2"});
         results.add(Pair.of(Del, buildArgs("key1", "key2")));
@@ -472,6 +483,10 @@ public class TransactionTests {
         transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
 
+        transaction.zmpop(new String[] {"key1", "key2"}, MAX).zmpop(new String[] {"key"}, MIN, 42);
+        results.add(Pair.of(ZMPop, buildArgs("2", "key1", "key2", "MAX")));
+        results.add(Pair.of(ZMPop, buildArgs("1", "key", "MIN", "COUNT", "42")));
+
         transaction
                 .bzmpop(new String[] {"key1", "key2"}, MAX, .1)
                 .bzmpop(new String[] {"key"}, MIN, .1, 42);
@@ -573,6 +588,46 @@ public class TransactionTests {
         results.add(
                 Pair.of(
                         ZUnion,
+                        buildArgs(
+                                "2",
+                                "key1",
+                                "key2",
+                                WEIGHTS_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                AGGREGATE_REDIS_API,
+                                Aggregate.MAX.toString(),
+                                WITH_SCORES_REDIS_API)));
+        transaction.zintercard(new String[] {"key1", "key2"}, 5);
+        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2", LIMIT_REDIS_API, "5")));
+
+        transaction.zintercard(new String[] {"key1", "key2"});
+        results.add(Pair.of(ZInterCard, buildArgs("2", "key1", "key2")));
+
+        transaction.zinter(new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2")));
+
+        transaction.zinterWithScores(new KeyArray(new String[] {"key1", "key2"}));
+        results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
+
+        transaction.zinter(new WeightedKeys(weightedKeys), Aggregate.MAX);
+        results.add(
+                Pair.of(
+                        ZInter,
+                        buildArgs(
+                                "2",
+                                "key1",
+                                "key2",
+                                WEIGHTS_REDIS_API,
+                                "10.0",
+                                "20.0",
+                                AGGREGATE_REDIS_API,
+                                Aggregate.MAX.toString())));
+
+        transaction.zinterWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
+        results.add(
+                Pair.of(
+                        ZInter,
                         buildArgs(
                                 "2",
                                 "key1",
@@ -705,6 +760,9 @@ public class TransactionTests {
         transaction.geoadd("key", Map.of("Place", new GeospatialData(10.0, 20.0)));
         results.add(Pair.of(GeoAdd, buildArgs("key", "10.0", "20.0", "Place")));
 
+        transaction.getbit("key", 1);
+        results.add(Pair.of(GetBit, buildArgs("key", "1")));
+
         transaction.geoadd(
                 "key",
                 Map.of("Place", new GeospatialData(10.0, 20.0)),
@@ -722,6 +780,10 @@ public class TransactionTests {
         transaction.geopos("key", new String[] {"Place"});
         results.add(Pair.of(GeoPos, buildArgs("key", "Place")));
 
+        transaction.functionLoad("pewpew").functionLoadReplace("ololo");
+        results.add(Pair.of(FunctionLoad, buildArgs("pewpew")));
+        results.add(Pair.of(FunctionLoad, buildArgs("REPLACE", "ololo")));
+
         transaction.geodist("key", "Place", "Place2");
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2")));
         transaction.geodist("key", "Place", "Place2", GeoUnit.KILOMETERS);
@@ -731,16 +793,25 @@ public class TransactionTests {
         results.add(Pair.of(GeoHash, buildArgs("key", "Place")));
 
         transaction.bitcount("key");
-        results.add(Pair.of(Bitcount, buildArgs("key")));
+        results.add(Pair.of(BitCount, buildArgs("key")));
 
         transaction.bitcount("key", 1, 1);
-        results.add(Pair.of(Bitcount, buildArgs("key", "1", "1")));
+        results.add(Pair.of(BitCount, buildArgs("key", "1", "1")));
 
         transaction.bitcount("key", 1, 1, BitmapIndexType.BIT);
-        results.add(Pair.of(Bitcount, buildArgs("key", "1", "1", BitmapIndexType.BIT.toString())));
+        results.add(Pair.of(BitCount, buildArgs("key", "1", "1", BitmapIndexType.BIT.toString())));
 
         transaction.setbit("key", 8, 1);
         results.add(Pair.of(SetBit, buildArgs("key", "8", "1")));
+
+        transaction.bitpos("key", 1);
+        results.add(Pair.of(BitPos, buildArgs("key", "1")));
+        transaction.bitpos("key", 0, 8);
+        results.add(Pair.of(BitPos, buildArgs("key", "0", "8")));
+        transaction.bitpos("key", 1, 8, 10);
+        results.add(Pair.of(BitPos, buildArgs("key", "1", "8", "10")));
+        transaction.bitpos("key", 1, 8, 10, BitmapIndexType.BIT);
+        results.add(Pair.of(BitPos, buildArgs("key", "1", "8", "10", BitmapIndexType.BIT.toString())));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
