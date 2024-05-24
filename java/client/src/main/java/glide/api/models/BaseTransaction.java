@@ -19,6 +19,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
 import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
@@ -167,6 +168,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
@@ -3526,6 +3528,27 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         offsetType.toString());
 
         protobufTransaction.addCommands(buildCommand(BitPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Perform a bitwise operation between multiple keys (containing string values) and store the
+     * result in the <code>destination</code>.
+     *
+     * @see <a href="https://redis.io/commands/bitop/">redis.io</a> for details.
+     * @param bitwiseOperation The bitwise operation to perform.
+     * @param destination The key that will store the resulting string.
+     * @param keys The list of keys to perform the bitwise operation on.
+     * @return Command Response - The size of the string stored in <code>destination</code>.
+     */
+    public T bitop(
+            @NonNull BitwiseOperation bitwiseOperation,
+            @NonNull String destination,
+            @NonNull String[] keys) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {bitwiseOperation.toString(), destination}, keys));
+
+        protobufTransaction.addCommands(buildCommand(BitOp, commandArgs));
         return getThis();
     }
 

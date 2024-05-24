@@ -20,6 +20,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -557,6 +558,8 @@ public class TransactionTestUtilities {
     private static Object[] bitmapCommands(BaseTransaction<?> transaction) {
         String key1 = "{bitmapKey}-1" + UUID.randomUUID();
         String key2 = "{bitmapKey}-2" + UUID.randomUUID();
+        String key3 = "{bitmapKey}-3" + UUID.randomUUID();
+        String key4 = "{bitmapKey}-4" + UUID.randomUUID();
 
         transaction
                 .set(key1, "foobar")
@@ -567,7 +570,10 @@ public class TransactionTestUtilities {
                 .getbit(key1, 1)
                 .bitpos(key1, 1)
                 .bitpos(key1, 1, 3)
-                .bitpos(key1, 1, 3, 5);
+                .bitpos(key1, 1, 3, 5)
+                .set(key3, "abcdef")
+                .bitop(BitwiseOperation.AND, key4, new String[] {key1, key3})
+                .get(key4);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
@@ -586,6 +592,9 @@ public class TransactionTestUtilities {
                     1L, // bitpos(key, 1)
                     25L, // bitpos(key, 1, 3)
                     25L, // bitpos(key, 1, 3, 5)
+                    OK, // set(key3, "abcdef")
+                    6L, // bitop(BitwiseOperation.AND, key4, new String[] {key1, key3})
+                    "`bc`ab", // get(key4)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {

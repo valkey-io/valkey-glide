@@ -187,6 +187,7 @@ enum RequestType {
     GetBit = 145;
     ZInter = 146;
     BitPos = 147;
+    BitOp = 148;
     FunctionLoad = 150;
 }
 
