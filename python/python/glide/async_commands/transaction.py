@@ -1056,7 +1056,7 @@ class BaseTransaction:
         """
         Gets the intersection of all the given sets.
 
-        See https://valkey.io/docs/latest/commands/sinter for more details.
+        See https://valkey.io/commands/sinter for more details.
 
         Args:
             keys (List[str]): The keys of the sets.
@@ -1066,6 +1066,23 @@ class BaseTransaction:
                 If one or more sets do not exist, an empty set will be returned.
         """
         return self.append_command(RequestType.SInter, keys)
+
+    def sinterstore(
+        self: TTransaction, destination: str, keys: List[str]
+    ) -> TTransaction:
+        """
+        Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+
+        See https://valkey.io/commands/sinterstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys from which to retrieve the set members.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SInterStore, [destination] + keys)
 
     def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
         """
@@ -1089,7 +1106,7 @@ class BaseTransaction:
         Stores the difference between the first set and all the successive sets in `keys` into a new set at
         `destination`.
 
-        See https://valkey.io/docs/latest/commands/sdiffstore for more details.
+        See https://valkey.io/commands/sdiffstore for more details.
 
         Args:
             destination (str): The key of the destination set.
