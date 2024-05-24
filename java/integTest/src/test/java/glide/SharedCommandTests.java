@@ -4,6 +4,7 @@ package glide;
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
@@ -32,6 +33,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.PopDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -4060,5 +4062,47 @@ public class SharedCommandTests {
                         ExecutionException.class,
                         () -> client.bitop(BitwiseOperation.NOT, destination, new String[] {key1, key2}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lmpop(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonListKey = "{key}-3" + UUID.randomUUID();
+        String[] singleKeyArray = {key1};
+        String[] multiKeyArray = {key2, key1};
+        long count = 1L;
+        Long arraySize = 5L;
+        String[] lpushArgs = {"one", "two", "three", "four", "five"};
+        Map<String, String[]> expected = Map.of(key1, new String[] {"five"});
+        Map<String, String[]> expected2 = Map.of(key2, new String[] {"one", "two"});
+
+        // nothing to be popped
+        assertNull(client.lmpop(singleKeyArray, PopDirection.LEFT).get());
+        assertNull(client.lmpop(singleKeyArray, PopDirection.LEFT, count).get());
+
+        // pushing to the arrays to be popped
+        assertEquals(arraySize, client.lpush(key1, lpushArgs).get());
+        assertEquals(arraySize, client.lpush(key2, lpushArgs).get());
+
+        // assert correct result from popping
+        Map<String, String[]> result = client.lmpop(singleKeyArray, PopDirection.LEFT).get();
+        assertDeepEquals(result, expected);
+
+        // assert popping multiple elements from the right
+        Map<String, String[]> result2 = client.lmpop(multiKeyArray, PopDirection.RIGHT, 2L).get();
+        assertDeepEquals(result2, expected2);
+
+        // key exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, "lmpop").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lmpop(new String[] {nonListKey}, PopDirection.LEFT).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }

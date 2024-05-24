@@ -11,6 +11,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.PopDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -242,6 +243,7 @@ public class TransactionTestUtilities {
         String listKey1 = "{ListKey}-1-" + UUID.randomUUID();
         String listKey2 = "{ListKey}-2-" + UUID.randomUUID();
         String listKey3 = "{ListKey}-3-" + UUID.randomUUID();
+        String listKey4 = "{ListKey}-4-" + UUID.randomUUID();
 
         transaction
                 .lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
@@ -262,25 +264,45 @@ public class TransactionTestUtilities {
                 .blpop(new String[] {listKey3}, 0.01)
                 .brpop(new String[] {listKey3}, 0.01);
 
-        return new Object[] {
-            5L, // lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
-            5L, // llen(listKey1)
-            value3, // lindex(key5, 0)
-            1L, // lrem(listKey1, 1, value1)
-            OK, // ltrim(listKey1, 1, -1)
-            new String[] {value3, value2}, // lrange(listKey1, 0, -2)
-            value3, // lpop(listKey1)
-            new String[] {value2, value1}, // lpopCount(listKey1, 2)
-            3L, // rpush(listKey2, new String[] {value1, value2, value2})
-            value2, // rpop(listKey2)
-            new String[] {value2, value1}, // rpopCount(listKey2, 2)
-            0L, // rpushx(listKey3, new String[] { "_" })
-            0L, // lpushx(listKey3, new String[] { "_" })
-            3L, // lpush(listKey3, new String[] { value1, value2, value3})
-            4L, // linsert(listKey3, AFTER, value2, value2)
-            new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
-            new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01)
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .lpush(listKey4, new String[] {value1, value2, value3})
+                    .lmpop(new String[] {listKey4}, PopDirection.LEFT)
+                    .lmpop(new String[] {listKey4}, PopDirection.LEFT, 2L);
+        } // listKey4 is now empty
+
+        var expectedResults =
+                new Object[] {
+                    5L, // lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
+                    5L, // llen(listKey1)
+                    value3, // lindex(key5, 0)
+                    1L, // lrem(listKey1, 1, value1)
+                    OK, // ltrim(listKey1, 1, -1)
+                    new String[] {value3, value2}, // lrange(listKey1, 0, -2)
+                    value3, // lpop(listKey1)
+                    new String[] {value2, value1}, // lpopCount(listKey1, 2)
+                    3L, // rpush(listKey2, new String[] {value1, value2, value2})
+                    value2, // rpop(listKey2)
+                    new String[] {value2, value1}, // rpopCount(listKey2, 2)
+                    0L, // rpushx(listKey3, new String[] { "_" })
+                    0L, // lpushx(listKey3, new String[] { "_" })
+                    3L, // lpush(listKey3, new String[] { value1, value2, value3})
+                    4L, // linsert(listKey3, AFTER, value2, value2)
+                    new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
+                    new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01)
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            return concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        3L, // lpush(listKey4, {value1, value2, value3})
+                        Map.of(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
+                        Map.of(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
+                    });
+        }
+
+        return expectedResults;
     }
 
     private static Object[] setCommands(BaseTransaction<?> transaction) {
