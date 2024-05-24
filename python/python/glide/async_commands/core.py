@@ -604,7 +604,7 @@ class CoreCommands(Protocol):
         Overwrites part of the string stored at `key`, starting at the specified
         `offset`, for the entire length of `value`.
         If the `offset` is larger than the current length of the string at `key`,
-        the string is padded with zero bytes to make `offset` fit. Create the `key`
+        the string is padded with zero bytes to make `offset` fit. Creates the `key`
         if it doesn't exist.
 
         See https://valkey.io/commands/setrange for more details.
