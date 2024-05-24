@@ -187,8 +187,10 @@ enum RequestType {
     GetBit = 145;
     ZInter = 146;
     BitPos = 147;
-    HStrlen = 148;
+    BitOp = 148;
+    HStrlen = 149;
     FunctionLoad = 150;
+    LMPop = 155;
 }
 
 message Command {

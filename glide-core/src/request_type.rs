@@ -157,8 +157,10 @@ pub enum RequestType {
     GetBit = 145,
     ZInter = 146,
     BitPos = 147,
-    HStrlen = 148,
+    BitOp = 148,
+    HStrlen = 149,
     FunctionLoad = 150,
+    LMPop = 155,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -314,12 +316,14 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BitCount => RequestType::BitCount,
             ProtobufRequestType::BZMPop => RequestType::BZMPop,
             ProtobufRequestType::SetBit => RequestType::SetBit,
+            ProtobufRequestType::LMPop => RequestType::LMPop,
             ProtobufRequestType::ZInterCard => RequestType::ZInterCard,
             ProtobufRequestType::ZMPop => RequestType::ZMPop,
             ProtobufRequestType::GetBit => RequestType::GetBit,
             ProtobufRequestType::ZInter => RequestType::ZInter,
             ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
             ProtobufRequestType::BitPos => RequestType::BitPos,
+            ProtobufRequestType::BitOp => RequestType::BitOp,
             ProtobufRequestType::HStrlen => RequestType::HStrlen,
         }
     }
@@ -471,6 +475,7 @@ impl RequestType {
             RequestType::ZRandMember => Some(cmd("ZRANDMEMBER")),
             RequestType::BitCount => Some(cmd("BITCOUNT")),
             RequestType::BZMPop => Some(cmd("BZMPOP")),
+            RequestType::LMPop => Some(cmd("LMPOP")),
             RequestType::SetBit => Some(cmd("SETBIT")),
             RequestType::ZInterCard => Some(cmd("ZINTERCARD")),
             RequestType::ZMPop => Some(cmd("ZMPOP")),
@@ -478,6 +483,7 @@ impl RequestType {
             RequestType::ZInter => Some(cmd("ZINTER")),
             RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
             RequestType::BitPos => Some(cmd("BITPOS")),
+            RequestType::BitOp => Some(cmd("BITOP")),
             RequestType::HStrlen => Some(cmd("HSTRLEN")),
         }
     }

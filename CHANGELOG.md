@@ -38,7 +38,7 @@
 * Python: Added SDIFFSTORE command ([#1449](https://github.com/aws/glide-for-redis/pull/1449))
 * Python: Added SINTERSTORE command ([#1459](https://github.com/aws/glide-for-redis/pull/1459))
 * Python: Added SMISMEMBER command ([#1461](https://github.com/aws/glide-for-redis/pull/1461))
-
+* Python: Added SETRANGE command ([#1453](https://github.com/aws/glide-for-redis/pull/1453)
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
