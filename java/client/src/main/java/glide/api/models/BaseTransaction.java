@@ -1450,7 +1450,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/expiretime/">redis.io</a> for details.
-     * @param key The <code>key</code> to return its expiration.
+     * @param key The <code>key</code> to determine the expiration value of.
      * @return Command response - The expiration Unix timestamp in seconds, <code>-2</code> if <code>
      *     key</code> does not exist, or <code>-1</code> if <code>key</code> exists but has no
      *     associated expiration.
@@ -1466,7 +1466,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/pexpiretime/">redis.io</a> for details.
-     * @param key The <code>key</code> to return its expiration.
+     * @param key The <code>key</code> to determine the expiration value of.
      * @return Command response - The expiration Unix timestamp in milliseconds, <code>-2</code> if
      *     <code>key
      *     </code> does not exist, or <code>-1</code> if <code>key</code> exists but has no associated
