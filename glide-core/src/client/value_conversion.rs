@@ -497,7 +497,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"HGETALL" | b"XREAD" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => {
             Some(ExpectedReturnType::Map)
         }
-        b"INCRBYFLOAT" | b"HINCRBYFLOAT" => Some(ExpectedReturnType::Double),
+        b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
         b"HEXISTS" | b"HSETNX" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT"
         | b"SISMEMBER" | b"PERSIST" | b"SMOVE" | b"RENAMENX" => Some(ExpectedReturnType::Boolean),
         b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),

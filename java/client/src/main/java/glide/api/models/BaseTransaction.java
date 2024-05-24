@@ -110,6 +110,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
@@ -1502,7 +1503,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * If <code>member</code> does not exist in the sorted set, it is added with <code>
      * increment</code> as its score (as if its previous score was 0.0).<br>
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
-     * member is created.
+     * member is created.<br>
+     * <code>zaddIncr</code> with empty option acts as {@link #zincrby(String, double, String)}.
      *
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -1511,7 +1513,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param options The ZAdd options.
      * @return Command Response - The score of the member.<br>
      *     If there was a conflict with the options, the operation aborts and <code>null</code> is
-     *     returned.<br>
+     *     returned.
      */
     public T zaddIncr(
             @NonNull String key, @NonNull String member, double increment, @NonNull ZAddOptions options) {
@@ -1665,6 +1667,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
         ArgsArray commandArgs = buildArgs(arguments);
         protobufTransaction.addCommands(buildCommand(ZRandMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Increments the score of <code>member</code> in the sorted set stored at <code>key</code> by
+     * <code>increment</code>.<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code>increment
+     * </code> as its score. If key does not exist, a new sorted set with the specified member as its
+     * sole member is created.
+     *
+     * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param increment The score increment.
+     * @param member A member of the sorted set.
+     * @return Command Response - The new score of <code>member</code>.
+     */
+    public T zincrby(@NonNull String key, double increment, @NonNull String member) {
+        ArgsArray commandArgs = buildArgs(key, Double.toString(increment), member);
+        protobufTransaction.addCommands(buildCommand(ZIncrBy, commandArgs));
         return getThis();
     }
 

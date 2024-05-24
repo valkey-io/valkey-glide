@@ -127,7 +127,8 @@ public interface SortedSetBaseCommands {
      * If <code>member</code> does not exist in the sorted set, it is added with <code>
      * increment</code> as its score (as if its previous score was <code>0.0</code>).<br>
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
-     * member is created.
+     * member is created.<br>
+     * <code>zaddIncr</code> with empty option acts as {@link #zincrby(String, double, String)}.
      *
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -139,11 +140,11 @@ public interface SortedSetBaseCommands {
      *     returned.
      * @example
      *     <pre>{@code
-     * ZaddOptions options = ZaddOptions.builder().conditionalChange(ONLY_IF_DOES_NOT_EXIST).build();
+     * ZAddOptions options = ZaddOptions.builder().conditionalChange(ONLY_IF_DOES_NOT_EXIST).build();
      * Double num = client.zaddIncr("mySortedSet", member, 5.0, options).get();
      * assert num == 5.0;
      *
-     * options = ZaddOptions.builder().updateOptions(SCORE_LESS_THAN_CURRENT).build();
+     * options = ZAddOptions.builder().updateOptions(SCORE_LESS_THAN_CURRENT).build();
      * Double num = client.zaddIncr("existingSortedSet", member, 3.0, options).get();
      * assert num == null;
      * }</pre>
@@ -1209,7 +1210,7 @@ public interface SortedSetBaseCommands {
      *     </code>.
      * @example
      *     <pre>{@code
-     * Object[][] data = client.zrandmemberWithCountWithScores(key1, -3).get();
+     * Object[][] data = client.zrandmemberWithCountWithScores("mySortedSet", -3).get();
      * assert data.length == 3;
      * for (Object[] memberScorePair : data) {
      *     System.out.printf("Member: '%s', score: %d", memberScorePair[0], memberScorePair[1]);
@@ -1217,4 +1218,24 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[][]> zrandmemberWithCountWithScores(String key, long count);
+
+    /**
+     * Increments the score of <code>member</code> in the sorted set stored at <code>key</code> by
+     * <code>increment</code>.<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code>increment
+     * </code> as its score. If key does not exist, a new sorted set with the specified member as its
+     * sole member is created.
+     *
+     * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param increment The score increment.
+     * @param member A member of the sorted set.
+     * @return The new score of <code>member</code>.
+     * @example
+     *     <pre>{@code
+     * Double score = client.zincrby("mySortedSet", -3.14, "value").get();
+     * assert score > 0; // member "value" existed in the set before score was altered
+     * }</pre>
+     */
+    CompletableFuture<Double> zincrby(String key, double increment, String member);
 }

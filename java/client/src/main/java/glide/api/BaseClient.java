@@ -94,6 +94,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
@@ -1070,6 +1071,13 @@ public abstract class BaseClient
                 ZRandMember,
                 arguments,
                 response -> castArray(handleArrayResponse(response), Object[].class));
+    }
+
+    @Override
+    public CompletableFuture<Double> zincrby(
+            @NonNull String key, double increment, @NonNull String member) {
+        String[] arguments = new String[] {key, Double.toString(increment), member};
+        return commandManager.submitNewCommand(ZIncrBy, arguments, this::handleDoubleResponse);
     }
 
     @Override
