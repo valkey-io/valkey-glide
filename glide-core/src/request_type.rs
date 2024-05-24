@@ -158,6 +158,7 @@ pub enum RequestType {
     ZInter = 146,
     BitPos = 147,
     BitOp = 148,
+    HStrlen = 149,
     FunctionLoad = 150,
     LMPop = 155,
 }
@@ -323,6 +324,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
             ProtobufRequestType::BitPos => RequestType::BitPos,
             ProtobufRequestType::BitOp => RequestType::BitOp,
+            ProtobufRequestType::HStrlen => RequestType::HStrlen,
         }
     }
 }
@@ -482,6 +484,7 @@ impl RequestType {
             RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
             RequestType::BitPos => Some(cmd("BITPOS")),
             RequestType::BitOp => Some(cmd("BITOP")),
+            RequestType::HStrlen => Some(cmd("HSTRLEN")),
         }
     }
 }
