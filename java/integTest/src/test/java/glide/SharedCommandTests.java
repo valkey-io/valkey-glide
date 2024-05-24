@@ -782,6 +782,62 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hrandfield(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        // key does not exist
+        assertNull(client.hrandfield(key1).get());
+        assertEquals(0, client.hrandfieldWithCount(key1, 5).get().length);
+        assertEquals(0, client.hrandfieldWithCountWithValues(key1, 5).get().length);
+
+        var data = Map.of("f 1", "v 1", "f 2", "v 2", "f 3", "v 3");
+        assertEquals(3, client.hset(key1, data).get());
+
+        // random key
+        assertTrue(data.containsKey(client.hrandfield(key1).get()));
+
+        // WithCount - positive count
+        var keys = client.hrandfieldWithCount(key1, 5).get();
+        assertEquals(data.keySet().size(), keys.length);
+        assertEquals(data.keySet(), Set.of(keys));
+
+        // WithCount - negative count
+        keys = client.hrandfieldWithCount(key1, -5).get();
+        assertEquals(5, keys.length);
+        Arrays.stream(keys).forEach(key -> assertTrue(data.containsKey(key)));
+
+        // WithCountWithValues - positive count
+        var keysWithValues = client.hrandfieldWithCountWithValues(key1, 5).get();
+        assertEquals(data.keySet().size(), keysWithValues.length);
+        for (var pair : keysWithValues) {
+            assertEquals(data.get(pair[0]), pair[1]);
+        }
+
+        // WithCountWithValues - negative count
+        keysWithValues = client.hrandfieldWithCountWithValues(key1, -5).get();
+        assertEquals(5, keysWithValues.length);
+        for (var pair : keysWithValues) {
+            assertEquals(data.get(pair[0]), pair[1]);
+        }
+
+        // Key exists, but it is not a List
+        assertEquals(OK, client.set(key2, "value").get());
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.hrandfield(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.hrandfieldWithCount(key2, 2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.hrandfieldWithCountWithValues(key2, 3).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void lpush_lpop_lrange_existing_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String[] valueArray = new String[] {"value4", "value3", "value2", "value1"};
