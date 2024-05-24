@@ -75,6 +75,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -153,6 +154,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.PopDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -827,6 +829,11 @@ public class TransactionTests {
 
         transaction.bitop(BitwiseOperation.AND, "destination", new String[] {"key"});
         results.add(Pair.of(BitOp, buildArgs(BitwiseOperation.AND.toString(), "destination", "key")));
+
+        transaction.lmpop(new String[] {"key"}, PopDirection.LEFT);
+        results.add(Pair.of(LMPop, buildArgs("1", "key", "LEFT")));
+        transaction.lmpop(new String[] {"key"}, PopDirection.LEFT, 1L);
+        results.add(Pair.of(LMPop, buildArgs("1", "key", "LEFT", "COUNT", "1")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

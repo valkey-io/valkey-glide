@@ -189,6 +189,7 @@ enum RequestType {
     BitPos = 147;
     BitOp = 148;
     FunctionLoad = 150;
+    LMPop = 155;
 }
 
 message Command {

@@ -159,6 +159,7 @@ pub enum RequestType {
     BitPos = 147,
     BitOp = 148,
     FunctionLoad = 150,
+    LMPop = 155,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -314,6 +315,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BitCount => RequestType::BitCount,
             ProtobufRequestType::BZMPop => RequestType::BZMPop,
             ProtobufRequestType::SetBit => RequestType::SetBit,
+            ProtobufRequestType::LMPop => RequestType::LMPop,
             ProtobufRequestType::ZInterCard => RequestType::ZInterCard,
             ProtobufRequestType::ZMPop => RequestType::ZMPop,
             ProtobufRequestType::GetBit => RequestType::GetBit,
@@ -471,6 +473,7 @@ impl RequestType {
             RequestType::ZRandMember => Some(cmd("ZRANDMEMBER")),
             RequestType::BitCount => Some(cmd("BITCOUNT")),
             RequestType::BZMPop => Some(cmd("BZMPOP")),
+            RequestType::LMPop => Some(cmd("LMPOP")),
             RequestType::SetBit => Some(cmd("SETBIT")),
             RequestType::ZInterCard => Some(cmd("ZINTERCARD")),
             RequestType::ZMPop => Some(cmd("ZMPOP")),
