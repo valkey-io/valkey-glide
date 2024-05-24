@@ -2,6 +2,7 @@
 package glide.api;
 
 import static glide.api.BaseClient.OK;
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
@@ -72,6 +73,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
@@ -1419,6 +1421,78 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(values, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hrandfield_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] args = {key};
+        String field = "field";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(field);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(HRandField), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.hrandfield(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(field, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hrandfieldWithCount_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] args = {key, "2"};
+        String[] fields = new String[] {"field_1", "field_2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(fields);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(HRandField), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.hrandfieldWithCount(key, 2);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(fields, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hrandfieldWithCountWithValues_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] args = {key, "2", WITH_VALUES_REDIS_API};
+        String[][] fields = new String[][] {{"field_1", "value_1"}, {"field_2", "value_2"}};
+
+        CompletableFuture<String[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(fields);
+
+        // match on protobuf request
+        when(commandManager.<String[][]>submitNewCommand(eq(HRandField), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[][]> response = service.hrandfieldWithCountWithValues(key, 2);
+        String[][] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(fields, payload);
     }
 
     @SneakyThrows
