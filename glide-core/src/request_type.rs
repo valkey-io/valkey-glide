@@ -160,8 +160,8 @@ pub enum RequestType {
     BitOp = 148,
     FunctionLoad = 150,
     LMPop = 155,
-    ExpireTime = 160,
-    PExpireTime = 161,
+    ExpireTime = 156,
+    PExpireTime = 157,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
