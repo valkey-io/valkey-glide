@@ -751,11 +751,34 @@ public class SharedCommandTests {
 
         assertEquals(0, client.hkeys(key2).get().length);
 
-        // Key exists, but it is not a List
+        // Key exists, but it is not a hash
         assertEquals(OK, client.set(key2, "value").get());
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.hkeys(key2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hstrlen(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        assertEquals(1, client.hset(key1, Map.of("field", "value")).get());
+        assertEquals(5L, client.hstrlen(key1, "field").get());
+
+        // missing value
+        assertEquals(0, client.hstrlen(key1, "field 2").get());
+
+        // missing key
+        assertEquals(0, client.hstrlen(key2, "field").get());
+
+        // Key exists, but it is not a hash
+        assertEquals(OK, client.set(key2, "value").get());
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.hkeys(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows

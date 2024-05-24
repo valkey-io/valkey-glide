@@ -49,6 +49,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
+import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -697,6 +698,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T hkeys(@NonNull String key) {
         protobufTransaction.addCommands(buildCommand(HKeys, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns the string length of the value associated with <code>field</code> in the hash stored at
+     * <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/hstrlen/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash.
+     * @return Command Response - The string length or <code>0</code> if <code>field</code> or <code>
+     *     key</code> does not exist.
+     */
+    public T hstrlen(@NonNull String key, @NonNull String field) {
+        protobufTransaction.addCommands(buildCommand(HStrlen, buildArgs(key, field)));
         return getThis();
     }
 

@@ -184,6 +184,7 @@ enum RequestType {
     SetBit = 142;
     ZInterCard = 143;
     ZMPop = 144;
+    HStrlen = 148;
 }
 
 message Command {

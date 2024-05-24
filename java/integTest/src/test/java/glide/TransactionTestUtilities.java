@@ -202,7 +202,8 @@ public class TransactionTestUtilities {
                 .hvals(hashKey1)
                 .hincrBy(hashKey1, field3, 5)
                 .hincrByFloat(hashKey1, field3, 5.5)
-                .hkeys(hashKey1);
+                .hkeys(hashKey1)
+                .hstrlen(hashKey1, field2);
 
         return new Object[] {
             2L, // hset(hashKey1, Map.of(field1, value1, field2, value2))
@@ -217,6 +218,7 @@ public class TransactionTestUtilities {
             5L, // hincrBy(hashKey1, field3, 5)
             10.5, // hincrByFloat(hashKey1, field3, 5.5)
             new String[] {field2, field3}, // hkeys(hashKey1)
+            (long) value2.length(), // hstrlen(hashKey1, field2)
         };
     }
 
