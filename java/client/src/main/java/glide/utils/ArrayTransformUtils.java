@@ -109,6 +109,9 @@ public class ArrayTransformUtils {
     @SuppressWarnings("unchecked")
     public static <T, U extends T> Map<String, U[]> castMapOfArrays(
             Map<String, T[]> mapOfArrays, Class<U> clazz) {
+        if (mapOfArrays == null) {
+            return null;
+        }
         return mapOfArrays.entrySet().stream()
                 .collect(Collectors.toMap(k -> k.getKey(), e -> castArray(e.getValue(), clazz)));
     }

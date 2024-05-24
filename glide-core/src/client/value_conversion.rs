@@ -16,9 +16,11 @@ pub(crate) enum ExpectedReturnType {
     DoubleOrNull,
     ZRankReturnType,
     JsonToggleReturnType,
+    ArrayOfStrings,
     ArrayOfBools,
     ArrayOfDoubleOrNull,
     Lolwut,
+    ArrayOfStringAndArrays,
     ArrayOfArraysOfDoubleOrNull,
     ArrayOfPairs,
     ArrayOfMemberScorePairs,
@@ -176,6 +178,14 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
+        ExpectedReturnType::ArrayOfStrings => match value {
+            Value::Array(array) => convert_array_elements(array, ExpectedReturnType::BulkString),
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to an array of bulk strings",
+            )
+                .into()),
+        },
         ExpectedReturnType::ArrayOfDoubleOrNull => match value {
             Value::Array(array) => convert_array_elements(array, ExpectedReturnType::DoubleOrNull),
             _ => Err((
@@ -324,6 +334,29 @@ pub(crate) fn convert_to_expected_type(
             // RESP2 returns scores as strings, but we want scores as type double.
             convert_to_array_of_pairs(value, Some(ExpectedReturnType::Double))
         }
+        // Used by LMPOP and BLMPOP
+        // The server response can be an array or null
+        //
+        // Example:
+        // let input = ["key", "val1", "val2"]
+        // let expected =("key", vec!["val1", "val2"])
+        ExpectedReturnType::ArrayOfStringAndArrays => match value {
+            Value::Nil => Ok(value),
+            Value::Array(array) if array.len() == 2 && matches!(array[1], Value::Array(_)) => {
+                // convert the array to a map of string to string-array
+                let map = convert_array_to_map(
+                    array,
+                    Some(ExpectedReturnType::BulkString),
+                    Some(ExpectedReturnType::ArrayOfStrings),
+                )?;
+                Ok(map)
+            }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to a pair of String/String-Array return type",
+            )
+                .into()),
+        },
         // Used by BZPOPMIN/BZPOPMAX, which return an array consisting of the key of the sorted set that was popped, the popped member, and its score.
         // RESP2 returns the score as a string, but RESP3 returns the score as a double. Here we convert string scores into type double.
         ExpectedReturnType::KeyWithMemberAndScore => match value {
@@ -508,6 +541,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"BZMPOP" | b"ZMPOP" => Some(ExpectedReturnType::ZMPopReturnType),
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
         b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
+        b"LMPOP" => Some(ExpectedReturnType::ArrayOfStringAndArrays),
         b"HRANDFIELD" => cmd
             .position(b"WITHVALUES")
             .map(|_| ExpectedReturnType::ArrayOfPairs),
@@ -749,6 +783,28 @@ mod tests {
             Some(ExpectedReturnType::ArrayOfMemberScorePairs),
         )
         .unwrap();
+        assert_eq!(expected_response, converted_flat_array);
+    }
+
+    #[test]
+    fn convert_to_array_of_string_and_array_return_type() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("LMPOP").arg("1").arg("key").arg("LEFT")),
+            Some(ExpectedReturnType::ArrayOfStringAndArrays)
+        ));
+
+        // testing value conversion
+        let flat_array = Value::Array(vec![
+            Value::BulkString(b"1".to_vec()),
+            Value::Array(vec![Value::BulkString(b"one".to_vec())]),
+        ]);
+        let expected_response = Value::Map(vec![(
+            Value::BulkString("1".into()),
+            Value::Array(vec![Value::BulkString(b"one".to_vec())]),
+        )]);
+        let converted_flat_array =
+            convert_to_expected_type(flat_array, Some(ExpectedReturnType::ArrayOfStringAndArrays))
+                .unwrap();
         assert_eq!(expected_response, converted_flat_array);
     }
 
