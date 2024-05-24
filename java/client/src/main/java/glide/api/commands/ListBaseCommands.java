@@ -375,41 +375,43 @@ public interface ListBaseCommands {
     CompletableFuture<Long> lpushx(String key, String[] elements);
 
     /**
-     * Pops one or more elements from the first non-empty list from the list of provided <code>key
+     * Pops one or more elements from the first non-empty list from the list of provided <code>keys
      * </code>.
      *
      * @since Redis 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
-     * @param keys The list of provided <code>key</code> names.
+     * @param keys An of array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     PopDirection}.
-     * @param count The count of elements to be popped and returned.
+     * @param count The maximum number of popped elements.
      * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.
      * @example
      *     <pre>{@code
-     * client.lpush("testKey", new String[] {"one", "two", "three"}.;
-     * String[] result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L).get().get("testKey");
-     * assertArrayEquals(new String[] {"three"}, result);
+     * client.lpush("testKey", new String[] {"one", "two", "three"}.get();
+     * String[] result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L).get();
+     * String resultValue = result.get("testKey");
+     * assertArrayEquals(new String[] {"three"}, resultValue);
      * }</pre>
      */
     CompletableFuture<Map<String, String[]>> lmpop(String[] keys, PopDirection direction, long count);
 
     /**
-     * Pops one element from the first non-empty list from the list of provided <code>key</code>.
+     * Pops one element from the first non-empty list from the list of provided <code>keys</code>.
      *
      * @since Redis 7.0 and above.
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
-     * @param keys The list of provided <code>key</code> names.
+     * @param keys An of array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     PopDirection}.
      * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
      * @example
      *     <pre>{@code
-     * client.lpush("testKey", new String[] {"one", "two", "three"};
-     * String[] result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L).get().get("testKey");
-     * assertArrayEquals(new String[] {"three"}, result);
+     * client.lpush("testKey", new String[] {"one", "two", "three"}.get();
+     * String[] result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L).get();
+     * String resultValue = result.get("testKey");
+     * assertArrayEquals(new String[] {"three"}, resultValue);
      * }</pre>
      */
     CompletableFuture<Map<String, String[]>> lmpop(String[] keys, PopDirection direction);

@@ -2,8 +2,8 @@
 package glide.api;
 
 import static glide.api.BaseClient.OK;
-import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
+import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;

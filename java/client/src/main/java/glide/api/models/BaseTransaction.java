@@ -1,8 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
+import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
@@ -3556,15 +3556,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Pops one or more elements from the first non-empty list from the list of provided <code>key
+     * Pops one or more elements from the first non-empty list from the list of provided <code>keys
      * </code>.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
-     * @param keys The list of provided <code>key</code> names.
+     * @param keys An of array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     PopDirection}.
-     * @param count The count of elements to be popped and returned.
+     * @param count The maximum number of popped elements.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped arrays of popped
      *     elements.
      */
@@ -3582,11 +3582,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Pops one element from the first non-empty list from the list of provided <code>key</code>.
+     * Pops one element from the first non-empty list from the list of provided <code>keys</code>.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
-     * @param keys The list of provided <code>key</code> names.
+     * @param keys An of array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
      *     PopDirection}.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped array of the
