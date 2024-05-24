@@ -579,7 +579,7 @@ class TestCommands:
         with pytest.raises(RequestError):
             assert await redis_client.setrange(key1, -1, "GLIDE")
 
-        # non-string key
+        # non-string key throws RequestError
         assert await redis_client.lpush(key2, ["_"]) == 1
         with pytest.raises(RequestError):
             assert await redis_client.setrange(key2, 0, "_")
