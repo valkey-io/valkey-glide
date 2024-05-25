@@ -4141,4 +4141,70 @@ public class SharedCommandTests {
                         () -> client.lmpop(new String[] {nonListKey}, PopDirection.LEFT).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmpop(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonListKey = "{key}-3" + UUID.randomUUID();
+        String[] singleKeyArray = {key1};
+        String[] multiKeyArray = {key2, key1};
+        long count = 1L;
+        Long arraySize = 5L;
+        String[] lpushArgs = {"one", "two", "three", "four", "five"};
+        Map<String, String[]> expected = Map.of(key1, new String[] {"five"});
+        Map<String, String[]> expected2 = Map.of(key2, new String[] {"one", "two"});
+
+        // nothing to be popped
+        assertNull(client.blmpop(singleKeyArray, PopDirection.LEFT, 0.1).get());
+        assertNull(client.blmpop(singleKeyArray, PopDirection.LEFT, count, 0.1).get());
+
+        // pushing to the arrays to be popped
+        assertEquals(arraySize, client.lpush(key1, lpushArgs).get());
+        assertEquals(arraySize, client.lpush(key2, lpushArgs).get());
+
+        // assert correct result from popping
+        Map<String, String[]> result = client.blmpop(singleKeyArray, PopDirection.LEFT, 0.1).get();
+        assertDeepEquals(result, expected);
+
+        // assert popping multiple elements from the right
+        Map<String, String[]> result2 = client.blmpop(multiKeyArray, PopDirection.RIGHT, 2L, 0.1).get();
+        assertDeepEquals(result2, expected2);
+
+        // key exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, "blmpop").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.blmpop(new String[] {nonListKey}, PopDirection.LEFT, 0.1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmpop_timeout_check(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String key = UUID.randomUUID().toString();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.blmpop(new String[] {key}, PopDirection.LEFT, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient.blmpop(new String[] {key}, PopDirection.LEFT, 0).get(3, TimeUnit.SECONDS));
+        }
+    }
 }
