@@ -115,7 +115,9 @@ public class TransactionTestUtilities {
                     .expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                     .expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
                     .pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
-                    .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY);
+                    .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                    .expiretime(genericKey1)
+                    .pexpiretime(genericKey1);
         }
 
         var expectedResults =
@@ -150,6 +152,8 @@ public class TransactionTestUtilities {
                         true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
                         false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
                         false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                        -2L, // expiretime(genericKey1)
+                        -2L, // pexpiretime(genericKey1)
                     });
         }
         return expectedResults;

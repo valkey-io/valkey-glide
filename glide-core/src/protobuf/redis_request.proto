@@ -191,6 +191,8 @@ enum RequestType {
     HStrlen = 149;
     FunctionLoad = 150;
     LMPop = 155;
+    ExpireTime = 156;
+    PExpireTime = 157;
 }
 
 message Command {
