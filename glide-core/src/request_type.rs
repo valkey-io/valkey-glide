@@ -161,6 +161,8 @@ pub enum RequestType {
     HStrlen = 149,
     FunctionLoad = 150,
     LMPop = 155,
+    ExpireTime = 156,
+    PExpireTime = 157,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -325,6 +327,8 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BitPos => RequestType::BitPos,
             ProtobufRequestType::BitOp => RequestType::BitOp,
             ProtobufRequestType::HStrlen => RequestType::HStrlen,
+            ProtobufRequestType::ExpireTime => RequestType::ExpireTime,
+            ProtobufRequestType::PExpireTime => RequestType::PExpireTime,
         }
     }
 }
@@ -485,6 +489,8 @@ impl RequestType {
             RequestType::BitPos => Some(cmd("BITPOS")),
             RequestType::BitOp => Some(cmd("BITOP")),
             RequestType::HStrlen => Some(cmd("HSTRLEN")),
+            RequestType::ExpireTime => Some(cmd("EXPIRETIME")),
+            RequestType::PExpireTime => Some(cmd("PEXPIRETIME")),
         }
     }
 }
