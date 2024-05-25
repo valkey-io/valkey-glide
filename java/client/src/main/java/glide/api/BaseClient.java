@@ -24,6 +24,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Del;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -66,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
@@ -800,6 +802,18 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> ttl(@NonNull String key) {
         return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> expiretime(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                ExpireTime, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> pexpiretime(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                PExpireTime, new String[] {key}, this::handleLongResponse);
     }
 
     @Override

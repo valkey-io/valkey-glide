@@ -266,7 +266,7 @@ public interface GenericBaseCommands {
      * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
      * @param key The <code>key</code> to return its timeout.
      * @return TTL in seconds, <code>-2</code> if <code>key</code> does not exist, or <code>-1</code>
-     *     if <code>key</code> exists but has no associated expire.
+     *     if <code>key</code> exists but has no associated expiration.
      * @example
      *     <pre>{@code
      * Long timeRemaining = client.ttl("my_key").get();
@@ -278,8 +278,43 @@ public interface GenericBaseCommands {
      */
     CompletableFuture<Long> ttl(String key);
 
-    // TODO move ScriptingAndFunctionsBaseCommands
-    // TODO add note about routing on cluster client
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire, in seconds.<br>
+     * To get the expiration with millisecond precision, use {@link #pexpiretime(String)}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/expiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to determine the expiration value of.
+     * @return The expiration Unix timestamp in seconds. <code>-2</code> if <code>key</code> does not
+     *     exist, or <code>-1</code> if <code>key</code> exists but has no associated expiration.
+     * @example
+     *     <pre>{@code
+     * Long expiration = client.expiretime("my_key").get();
+     * System.out.printf("The key expires at %d epoch time", expiration);
+     * }</pre>
+     */
+    CompletableFuture<Long> expiretime(String key);
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire, in milliseconds.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/pexpiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to determine the expiration value of.
+     * @return The expiration Unix timestamp in milliseconds. <code>-2</code> if <code>key</code> does
+     *     not exist, or <code>-1</code> if <code>key</code> exists but has no associated expiration.
+     * @example
+     *     <pre>{@code
+     * Long expiration = client.pexpiretime("my_key").get();
+     * System.out.printf("The key expires at %d epoch time (ms)", expiration);
+     * }</pre>
+     */
+    CompletableFuture<Long> pexpiretime(String key);
+
+    // TODO move invokeScript to ScriptingAndFunctionsBaseCommands
+    // TODO add note to invokeScript about routing on cluster client
     /**
      * Invokes a Lua script.<br>
      * This method simplifies the process of invoking scripts on a Redis server by using an object
@@ -365,7 +400,7 @@ public interface GenericBaseCommands {
     /**
      * Returns the string representation of the type of the value stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/type/>redis.io</a> for details.
+     * @see <a href="https://redis.io/commands/type/">redis.io</a> for details.
      * @param key The <code>key</code> to check its data type.
      * @return If the <code>key</code> exists, the type of the stored value is returned. Otherwise, a
      *     "none" string is returned.
