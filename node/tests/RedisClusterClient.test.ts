@@ -18,9 +18,9 @@ import {
     ProtocolVersion,
     RedisClusterClient,
 } from "..";
+import { RedisCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
 import {
-    RedisCluster,
     flushAndCloseClient,
     getClientConfigurationOption,
     getFirstResult,
@@ -28,7 +28,6 @@ import {
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
-
 type Context = {
     client: RedisClusterClient;
 };

@@ -2,6 +2,14 @@
 
 name: Continuous Deployment
 
+env:
+  MATRIX: '[{"OS": "ubuntu","NAMED_OS": "linux","RUNNER": "ubuntu-latest","ARCH": "x64","TARGET": "x86_64-unknown-linux-gnu"},
+          {"OS": "ubuntu","NAMED_OS": "linux","RUNNER": ["self-hosted", "Linux", "ARM64"],"ARCH": "arm64","TARGET": "aarch64-unknown-linux-gnu"},
+          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-12","ARCH": "x64","TARGET": "x86_64-apple-darwin"},
+          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-13-xlarge","ARCH": "arm64","TARGET": "aarch64-apple-darwin"},
+          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "arm64","TARGET": "aarch64-unknown-linux-musl","RUNNER": ["self-hosted", "Linux", "ARM64"],"IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged --rm"},
+          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "x64","TARGET": "x86_64-unknown-linux-musl","RUNNER": "ubuntu-latest","IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged"}]'
+
 on:
     pull_request:
       paths:
@@ -18,6 +26,16 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    output-matrix:
+        runs-on: ubuntu-latest
+        outputs:
+            matrix: ${{ steps.set-matrix.outputs.matrix }}
+        steps:
+            - name: Set matrix
+              id: set-matrix
+              run: |
+               echo "::set-output name=matrix::${{toJson( env.MATRIX )}}"
+
     start-self-hosted-runner:
         if: github.repository_owner == 'aws'
         runs-on: ubuntu-latest
@@ -36,7 +54,7 @@ jobs:
                 ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     publish-binaries:
-        needs: start-self-hosted-runner
+        needs: [start-self-hosted-runner, output-matrix]
         if: github.repository_owner == 'aws'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER }}
@@ -47,52 +65,8 @@ jobs:
             fail-fast: false
             matrix:
                 build:
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          RUNNER: ubuntu-latest,
-                          ARCH: x64,
-                          TARGET: x86_64-unknown-linux-gnu,
-                      }
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          RUNNER: [self-hosted, Linux, ARM64],
-                          ARCH: arm64,
-                          TARGET: aarch64-unknown-linux-gnu,
-                      }
-                    - {
-                          OS: macos,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-12,
-                          ARCH: x64,
-                          TARGET: x86_64-apple-darwin,
-                      }
-                    - {
-                          OS: macos,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-13-xlarge,
-                          arch: arm64,
-                          TARGET: aarch64-apple-darwin,
-                      }
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          ARCH: arm64,
-                          TARGET: aarch64-unknown-linux-musl,
-                          RUNNER: [self-hosted, Linux, ARM64],
-                          IMAGE: 'node:alpine',
-                          CONTAINER_OPTIONS: '--user root --privileged --rm',
-                      }
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          ARCH: x64,
-                          TARGET: x86_64-unknown-linux-musl,
-                          RUNNER: ubuntu-latest,
-                          IMAGE: 'node:alpine',
-                          CONTAINER_OPTIONS: '--user root --privileged',
-                      }
+                  ${{fromJson(needs.output-matrix.outputs.matrix)}}
+                    
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
@@ -137,6 +111,14 @@ jobs:
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
                   token: ${{ secrets.NPM_AUTH_TOKEN }}
+            
+            - name: Setup node for publishing
+              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-musl' }}
+              working-directory: ./node
+              run: |
+                npm config set registry https://registry.npmjs.org/
+                npm config set '//registry.npmjs.org/:_authToken' ${{ secrets.NPM_AUTH_TOKEN }}
+                npm config set scope ${{ vars.NPM_SCOPE }}
             
             - name: Update package version in config.toml
               uses: ./.github/workflows/update-glide-version
@@ -297,3 +279,78 @@ jobs:
                   npm publish --access public --tag ${{ env.NPM_TAG }}
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
+
+    test-release-candidate:
+        if: github.event_name != 'pull_request' && contains(github.ref, 'rc')
+        name: Test the release candidate
+        needs: [publish-base-to-npm, output-matrix]
+        runs-on: ${{ matrix.build.RUNNER }}
+        container:
+            image: ${{ matrix.build.IMAGE || '' }}
+            options: ${{ matrix.build.CONTAINER_OPTIONS || 'none'}}
+        strategy:
+            fail-fast: false
+            matrix:
+                build:
+                  ${{fromJson(needs.output-matrix.outputs.matrix)}}
+        steps:
+            - name: Setup self-hosted runner access
+              if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+
+            - name: install Redis and git for alpine
+              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+              run: |
+                apk update
+                apk add redis git
+            
+            - name: install Redis and Python for ubuntu
+              if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
+              run: |
+                sudo apt-get update
+                sudo apt-get install redis-server python3
+
+            - name: install Redis and Python for macos
+              if: ${{ contains(matrix.build.RUNNER, 'mac') }}
+              run: |
+                brew install redis python3
+
+            - name: Setup for musl
+              if: ${{ contains(matrix.build.TARGET, 'musl') }}
+              uses: ./.github/workflows/setup-musl-on-linux
+              with:
+                  workspace: $GITHUB_WORKSPACE
+                  npm-scope: ${{ vars.NPM_SCOPE }}
+                  npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
+                  arch: ${{ matrix.build.ARCH }}
+
+            - name: Checkout
+              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
+            - name: Install node
+              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
+              uses: actions/setup-node@v3
+              with:
+                  node-version: "16"
+                  registry-url: "https://registry.npmjs.org"
+                  scope: "${{ vars.NPM_SCOPE }}"
+                  always-auth: true
+
+            - name: Run the tests
+              shell: bash
+              working-directory: ./utils/release-candidate-testing/node
+              run: |
+                  npm install --no-save @aws/glide-for-redis@next
+                  npm run test
+
+            # Reset the repository to make sure we get the clean checkout of the action later in other actions.
+            # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
+            - name: Reset repository
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
+              shell: bash
+              run: |
+                git reset --hard
+                git clean -xdf
