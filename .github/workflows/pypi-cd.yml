@@ -98,6 +98,7 @@ jobs:
               run: |
                   export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
                   echo "PY_RELEASE_VERSION=${version}" >> $GITHUB_ENV
+                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Set the package version for Python
               working-directory: ./python

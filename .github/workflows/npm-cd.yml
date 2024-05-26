@@ -169,19 +169,6 @@ jobs:
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
-            - name: Pack the Node package
-              shell: bash
-              working-directory: ./node
-              run: |
-                  # Remove the "cpu" and "os" fileds so the base package would be able to install it on ubuntu
-                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS '/"\/\/\/cpu": \[/,/]/d' ./package.json && sed -i $SED_FOR_MACOS '/"\/\/\/os": \[/,/]/d' ./package.json
-                  mkdir -p bin
-                  npm pack --pack-destination ./bin
-                  ls ./bin
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
             - name: Reset repository
