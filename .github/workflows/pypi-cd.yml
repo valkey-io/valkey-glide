@@ -79,8 +79,19 @@ jobs:
               uses: actions/checkout@v4
               with:
                   submodules: "true"
+              
+              # For NPM and Cargo we need the the rc version to be {version}-rc{number} while for PyPi we need it to be {version}rc{number}
+              # This is because PyPi does not allow the '-' character in the version name
+              # So the tag will be as NPM and Cargo ask: v1.0.0-rc1 and for PyPi we'll chnage it to: v1.0.0rc1
+            - name: Change and set realease version for RC
+              if: ${{ github.event_name != 'pull_request' && contains(github.ref, 'rc') }}
+              shell: bash
+              run: |
+                  export version=`echo ${GITHUB_REF:11} | sed 's/-/rc/'`
+                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Set the release version
+              if: ${{ !contains(github.ref, 'rc') }}
               shell: bash
               run: |
                   export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
