@@ -384,7 +384,7 @@ class ClusterCommands(CoreCommands):
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         To store the result into a new key, see `sort_store`.
 
-        see https://valkey-io.github.io/commands/sort/ for more details.
+        See https://valkey-io.github.io/commands/sort/ for more details.
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
@@ -422,7 +422,7 @@ class ClusterCommands(CoreCommands):
         When in cluster mode, `key` and `store` must map to the same hash slot.
         To get the sort result, see `sort`.
 
-        see https://valkey-io.github.io/commands/sort/ for more details.
+        See https://valkey-io.github.io/commands/sort/ for more details.
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
