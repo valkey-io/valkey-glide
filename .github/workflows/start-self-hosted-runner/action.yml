@@ -24,9 +24,13 @@ runs:
               aws-secret-access-key: ${{ inputs.aws-secret-access-key }}
               aws-region: ${{ inputs.aws-region }}
         - name: Start EC2 self hosted runner
-          shell: bash
-          run: |
-              sudo apt update
-              sudo apt install awscli -y
-              aws ssm send-command --instance-ids ${{ inputs.ec2-instance-id }} --document-name  StartGithubSelfHostedRunner --output text
-              aws ssm list-command-invocations 
+          uses: nick-fields/retry@v3
+          with:
+            shell: bash
+            max_attempts: 3
+            timeout_minutes: 2 
+            command: |
+                sudo apt update
+                sudo apt install awscli -y
+                aws ssm send-command --instance-ids ${{ inputs.ec2-instance-id }} --document-name  StartGithubSelfHostedRunner --output text
+                aws ssm list-command-invocations 
