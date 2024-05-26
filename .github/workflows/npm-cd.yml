@@ -3,12 +3,12 @@
 name: Continuous Deployment
 
 env:
-  MATRIX: '[{"OS": "ubuntu","NAMED_OS": "linux","RUNNER": "ubuntu-latest","ARCH": "x64","TARGET": "x86_64-unknown-linux-gnu"},
-          {"OS": "ubuntu","NAMED_OS": "linux","RUNNER": ["self-hosted", "Linux", "ARM64"],"ARCH": "arm64","TARGET": "aarch64-unknown-linux-gnu"},
-          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-12","ARCH": "x64","TARGET": "x86_64-apple-darwin"},
-          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-13-xlarge","ARCH": "arm64","TARGET": "aarch64-apple-darwin"},
-          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "arm64","TARGET": "aarch64-unknown-linux-musl","RUNNER": ["self-hosted", "Linux", "ARM64"],"IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged --rm"},
-          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "x64","TARGET": "x86_64-unknown-linux-musl","RUNNER": "ubuntu-latest","IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged"}]'
+  MATRIX: '[{"OS": "ubuntu","NAMED_OS": "linux","RUNNER": "ubuntu-latest","ARCH": "x64","TARGET": "x86_64-unknown-linux-gnu", "CLIB": "-gnu"},
+          {"OS": "ubuntu","NAMED_OS": "linux","RUNNER": ["self-hosted", "Linux", "ARM64"],"ARCH": "arm64","TARGET": "aarch64-unknown-linux-gnu", "CLIB": "-gnu"},
+          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-12","ARCH": "x64","TARGET": "x86_64-apple-darwin", "CLIB": ""},
+          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-13-xlarge","ARCH": "arm64","TARGET": "aarch64-apple-darwin", "CLIB": ""},
+          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "arm64","TARGET": "aarch64-unknown-linux-musl","RUNNER": ["self-hosted", "Linux", "ARM64"],"IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged --rm", , "CLIB": "-musl"},
+          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "x64","TARGET": "x86_64-unknown-linux-musl","RUNNER": "ubuntu-latest","IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged", "CLIB": "-musl"}]'
 
 on:
     pull_request:
@@ -169,14 +169,6 @@ jobs:
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
-            - name: Upload the Node package
-              if: github.event_name != 'pull_request'
-              uses: actions/upload-artifact@v3
-              with:
-                  name: ${{ matrix.build.TARGET }}
-                  path: ./node/bin
-                  if-no-files-found: error
-
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
             - name: Reset repository
@@ -189,7 +181,7 @@ jobs:
     publish-base-to-npm:
         if: github.event_name != 'pull_request'
         name: Publish the base NPM package
-        needs: publish-binaries
+        needs: [publish-binaries, output-matrix]
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
@@ -228,31 +220,18 @@ jobs:
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Create a directory for the packed packages
+            - name: Create package list from Matrix
               shell: bash
-              working-directory: ./node/npm/glide
-              run: mkdir packages
-
-            - name: Download the packed packages
-              id: download
-              uses: actions/download-artifact@v3
-              with:
-                  path: ./node/npm/glide/packages
+              run: |
+                  packages_list=`echo jq -r '.[] | "@aws/glide-for-redis-\(.OS)\(.CLIB)-\(.ARCH)"' ${{fromJson(needs.output-matrix.outputs.matrix)}}`
+                  echo "PACKAGES_LIST=${packages_list}" >> $GITHUB_ENV
 
             - name: Install the packed packages
               shell: bash
               working-directory: ./node/npm/glide
               run: |
-                  ls -LR packages/
-                  packages_list=`find ${{steps.download.outputs.download-path}} -type f -follow -print`
-                  for package in $packages_list
-                  do
-                    if [[ "${package}" == *.tgz ]]
-                    then
-                        echo "Installing package $package"
-                        npm i --no-save "$package"
-                    fi
-                  done
+                  echo "Installing packages: ${{ env.PACKAGES_LIST }}"
+                  npm install --no-save ${{ env.PACKAGES_LIST }}
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
