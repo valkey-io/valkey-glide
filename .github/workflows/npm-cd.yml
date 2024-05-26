@@ -3,8 +3,8 @@
 name: Continuous Deployment
 
 env:
-  MATRIX: '[{"OS": "ubuntu","NAMED_OS": "linux","RUNNER": "ubuntu-latest","ARCH": "x64","TARGET": "x86_64-unknown-linux-gnu", "CLIB": "-gnu"},
-          {"OS": "ubuntu","NAMED_OS": "linux","RUNNER": ["self-hosted", "Linux", "ARM64"],"ARCH": "arm64","TARGET": "aarch64-unknown-linux-gnu", "CLIB": "-gnu"},
+  MATRIX: '[{"OS": "ubuntu","NAMED_OS": "linux","RUNNER": "ubuntu-latest","ARCH": "x64","TARGET": "x86_64-unknown-linux-gnu", "CLIB": ""},
+          {"OS": "ubuntu","NAMED_OS": "linux","RUNNER": ["self-hosted", "Linux", "ARM64"],"ARCH": "arm64","TARGET": "aarch64-unknown-linux-gnu", "CLIB": ""},
           {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-12","ARCH": "x64","TARGET": "x86_64-apple-darwin", "CLIB": ""},
           {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-13-xlarge","ARCH": "arm64","TARGET": "aarch64-apple-darwin", "CLIB": ""},
           {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "arm64","TARGET": "aarch64-unknown-linux-musl","RUNNER": ["self-hosted", "Linux", "ARM64"],"IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged --rm", "CLIB": "-musl"},
@@ -251,18 +251,16 @@ jobs:
             - name: Create package list from Matrix
               shell: bash
               run: |
-                  echo "Matrix: ${{ needs.output-matrix.outputs.matrix }}"
                   echo "Matrix: ${MATRIX}"
-                  echo "Matrix: ${{ fromJson(needs.output-matrix.outputs.matrix) }}"
                   packages_list=$(echo "${MATRIX}" | jq -r '.[] | "@aws/glide-for-redis-\(.OS)\(.CLIB)-\(.ARCH)@${{ env.NPM_TAG }}"')
-                  echo "PACKAGES_LIST=$packages_list" >> $GITHUB_ENV
+                  echo "PACKAGES_LIST='$packages_list'" >> $GITHUB_ENV
 
             - name: Install the packed packages
               shell: bash
               working-directory: ./node/npm/glide
               run: |
-                  echo "Installing packages: ${{ env.PACKAGES_LIST }}"
-                  npm install --no-save ${{ env.PACKAGES_LIST }}
+                  echo "Installing packages: ${PACKAGES_LIST//\'/}"
+                  npm install --no-save ${PACKAGES_LIST//\'/}
                   
             - name: Publish the base package
               if: github.event_name != 'pull_request'
