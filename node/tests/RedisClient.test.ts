@@ -13,10 +13,10 @@ import {
 import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import { ProtocolVersion, RedisClient, Transaction } from "..";
+import { RedisCluster } from "../../utils/TestUtils.js";
 import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
-    RedisCluster,
     flushAndCloseClient,
     getClientConfigurationOption,
     parseCommandLineArgs,

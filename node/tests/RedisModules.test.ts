@@ -16,8 +16,9 @@ import {
     RedisClusterClient,
     parseInfoResponse,
 } from "../";
+import { RedisCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
-import { RedisCluster, flushallOnPort, getFirstResult } from "./TestUtilities";
+import { flushallOnPort, getFirstResult } from "./TestUtilities";
 
 type Context = {
     client: RedisClusterClient;
