@@ -103,7 +103,7 @@ jobs:
               working-directory: ./python
               run: |
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS "s|255.255.255|${{ env.PY_RELEASE_VERSION }}|g" ./Cargo.toml
+                  sed -i $SED_FOR_MACOS "s|255.255.255|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
                   # Log the edited Cargo.toml file
                   cat Cargo.toml
 
