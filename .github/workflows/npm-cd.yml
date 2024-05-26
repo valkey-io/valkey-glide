@@ -310,6 +310,12 @@ jobs:
               run: |
                 brew install redis python3
 
+            - name: Checkout
+              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
+
             - name: Setup for musl
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
               uses: ./.github/workflows/setup-musl-on-linux
@@ -319,12 +325,6 @@ jobs:
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
                   arch: ${{ matrix.build.ARCH }}
 
-            - name: Checkout
-              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
-              uses: actions/checkout@v4
-              with:
-                  submodules: "true"
-
             - name: Install node
               if: ${{ !contains(matrix.build.TARGET, 'musl') }}
               uses: actions/setup-node@v3
@@ -333,6 +333,13 @@ jobs:
                   registry-url: "https://registry.npmjs.org"
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
+
+            - name: Install tsc and compile utils
+              shell: bash
+              working-directory: ./utils
+              run: |
+                  npm install -g typescript npx
+                  npx tsc
 
             - name: Run the tests
               shell: bash
