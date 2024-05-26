@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast, Tuple
+from typing import Dict, List, Mapping, Optional, Tuple, cast
 
 from glide.async_commands.core import (
     CoreCommands,

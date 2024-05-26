@@ -21,11 +21,11 @@ from glide.async_commands.core import (
     InfBound,
     InfoSection,
     InsertPosition,
+    SortOrder,
     StreamAddOptions,
     TrimByMaxLen,
     TrimByMinId,
     UpdateOptions,
-    SortOrder,
 )
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -3440,38 +3440,39 @@ class TestCommands:
         assert await redis_client.hset(user_key5, {"name": "Eve", "age": "40"}) == 2
         assert await redis_client.lpush("user_ids", ["5", "4", "3", "2", "1"]) == 5
 
-        # Test sort with all arguments
-        assert await redis_client.lpush(key, ["3", "1", "2"]) == 3
-        result = await redis_client.sort(
-            key,
-            limit=(0, 2),
-            get_patterns=["user:*->name"],
-            order=SortOrder.ASC,
-            alpha=True,
-        )
-        assert result == ["Alice", "Bob"]
+        if isinstance(redis_client, RedisClient):
+            # Test sort with all arguments
+            assert await redis_client.lpush(key, ["3", "1", "2"]) == 3
+            result = await redis_client.sort(
+                key,
+                limit=(0, 2),
+                get_patterns=["user:*->name"],
+                order=SortOrder.ASC,
+                alpha=True,
+            )
+            assert result == ["Alice", "Bob"]
 
-        # Test sort_store with all arguments
-        result = await redis_client.sort_store(
-            key,
-            store,
-            limit=(0, 2),
-            get_patterns=["user:*->name"],
-            order=SortOrder.ASC,
-            alpha=True,
-        )
-        assert result == 2
-        sorted_list = await redis_client.lrange(store, 0, -1)
-        assert sorted_list == ["Alice", "Bob"]
+            # Test sort_store with all arguments
+            sort_store_result = await redis_client.sort_store(
+                key,
+                store,
+                limit=(0, 2),
+                get_patterns=["user:*->name"],
+                order=SortOrder.ASC,
+                alpha=True,
+            )
+            assert sort_store_result == 2
+            sorted_list = await redis_client.lrange(store, 0, -1)
+            assert sorted_list == ["Alice", "Bob"]
 
-        # Test sort with `by` argument
-        result = await redis_client.sort(
-            "user_ids",
-            by_pattern="user:*->age",
-            get_patterns=["user:*->name"],
-            alpha=True,
-        )
-        assert result == ["Dave", "Bob", "Alice", "Charlie", "Eve"]
+            # Test sort with `by` argument
+            result = await redis_client.sort(
+                "user_ids",
+                by_pattern="user:*->age",
+                get_patterns=["user:*->name"],
+                alpha=True,
+            )
+            assert result == ["Dave", "Bob", "Alice", "Charlie", "Eve"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3486,8 +3487,10 @@ class TestCommands:
         assert result == []
 
         # Test sort_store with non-existing key
-        result = await redis_client.sort_store("{SameSlotKey}:non_existing_key", store)
-        assert result == 0
+        sort_store_result = await redis_client.sort_store(
+            "{SameSlotKey}:non_existing_key", store
+        )
+        assert sort_store_result == 0
 
         # Test each argument separately
         assert await redis_client.lpush(key, ["5", "2", "4", "1", "3"]) == 5
@@ -3521,10 +3524,10 @@ class TestCommands:
         assert result == ["5", "4", "3"]
 
         # Test sort_store with combined arguments
-        result = await redis_client.sort_store(
+        sort_store_result = await redis_client.sort_store(
             key, store, limit=(1, 3), order=SortOrder.DESC, alpha=True
         )
-        assert result == 3
+        assert sort_store_result == 3
         sorted_list = await redis_client.lrange(store, 0, -1)
         assert sorted_list == ["5", "4", "3"]
 

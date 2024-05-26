@@ -11,10 +11,10 @@ from glide.async_commands.core import (
     GeoUnit,
     InfoSection,
     InsertPosition,
+    SortOrder,
     StreamAddOptions,
     StreamTrimOptions,
     UpdateOptions,
-    SortOrder,
     _build_sort_args,
 )
 from glide.async_commands.sorted_set import (
@@ -2822,12 +2822,12 @@ class ClusterTransaction(BaseTransaction):
     """
 
     def sort(
-        self,
+        self: TTransaction,
         key: str,
         limit: Optional[Tuple[int, int]] = None,
         order: Optional[SortOrder] = None,
         alpha: Optional[bool] = None,
-    ) -> List[Optional[str]]:
+    ) -> TTransaction:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         To store the result into a new key, see `sort_store`.
@@ -2847,13 +2847,13 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     def sort_store(
-        self,
+        self: TTransaction,
         key: str,
         store: str,
         limit: Optional[Tuple[int, int]] = None,
         order: Optional[SortOrder] = None,
         alpha: Optional[bool] = None,
-    ) -> int:
+    ) -> TTransaction:
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
         When in cluster mode, `key` and `store` must map to the same hash slot.

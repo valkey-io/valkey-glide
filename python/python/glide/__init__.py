@@ -9,12 +9,12 @@ from glide.async_commands.core import (
     GeoUnit,
     InfoSection,
     InsertPosition,
+    SortOrder,
     StreamAddOptions,
     StreamTrimOptions,
     TrimByMaxLen,
     TrimByMinId,
     UpdateOptions,
-    SortOrder,
 )
 from glide.async_commands.redis_modules import json
 from glide.async_commands.sorted_set import (
@@ -103,12 +103,12 @@ __all__ = [
     "RangeByLex",
     "RangeByScore",
     "ScoreFilter",
+    "SortOrder",
     "StreamAddOptions",
     "StreamTrimOptions",
     "TrimByMaxLen",
     "TrimByMinId",
     "UpdateOptions",
-    "SortOrder",
     # Logger
     "Logger",
     "LogLevel",

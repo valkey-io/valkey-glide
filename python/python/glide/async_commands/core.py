@@ -138,13 +138,17 @@ class UpdateOptions(Enum):
 class SortOrder(Enum):
     """
     SORT order options: options for sorting elements.
-
-    - ASC: Sort in ascending order.
-    - DESC: Sort in descending order.
     """
 
     ASC = "ASC"
+    """
+    ASC: Sort in ascending order.
+    """
+
     DESC = "DESC"
+    """
+    DESC: Sort in descending order.
+    """
 
 
 class GeospatialData:
