@@ -259,8 +259,8 @@ jobs:
               shell: bash
               working-directory: ./node/npm/glide
               run: |
-                  echo "Installing packages: ${PACKAGES_LIST//\'/}"
-                  npm install --no-save ${PACKAGES_LIST//\'/}
+                  echo "Installing packages: ${{ env.PACKAGES_LIST }}"
+                  npm install --no-save ${{ env.PACKAGES_LIST }}
                   
             - name: Publish the base package
               if: github.event_name != 'pull_request'
