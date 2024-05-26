@@ -252,8 +252,8 @@ jobs:
               shell: bash
               run: |
                   echo "Matrix: ${MATRIX}"
-                  packages_list=$(echo "${MATRIX}" | jq -r '.[] | "@aws/glide-for-redis-\(.OS)\(.CLIB)-\(.ARCH)@${{ env.NPM_TAG }}"')
-                  echo "PACKAGES_LIST='$packages_list'" >> $GITHUB_ENV
+                  packages_list=$(echo "${MATRIX}" | jq -r '[.[] | "@aws/glide-for-redis-\(.OS)\(.CLIB)-\(.ARCH)@${{ env.NPM_TAG }}"] | join(" ")')
+                  echo 'PACKAGES_LIST=$packages_list' >> $GITHUB_ENV
 
             - name: Install the packed packages
               shell: bash
