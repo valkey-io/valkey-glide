@@ -338,13 +338,15 @@ jobs:
               shell: bash
               working-directory: ./utils
               run: |
+                  npm install
                   npm install -g typescript
-                  npx tsc
+                  npx tsc -p ./tsconfig.json
 
             - name: Run the tests
               shell: bash
               working-directory: ./utils/release-candidate-testing/node
               run: |
+                  npm install
                   npm install --no-save @aws/glide-for-redis@next
                   npm run test
 
