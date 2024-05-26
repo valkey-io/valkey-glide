@@ -137,6 +137,19 @@ jobs:
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Check if RC and set a distribution tag for the package
+              shell: bash
+              run: |
+                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  then
+                    echo "This is a release candidate"
+                    export npm_tag="next"
+                  else
+                    echo "This is a stable release"
+                    export npm_tag="latest"
+                  fi
+                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+
             - name: Publish to NPM
               if: github.event_name != 'pull_request'
               shell: bash
@@ -144,7 +157,7 @@ jobs:
               run: |
                   set +e
                   # Redirect only stderr
-                  { npm_publish_err=$(npm publish --access public 2>&1 >&3 3>&-); } 3>&1
+                  { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 >&3 3>&- | grep -v "^npm notice"); } 3>&1
                   if [[ "$npm_publish_err" == *"You cannot publish over the previously published versions"* ]]
                   then
                     echo "Skipping publishing, package already published"
@@ -219,20 +232,7 @@ jobs:
                   os: ubuntu
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Create package list from Matrix
-              shell: bash
-              run: |
-                  packages_list=`echo jq -r '.[] | "@aws/glide-for-redis-\(.OS)\(.CLIB)-\(.ARCH)@$GITHUB_REF:11"' ${{fromJson(needs.output-matrix.outputs.matrix)}}`
-                  echo "PACKAGES_LIST=${packages_list}" >> $GITHUB_ENV
-
-            - name: Install the packed packages
-              shell: bash
-              working-directory: ./node/npm/glide
-              run: |
-                  echo "Installing packages: ${{ env.PACKAGES_LIST }}"
-                  npm install --no-save ${{ env.PACKAGES_LIST }}
-
+            
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
@@ -245,6 +245,19 @@ jobs:
                     export npm_tag="latest"
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+
+            - name: Create package list from Matrix
+              shell: bash
+              run: |
+                  packages_list=`echo jq -r '.[] | "@aws/glide-for-redis-\(.OS)\(.CLIB)-\(.ARCH)@${{ env.NPM_TAG }}"' ${{fromJson(needs.output-matrix.outputs.matrix)}}`
+                  echo "PACKAGES_LIST=${packages_list}" >> $GITHUB_ENV
+
+            - name: Install the packed packages
+              shell: bash
+              working-directory: ./node/npm/glide
+              run: |
+                  echo "Installing packages: ${{ env.PACKAGES_LIST }}"
+                  npm install --no-save ${{ env.PACKAGES_LIST }}
                   
             - name: Publish the base package
               if: github.event_name != 'pull_request'
