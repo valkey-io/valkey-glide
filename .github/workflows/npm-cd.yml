@@ -249,8 +249,8 @@ jobs:
             - name: Create package list from Matrix
               shell: bash
               run: |
-                  packages_list=`echo jq -r '.[] | "@aws/glide-for-redis-\(.OS)\(.CLIB)-\(.ARCH)@${{ env.NPM_TAG }}"' ${{fromJson(needs.output-matrix.outputs.matrix)}}`
-                  echo "PACKAGES_LIST=${packages_list}" >> $GITHUB_ENV
+                  packages_list=$(echo '${{fromJson(needs.output-matrix.outputs.matrix)}}' | jq -r '.[] | "@aws/glide-for-redis-\(.OS)\(.CLIB)-\(.ARCH)@${{ env.NPM_TAG }}"')
+                  echo "PACKAGES_LIST=$packages_list" >> $GITHUB_ENV
 
             - name: Install the packed packages
               shell: bash
