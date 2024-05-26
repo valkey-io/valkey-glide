@@ -87,21 +87,23 @@ jobs:
               if: ${{ github.event_name != 'pull_request' && contains(github.ref, 'rc') }}
               shell: bash
               run: |
-                  export version=`echo ${GITHUB_REF:11} | sed 's/-/rc/'`
+                  export version=`echo ${GITHUB_REF:11}`
                   echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
+                  export py_version=`echo ${GITHUB_REF:11} | sed 's/-rc/rc/'`
+                  echo "PY_RELEASE_VERSION=${py_version}" >> $GITHUB_ENV
 
             - name: Set the release version
               if: ${{ !contains(github.ref, 'rc') }}
               shell: bash
               run: |
                   export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
-                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
+                  echo "PY_RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Set the package version for Python
               working-directory: ./python
               run: |
                   SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS "s|255.255.255|${{ env.RELEASE_VERSION }}|g" ./Cargo.toml
+                  sed -i $SED_FOR_MACOS "s|255.255.255|${{ env.PY_RELEASE_VERSION }}|g" ./Cargo.toml
                   # Log the edited Cargo.toml file
                   cat Cargo.toml
 
