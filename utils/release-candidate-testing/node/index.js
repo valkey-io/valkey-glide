@@ -9,39 +9,57 @@ async function runCommands(client) {
         let res = await client.set(`foo${i}`, "bar");
         if (res !== "OK") {
             console.log(res);
-            throw new Error("Unexpected set response");
+            throw new Error(`Unexpected set response, expected OK, got ${res}`);
         }
     }
+    console.log("Keys sets");
     // Get the keys
     for (let i = 0; i < 10; i++) {
         let val = await client.get(`foo${i}`);
         if (val !== "bar") {
             console.log(val);
-            throw new Error("Unexpected value");
+            throw new Error(`Unexpected value, expected bar, got ${val}`);
         }
     }
-    // Run some commands
+    console.log("Got keys");
+    // Run some various commands
     let pong = await client.ping();
     if (pong !== "PONG") {
         console.log(pong);
-        throw new Error("Unexpected pong");
+        throw new Error(`Unexpected ping response, expected PONG, got ${pong}`);
     }
-    let time = await client.time();
-    if (time.length !== 2) {
-        console.log(time);
-        throw new Error("Unexpected time response");
+    console.log(`Ponged: ${pong}`);
+    // Set a bunch of keys to delete
+    let arrayOfkeys = [];
+    for (let i = 1; i <= 3; i++) arrayOfkeys.push(`foo${i}`);
+    // delete the keys
+    let deletedKeysNum = await client.del(arrayOfkeys);
+    console.log(`Deleted keys: ${deletedKeysNum}`);
+    // check that the correct number of keys were deleted
+    if (deletedKeysNum !== 3) {
+        console.log(deletedKeysNum);
+        throw new Error(`Unexpected number of keys deleted, expected 3, got ${deletedKeysNum}`);
     }
+    // check that the keys were deleted
+    for (let i = 1; i <= 3; i++) {
+        let val = await client.get(`foo${i}`);
+        if (val !== null) {
+            console.log(val);
+            throw new Error(`Unexpected value, expected null, got ${val}`);
+        }
+    }
+    console.log("Keys deleted");
     console.log("Commands executed");
 }
 
-async function closeClientAndServers(client, server) {
+async function closeClientAndCluster(client, Cluster) {
     console.log("Closing client");
     await client.close();
     console.log("Client closed");
 
-    console.log("Closing servers");
-    await server.close();
-    console.log("Servers closed");
+    console.log("Closing Clusters");
+    await Cluster.close();
+    console.log("Clusters closed");
 }
 
 async function clusterTests() {
@@ -61,44 +79,44 @@ async function clusterTests() {
 
         await runCommands(client);
 
-        await closeClientAndServers(client, redisCluster);
+        await closeClientAndCluster(client, redisCluster);
         console.log("Done");
     } catch (error) {
-        // Need this part just when running in our self-hosted runner, so if the test fails before closing servers we still kill them and clean up
+        // Need this part just when running in our self-hosted runner, so if the test fails before closing Clusters we still kill them and clean up
         if (process.platform === "linux" && process.arch in ["arm", "arm64"]) {
             exec(`pkill -f redis`);
             exec(`rm -rf ${clusterFolder}`);
             exec(`rm -rf /tmp/redis*`);
         }
-        console.error(error);
+        throw error;
     }
 }
 
 async function standaloneTests() {
     try {
-        console.log("Testing standalone server")
-        console.log("Creating Server");
-        let redisServer = await RedisCluster.createCluster(false,
+        console.log("Testing standalone Cluster")
+        console.log("Creating Cluster");
+        let redisCluster = await RedisCluster.createCluster(false,
             1,
             1,
         );
-        console.log("Server created");
+        console.log("Cluster created");
 
-        console.log("Connecting to Server");
-        let addresses = redisServer.getAddresses().map((address) => { return { host: address[0], port: address[1] } });
+        console.log("Connecting to Cluster");
+        let addresses = redisCluster.getAddresses().map((address) => { return { host: address[0], port: address[1] } });
         const client = await RedisClient.createClient({ addresses: addresses });
-        console.log("Connected to Server");
+        console.log("Connected to Cluster");
 
-        await closeClientAndServers(client, redisServer);
+        await closeClientAndCluster(client, redisCluster);
         console.log("Done");
 
     } catch (error) {
-        // Need this part just when running in our self-hosted runner, so if the test fails before closing servers we still kill them and clean up
+        // Need this part just when running in our self-hosted runner, so if the test fails before closing Clusters we still kill them and clean up
         if (process.platform === "linux" && process.arch in ["arm", "arm64"]) {
             exec(`pkill -f redis`);
             exec(`rm -rf /tmp/redis*`);
         }
-        console.error(error);
+        throw error;
     }
 }
 
