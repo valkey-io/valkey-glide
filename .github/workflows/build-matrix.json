@@ -1,0 +1,49 @@
+[
+    {
+        "OS": "ubuntu",
+        "NAMED_OS": "linux",
+        "RUNNER": "ubuntu-latest",
+        "ARCH": "x64",
+        "TARGET": "x86_64-unknown-linux-gnu"
+    },
+    {
+        "OS": "ubuntu",
+        "NAMED_OS": "linux",
+        "RUNNER": ["self-hosted", "Linux", "ARM64"],
+        "ARCH": "arm64",
+        "TARGET": "aarch64-unknown-linux-gnu",
+        "CONTAINER": "2_28"
+    },
+    {
+        "OS": "macos",
+        "NAMED_OS": "darwin",
+        "RUNNER": "macos-12",
+        "ARCH": "x64",
+        "TARGET": "x86_64-apple-darwin"
+    },
+    {
+        "OS": "macos",
+        "NAMED_OS": "darwin",
+        "RUNNER": "macos-13-xlarge",
+        "ARCH": "arm64",
+        "TARGET": "aarch64-apple-darwin"
+    },
+    {
+        "OS": "ubuntu",
+        "NAMED_OS": "linux",
+        "ARCH": "arm64",
+        "TARGET": "aarch64-unknown-linux-musl",
+        "RUNNER": ["self-hosted", "Linux", "ARM64"],
+        "IMAGE": "node:alpine",
+        "CONTAINER_OPTIONS": "--user root --privileged --rm"
+    },
+    {
+        "OS": "ubuntu",
+        "NAMED_OS": "linux",
+        "ARCH": "x64",
+        "TARGET": "x86_64-unknown-linux-musl",
+        "RUNNER": "ubuntu-latest",
+        "IMAGE": "node:alpine",
+        "CONTAINER_OPTIONS": "--user root --privileged"
+    }
+]
