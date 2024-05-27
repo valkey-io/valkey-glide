@@ -382,7 +382,7 @@ class ClusterCommands(CoreCommands):
 
         By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
 
-        See https://valkey-io.github.io/commands/sort/ for more details.
+        See https://valkey.io/commands/sort for more details.
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
@@ -431,7 +431,7 @@ class ClusterCommands(CoreCommands):
         When in cluster mode, `key` and `store` must map to the same hash slot.
         To get the sort result, see `sort`.
 
-        See https://valkey-io.github.io/commands/sort/ for more details.
+        See https://valkey.io/commands/sort for more details.
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.

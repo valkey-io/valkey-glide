@@ -280,7 +280,7 @@ class StandaloneCommands(CoreCommands):
         The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
         To store the result into a new key, see `sort_store`.
 
-        See https://valkey-io.github.io/commands/sort/ for more details.
+        See https://valkey.io/commands/sort for more details.
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
@@ -327,7 +327,7 @@ class StandaloneCommands(CoreCommands):
         The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements, and store the result in a new key.
         To get the sort result, see `sort`.
 
-        See https://valkey-io.github.io/commands/sort/ for more details.
+        See https://valkey.io/commands/sort for more details.
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
