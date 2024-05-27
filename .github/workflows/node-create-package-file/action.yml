@@ -75,7 +75,11 @@ runs:
                 sed -i '/"name":/d' ./package.json
               fi
               # Remove all `///` occurrences to enable the commented out sections
-              sed -i -e 's|///||g' package.json
+              if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then
+                sed 's|///||g' package.json > temp.json && mv temp.json package.json
+              else
+                sed -i 's|///||g' package.json
+              fi
               # generate package.json from the template
               mv package.json package.json.tmpl
               envsubst < package.json.tmpl > "package.json"
