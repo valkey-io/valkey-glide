@@ -174,8 +174,10 @@ def _create_zrange_args(
     range_query: Union[RangeByLex, RangeByScore, RangeByIndex],
     reverse: bool,
     with_scores: bool,
+    destination: Optional[str] = None,
 ) -> List[str]:
-    args = [key, str(range_query.start), str(range_query.stop)]
+    args = [destination] if destination else []
+    args += [key, str(range_query.start), str(range_query.stop)]
 
     if isinstance(range_query, RangeByScore):
         args.append("BYSCORE")
@@ -212,7 +214,6 @@ def separate_keys(
     if isinstance(keys[0], tuple):
         key_list = [item[0] for item in keys]
         weight_list = [str(item[1]) for item in keys]
-    # elif isinstance(keys[0], str):
     else:
         key_list = keys  # type: ignore
 
@@ -237,31 +238,5 @@ def _create_z_cmd_store_args(
     if aggregation_type:
         args.append("AGGREGATE")
         args.append(aggregation_type.value)
-
-    return args
-
-
-def _create_zrangestore_args(
-    destination: str,
-    source: str,
-    range_query: Union[RangeByLex, RangeByScore, RangeByIndex],
-    reverse: bool,
-) -> List[str]:
-    args = [destination, source, str(range_query.start), str(range_query.stop)]
-
-    if isinstance(range_query, RangeByScore):
-        args.append("BYSCORE")
-    elif isinstance(range_query, RangeByLex):
-        args.append("BYLEX")
-    if reverse:
-        args.append("REV")
-    if hasattr(range_query, "limit") and range_query.limit is not None:
-        args.extend(
-            [
-                "LIMIT",
-                str(range_query.limit.offset),
-                str(range_query.limit.count),
-            ]
-        )
 
     return args

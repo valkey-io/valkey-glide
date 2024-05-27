@@ -27,7 +27,6 @@ from glide.async_commands.sorted_set import (
     ScoreFilter,
     _create_z_cmd_store_args,
     _create_zrange_args,
-    _create_zrangestore_args,
 )
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -2741,7 +2740,7 @@ class CoreCommands(Protocol):
             >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
                 2  # The 2 members with scores between negative infinity and 3 (inclusive) from "my_sorted_set" were stored in the sorted set at "destination_key".
         """
-        args = _create_zrangestore_args(destination, source, range_query, reverse)
+        args = _create_zrange_args(source, range_query, reverse, False, destination)
 
         return cast(int, await self._execute_command(RequestType.ZRangeStore, args))
 
