@@ -2475,6 +2475,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ObjectEncoding, [key])
 
+    def object_freq(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-freq for more details.
+
+        Args:
+            key (str): The key of the object to get the logarithmic access frequency counter of.
+
+        Command response:
+            int: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
+                integer. Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectFreq, [key])
+
 
 class Transaction(BaseTransaction):
     """

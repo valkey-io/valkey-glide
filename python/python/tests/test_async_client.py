@@ -3393,6 +3393,26 @@ class TestCommands:
         assert await redis_client.xadd(stream_key, [("field", "value")]) is not None
         assert await redis_client.object_encoding(stream_key) == "stream"
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_object_freq(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        maxmemory_policy_key = "maxmemory-policy"
+        config = await redis_client.config_get([maxmemory_policy_key])
+        maxmemory_policy = cast(str, config.get(maxmemory_policy_key))
+
+        try:
+            assert (
+                await redis_client.config_set({maxmemory_policy_key: "allkeys-lfu"})
+                == OK
+            )
+            assert await redis_client.object_freq(non_existing_key) is None
+            assert await redis_client.set(key, "") == OK
+            assert await redis_client.object_freq(key) >= 0
+        finally:
+            await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
