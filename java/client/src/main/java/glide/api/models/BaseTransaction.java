@@ -3493,7 +3493,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Blocks the connection until it pops one or more elements from the first non-empty list from the
-     * provided <code>keys</code>. <code>BLMPOP</code> is the blocking variant of <code>LMPOP</code>.
+     * provided <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link
+     * #lmpop(String[], PopDirection, Long)}.
      *
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
@@ -3507,7 +3508,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @return Command Response - A <code>Map</code> of <code>key</code> names arrays of popped
-     *     elements. <br>
+     *     elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      */
     public T blmpop(
@@ -3529,7 +3530,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Blocks the connection until it pops one element from the first non-empty list from the provided
-     * <code>keys</code>. <code>BLMPOP</code> is the blocking variant of <code>LMPOP</code>.
+     * <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link #lmpop(String[],
+     * PopDirection)}.
      *
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
@@ -3542,7 +3544,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @return Command Response - A <code>Map</code> of <code>key</code> names arrays of popped
-     *     elements. <br>
+     *     elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      */
     public T blmpop(@NonNull String[] keys, @NonNull PopDirection direction, double timeout) {

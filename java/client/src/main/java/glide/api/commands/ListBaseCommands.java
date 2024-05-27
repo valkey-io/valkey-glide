@@ -418,8 +418,8 @@ public interface ListBaseCommands {
 
     /**
      * Blocks the connection until it pops one or more elements from the first non-empty list from the
-     * provided <code>keys</code> <code>BLMPOP</code> is the blocking variant of <code>LMPOP
-     * </code>.
+     * provided <code>keys</code> <code>BLMPOP</code> is the blocking variant of {@link
+     * #lmpop(String[], PopDirection, long)}.
      *
      * @apiNote
      *     <ol>
@@ -437,7 +437,7 @@ public interface ListBaseCommands {
      * @param count The maximum number of popped elements.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements. <br>
+     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
@@ -451,9 +451,9 @@ public interface ListBaseCommands {
             String[] keys, PopDirection direction, long count, double timeout);
 
     /**
-     * Blocks the connection until it pop one element from the first non-empty list from the provided
-     * <code>keys</code> <code>BLMPOP</code> is the blocking variant of <code>LMPOP
-     * </code>.
+     * Blocks the connection until it pops one element from the first non-empty list from the provided
+     * <code>keys</code> <code>BLMPOP</code> is the blocking variant of {@link #lmpop(String[],
+     * PopDirection)}.
      *
      * @apiNote
      *     <ol>
@@ -470,7 +470,7 @@ public interface ListBaseCommands {
      *     PopDirection}.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
-     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element. <br>
+     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      * @example
      *     <pre>{@code
