@@ -1957,6 +1957,9 @@ class TestCommands:
         members_scores = {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
         assert await redis_client.zadd(key1, members_scores) == 5
 
+        # Test start exceeding end
+        assert await redis_client.zremrangebyrank(key1, 2, 1) == 0
+
         # Test removing elements by rank
         assert await redis_client.zremrangebyrank(key1, 0, 2) == 3
         zremrangebyrank_res = await redis_client.zrange_withscores(key1, range)
@@ -1965,9 +1968,6 @@ class TestCommands:
         # Test removing elements beyond the existing range
         assert await redis_client.zremrangebyrank(key1, 0, 10) == 2
         assert await redis_client.zrange_withscores(key1, range) == {}
-
-        # Test start exceeding end
-        assert await redis_client.zremrangebyrank(key1, 2, 1) == 0
 
         # Test with non-existing key
         assert await redis_client.zremrangebyrank("non_existing_key", 0, 1) == 0
