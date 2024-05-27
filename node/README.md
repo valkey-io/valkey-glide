@@ -91,3 +91,9 @@ Visit our [wiki](https://github.com/aws/glide-for-redis/wiki/NodeJS-wrapper) for
 ### Building & Testing
 
 Development instructions for local building & testing the package are in the [DEVELOPER.md](https://github.com/aws/glide-for-redis/blob/main/node/DEVELOPER.md#build-from-source) file.
+
+### Supported platforms
+
+Currentlly the package is supported on:
+Linux with both glibc and musl libc, and on both x86_64 and aarch64 architectures.
+macOS with both aarch64 and x86_64 architectures.
