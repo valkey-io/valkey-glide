@@ -151,7 +151,7 @@ jobs:
                     export npm_tag="latest"
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
-                  
+
             - name: Check that the release version dont have typo init
               if: ${{ github.event_name != 'pull_request' && contains(github.ref, '-') && !contains(github.ref, 'rc') }}
               run: exit 1
@@ -264,8 +264,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build:
-                  ${{fromJson(github.env.MATRIX)}}
+                build: ${{fromJson(needs.output-matrix.outputs.MATRIX)}}                   
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
