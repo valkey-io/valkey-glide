@@ -6,10 +6,10 @@ from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
+from glide.async_commands.command_args import Limit, SortOrder
 from glide.async_commands.core import (
     GeospatialData,
     InsertPosition,
-    SortOrder,
     StreamAddOptions,
     TrimByMinId,
 )
@@ -369,7 +369,7 @@ async def transaction_test(
     args.append(5)
     transaction.sort(
         key17,
-        limit=(1, 4),
+        limit=Limit(1, 4),
         order=SortOrder.ASC,
         alpha=True,
     )
@@ -377,7 +377,7 @@ async def transaction_test(
     transaction.sort_store(
         key17,
         key18,
-        limit=(1, 4),
+        limit=Limit(1, 4),
         order=SortOrder.ASC,
         alpha=True,
     )

@@ -16,6 +16,7 @@ from typing import (
     get_args,
 )
 
+from glide.async_commands.command_args import Limit, SortOrder
 from glide.async_commands.sorted_set import (
     AggregationType,
     InfBound,
@@ -133,22 +134,6 @@ class UpdateOptions(Enum):
 
     LESS_THAN = "LT"
     GREATER_THAN = "GT"
-
-
-class SortOrder(Enum):
-    """
-    SORT order options: options for sorting elements.
-    """
-
-    ASC = "ASC"
-    """
-    ASC: Sort in ascending order.
-    """
-
-    DESC = "DESC"
-    """
-    DESC: Sort in descending order.
-    """
 
 
 class GeospatialData:
@@ -380,7 +365,7 @@ class InsertPosition(Enum):
 def _build_sort_args(
     key: str,
     by_pattern: Optional[str] = None,
-    limit: Optional[Tuple[int, int]] = None,
+    limit: Optional[Limit] = None,
     get_patterns: Optional[List[str]] = None,
     order: Optional[SortOrder] = None,
     alpha: Optional[bool] = None,
@@ -392,7 +377,7 @@ def _build_sort_args(
         args.extend(["BY", by_pattern])
 
     if limit:
-        args.extend(["LIMIT", str(limit[0]), str(limit[1])])
+        args.extend(["LIMIT", str(limit.offset), str(limit.count)])
 
     if get_patterns:
         for pattern in get_patterns:

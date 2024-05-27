@@ -4,12 +4,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Tuple, cast
 
-from glide.async_commands.core import (
-    CoreCommands,
-    InfoSection,
-    SortOrder,
-    _build_sort_args,
-)
+from glide.async_commands.command_args import Limit, SortOrder
+from glide.async_commands.core import CoreCommands, InfoSection, _build_sort_args
 from glide.async_commands.transaction import BaseTransaction, Transaction
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -274,7 +270,7 @@ class StandaloneCommands(CoreCommands):
         self,
         key: str,
         by_pattern: Optional[str] = None,
-        limit: Optional[Tuple[int, int]] = None,
+        limit: Optional[Limit] = None,
         get_patterns: Optional[List[str]] = None,
         order: Optional[SortOrder] = None,
         alpha: Optional[bool] = None,
@@ -289,7 +285,7 @@ class StandaloneCommands(CoreCommands):
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
             by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
-            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
+            limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
             get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
             order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
@@ -321,7 +317,7 @@ class StandaloneCommands(CoreCommands):
         key: str,
         store: str,
         by_pattern: Optional[str] = None,
-        limit: Optional[Tuple[int, int]] = None,
+        limit: Optional[Limit] = None,
         get_patterns: Optional[List[str]] = None,
         order: Optional[SortOrder] = None,
         alpha: Optional[bool] = None,
@@ -337,7 +333,7 @@ class StandaloneCommands(CoreCommands):
             key (str): The key of the list, set, or sorted set to be sorted.
             store (str): The key where the sorted result will be stored.
             by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
-            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
+            limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
             get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
             order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.

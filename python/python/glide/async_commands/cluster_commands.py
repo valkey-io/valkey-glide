@@ -4,12 +4,8 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Tuple, cast
 
-from glide.async_commands.core import (
-    CoreCommands,
-    InfoSection,
-    SortOrder,
-    _build_sort_args,
-)
+from glide.async_commands.command_args import Limit, SortOrder
+from glide.async_commands.core import CoreCommands, InfoSection, _build_sort_args
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
 from glide.constants import TOK, TClusterResponse, TResult, TSingleNodeRoute
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -376,34 +372,47 @@ class ClusterCommands(CoreCommands):
     async def sort(
         self,
         key: str,
-        limit: Optional[Tuple[int, int]] = None,
+        limit: Optional[Limit] = None,
         order: Optional[SortOrder] = None,
         alpha: Optional[bool] = None,
-    ) -> List[Optional[str]]:
+    ) -> List[str]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         To store the result into a new key, see `sort_store`.
+
+        By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
 
         See https://valkey-io.github.io/commands/sort/ for more details.
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
-            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
-            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
-            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+            limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
+            A tuple specifying the offset and count for limiting the number of results returned.
+                The `limit` parameter takes a tuple `(offset, count)` where `offset` specifies the starting position and `count` specifies the maximum number of elements to return.
+                If `offset` exceeds the length of the returned result, an empty list is returned.
+            order (Optional[SortOrder]): Specifies the order to sort the elements.
+                Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
         Returns:
-            List[Optional[str]]: Returns a list of sorted elements.
+            List[str]: A list of sorted elements.
 
         Examples:
-            >>> await client.lpush("mylist", 3, 1, 2)
+            >>> await client.lpush("mylist", '3', '1', '2')
             >>> await client.sort("mylist")
             ['1', '2', '3']
+
             >>> await client.sort("mylist", order=SortOrder.DESC)
             ['3', '2', '1']
-            >>> await client.lpush("mylist", 2, 1, 2, 3, 3, 1)
+
+            >>> await client.lpush("mylist", '2', '1', '2', '3', '3', '1')
             >>> await client.sort("mylist", limit=(2, 3))
             ['2', '2', '3']
+
+            >>> await client.lpush("mylist", "a", "b", "c", "d")
+            >>> await client.sort("mylist", limit=(3, 2), order=SortOrder.DESC, alpha=True)
+            ['b', 'a']
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         result = await self._execute_command(RequestType.Sort, args)

@@ -1,5 +1,6 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
+from glide.async_commands.command_args import Limit, SortOrder
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -9,7 +10,6 @@ from glide.async_commands.core import (
     GeoUnit,
     InfoSection,
     InsertPosition,
-    SortOrder,
     StreamAddOptions,
     StreamTrimOptions,
     TrimByMaxLen,
@@ -21,7 +21,6 @@ from glide.async_commands.sorted_set import (
     AggregationType,
     InfBound,
     LexBoundary,
-    Limit,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
