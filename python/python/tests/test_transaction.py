@@ -268,6 +268,8 @@ async def transaction_test(
     args.append(0)
     transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(0)
+    transaction.zremrangebyrank(key8, 0, 10)
+    args.append(0)
     transaction.zdiffstore(key8, [key8, key8])
     args.append(0)
     if not await check_if_server_version_lt(redis_client, "7.0.0"):

@@ -2930,6 +2930,43 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def zremrangebyrank(
+        self,
+        key: str,
+        start: int,
+        end: int,
+    ) -> int:
+        """
+        Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
+        Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
+        These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
+
+        See https://valkey.io/commands/zremrangebyrank/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            start (int): The starting point of the range.
+            end (int): The end of the range.
+
+        Returns:
+            int: The number of elements that were removed.
+                If `start` exceeds the end of the sorted set, or if `start` is greater than `end`, `0` is returned.
+                If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
+                If `key` does not exist, `0` is returned.
+
+        Examples:
+            >>> await client.zremrangebyrank("my_sorted_set", 0, 4)
+                5  # Indicates that 5 elements, with ranks ranging from 0 to 4 (inclusive), have been removed from "my_sorted_set".
+            >>> await client.zremrangebyrank("my_sorted_set", 0, 4)
+                0  # Indicates that nothing was removed.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZRemRangeByRank, [key, str(start), str(end)]
+            ),
+        )
+
     async def zlexcount(
         self,
         key: str,

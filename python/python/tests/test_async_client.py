@@ -1950,6 +1950,35 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zremrangebyrank(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        range = RangeByIndex(0, -1)
+        members_scores = {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
+        assert await redis_client.zadd(key1, members_scores) == 5
+
+        # Test start exceeding end
+        assert await redis_client.zremrangebyrank(key1, 2, 1) == 0
+
+        # Test removing elements by rank
+        assert await redis_client.zremrangebyrank(key1, 0, 2) == 3
+        zremrangebyrank_res = await redis_client.zrange_withscores(key1, range)
+        assert compare_maps(zremrangebyrank_res, {"d": 4.0, "e": 5.0}) is True
+
+        # Test removing elements beyond the existing range
+        assert await redis_client.zremrangebyrank(key1, 0, 10) == 2
+        assert await redis_client.zrange_withscores(key1, range) == {}
+
+        # Test with non-existing key
+        assert await redis_client.zremrangebyrank("non_existing_key", 0, 1) == 0
+
+        # Key exists, but it is not a sorted set
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zremrangebyrank(key2, 0, 1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zlexcount(self, redis_client: TRedisClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
