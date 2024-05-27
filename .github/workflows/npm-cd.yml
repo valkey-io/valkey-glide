@@ -151,6 +151,10 @@ jobs:
                     export npm_tag="latest"
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+                  
+            - name: Check that the release version dont have typo init
+              if: ${{ github.event_name != 'pull_request' && contains(github.ref, '-') && !contains(github.ref, 'rc') }}
+              run: exit 1
 
             - name: Publish to NPM
               if: github.event_name != 'pull_request'
