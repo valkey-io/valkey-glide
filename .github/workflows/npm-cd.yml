@@ -257,7 +257,7 @@ jobs:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
     test-release-candidate:
-        if: github.event_name != 'pull_request' && contains(github.ref, 'rc')
+        if: github.event_name != 'pull_request'
         name: Test the release candidate
         needs: [publish-base-to-npm, output-matrix]
         runs-on: ${{ matrix.build.RUNNER }}
@@ -321,7 +321,7 @@ jobs:
               working-directory: ./utils
               run: |
                   npm install
-                  npm install -g typescript
+                  sudo npm install -g typescript
                   npx tsc -p ./tsconfig.json
 
             - name: Run the tests
