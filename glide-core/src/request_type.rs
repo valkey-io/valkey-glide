@@ -163,6 +163,7 @@ pub enum RequestType {
     LMPop = 155,
     ExpireTime = 156,
     PExpireTime = 157,
+    BLMPop = 158,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -319,6 +320,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BZMPop => RequestType::BZMPop,
             ProtobufRequestType::SetBit => RequestType::SetBit,
             ProtobufRequestType::LMPop => RequestType::LMPop,
+            ProtobufRequestType::BLMPop => RequestType::BLMPop,
             ProtobufRequestType::ZInterCard => RequestType::ZInterCard,
             ProtobufRequestType::ZMPop => RequestType::ZMPop,
             ProtobufRequestType::GetBit => RequestType::GetBit,
@@ -480,6 +482,7 @@ impl RequestType {
             RequestType::BitCount => Some(cmd("BITCOUNT")),
             RequestType::BZMPop => Some(cmd("BZMPOP")),
             RequestType::LMPop => Some(cmd("LMPOP")),
+            RequestType::BLMPop => Some(cmd("BLMPOP")),
             RequestType::SetBit => Some(cmd("SETBIT")),
             RequestType::ZInterCard => Some(cmd("ZINTERCARD")),
             RequestType::ZMPop => Some(cmd("ZMPOP")),
