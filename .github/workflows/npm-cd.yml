@@ -324,12 +324,25 @@ jobs:
                   sudo npm install -g typescript
                   npx tsc -p ./tsconfig.json
 
+            - name: Check if RC and set a distribution tag for the package
+              shell: bash
+              run: |
+                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  then
+                    echo "This is a release candidate"
+                    export npm_tag="next"
+                  else
+                    echo "This is a stable release"
+                    export npm_tag="latest"
+                  fi
+                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+
             - name: Run the tests
               shell: bash
               working-directory: ./utils/release-candidate-testing/node
               run: |
                   npm install
-                  npm install --no-save @aws/glide-for-redis@next
+                  npm install --no-save @aws/glide-for-redis@${{ env.NPM_TAG }}
                   npm run test
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
