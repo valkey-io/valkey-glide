@@ -193,6 +193,7 @@ enum RequestType {
     LMPop = 155;
     ExpireTime = 156;
     PExpireTime = 157;
+    BLMPop = 158;
 }
 
 message Command {

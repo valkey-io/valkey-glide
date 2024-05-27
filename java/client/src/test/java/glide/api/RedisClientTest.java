@@ -35,6 +35,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -4813,6 +4814,74 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.setbit(key, 8, 1);
         Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void blmpop_returns_success() {
+        // setup
+        String key = "testKey";
+        String key2 = "testKey2";
+        String[] keys = {key, key2};
+        PopDirection popDirection = PopDirection.LEFT;
+        double timeout = 0.1;
+        String[] arguments =
+                new String[] {Double.toString(timeout), "2", key, key2, popDirection.toString()};
+        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+
+        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[]>> response = service.blmpop(keys, popDirection, timeout);
+        Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void blmpop_with_count_returns_success() {
+        // setup
+        String key = "testKey";
+        String key2 = "testKey2";
+        String[] keys = {key, key2};
+        PopDirection popDirection = PopDirection.LEFT;
+        long count = 1L;
+        double timeout = 0.1;
+        String[] arguments =
+                new String[] {
+                    Double.toString(timeout),
+                    "2",
+                    key,
+                    key2,
+                    popDirection.toString(),
+                    COUNT_FOR_LIST_REDIS_API,
+                    Long.toString(count)
+                };
+        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+
+        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[]>> response =
+                service.blmpop(keys, popDirection, count, timeout);
+        Map<String, String[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
