@@ -17,6 +17,23 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    output-matrix:
+        runs-on: ubuntu-latest
+        outputs:
+            MATRIX: ${{ steps.output-matrix.outputs.MATRIX }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: output-matrix
+              id: output-matrix
+              shell: bash
+              run: |
+                # Get the matrix from the matrix.json file, without the object that has the IMAGE key
+                export "MATRIX=$(jq 'map(select(.IMAGE == null))' < .github/workflows/build-matrix.json | jq -c .)"
+                echo "MATRIX=${MATRIX}" >> $GITHUB_OUTPUT
+                
+
     start-self-hosted-runner:
         if: github.repository_owner == 'aws'
         runs-on: ubuntu-latest
@@ -32,7 +49,7 @@ jobs:
                 ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     publish-binaries:
-        needs: start-self-hosted-runner
+        needs: [start-self-hosted-runner, output-matrix]
         if: github.repository_owner == 'aws'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
@@ -41,35 +58,7 @@ jobs:
             fail-fast: false
             matrix:
                 build:
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          RUNNER: ubuntu-latest,
-                          ARCH: x64,
-                          TARGET: x86_64-unknown-linux-gnu,
-                      }
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          RUNNER: [self-hosted, Linux, ARM64],
-                          ARCH: arm64,
-                          TARGET: aarch64-unknown-linux-gnu,
-                          CONTAINER: "2_28",
-                      }
-                    - {
-                          OS: macos,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-12,
-                          ARCH: x64,
-                          TARGET: x86_64-apple-darwin,
-                      }
-                    - {
-                          OS: macos,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-13-xlarge,
-                          arch: arm64,
-                          TARGET: aarch64-apple-darwin,
-                      }
+                    ${{fromJson( needs.output-matrix.outputs.MATRIX )}}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
@@ -79,11 +68,25 @@ jobs:
               uses: actions/checkout@v4
               with:
                   submodules: "true"
+              
+              # For NPM and Cargo we need the the rc version to be {version}-rc{number} while for PyPi we need it to be {version}rc{number}
+              # This is because PyPi does not allow the '-' character in the version name
+              # So the tag will be as NPM and Cargo ask: v1.0.0-rc1 and for PyPi we'll chnage it to: v1.0.0rc1
+            - name: Change and set realease version for RC
+              if: ${{ github.event_name != 'pull_request' && contains(github.ref, 'rc') }}
+              shell: bash
+              run: |
+                  export version=`echo ${GITHUB_REF:11}`
+                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
+                  export py_version=`echo ${GITHUB_REF:11} | sed 's/-rc/rc/'`
+                  echo "PY_RELEASE_VERSION=${py_version}" >> $GITHUB_ENV
 
             - name: Set the release version
+              if: ${{ !contains(github.ref, 'rc') }}
               shell: bash
               run: |
                   export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
+                  echo "PY_RELEASE_VERSION=${version}" >> $GITHUB_ENV
                   echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Set the package version for Python

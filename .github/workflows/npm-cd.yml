@@ -2,14 +2,6 @@
 
 name: Continuous Deployment
 
-env:
-  MATRIX: '[{"OS": "ubuntu","NAMED_OS": "linux","RUNNER": "ubuntu-latest","ARCH": "x64","TARGET": "x86_64-unknown-linux-gnu"},
-          {"OS": "ubuntu","NAMED_OS": "linux","RUNNER": ["self-hosted", "Linux", "ARM64"],"ARCH": "arm64","TARGET": "aarch64-unknown-linux-gnu"},
-          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-12","ARCH": "x64","TARGET": "x86_64-apple-darwin"},
-          {"OS": "macos","NAMED_OS": "darwin","RUNNER": "macos-13-xlarge","ARCH": "arm64","TARGET": "aarch64-apple-darwin"},
-          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "arm64","TARGET": "aarch64-unknown-linux-musl","RUNNER": ["self-hosted", "Linux", "ARM64"],"IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged --rm"},
-          {"OS": "ubuntu","NAMED_OS": "linux","ARCH": "x64","TARGET": "x86_64-unknown-linux-musl","RUNNER": "ubuntu-latest","IMAGE": "node:alpine","CONTAINER_OPTIONS": "--user root --privileged"}]'
-
 on:
     pull_request:
       paths:
@@ -26,16 +18,6 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
-    output-matrix:
-        runs-on: ubuntu-latest
-        outputs:
-            matrix: ${{ steps.set-matrix.outputs.matrix }}
-        steps:
-            - name: Set matrix
-              id: set-matrix
-              run: |
-               echo "::set-output name=matrix::${{toJson( env.MATRIX )}}"
-
     start-self-hosted-runner:
         if: github.repository_owner == 'aws'
         runs-on: ubuntu-latest
@@ -53,6 +35,21 @@ jobs:
                 aws-region: ${{ secrets.AWS_REGION }}
                 ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
+    output-matrix:
+        runs-on: ubuntu-latest
+        outputs:
+            MATRIX: ${{ steps.output-matrix.outputs.MATRIX }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: output-matrix
+              id: output-matrix
+              shell: bash
+              run: |
+                export "MATRIX=$(jq -c . <  .github/workflows/build-matrix.json)"
+                echo "MATRIX=${MATRIX}" >> $GITHUB_OUTPUT
+
     publish-binaries:
         needs: [start-self-hosted-runner, output-matrix]
         if: github.repository_owner == 'aws'
@@ -64,9 +61,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build:
-                  ${{fromJson(needs.output-matrix.outputs.matrix)}}
-                    
+                build: ${{fromJson(needs.output-matrix.outputs.MATRIX)}}                   
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
@@ -105,7 +100,7 @@ jobs:
               if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
               uses: actions/setup-node@v3
               with:
-                  node-version: "16"
+                  node-version: "20"
                   registry-url: "https://registry.npmjs.org"
                   architecture: ${{ matrix.build.ARCH }}
                   scope: "${{ vars.NPM_SCOPE }}"
@@ -137,6 +132,19 @@ jobs:
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
+            - name: Check if RC and set a distribution tag for the package
+              shell: bash
+              run: |
+                  if [[ "${GITHUB_REF:11}" == *"rc"* ]]
+                  then
+                    echo "This is a release candidate"
+                    export npm_tag="next"
+                  else
+                    echo "This is a stable release"
+                    export npm_tag="latest"
+                  fi
+                  echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
+
             - name: Publish to NPM
               if: github.event_name != 'pull_request'
               shell: bash
@@ -144,7 +152,7 @@ jobs:
               run: |
                   set +e
                   # Redirect only stderr
-                  { npm_publish_err=$(npm publish --access public 2>&1 >&3 3>&-); } 3>&1
+                  { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 >&3 3>&- | grep -v "npm notice" | grep -v "warn"); } 3>&1
                   if [[ "$npm_publish_err" == *"You cannot publish over the previously published versions"* ]]
                   then
                     echo "Skipping publishing, package already published"
@@ -155,27 +163,6 @@ jobs:
                   fi
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            - name: Pack the Node package
-              shell: bash
-              working-directory: ./node
-              run: |
-                  # Remove the "cpu" and "os" fileds so the base package would be able to install it on ubuntu
-                  SED_FOR_MACOS=`if [[ "${{ matrix.build.OS }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS '/"\/\/\/cpu": \[/,/]/d' ./package.json && sed -i $SED_FOR_MACOS '/"\/\/\/os": \[/,/]/d' ./package.json
-                  mkdir -p bin
-                  npm pack --pack-destination ./bin
-                  ls ./bin
-              env:
-                  NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
-
-            - name: Upload the Node package
-              if: github.event_name != 'pull_request'
-              uses: actions/upload-artifact@v3
-              with:
-                  name: ${{ matrix.build.TARGET }}
-                  path: ./node/bin
-                  if-no-files-found: error
 
             # Reset the repository to make sure we get the clean checkout of the action later in other actions.
             # It is not required since in other actions we are cleaning before the action, but it is a good practice to do it here as well.
@@ -193,14 +180,14 @@ jobs:
         runs-on: ubuntu-latest
         steps:
             - name: Checkout
-              uses: actions/checkout@v3
+              uses: actions/checkout@v4
               with:
                   submodules: "true"
 
             - name: Install node
               uses: actions/setup-node@v3
               with:
-                  node-version: "16"
+                  node-version: "20"
                   registry-url: "https://registry.npmjs.org"
                   scope: "${{ vars.NPM_SCOPE }}"
                   always-auth: true
@@ -227,33 +214,7 @@ jobs:
                   os: ubuntu
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Create a directory for the packed packages
-              shell: bash
-              working-directory: ./node/npm/glide
-              run: mkdir packages
-
-            - name: Download the packed packages
-              id: download
-              uses: actions/download-artifact@v3
-              with:
-                  path: ./node/npm/glide/packages
-
-            - name: Install the packed packages
-              shell: bash
-              working-directory: ./node/npm/glide
-              run: |
-                  ls -LR packages/
-                  packages_list=`find ${{steps.download.outputs.download-path}} -type f -follow -print`
-                  for package in $packages_list
-                  do
-                    if [[ "${package}" == *.tgz ]]
-                    then
-                        echo "Installing package $package"
-                        npm i --no-save "$package"
-                    fi
-                  done
-
+            
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
@@ -292,7 +253,7 @@ jobs:
             fail-fast: false
             matrix:
                 build:
-                  ${{fromJson(needs.output-matrix.outputs.matrix)}}
+                  ${{fromJson(github.env.MATRIX)}}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
@@ -303,17 +264,34 @@ jobs:
               run: |
                 apk update
                 apk add redis git
+                node -v
             
             - name: install Redis and Python for ubuntu
               if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
               run: |
                 sudo apt-get update
-                sudo apt-get install redis-server python3
+                sudo apt-get install redis-server python3 
 
-            - name: install Redis and Python for macos
+            - name: install node16 for ubuntu
+              if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
+              working-directory: ~
+              run: |
+                curl -sL https://deb.nodesource.com/setup_16.x -o nodesource_setup.sh 
+                sudo bash nodesource_setup.sh
+                sudo apt-get install nodejs
+                node -v
+
+            - name: install Redis, Python and node16 for macos
               if: ${{ contains(matrix.build.RUNNER, 'mac') }}
               run: |
-                brew install redis python3
+                brew install redis python3 node@16
+                node -v
+
+            - name: Checkout
+              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
+              uses: actions/checkout@v4
+              with:
+                  submodules: "true"
 
             - name: Setup for musl
               if: ${{ contains(matrix.build.TARGET, 'musl') }}
@@ -324,25 +302,19 @@ jobs:
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
                   arch: ${{ matrix.build.ARCH }}
 
-            - name: Checkout
-              if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
-              uses: actions/checkout@v4
-              with:
-                  submodules: "true"
-
-            - name: Install node
-              if: ${{ !contains(matrix.build.TARGET, 'musl') }}
-              uses: actions/setup-node@v3
-              with:
-                  node-version: "16"
-                  registry-url: "https://registry.npmjs.org"
-                  scope: "${{ vars.NPM_SCOPE }}"
-                  always-auth: true
+            - name: Install tsc and compile utils
+              shell: bash
+              working-directory: ./utils
+              run: |
+                  npm install
+                  npm install -g typescript
+                  npx tsc -p ./tsconfig.json
 
             - name: Run the tests
               shell: bash
               working-directory: ./utils/release-candidate-testing/node
               run: |
+                  npm install
                   npm install --no-save @aws/glide-for-redis@next
                   npm run test
 
