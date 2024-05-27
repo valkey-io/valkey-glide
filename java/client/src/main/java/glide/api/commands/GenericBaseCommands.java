@@ -475,7 +475,7 @@ public interface GenericBaseCommands {
     CompletableFuture<String> rename(String key, String newKey);
 
     /**
-     * If <code>newKey</code> already exists it is overwritten.
+     * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
      * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
      *     same hash slot.
