@@ -283,20 +283,10 @@ jobs:
                 sudo apt-get update
                 sudo apt-get install redis-server python3 
 
-            - name: install node16 for ubuntu
-              if: ${{ contains(matrix.build.TARGET, 'linux-gnu') }}
-              working-directory: ~
-              run: |
-                curl -sL https://deb.nodesource.com/setup_16.x -o nodesource_setup.sh 
-                sudo bash nodesource_setup.sh
-                sudo apt-get install nodejs
-                node -v
-
-            - name: install Redis, Python and node16 for macos
+            - name: install Redis, Python for macos
               if: ${{ contains(matrix.build.RUNNER, 'mac') }}
               run: |
-                brew install redis python3 node@16
-                node -v
+                brew install redis python3
 
             - name: Checkout
               if: ${{  matrix.build.TARGET != 'aarch64-unknown-linux-musl'}}
@@ -313,12 +303,23 @@ jobs:
                   npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
                   arch: ${{ matrix.build.ARCH }}
 
+            - name: Setup node
+              if: ${{ matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
+              uses: actions/setup-node@v3
+              with:
+                  node-version: "16"
+                  registry-url: "https://registry.npmjs.org"
+                  architecture: ${{ matrix.build.ARCH }}
+                  scope: "${{ vars.NPM_SCOPE }}"
+                  always-auth: true
+                  token: ${{ secrets.NPM_AUTH_TOKEN }}
+
             - name: Install tsc and compile utils
               shell: bash
               working-directory: ./utils
               run: |
                   npm install
-                  sudo npm install -g typescript
+                  npm install -g typescript
                   npx tsc -p ./tsconfig.json
 
             - name: Check if RC and set a distribution tag for the package
