@@ -84,6 +84,10 @@ jobs:
                   export py_version=`echo ${GITHUB_REF:11} | sed 's/-rc/rc/'`
                   echo "PY_RELEASE_VERSION=${py_version}" >> $GITHUB_ENV
 
+            - name: Check that the release version dont have typo init
+              if: ${{ github.event_name != 'pull_request' && contains(github.ref, '-') && !contains(github.ref, 'rc') }}
+              run: exit 1
+
             - name: Set the release version
               if: ${{ !contains(github.ref, 'rc') }}
               shell: bash
