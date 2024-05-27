@@ -63,6 +63,8 @@ async def transaction_test(
 
     transaction.set(key, value)
     args.append(OK)
+    transaction.object_encoding(key)
+    args.append("embstr")
     transaction.setrange(key, 0, value)
     args.append(len(value))
     transaction.get(key)
