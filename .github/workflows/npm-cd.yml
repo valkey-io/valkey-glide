@@ -134,6 +134,12 @@ jobs:
                   npm_scope: ${{ vars.NPM_SCOPE }}
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+            
+            - name: Del package.json.tmpl
+              shell: bash
+              run: |
+                rm ./node/npm/glide/package.json.tmpl
+                echo $(ls *json*) 
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
@@ -217,6 +223,12 @@ jobs:
                   os: ubuntu
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+              
+            - name: Del package.json.tmpl
+              shell: bash
+              run: |
+                rm ./node/npm/glide/package.json.tmpl
+                echo $(ls *json*) 
             
             - name: Check if RC and set a distribution tag for the package
               shell: bash
