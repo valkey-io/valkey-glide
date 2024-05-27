@@ -2938,7 +2938,7 @@ class CoreCommands(Protocol):
     ) -> int:
         """
         Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
-        Both `start` and `end` are zero-based indexes with `0` being the element with the lowest score.
+        Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
         These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
 
         See https://valkey.io/commands/zremrangebyrank/ for more details.
