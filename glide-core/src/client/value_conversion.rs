@@ -542,6 +542,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"JSON.TOGGLE" => Some(ExpectedReturnType::JsonToggleReturnType),
         b"GEOPOS" => Some(ExpectedReturnType::ArrayOfArraysOfDoubleOrNull),
         b"LMPOP" => Some(ExpectedReturnType::ArrayOfStringAndArrays),
+        b"BLMPOP" => Some(ExpectedReturnType::ArrayOfStringAndArrays),
         b"HRANDFIELD" => cmd
             .position(b"WITHVALUES")
             .map(|_| ExpectedReturnType::ArrayOfPairs),
