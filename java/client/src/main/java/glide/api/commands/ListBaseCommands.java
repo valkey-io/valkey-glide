@@ -415,4 +415,71 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, String[]>> lmpop(String[] keys, PopDirection direction);
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided <code>keys</code> <code>BLMPOP</code> is the blocking variant of {@link
+     * #lmpop(String[], PopDirection, long)}.
+     *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BLMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
+     * @param keys An array of keys to lists.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     PopDirection}.
+     * @param count The maximum number of popped elements.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
+     * Map<String, String[]> result = client.blmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L, 0.1).get();
+     * String[] resultValue = result.get("testKey");
+     * assertArrayEquals(new String[] {"three"}, resultValue);
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[]>> blmpop(
+            String[] keys, PopDirection direction, long count, double timeout);
+
+    /**
+     * Blocks the connection until it pops one element from the first non-empty list from the provided
+     * <code>keys</code> <code>BLMPOP</code> is the blocking variant of {@link #lmpop(String[],
+     * PopDirection)}.
+     *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BLMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys An array of keys to lists.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     PopDirection}.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
+     * Map<String, String[]> result = client.blmpop(new String[] {"testKey"}, PopDirection.LEFT, 0.1).get();
+     * String[] resultValue = result.get("testKey");
+     * assertArrayEquals(new String[] {"three"}, resultValue);
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[]>> blmpop(
+            String[] keys, PopDirection direction, double timeout);
 }

@@ -272,9 +272,11 @@ public class TransactionTestUtilities {
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
-                    .lpush(listKey4, new String[] {value1, value2, value3})
+                    .lpush(listKey4, new String[] {value1, value2, value3, value1, value2, value3})
                     .lmpop(new String[] {listKey4}, PopDirection.LEFT)
-                    .lmpop(new String[] {listKey4}, PopDirection.LEFT, 2L);
+                    .lmpop(new String[] {listKey4}, PopDirection.LEFT, 2L)
+                    .blmpop(new String[] {listKey4}, PopDirection.LEFT, 0.1)
+                    .blmpop(new String[] {listKey4}, PopDirection.LEFT, 2L, 0.1);
         } // listKey4 is now empty
 
         var expectedResults =
@@ -302,9 +304,11 @@ public class TransactionTestUtilities {
             return concatenateArrays(
                     expectedResults,
                     new Object[] {
-                        3L, // lpush(listKey4, {value1, value2, value3})
+                        6L, // lpush(listKey4, {value1, value2, value3})
                         Map.of(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
                         Map.of(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
+                        Map.of(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
+                        Map.of(listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
                     });
         }
 

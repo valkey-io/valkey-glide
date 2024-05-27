@@ -14,6 +14,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -3487,6 +3488,73 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T getbit(@NonNull String key, long offset) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(offset));
         protobufTransaction.addCommands(buildCommand(GetBit, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link
+     * #lmpop(String[], PopDirection, Long)}.
+     *
+     * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
+     * @param keys The list of provided <code>key</code> names.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     PopDirection}.
+     * @param count The maximum number of popped elements.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A <code>Map</code> of <code>key</code> names arrays of popped
+     *     elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     */
+    public T blmpop(
+            @NonNull String[] keys,
+            @NonNull PopDirection direction,
+            @NonNull Long count,
+            double timeout) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Double.toString(timeout), Long.toString(keys.length)},
+                                keys,
+                                new String[] {
+                                    direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                                }));
+        protobufTransaction.addCommands(buildCommand(BLMPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Blocks the connection until it pops one element from the first non-empty list from the provided
+     * <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link #lmpop(String[],
+     * PopDirection)}.
+     *
+     * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys The list of provided <code>key</code> names.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     PopDirection}.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A <code>Map</code> of <code>key</code> names arrays of popped
+     *     elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     */
+    public T blmpop(@NonNull String[] keys, @NonNull PopDirection direction, double timeout) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Double.toString(timeout), Long.toString(keys.length)},
+                                keys,
+                                new String[] {direction.toString()}));
+        protobufTransaction.addCommands(buildCommand(BLMPop, commandArgs));
         return getThis();
     }
 

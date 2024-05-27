@@ -701,7 +701,11 @@ public class CommandTests {
                 Arguments.of(
                         "bitop",
                         null,
-                        clusterClient.bitop(BitwiseOperation.OR, "abc", new String[] {"zxy", "lkn"})));
+                        clusterClient.bitop(BitwiseOperation.OR, "abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "blmpop",
+                        "7.0.0",
+                        clusterClient.blmpop(new String[] {"abc", "def"}, PopDirection.LEFT, 1L, 0.1)));
     }
 
     @SneakyThrows

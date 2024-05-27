@@ -10,6 +10,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -1511,6 +1512,34 @@ public abstract class BaseClient
                         new String[] {Long.toString(keys.length)}, keys, new String[] {direction.toString()});
         return commandManager.submitNewCommand(
                 LMPop,
+                arguments,
+                response -> castMapOfArrays(handleMapOrNullResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[]>> blmpop(
+            @NonNull String[] keys, @NonNull PopDirection direction, long count, double timeout) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {Double.toString(timeout), Long.toString(keys.length)},
+                        keys,
+                        new String[] {direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)});
+        return commandManager.submitNewCommand(
+                BLMPop,
+                arguments,
+                response -> castMapOfArrays(handleMapOrNullResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[]>> blmpop(
+            @NonNull String[] keys, @NonNull PopDirection direction, double timeout) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {Double.toString(timeout), Long.toString(keys.length)},
+                        keys,
+                        new String[] {direction.toString()});
+        return commandManager.submitNewCommand(
+                BLMPop,
                 arguments,
                 response -> castMapOfArrays(handleMapOrNullResponse(response), String.class));
     }
