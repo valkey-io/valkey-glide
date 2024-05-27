@@ -2460,6 +2460,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.PfAdd, [key] + elements)
 
+    def object_encoding(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the internal encoding for the Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-encoding for more details.
+
+        Args:
+            key (str): The `key` of the object to get the internal encoding of.
+
+        Command response:
+            Optional[str]: If `key` exists, returns the internal encoding of the object stored at
+                `key` as a string. Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectEncoding, [key])
+
 
 class Transaction(BaseTransaction):
     """

@@ -1,3 +1,6 @@
+#### Changes
+* Python: Added OBJECT ENCODING command ([#1471](https://github.com/aws/glide-for-redis/pull/1471))
+
 ## 0.4.0 (2024-05-26)
 
 #### Changes
