@@ -26,7 +26,6 @@ from glide.async_commands.sorted_set import (
     ScoreFilter,
     _create_z_cmd_store_args,
     _create_zrange_args,
-    _create_zrangestore_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -1921,7 +1920,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set.
         """
-        args = _create_zrangestore_args(destination, source, range_query, reverse)
+        args = _create_zrange_args(source, range_query, reverse, False, destination)
 
         return self.append_command(RequestType.ZRangeStore, args)
 
