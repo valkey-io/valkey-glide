@@ -3544,3 +3544,25 @@ class CoreCommands(Protocol):
             Optional[str],
             await self._execute_command(RequestType.ObjectEncoding, [key]),
         )
+
+    async def object_freq(self, key: str) -> int:
+        """
+        Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-freq for more details.
+
+        Args:
+            key (str): The key of the object to get the logarithmic access frequency counter of.
+
+        Returns:
+            int: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
+                integer. Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_freq("my_hash")
+                2  # The logarithmic access frequency counter of "my_hash" has a value of 2.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.ObjectFreq, [key]),
+        )
