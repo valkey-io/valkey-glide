@@ -386,10 +386,7 @@ class ClusterCommands(CoreCommands):
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
-            limit (Optional[Limit]): The limit argument for a range query. Defaults to None. See `Limit` class for more information.
-            A tuple specifying the offset and count for limiting the number of results returned.
-                The `limit` parameter takes a tuple `(offset, count)` where `offset` specifies the starting position and `count` specifies the maximum number of elements to return.
-                If `offset` exceeds the length of the returned result, an empty list is returned.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
@@ -422,7 +419,7 @@ class ClusterCommands(CoreCommands):
         self,
         key: str,
         store: str,
-        limit: Optional[Tuple[int, int]] = None,
+        limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> int:
@@ -436,7 +433,7 @@ class ClusterCommands(CoreCommands):
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
             store (str): The key where the sorted result will be stored.
-            limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
 

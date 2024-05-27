@@ -285,7 +285,7 @@ class StandaloneCommands(CoreCommands):
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
             by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
-            limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
             order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
@@ -333,7 +333,7 @@ class StandaloneCommands(CoreCommands):
             key (str): The key of the list, set, or sorted set to be sorted.
             store (str): The key where the sorted result will be stored.
             by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
-            limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
             order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
