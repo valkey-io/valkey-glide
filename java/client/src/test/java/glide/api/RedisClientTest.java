@@ -3903,7 +3903,7 @@ public class RedisClientTest {
         String newKey = "key2";
         String[] arguments = new String[] {key, newKey};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete("OK");
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(Rename), eq(arguments), any()))
@@ -3914,6 +3914,7 @@ public class RedisClientTest {
 
         // verify
         assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
     }
 
     @SneakyThrows

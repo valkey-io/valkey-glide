@@ -2706,13 +2706,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Renames <code>key</code> to <code>newKey</code>.
+     * If <code>newKey</code> already exists it is overwritten.
      *
      * @see <a href="https://redis.io/commands/rename/">redis.io</a> for details.
      * @param key The <code>key</code> to rename.
      * @param newKey The new name of the <code>key</code>.
-     * @return If the <code>key</code> was successfully renamed, return <code>"OK"</code>. If <code>
-     *     key</code> does not exist, an error is thrown.
+     * @return Command Response - If the <code>key</code> was successfully renamed, return <code>"OK"
+     *     </code>. If <code>
+     *     key</code> does not exist, the transaction fails with an error.
      */
     public T rename(@NonNull String key, @NonNull String newKey) {
         ArgsArray commandArgs = buildArgs(key, newKey);
