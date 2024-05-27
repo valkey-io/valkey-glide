@@ -2875,4 +2875,3 @@ class ClusterTransaction(BaseTransaction):
         return self.append_command(RequestType.Sort, args)
 
     # TODO: add all CLUSTER commands
-    pass
