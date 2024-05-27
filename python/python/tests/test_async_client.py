@@ -3320,6 +3320,79 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.pfadd("foo", [])
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_object_encoding(self, redis_client: TRedisClient):
+        string_key = get_random_string(10)
+        list_key = get_random_string(10)
+        hashtable_key = get_random_string(10)
+        intset_key = get_random_string(10)
+        set_listpack_key = get_random_string(10)
+        hash_hashtable_key = get_random_string(10)
+        hash_listpack_key = get_random_string(10)
+        skiplist_key = get_random_string(10)
+        zset_listpack_key = get_random_string(10)
+        stream_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+
+        assert await redis_client.object_encoding(non_existing_key) is None
+
+        assert await redis_client.set(
+            string_key, "a really loooooooooooooooooooooooooooooooooooooooong value"
+        )
+        assert await redis_client.object_encoding(string_key) == "raw"
+
+        assert await redis_client.set(string_key, "2") == OK
+        assert await redis_client.object_encoding(string_key) == "int"
+
+        assert await redis_client.set(string_key, "value") == OK
+        assert await redis_client.object_encoding(string_key) == "embstr"
+
+        assert await redis_client.lpush(list_key, ["1"]) == 1
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.object_encoding(list_key) == "quicklist"
+        else:
+            assert await redis_client.object_encoding(list_key) == "listpack"
+
+        # The default value of set-max-intset-entries is 512
+        for i in range(0, 513):
+            assert await redis_client.sadd(hashtable_key, [str(i)]) == 1
+        assert await redis_client.object_encoding(hashtable_key) == "hashtable"
+
+        assert await redis_client.sadd(intset_key, ["1"]) == 1
+        assert await redis_client.object_encoding(intset_key) == "intset"
+
+        assert await redis_client.sadd(set_listpack_key, ["foo"]) == 1
+        if await check_if_server_version_lt(redis_client, "7.2.0"):
+            assert await redis_client.object_encoding(set_listpack_key) == "hashtable"
+        else:
+            assert await redis_client.object_encoding(set_listpack_key) == "listpack"
+
+        # The default value of hash-max-listpack-entries is 512
+        for i in range(0, 513):
+            assert await redis_client.hset(hash_hashtable_key, {str(i): "2"}) == 1
+        assert await redis_client.object_encoding(hash_hashtable_key) == "hashtable"
+
+        assert await redis_client.hset(hash_listpack_key, {"1": "2"}) == 1
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.object_encoding(hash_listpack_key) == "ziplist"
+        else:
+            assert await redis_client.object_encoding(hash_listpack_key) == "listpack"
+
+        # The default value of zset-max-listpack-entries is 128
+        for i in range(0, 129):
+            assert await redis_client.zadd(skiplist_key, {str(i): 2.0}) == 1
+        assert await redis_client.object_encoding(skiplist_key) == "skiplist"
+
+        assert await redis_client.zadd(zset_listpack_key, {"1": 2.0}) == 1
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.object_encoding(zset_listpack_key) == "ziplist"
+        else:
+            assert await redis_client.object_encoding(zset_listpack_key) == "listpack"
+
+        assert await redis_client.xadd(stream_key, [("field", "value")]) is not None
+        assert await redis_client.object_encoding(stream_key) == "stream"
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -3347,7 +3420,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.sdiffstore("abc", ["def", "ghi"]),
         ]
 
-        if not check_if_server_version_lt(redis_client, "7.0.0"):
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
             promises.extend(
                 [
                     redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),

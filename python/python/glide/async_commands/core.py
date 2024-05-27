@@ -3522,3 +3522,25 @@ class CoreCommands(Protocol):
             int,
             await self._execute_command(RequestType.PfAdd, [key] + elements),
         )
+
+    async def object_encoding(self, key: str) -> Optional[str]:
+        """
+        Returns the internal encoding for the Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-encoding for more details.
+
+        Args:
+            key (str): The `key` of the object to get the internal encoding of.
+
+        Returns:
+            Optional[str]: If `key` exists, returns the internal encoding of the object stored at
+                `key` as a string. Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_encoding("my_hash")
+                "listpack"  # The hash stored at "my_hash" has an internal encoding of "listpack".
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.ObjectEncoding, [key]),
+        )
