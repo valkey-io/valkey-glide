@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Tuple, cast
 
-from glide.async_commands.command_args import Limit, SortOrder
+from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import CoreCommands, InfoSection, _build_sort_args
 from glide.async_commands.transaction import BaseTransaction, Transaction
 from glide.constants import TOK, TResult
@@ -272,7 +272,7 @@ class StandaloneCommands(CoreCommands):
         by_pattern: Optional[str] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[str]] = None,
-        order: Optional[SortOrder] = None,
+        order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> List[Optional[str]]:
         """
@@ -287,7 +287,7 @@ class StandaloneCommands(CoreCommands):
             by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
             limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
             get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
-            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
 
         Returns:
@@ -297,10 +297,10 @@ class StandaloneCommands(CoreCommands):
             >>> await client.lpush("mylist", 3, 1, 2)
             >>> await client.sort("mylist")
             ['1', '2', '3']
-            >>> await client.sort("mylist", order=SortOrder.DESC)
+            >>> await client.sort("mylist", order=OrderBy.DESC)
             ['3', '2', '1']
             >>> await client.lpush("mylist", 2, 1, 2, 3, 3, 1)
-            >>> await client.sort("mylist", limit=(2, 3))
+            >>> await client.sort("mylist", limit=Limit(2, 3))
             ['2', '2', '3']
             >>> await client.hset("user:1", "name", "Alice", "age", 30)
             >>> await client.hset("user:2", "name", "Bob", "age", 25)
@@ -319,7 +319,7 @@ class StandaloneCommands(CoreCommands):
         by_pattern: Optional[str] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[str]] = None,
-        order: Optional[SortOrder] = None,
+        order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> int:
         """
@@ -335,7 +335,7 @@ class StandaloneCommands(CoreCommands):
             by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
             limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
             get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
-            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
 
         Returns:

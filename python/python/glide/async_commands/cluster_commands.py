@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, Tuple, cast
 
-from glide.async_commands.command_args import Limit, SortOrder
+from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import CoreCommands, InfoSection, _build_sort_args
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
 from glide.constants import TOK, TClusterResponse, TResult, TSingleNodeRoute
@@ -373,7 +373,7 @@ class ClusterCommands(CoreCommands):
         self,
         key: str,
         limit: Optional[Limit] = None,
-        order: Optional[SortOrder] = None,
+        order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> List[str]:
         """
@@ -390,8 +390,8 @@ class ClusterCommands(CoreCommands):
             A tuple specifying the offset and count for limiting the number of results returned.
                 The `limit` parameter takes a tuple `(offset, count)` where `offset` specifies the starting position and `count` specifies the maximum number of elements to return.
                 If `offset` exceeds the length of the returned result, an empty list is returned.
-            order (Optional[SortOrder]): Specifies the order to sort the elements.
-                Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
@@ -403,15 +403,15 @@ class ClusterCommands(CoreCommands):
             >>> await client.sort("mylist")
             ['1', '2', '3']
 
-            >>> await client.sort("mylist", order=SortOrder.DESC)
+            >>> await client.sort("mylist", order=OrderBy.DESC)
             ['3', '2', '1']
 
             >>> await client.lpush("mylist", '2', '1', '2', '3', '3', '1')
-            >>> await client.sort("mylist", limit=(2, 3))
+            >>> await client.sort("mylist", limit=Limit(2, 3))
             ['2', '2', '3']
 
             >>> await client.lpush("mylist", "a", "b", "c", "d")
-            >>> await client.sort("mylist", limit=(3, 2), order=SortOrder.DESC, alpha=True)
+            >>> await client.sort("mylist", limit=Limit(3, 2), order=OrderBy.DESC, alpha=True)
             ['b', 'a']
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
@@ -423,7 +423,7 @@ class ClusterCommands(CoreCommands):
         key: str,
         store: str,
         limit: Optional[Tuple[int, int]] = None,
-        order: Optional[SortOrder] = None,
+        order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> int:
         """
@@ -437,7 +437,7 @@ class ClusterCommands(CoreCommands):
             key (str): The key of the list, set, or sorted set to be sorted.
             store (str): The key where the sorted result will be stored.
             limit (Optional[Tuple[int, int]]): A tuple specifying the offset and count for limiting the number of results.
-            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
 
         Returns:

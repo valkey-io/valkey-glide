@@ -31,7 +31,7 @@ class Limit:
         self.count = count
 
 
-class SortOrder(Enum):
+class OrderBy(Enum):
     """
     SORT order options: options for sorting elements.
     """

@@ -6,7 +6,7 @@ from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
-from glide.async_commands.command_args import Limit, SortOrder
+from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
     GeospatialData,
     InsertPosition,
@@ -370,7 +370,7 @@ async def transaction_test(
     transaction.sort(
         key17,
         limit=Limit(1, 4),
-        order=SortOrder.ASC,
+        order=OrderBy.ASC,
         alpha=True,
     )
     args.append(["2", "3", "4", "a"])
@@ -378,7 +378,7 @@ async def transaction_test(
         key17,
         key18,
         limit=Limit(1, 4),
-        order=SortOrder.ASC,
+        order=OrderBy.ASC,
         alpha=True,
     )
     args.append(4)
@@ -531,7 +531,7 @@ class TestTransaction:
             key1,
             by_pattern="user:*->age",
             get_patterns=["user:*->name"],
-            order=SortOrder.ASC,
+            order=OrderBy.ASC,
             alpha=True,
         )
         transaction.sort_store(
@@ -539,7 +539,7 @@ class TestTransaction:
             "newSortedKey",
             by_pattern="user:*->age",
             get_patterns=["user:*->name"],
-            order=SortOrder.ASC,
+            order=OrderBy.ASC,
             alpha=True,
         )
         transaction.select(0)

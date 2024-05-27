@@ -16,7 +16,7 @@ from typing import (
     get_args,
 )
 
-from glide.async_commands.command_args import Limit, SortOrder
+from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
     InfBound,
@@ -367,7 +367,7 @@ def _build_sort_args(
     by_pattern: Optional[str] = None,
     limit: Optional[Limit] = None,
     get_patterns: Optional[List[str]] = None,
-    order: Optional[SortOrder] = None,
+    order: Optional[OrderBy] = None,
     alpha: Optional[bool] = None,
     store: Optional[str] = None,
 ) -> List[str]:

@@ -11,7 +11,7 @@ from typing import Any, Dict, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
-from glide.async_commands.command_args import Limit, SortOrder
+from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -3447,7 +3447,7 @@ class TestCommands:
                 key,
                 limit=Limit(0, 2),
                 get_patterns=["user:*->name"],
-                order=SortOrder.ASC,
+                order=OrderBy.ASC,
                 alpha=True,
             )
             assert result == ["Alice", "Bob"]
@@ -3458,7 +3458,7 @@ class TestCommands:
                 store,
                 limit=Limit(0, 2),
                 get_patterns=["user:*->name"],
-                order=SortOrder.ASC,
+                order=OrderBy.ASC,
                 alpha=True,
             )
             assert sort_store_result == 2
@@ -3504,7 +3504,7 @@ class TestCommands:
         assert result == ["2", "3", "4"]
 
         # order argument
-        result = await redis_client.sort(key, order=SortOrder.DESC)
+        result = await redis_client.sort(key, order=OrderBy.DESC)
         assert result == ["5", "4", "3", "2", "1"]
 
         assert await redis_client.lpush(key, ["a"]) == 6
@@ -3519,13 +3519,13 @@ class TestCommands:
 
         # Combining multiple arguments
         result = await redis_client.sort(
-            key, limit=Limit(1, 3), order=SortOrder.DESC, alpha=True
+            key, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
         )
         assert result == ["5", "4", "3"]
 
         # Test sort_store with combined arguments
         sort_store_result = await redis_client.sort_store(
-            key, store, limit=Limit(1, 3), order=SortOrder.DESC, alpha=True
+            key, store, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
         )
         assert sort_store_result == 3
         sorted_list = await redis_client.lrange(store, 0, -1)

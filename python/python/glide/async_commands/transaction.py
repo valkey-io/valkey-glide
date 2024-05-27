@@ -3,7 +3,7 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
-from glide.async_commands.command_args import Limit, SortOrder
+from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -2753,7 +2753,7 @@ class Transaction(BaseTransaction):
         by_pattern: Optional[str] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[str]] = None,
-        order: Optional[SortOrder] = None,
+        order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> TTransaction:
         """
@@ -2768,7 +2768,7 @@ class Transaction(BaseTransaction):
             by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
             limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
             get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
-            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
 
         Command response:
@@ -2784,7 +2784,7 @@ class Transaction(BaseTransaction):
         by_pattern: Optional[str] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[str]] = None,
-        order: Optional[SortOrder] = None,
+        order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> TTransaction:
         """
@@ -2800,7 +2800,7 @@ class Transaction(BaseTransaction):
             by_pattern (Optional[str]): A pattern to sort by. If not provided, elements are sorted by their value.
             limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
             get_patterns (Optional[List[str]]): One or more patterns to extract values to return.
-            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
 
         Command response:
@@ -2825,7 +2825,7 @@ class ClusterTransaction(BaseTransaction):
         self: TTransaction,
         key: str,
         limit: Optional[Limit] = None,
-        order: Optional[SortOrder] = None,
+        order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> TTransaction:
         """
@@ -2837,7 +2837,7 @@ class ClusterTransaction(BaseTransaction):
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
             limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
-            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
 
         Command response:
@@ -2851,7 +2851,7 @@ class ClusterTransaction(BaseTransaction):
         key: str,
         store: str,
         limit: Optional[Limit] = None,
-        order: Optional[SortOrder] = None,
+        order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> TTransaction:
         """
@@ -2865,7 +2865,7 @@ class ClusterTransaction(BaseTransaction):
             key (str): The key of the list, set, or sorted set to be sorted.
             store (str): The key where the sorted result will be stored.
             limit (Optional[Limit]): A tuple specifying the offset and count for limiting the number of results.
-            order (Optional[SortOrder]): Specifies the order to sort the elements. Can be `SortOrder.ASC` (ascending) or `SortOrder.DESC` (descending).
+            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
             alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
 
         Command response:
