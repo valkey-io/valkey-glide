@@ -3426,6 +3426,17 @@ class TestCommands:
         idletime = await redis_client.object_idletime(string_key)
         assert idletime is not None and idletime > 0
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_object_refcount(self, redis_client: TRedisClient):
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+
+        assert await redis_client.object_refcount(non_existing_key) is None
+        assert await redis_client.set(string_key, "foo") == OK
+        refcount = await redis_client.object_refcount(string_key)
+        assert refcount is not None and refcount >= 0
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
