@@ -13,7 +13,7 @@ import {
     RedisClient,
     RedisClusterClient,
     Script,
-    parseInfoResponse
+    parseInfoResponse,
 } from "../";
 import {
     Client,
