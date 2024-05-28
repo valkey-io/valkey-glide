@@ -6,7 +6,7 @@ use redis::{
 };
 
 #[derive(Clone, Copy, Debug)]
-pub(crate) enum ExpectedReturnType {
+pub(crate) enum ExpectedReturnType<'a> {
     Map,
     MapOfStringToDouble,
     Double,
@@ -22,8 +22,7 @@ pub(crate) enum ExpectedReturnType {
     Lolwut,
     ArrayOfStringAndArrays,
     ArrayOfArraysOfDoubleOrNull,
-    ArrayOfMapsRecursive,
-    ArrayOfMaps,
+    ArrayOfMaps(&'a ExpectedReturnType<'a>),
     StringOrSet,
     ArrayOfPairs,
     ArrayOfMemberScorePairs,
@@ -400,31 +399,18 @@ pub(crate) fn convert_to_expected_type(
         2) 1# "library_name" => "mylib2"
            ...
         */
-        ExpectedReturnType::ArrayOfMapsRecursive => match value {
+        ExpectedReturnType::ArrayOfMaps(type_of_map_values) => match value {
             // empty array, or it is already contains a map (RESP3 response) - no conversion needed
             Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Map(_)) => {
                 Ok(value)
-            }
-            Value::Array(array) => {
-                convert_array_of_flat_maps(array, Some(ExpectedReturnType::ArrayOfMaps))
             }
             // cluster (multi-node) response - go recursive
             Value::Map(map) => convert_map_entries(
                 map,
                 Some(ExpectedReturnType::BulkString),
-                Some(ExpectedReturnType::ArrayOfMapsRecursive),
+                Some(ExpectedReturnType::ArrayOfMaps(type_of_map_values)),
             ),
-            _ => Err((
-                ErrorKind::TypeError,
-                "Response couldn't be converted into a recursive array of maps",
-            )
-                .into()),
-        },
-        // Not used for a command, but used as a helper for `ArrayOfMapsRecursive` to process the inner map.
-        ExpectedReturnType::ArrayOfMaps => match value {
-            Value::Array(array) => {
-                convert_array_of_flat_maps(array, Some(ExpectedReturnType::StringOrSet))
-            }
+            Value::Array(array) => convert_array_of_flat_maps(array, Some(*type_of_map_values)),
             // Due to recursion, it would be called to convert every map value, including simple strings, do nothing with them
             Value::BulkString(_) | Value::SimpleString(_) | Value::VerbatimString { .. } => {
                 Ok(value)
@@ -689,7 +675,9 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             }
         }
         b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
-        b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMapsRecursive),
+        b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMaps(
+            &ExpectedReturnType::ArrayOfMaps(&ExpectedReturnType::StringOrSet),
+        )),
         _ => None,
     }
 }
@@ -700,9 +688,13 @@ mod tests {
 
     #[test]
     fn convert_function_list() {
+        let expected_type = ExpectedReturnType::ArrayOfMaps(&ExpectedReturnType::ArrayOfMaps(
+            &ExpectedReturnType::StringOrSet,
+        ));
+
         assert!(matches!(
             expected_type_for_cmd(redis::cmd("FUNCTION").arg("LIST")),
-            Some(ExpectedReturnType::ArrayOfMapsRecursive)
+            Some(ExpectedReturnType::ArrayOfMaps(_))
         ));
 
         let resp2_response = Value::Array(vec![
@@ -814,20 +806,12 @@ mod tests {
         ]);
 
         assert_eq!(
-            convert_to_expected_type(
-                resp2_response.clone(),
-                Some(ExpectedReturnType::ArrayOfMapsRecursive)
-            )
-            .unwrap(),
+            convert_to_expected_type(resp2_response.clone(), Some(expected_type)).unwrap(),
             resp3_response.clone()
         );
 
         assert_eq!(
-            convert_to_expected_type(
-                resp3_response.clone(),
-                Some(ExpectedReturnType::ArrayOfMapsRecursive)
-            )
-            .unwrap(),
+            convert_to_expected_type(resp3_response.clone(), Some(expected_type)).unwrap(),
             resp3_response.clone()
         );
     }
