@@ -89,7 +89,7 @@ mod socket_listener {
     }
 
     struct CommandComponents {
-        args: Vec<String>,
+        args: Vec<bytes::Bytes>,
         request_type: EnumOrUnknown<RequestType>,
         args_pointer: bool,
     }
@@ -241,11 +241,11 @@ mod socket_listener {
         command.request_type = components.request_type;
         if components.args_pointer {
             command.args = Some(Args::ArgsVecPointer(Box::leak(Box::new(components.args))
-                as *mut Vec<String>
+                as *mut Vec<bytes::Bytes>
                 as u64));
         } else {
             let mut args_array = ArgsArray::new();
-            args_array.args = components.args.into_iter().map(|str| str.into()).collect();
+            args_array.args.clone_from(&components.args);
             command.args = Some(Args::ArgsArray(args_array));
         }
         command
@@ -253,7 +253,7 @@ mod socket_listener {
 
     fn get_command_request(
         callback_index: u32,
-        args: Vec<String>,
+        args: Vec<bytes::Bytes>,
         request_type: EnumOrUnknown<RequestType>,
         args_pointer: bool,
     ) -> RedisRequest {
@@ -279,7 +279,7 @@ mod socket_listener {
         buffer: &mut Vec<u8>,
         socket: &mut UnixStream,
         callback_index: u32,
-        args: Vec<String>,
+        args: Vec<bytes::Bytes>,
         request_type: EnumOrUnknown<RequestType>,
         args_pointer: bool,
     ) {
@@ -321,7 +321,7 @@ mod socket_listener {
             buffer,
             socket,
             callback_index,
-            vec![key.to_string()],
+            vec![key.to_string().into()],
             RequestType::Get.into(),
             args_pointer,
         )
@@ -339,7 +339,7 @@ mod socket_listener {
             buffer,
             socket,
             callback_index,
-            vec![key.to_string(), value],
+            vec![key.to_string().into(), value.into()],
             RequestType::Set.into(),
             args_pointer,
         )
@@ -575,6 +575,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_set_and_get(
         #[values((false, Tls::NoTls), (true, Tls::NoTls), (false, Tls::UseTls))]
@@ -621,6 +622,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_pass_custom_command(
         #[values(false, true)] args_pointer: bool,
@@ -640,7 +642,11 @@ mod socket_listener {
             &mut buffer,
             &mut test_basics.socket,
             CALLBACK1_INDEX,
-            vec!["SET".to_string(), key.to_string(), value.clone()],
+            vec![
+                "SET".to_string().into(),
+                key.to_string().into(),
+                value.clone().into(),
+            ],
             RequestType::CustomCommand.into(),
             args_pointer,
         );
@@ -652,7 +658,7 @@ mod socket_listener {
             &mut buffer,
             &mut test_basics.socket,
             CALLBACK2_INDEX,
-            vec!["GET".to_string(), key],
+            vec!["GET".to_string().into(), key.into()],
             RequestType::CustomCommand.into(),
             args_pointer,
         );
@@ -675,7 +681,7 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         let mut request = get_command_request(
             CALLBACK1_INDEX,
-            vec!["ECHO".to_string(), "foo".to_string()],
+            vec!["ECHO".to_string().into(), "foo".to_string().into()],
             RequestType::CustomCommand.into(),
             false,
         );
@@ -723,7 +729,7 @@ mod socket_listener {
         let mut buffer = Vec::with_capacity(approx_message_length);
         let mut request = get_command_request(
             CALLBACK_INDEX,
-            vec!["CLUSTER".to_string(), "NODES".to_string()],
+            vec!["CLUSTER".to_string().into(), "NODES".to_string().into()],
             RequestType::CustomCommand.into(),
             false,
         );
@@ -809,7 +815,7 @@ mod socket_listener {
             &mut buffer,
             &mut test_basics.socket,
             CALLBACK_INDEX,
-            vec![key],
+            vec![key.into()],
             EnumOrUnknown::from_i32(request_type),
             false,
         );
@@ -828,6 +834,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_send_and_receive_long_values(
         #[values((false, Tls::NoTls), (true, Tls::NoTls), (false, Tls::UseTls))]
@@ -891,6 +898,7 @@ mod socket_listener {
     // This test starts multiple threads writing large inputs to a socket, and another thread that reads from the output socket and
     // verifies that the outputs match the inputs.
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_socket_send_and_receive_multiple_long_inputs(
         #[values((false, Tls::NoTls), (true, Tls::NoTls), (false, Tls::UseTls))]
@@ -946,7 +954,6 @@ mod socket_listener {
                                     assert_eq!(results[callback_index], State::ReceivedNull);
 
                                     let values = values_for_read.lock().unwrap();
-
                                     assert_value(
                                         pointer,
                                         Some(Value::BulkString(values[callback_index].clone())),
@@ -1026,6 +1033,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_does_not_close_when_server_closes() {
         let mut test_basics =
@@ -1054,6 +1062,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_reconnect_after_temporary_disconnect() {
         let test_basics = setup_server_test_basics(Tls::NoTls, TestServer::Unique);
@@ -1098,6 +1107,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_handle_request_after_reporting_disconnet() {
         let test_basics = setup_server_test_basics(Tls::NoTls, TestServer::Unique);
@@ -1141,6 +1151,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_transaction_and_get_array_of_results(
         #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
@@ -1152,22 +1163,22 @@ mod socket_listener {
         let key = generate_random_string(KEY_LENGTH);
         let commands = vec![
             CommandComponents {
-                args: vec![key.clone(), "bar".to_string()],
+                args: vec![key.clone().into(), "bar".to_string().into()],
                 args_pointer: true,
                 request_type: RequestType::Set.into(),
             },
             CommandComponents {
-                args: vec!["GET".to_string(), key.clone()],
+                args: vec!["GET".to_string().into(), key.clone().into()],
                 args_pointer: false,
                 request_type: RequestType::CustomCommand.into(),
             },
             CommandComponents {
-                args: vec!["FLUSHALL".to_string()],
+                args: vec!["FLUSHALL".to_string().into()],
                 args_pointer: false,
                 request_type: RequestType::CustomCommand.into(),
             },
             CommandComponents {
-                args: vec![key],
+                args: vec![key.into()],
                 args_pointer: false,
                 request_type: RequestType::Get.into(),
             },
@@ -1189,6 +1200,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_script(
         #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
@@ -1226,6 +1238,7 @@ mod socket_listener {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_empty_custom_command_is_an_error(
         #[values(RedisType::Cluster, RedisType::Standalone)] use_cluster: RedisType,
