@@ -59,6 +59,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
+import static redis_request.RedisRequestOuterClass.RequestType.LSet;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
@@ -1555,5 +1556,11 @@ public abstract class BaseClient
                 BLMPop,
                 arguments,
                 response -> castMapOfArrays(handleMapOrNullResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String> lset(@NonNull String key, long index, @NonNull String element) {
+        String[] arguments = new String[] {key, Long.toString(index), element};
+        return commandManager.submitNewCommand(LSet, arguments, this::handleStringResponse);
     }
 }

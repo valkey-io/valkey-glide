@@ -74,6 +74,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
+import static redis_request.RedisRequestOuterClass.RequestType.LSet;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
@@ -3767,6 +3768,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 keys,
                                 new String[] {direction.toString()}));
         protobufTransaction.addCommands(buildCommand(LMPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets the list element at <code>index</code> to <code>element</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to be set.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T lset(@NonNull String key, long index, @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(index), element);
+        protobufTransaction.addCommands(buildCommand(LSet, commandArgs));
         return getThis();
     }
 
