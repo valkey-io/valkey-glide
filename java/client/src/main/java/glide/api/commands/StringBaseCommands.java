@@ -35,6 +35,19 @@ public interface StringBaseCommands {
     CompletableFuture<String> get(String key);
 
     /**
+     * Get the value associated with the given <code>key</code>.
+     * <code>GETDEL</code> is similar to {@see #get}, except for the fact that it also deletes the key on success
+     * (if and only if the key's value type is a string).
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return
+     *
+     *
+     * */
+    CompletableFuture<String> getdel(String key);
+
+    /**
      * Sets the given <code>key</code> with the given value.
      *
      * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.

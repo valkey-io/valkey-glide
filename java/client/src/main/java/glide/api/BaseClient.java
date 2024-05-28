@@ -348,6 +348,8 @@ public abstract class BaseClient
                 Get, new String[] {key}, this::handleStringOrNullResponse);
     }
 
+
+
     @Override
     public CompletableFuture<String> set(@NonNull String key, @NonNull String value) {
         return commandManager.submitNewCommand(
