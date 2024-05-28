@@ -73,4 +73,19 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xtrim(String key, StreamTrimOptions options);
+
+    /**
+     * Returns the number of entries in the stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xlen/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return The number of entries in the stream. If <code>key</code> does not exist, return <code>0
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Long num = client.xlen("key").get();
+     * assert num == 2L; // Stream has 2 entries
+     * }</pre>
+     */
+    CompletableFuture<Long> xlen(String key);
 }
