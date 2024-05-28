@@ -63,8 +63,6 @@ async def transaction_test(
 
     transaction.set(key, value)
     args.append(OK)
-    transaction.object_encoding(key)
-    args.append("embstr")
     transaction.setrange(key, 0, value)
     args.append(len(value))
     transaction.get(key)
@@ -502,10 +500,13 @@ class TestTransaction:
 
         assert await redis_client.exec(transaction) == [OK, "value", 1]
 
-    # object_freq is not tested in transaction_test as it requires that we set and later restore the max memory policy
+    # The object commands are tested here instead of transaction_test because they have special requirements:
+    # - OBJECT FREQ and OBJECT IDLETIME require specific maxmemory policies to be set on the config
+    # - we cannot reliably predict the exact response values for OBJECT FREQ, OBJECT IDLETIME, and OBJECT REFCOUNT
+    # - OBJECT ENCODING is tested here since all the other OBJECT commands are tested here
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_object_freq(
+    async def test_transaction_object_commands(
         self, redis_client: TRedisClient, cluster_mode: bool
     ):
         string_key = get_random_string(10)
@@ -515,16 +516,28 @@ class TestTransaction:
 
         try:
             transaction = ClusterTransaction() if cluster_mode else Transaction()
-            transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
             transaction.set(string_key, "foo")
+            transaction.object_encoding(string_key)
+            # OBJECT FREQ requires a LFU maxmemory-policy
+            transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
             transaction.object_freq(string_key)
+            # OBJECT IDLETIME requires a non-LFU maxmemory-policy
+            transaction.config_set({maxmemory_policy_key: "allkeys-random"})
+            transaction.object_idletime(string_key)
 
             response = await redis_client.exec(transaction)
             assert response is not None
-            assert len(response) == 3
-            assert response[0] == OK
-            assert response[1] == OK
-            frequency = cast(int, response[2])
-            assert frequency >= 0
+            assert response[0] == OK  # transaction.set(string_key, "foo")
+            assert response[1] == "embstr"  # transaction.object_encoding(string_key)
+            assert (
+                response[2] == OK
+            )  # transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
+            assert cast(int, response[3]) >= 0  # transaction.object_freq(string_key)
+            assert (
+                response[4] == OK
+            )  # transaction.config_set({maxmemory_policy_key: "allkeys-random"})
+            assert (
+                cast(int, response[5]) >= 0
+            )  # transaction.object_idletime(string_key)
         finally:
             await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})
