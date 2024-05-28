@@ -139,6 +139,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -3971,6 +3972,29 @@ public class RedisClientTest {
     public void xtrim_with_options_to_arguments(
             String testName, StreamTrimOptions options, String[] expectedArgs) {
         assertArrayEquals(expectedArgs, options.toArgs());
+    }
+
+    @Test
+    @SneakyThrows
+    public void xlen_returns_success() {
+        // setup
+        String key = "testKey";
+        Long completedResult = 99L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(XLen), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xlen(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
     }
 
     @SneakyThrows
