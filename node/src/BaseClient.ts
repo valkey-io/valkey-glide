@@ -1238,6 +1238,7 @@ export class BaseClient {
      * ```typescript
      * const result == await client.smove("set1", "set2", "member1");
      * console.log(result); // Output: True # "member1" was moved from "set1" to "set2".
+     * ```
      */
     public smove(
         source: string,
