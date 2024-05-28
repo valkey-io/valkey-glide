@@ -64,6 +64,7 @@ import {
     createRPop,
     createRPush,
     createRename,
+    createRenameNX,
     createSAdd,
     createSCard,
     createSIsMember,
@@ -91,7 +92,7 @@ import {
     createZRem,
     createZRemRangeByRank,
     createZRemRangeByScore,
-    createZScore,
+    createZScore
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -1256,6 +1257,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public rename(key: string, newKey: string): T {
         return this.addAndReturn(createRename(key, newKey));
+    }
+
+    /**
+     * Renames `key` to `newkey` if `newkey` does not yet exist.
+     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+     * See https://redis.io/commands/renamenx/ for more details.
+     *
+     * @param key - The key to rename.
+     * @param newKey - The new name of the key.
+     * Command Response - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
+     */
+    public renameNX(key: string, newKey: string): T {
+        return this.addAndReturn(createRenameNX(key, newKey));
     }
 
     /** Blocking list pop primitive.
