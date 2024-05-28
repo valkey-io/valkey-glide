@@ -2228,7 +2228,7 @@ export class BaseClient {
      * console.log(result); // Output: OK - Indicates successful renaming of the key "old_key" to "new_key".
      * ```
      */
-    public renameNX(key: string, newKey: string): Promise<"OK"> {
+    public renamenx(key: string, newKey: string): Promise<"OK"> {
         return this.createWritePromise(createRenameNX(key, newKey));
     }
 

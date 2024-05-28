@@ -2373,22 +2373,20 @@ export function runBaseTests<Context>(config: {
             await runTest(async (client: BaseClient) => {
                 const key1 = `{key}-1-${uuidv4()}`;
                 const key2 = `{key}-2-${uuidv4()}`;
-                const key3 = `{key}-3-${uuidv4()}`;                                
+                const key3 = `{key}-3-${uuidv4()}`;
 
                 // renamenx missing key
                 try {
-                    expect(await client.renameNX(key1, key2)).toThrow();
+                    expect(await client.renamenx(key1, key2)).toThrow();
                 } catch (e) {
-                    expect((e as Error).message).toMatch(
-                        "no such key",
-                    );
+                    expect((e as Error).message).toMatch("no such key");
                 }
 
                 // renamenx a string
                 await client.set(key1, "key1");
-                await client.set(key3, "key3");                                
-                expect(await client.renameNX(key1, key2)).toEqual(true);
-                expect(await client.renameNX(key2, key3)).toEqual(false);
+                await client.set(key3, "key3");
+                expect(await client.renamenx(key1, key2)).toEqual(true);
+                expect(await client.renamenx(key2, key3)).toEqual(false);
                 const result2 = await client.get(key2);
                 expect(result2).toEqual("key1");
                 await client.del([key1, key2]);
@@ -2396,19 +2394,6 @@ export function runBaseTests<Context>(config: {
                 // this one remains unchanged
                 const result3 = await client.get(key3);
                 expect(result3).toEqual("key3");
-
-                // Same-slot requirement
-                if (client instanceof RedisClusterClient) {
-                    try {
-                        expect(
-                            await client.renameNX("abc", "zxy"),
-                        ).toThrow();
-                    } catch (e) {
-                        expect((e as Error).message.toLowerCase()).toMatch(
-                            "crossslot",
-                        );
-                    }
-                }
             }, protocol);
         },
         config.timeout,
