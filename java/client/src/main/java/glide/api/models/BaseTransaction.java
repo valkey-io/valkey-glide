@@ -359,6 +359,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
+     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
+     * this special case.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param value The value to append.
+     * @return Command Response - The length of the string after appending the value.
+     */
+    public T append(@NonNull String key, @NonNull String value) {
+        ArgsArray commandArgs = buildArgs(key, value);
+        protobufTransaction.addCommands(buildCommand(Append, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Retrieves the values of multiple <code>keys</code>.
      *
      * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
@@ -3742,21 +3758,5 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         }
 
         return commandArgs.build();
-    }
-
-    /**
-     * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
-     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
-     * this special case.
-     *
-     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
-     * @param key The key of the string.
-     * @param value The value to append.
-     * @return Command Response - The length of the string after appending the value.
-     */
-    public T append(@NonNull String key, @NonNull String value) {
-        ArgsArray commandArgs = buildArgs(key, value);
-        protobufTransaction.addCommands(buildCommand(Append, commandArgs));
-        return getThis();
     }
 }
