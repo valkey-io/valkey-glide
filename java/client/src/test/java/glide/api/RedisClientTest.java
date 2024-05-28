@@ -4698,7 +4698,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoad(code);
+        CompletableFuture<String> response = service.functionLoad(code, false);
         String payload = response.get();
 
         // verify
@@ -4708,7 +4708,7 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadReplace_returns_success() {
+    public void functionLoad_with_replace_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -4721,7 +4721,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadReplace(code);
+        CompletableFuture<String> response = service.functionLoad(code, true);
         String payload = response.get();
 
         // verify
