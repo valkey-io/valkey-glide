@@ -84,6 +84,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
+import static redis_request.RedisRequestOuterClass.RequestType.LSet;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
@@ -860,6 +861,9 @@ public class TransactionTests {
         results.add(Pair.of(BLMPop, buildArgs("0.1", "1", "key", "LEFT")));
         transaction.blmpop(new String[] {"key"}, PopDirection.LEFT, 1L, 0.1);
         results.add(Pair.of(BLMPop, buildArgs("0.1", "1", "key", "LEFT", "COUNT", "1")));
+
+        transaction.lset("key", 0, "zero");
+        results.add(Pair.of(LSet, buildArgs("key", "0", "zero")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
