@@ -442,7 +442,7 @@ pub(crate) fn convert_to_expected_type(
     }
 }
 
-/// Similar to [`convert_array_to_map`](convert_array_to_map), but converts a map to a map.
+/// Similar to [`convert_array_to_map`], but converts a map to a map.
 /// Converts every key and value to the given type.
 fn convert_map_entries(
     map: Vec<(Value, Value)>,
