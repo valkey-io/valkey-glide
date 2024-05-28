@@ -652,6 +652,7 @@ public class CommandTests {
     public static Stream<Arguments> callCrossSlotCommandsWhichShouldFail() {
         return Stream.of(
                 Arguments.of("smove", null, clusterClient.smove("abc", "zxy", "lkn")),
+                Arguments.of("rename", null, clusterClient.rename("abc", "xyz")),
                 Arguments.of("renamenx", null, clusterClient.renamenx("abc", "zxy")),
                 Arguments.of(
                         "sinterstore", null, clusterClient.sinterstore("abc", new String[] {"zxy", "lkn"})),

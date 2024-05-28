@@ -77,6 +77,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
@@ -427,6 +428,12 @@ public abstract class BaseClient
     public CompletableFuture<Long> objectRefcount(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectRefCount, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> rename(@NonNull String key, @NonNull String newKey) {
+        return commandManager.submitNewCommand(
+                Rename, new String[] {key, newKey}, this::handleStringResponse);
     }
 
     @Override
