@@ -1274,21 +1274,21 @@ public class RedisClusterClientTest {
         String[] args = new String[0];
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
-        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>[]>submitNewCommand(
+        when(commandManager.<ClusterValue<Map<String, Object>[]>>submitNewCommand(
                         eq(FunctionList), eq(args), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, Object>[]> response = service.functionList(RANDOM);
-        Map<String, Object>[] payload = response.get();
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> response = service.functionList(RANDOM);
+        ClusterValue<Map<String, Object>[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(value, payload.getSingleValue());
     }
 
     @SneakyThrows
@@ -1299,21 +1299,22 @@ public class RedisClusterClientTest {
         String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
-        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>[]>submitNewCommand(
+        when(commandManager.<ClusterValue<Map<String, Object>[]>>submitNewCommand(
                         eq(FunctionList), eq(args), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, Object>[]> response = service.functionList(pattern, RANDOM);
-        Map<String, Object>[] payload = response.get();
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
+                service.functionList(pattern, RANDOM);
+        ClusterValue<Map<String, Object>[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(value, payload.getSingleValue());
     }
 
     @SneakyThrows
@@ -1323,21 +1324,22 @@ public class RedisClusterClientTest {
         String[] args = new String[] {WITH_CODE_REDIS_API};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
-        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>[]>submitNewCommand(
+        when(commandManager.<ClusterValue<Map<String, Object>[]>>submitNewCommand(
                         eq(FunctionList), eq(args), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, Object>[]> response = service.functionListWithCode(RANDOM);
-        Map<String, Object>[] payload = response.get();
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
+                service.functionListWithCode(RANDOM);
+        ClusterValue<Map<String, Object>[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(value, payload.getSingleValue());
     }
 
     @SneakyThrows
@@ -1348,21 +1350,21 @@ public class RedisClusterClientTest {
         String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern, WITH_CODE_REDIS_API};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
-        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
 
         // match on protobuf request
-        when(commandManager.<Map<String, Object>[]>submitNewCommand(
+        when(commandManager.<ClusterValue<Map<String, Object>[]>>submitNewCommand(
                         eq(FunctionList), eq(args), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, Object>[]> response =
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
                 service.functionListWithCode(pattern, RANDOM);
-        Map<String, Object>[] payload = response.get();
+        ClusterValue<Map<String, Object>[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(value, payload.getSingleValue());
     }
 }

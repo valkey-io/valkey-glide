@@ -3275,7 +3275,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
      * @return Command Response - Info about all libraries and their functions.
      */
@@ -3287,7 +3287,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
      * @return Command Response - Info about all libraries, their functions, and their code.
      */
@@ -3300,7 +3300,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @return Command Response - Info about queried libraries and their functions.
@@ -3314,6 +3314,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns information about the functions and libraries.
      *
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @return Command Response - Info about queried libraries, their functions, and their code.

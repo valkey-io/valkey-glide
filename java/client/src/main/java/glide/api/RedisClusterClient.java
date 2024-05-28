@@ -40,6 +40,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -460,72 +461,82 @@ public class RedisClusterClient extends BaseClient
                 response -> castArray(handleArrayResponse(response), Map.class));
     }
 
+    protected ClusterValue<Map<String, Object>[]> handleFunctionListResponse(
+            Response response, Route route) {
+        if (route instanceof SingleNodeRoute) {
+            Map<String, Object>[] data = handleFunctionListResponse(handleArrayResponse(response));
+            return ClusterValue.ofSingleValue(data);
+        } else {
+            // each `Object` is a `Map<String, Object>[]` actually
+            Map<String, Object> info = handleMapResponse(response);
+            Map<String, Map<String, Object>[]> data = new HashMap<>();
+            for (var nodeInfo : info.entrySet()) {
+                data.put(nodeInfo.getKey(), handleFunctionListResponse((Object[]) nodeInfo.getValue()));
+            }
+            return ClusterValue.ofMultiValue(data);
+        }
+    }
+
     @Override
-    @SuppressWarnings("unchecked")
     public CompletableFuture<Map<String, Object>[]> functionList(@NonNull String libNamePattern) {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public CompletableFuture<Map<String, Object>[]> functionListWithCode() {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[] {WITH_CODE_REDIS_API},
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public CompletableFuture<Map<String, Object>[]> functionList() {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[0],
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<Map<String, Object>[]> functionListWithCode(
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionListWithCode(
             @NonNull String libNamePattern, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API},
                 route,
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(response, route));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<Map<String, Object>[]> functionList(
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
             @NonNull String libNamePattern, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
                 route,
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(response, route));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<Map<String, Object>[]> functionListWithCode(@NonNull Route route) {
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionListWithCode(
+            @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[] {WITH_CODE_REDIS_API},
                 route,
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(response, route));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<Map<String, Object>[]> functionList(@NonNull Route route) {
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[0],
                 route,
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(response, route));
     }
 }

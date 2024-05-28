@@ -208,39 +208,35 @@ public class RedisClient extends BaseClient
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public CompletableFuture<Map<String, Object>[]> functionListWithCode(
             @NonNull String libNamePattern) {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API},
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public CompletableFuture<Map<String, Object>[]> functionList(@NonNull String libNamePattern) {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public CompletableFuture<Map<String, Object>[]> functionListWithCode() {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[] {WITH_CODE_REDIS_API},
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public CompletableFuture<Map<String, Object>[]> functionList() {
         return commandManager.submitNewCommand(
                 FunctionList,
                 new String[0],
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 }

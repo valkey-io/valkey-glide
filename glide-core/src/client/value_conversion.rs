@@ -268,24 +268,11 @@ pub(crate) fn convert_to_expected_type(
         ExpectedReturnType::Lolwut => {
             match value {
                 // cluster (multi-node) response - go recursive
-                Value::Map(map) => {
-                    let result = map
-                        .into_iter()
-                        .map(|(key, inner_value)| {
-                            let converted_key = convert_to_expected_type(
-                                key,
-                                Some(ExpectedReturnType::BulkString),
-                            )?;
-                            let converted_value = convert_to_expected_type(
-                                inner_value,
-                                Some(ExpectedReturnType::Lolwut),
-                            )?;
-                            Ok((converted_key, converted_value))
-                        })
-                        .collect::<RedisResult<_>>();
-
-                    result.map(Value::Map)
-                }
+                Value::Map(map) => convert_map_entries(
+                    map,
+                    Some(ExpectedReturnType::BulkString),
+                    Some(ExpectedReturnType::Lolwut),
+                ),
                 // RESP 2 response
                 Value::BulkString(bytes) => {
                     let text = std::str::from_utf8(&bytes).unwrap();
@@ -353,12 +340,12 @@ pub(crate) fn convert_to_expected_type(
         // In RESP2 these maps are represented by arrays - we're going to convert them.
         /* RESP2 response
         1) 1) "library_name"
-           2) "mylib"
+           2) "mylib1"
            3) "engine"
            4) "LUA"
            5) "functions"
            6) 1) 1) "name"
-                 2) "myfunc2"
+                 2) "myfunc1"
                  3) "description"
                  4) (nil)
                  5) "flags"
@@ -369,15 +356,15 @@ pub(crate) fn convert_to_expected_type(
            ...
 
         RESP3 response
-        1) 1# "library_name" => "mylib"
+        1) 1# "library_name" => "mylib1"
            2# "engine" => "LUA"
            3# "functions" =>
-              1) 1# "name" => "myfunc2"
+              1) 1# "name" => "myfunc1"
                  2# "description" => (nil)
                  3# "flags" => (empty set)
-              2) 1# "name" => "myfunc"
+              2) 1# "name" => "myfunc2"
                  ...
-        2) 1# "library_name" => "mylib1"
+        2) 1# "library_name" => "mylib2"
            ...
         */
         ExpectedReturnType::ArrayOfMapsRecursive => match value {
@@ -388,7 +375,17 @@ pub(crate) fn convert_to_expected_type(
             Value::Array(array) => {
                 convert_array_of_flat_maps(array, Some(ExpectedReturnType::ArrayOfMaps))
             }
-            _ => Err((ErrorKind::TypeError, "Response couldn't be converted into a recursive array of maps").into()),
+            // cluster (multi-node) response - go recursive
+            Value::Map(map) => convert_map_entries(
+                map,
+                Some(ExpectedReturnType::BulkString),
+                Some(ExpectedReturnType::ArrayOfMapsRecursive),
+            ),
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted into a recursive array of maps",
+            )
+                .into()),
         },
         // Not used for a command, but used as a helper for `ArrayOfMapsRecursive` to process the inner map.
         ExpectedReturnType::ArrayOfMaps => match value {
@@ -410,6 +407,26 @@ pub(crate) fn convert_to_expected_type(
             _ => convert_to_expected_type(value, Some(ExpectedReturnType::BulkString)),
         },
     }
+}
+
+/// Similar to [`convert_array_to_map`](convert_array_to_map), but converts a map to a map.
+/// Converts every key and value to the given type.
+fn convert_map_entries(
+    map: Vec<(Value, Value)>,
+    key_expected_return_type: Option<ExpectedReturnType>,
+    value_expected_return_type: Option<ExpectedReturnType>,
+) -> RedisResult<Value> {
+    let result = map
+        .into_iter()
+        .map(|(key, inner_value)| {
+            let converted_key = convert_to_expected_type(key, key_expected_return_type)?;
+            let converted_value =
+                convert_to_expected_type(inner_value, value_expected_return_type)?;
+            Ok((converted_key, converted_value))
+        })
+        .collect::<RedisResult<_>>();
+
+    result.map(Value::Map)
 }
 
 /// Convert string returned by `LOLWUT` command.
@@ -449,7 +466,7 @@ fn convert_array_elements(
 ///    3) "map 1 key 2"
 ///    4) "map 1 value 2"
 ///    ...
-/// 1) 1) "map 2 key 1"
+/// 2) 1) "map 2 key 1"
 ///    2) "map 2 value 1"
 ///    ...
 /// ```

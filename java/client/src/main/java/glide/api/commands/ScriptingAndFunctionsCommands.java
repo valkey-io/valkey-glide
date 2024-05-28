@@ -49,22 +49,21 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
      * @return Info about all libraries and their functions.
      * @example
      *     <pre>{@code
      * Map<String, Object>[] response = client.functionList().get();
      * for (Map<String, Object> libraryInfo : response) {
-     *   System.out.printf("Server has library '%s' which runs on %s engine%n",
-     *       libraryInfo.get("library_name"), libraryInfo.get("engine"));
-     *   Object[] functions = (Object[]) libraryInfo.get("functions");
-     *   for (int i = 0; i < functions.length; i++) {
-     *     Map<String, Object> function = (Map<String, Object>) functions[i];
-     *     Set<String> flags = (Set<String>) function.get("flags");
-     *     System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
-     *         function.get("name"), String.join(", ", flags), function.get("description"));
-     *   }
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
      * }
      * }</pre>
      */
@@ -73,23 +72,22 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
      * @return Info about all libraries, their functions, and their code.
      * @example
      *     <pre>{@code
      * Map<String, Object>[] response = client.functionListWithCode().get();
      * for (Map<String, Object> libraryInfo : response) {
-     *   System.out.printf("Server has library '%s' which runs on %s engine%n",
-     *       libraryInfo.get("library_name"), libraryInfo.get("engine"));
-     *   Object[] functions = (Object[]) libraryInfo.get("functions");
-     *   for (int i = 0; i < functions.length; i++) {
-     *     Map<String, Object> function = (Map<String, Object>) functions[i];
-     *     Set<String> flags = (Set<String>) function.get("flags");
-     *     System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
-     *         function.get("name"), String.join(", ", flags), function.get("description"));
-     *     System.out.printf("Library code:%n%s%n", function.get("library_code"));
-     *   }
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get("library_code"));
      * }
      * }</pre>
      */
@@ -98,7 +96,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @return Info about queried libraries and their functions.
@@ -106,15 +104,14 @@ public interface ScriptingAndFunctionsCommands {
      *     <pre>{@code
      * Map<String, Object>[] response = client.functionList("myLib?_backup").get();
      * for (Map<String, Object> libraryInfo : response) {
-     *   System.out.printf("Server has library '%s' which runs on %s engine%n",
-     *       libraryInfo.get("library_name"), libraryInfo.get("engine"));
-     *   Object[] functions = (Object[]) libraryInfo.get("functions");
-     *   for (int i = 0; i < functions.length; i++) {
-     *     Map<String, Object> function = (Map<String, Object>) functions[i];
-     *     Set<String> flags = (Set<String>) function.get("flags");
-     *     System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
-     *         function.get("name"), String.join(", ", flags), function.get("description"));
-     *   }
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
      * }
      * }</pre>
      */
@@ -123,7 +120,7 @@ public interface ScriptingAndFunctionsCommands {
     /**
      * Returns information about the functions and libraries.
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @return Info about queried libraries, their functions, and their code.
@@ -131,16 +128,15 @@ public interface ScriptingAndFunctionsCommands {
      *     <pre>{@code
      * Map<String, Object>[] response = client.functionListWithCode("GLIDE*").get();
      * for (Map<String, Object> libraryInfo : response) {
-     *   System.out.printf("Server has library '%s' which runs on %s engine%n",
-     *       libraryInfo.get("library_name"), libraryInfo.get("engine"));
-     *   Object[] functions = (Object[]) libraryInfo.get("functions");
-     *   for (int i = 0; i < functions.length; i++) {
-     *     Map<String, Object> function = (Map<String, Object>) functions[i];
-     *     Set<String> flags = (Set<String>) function.get("flags");
-     *     System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
-     *         function.get("name"), String.join(", ", flags), function.get("description"));
-     *     System.out.printf("Library code:%n%s%n", function.get("library_code"));
-     *   }
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get("library_code"));
      * }
      * }</pre>
      */
