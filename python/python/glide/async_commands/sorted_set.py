@@ -221,11 +221,16 @@ def separate_keys(
 
 
 def _create_z_cmd_store_args(
-    destination: str,
     keys: Union[List[str], List[Tuple[str, float]]],
     aggregation_type: Optional[AggregationType] = None,
+    destination: Optional[str] = None,
 ) -> List[str]:
-    args = [destination, str(len(keys))]
+    args = []
+
+    if destination:
+        args.append(destination)
+
+    args.append(str(len(keys)))
 
     only_keys, weights = separate_keys(keys)
 
