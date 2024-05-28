@@ -533,6 +533,19 @@ public class TransactionTestUtilities {
                     }
                 };
 
+        var expectedLibData =
+                new Map[] {
+                    Map.<String, Object>of(
+                            "library_name",
+                            "mylib1T",
+                            "engine",
+                            "LUA",
+                            "functions",
+                            new Object[] {expectedFuncData},
+                            "library_code",
+                            code)
+                };
+
         transaction
                 .customCommand(new String[] {"function", "flush", "sync"})
                 .functionList()
@@ -550,18 +563,7 @@ public class TransactionTestUtilities {
             "mylib1T", // functionLoad(code)
             "mylib1T", // functionLoadReplace(code)
             new Map[0], // functionList("otherLib")
-            new Map[] {
-                Map.<String, Object>of(
-                        "library_name",
-                        "mylib1T",
-                        "engine",
-                        "LUA",
-                        "functions",
-                        new Object[] {expectedFuncData},
-                        "library_code",
-                        code)
-            },
-            // functionListWithCode("mylib1T")
+            expectedLibData, // functionListWithCode("mylib1T")
             OK, // customCommand("function", "flush", "sync")
         };
     }
