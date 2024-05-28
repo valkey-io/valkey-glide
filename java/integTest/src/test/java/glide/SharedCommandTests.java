@@ -2909,7 +2909,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void xadd_and_xtrim(BaseClient client) {
+    public void xadd_xlen_and_xtrim(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
         String field2 = UUID.randomUUID().toString();
@@ -2934,17 +2934,7 @@ public class SharedCommandTests {
                         .get());
 
         assertNotNull(client.xadd(key, Map.of(field1, "foo2", field2, "bar2")).get());
-        // TODO update test when XLEN is available
-        if (client instanceof RedisClient) {
-            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertEquals(
-                    2L,
-                    ((RedisClusterClient) client)
-                            .customCommand(new String[] {"XLEN", key})
-                            .get()
-                            .getSingleValue());
-        }
+        assertEquals(2L, client.xlen(key).get());
 
         // this will trim the first entry.
         String id =
@@ -2955,17 +2945,7 @@ public class SharedCommandTests {
                                 StreamAddOptions.builder().trim(new MaxLen(true, 2L)).build())
                         .get();
         assertNotNull(id);
-        // TODO update test when XLEN is available
-        if (client instanceof RedisClient) {
-            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertEquals(
-                    2L,
-                    ((RedisClusterClient) client)
-                            .customCommand(new String[] {"XLEN", key})
-                            .get()
-                            .getSingleValue());
-        }
+        assertEquals(2L, client.xlen(key).get());
 
         // this will trim the second entry.
         assertNotNull(
@@ -2975,39 +2955,22 @@ public class SharedCommandTests {
                                 Map.of(field1, "foo4", field2, "bar4"),
                                 StreamAddOptions.builder().trim(new MinId(true, id)).build())
                         .get());
-        // TODO update test when XLEN is available
-        if (client instanceof RedisClient) {
-            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertEquals(
-                    2L,
-                    ((RedisClusterClient) client)
-                            .customCommand(new String[] {"XLEN", key})
-                            .get()
-                            .getSingleValue());
-        }
+        assertEquals(2L, client.xlen(key).get());
 
         // test xtrim to remove 1 element
         assertEquals(1L, client.xtrim(key, new MaxLen(1)).get());
-        // TODO update test when XLEN is available
-        if (client instanceof RedisClient) {
-            assertEquals(1L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertEquals(
-                    1L,
-                    ((RedisClusterClient) client)
-                            .customCommand(new String[] {"XLEN", key})
-                            .get()
-                            .getSingleValue());
-        }
+        assertEquals(1L, client.xlen(key).get());
 
         // Key does not exist - returns 0
-        assertEquals(0L, client.xtrim(key, new MaxLen(true, 1)).get());
+        assertEquals(0L, client.xtrim(key2, new MaxLen(true, 1)).get());
+        assertEquals(0L, client.xlen(key2).get());
 
-        // Key exists, but it is not a stream
+        // Throw Exception: Key exists - but it is not a stream
         assertEquals(OK, client.set(key2, "xtrimtest").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.xtrim(key2, new MinId("0-1")).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException = assertThrows(ExecutionException.class, () -> client.xlen(key2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
