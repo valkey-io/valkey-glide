@@ -1,6 +1,7 @@
 #### Changes
 * Python: Added OBJECT ENCODING command ([#1471](https://github.com/aws/glide-for-redis/pull/1471))
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
+* Python: Added OBJECT IDLETIME command ([#1474](https://github.com/aws/glide-for-redis/pull/1474))
 
 ## 0.4.0 (2024-05-26)
 
