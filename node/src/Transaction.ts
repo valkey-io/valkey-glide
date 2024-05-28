@@ -683,6 +683,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Creates a new destination set if needed. The operation is atomic.
      * See https://valkey.io/commands/smove for more details.
      *
+     * Note: When in cluster mode, `source` and `destination` must map to the same hash slot.
+     *
      * @param source - The key of the set to remove the element from.
      * @param destination - The key of the set to add the element to.
      * @param member - The set element to move.
