@@ -195,6 +195,7 @@ enum RequestType {
     PExpireTime = 157;
     BLMPop = 158;
     XLen = 159;
+    LSet = 165;
 }
 
 message Command {
