@@ -3409,9 +3409,22 @@ class TestCommands:
             )
             assert await redis_client.object_freq(non_existing_key) is None
             assert await redis_client.set(key, "") == OK
-            assert await redis_client.object_freq(key) >= 0
+            freq = await redis_client.object_freq(key)
+            assert freq is not None and freq >= 0
         finally:
             await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_object_idletime(self, redis_client: TRedisClient):
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+
+        assert await redis_client.object_idletime(non_existing_key) is None
+        assert await redis_client.set(string_key, "foo") == OK
+        time.sleep(1)
+        idletime = await redis_client.object_idletime(string_key)
+        assert idletime is not None and idletime > 0
 
 
 class TestMultiKeyCommandCrossSlot:
