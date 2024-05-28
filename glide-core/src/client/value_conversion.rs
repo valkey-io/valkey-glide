@@ -411,7 +411,7 @@ pub(crate) fn convert_to_expected_type(
                 Some(ExpectedReturnType::ArrayOfMaps(type_of_map_values)),
             ),
             Value::Array(array) => convert_array_of_flat_maps(array, Some(*type_of_map_values)),
-            // Due to recursion, it would be called to convert every map value, including simple strings, do nothing with them
+            // Due to recursion, this will convert every map value, including simple strings, which we do nothing with
             Value::BulkString(_) | Value::SimpleString(_) | Value::VerbatimString { .. } => {
                 Ok(value)
             }

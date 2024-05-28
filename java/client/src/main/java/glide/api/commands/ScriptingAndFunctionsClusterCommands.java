@@ -182,7 +182,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @return Info about queried libraries and their functions.
      * @example
      *     <pre>{@code
-     * ClusterValue<Map<String, Object>[]> response = client.functionList("myLib?_backup", ALL_NODES, true).get();
+     * ClusterValue<Map<String, Object>[]> response = client.functionList("myLib?_backup", true, ALL_NODES).get();
      * for (String node : response.getMultiValue().keySet()) {
      *   for (Map<String, Object> libraryInfo : response.getMultiValue().get(node)) {
      *     System.out.printf("Node '%s' has library '%s' which runs on %s engine%n",
