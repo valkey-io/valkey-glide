@@ -346,7 +346,9 @@ public class CommandTests {
     public void functionLoad_and_functionList() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        // TODO FUNCTION FLUSH before the test
+        // TODO use FUNCTION FLUSH
+        assertEquals(OK, regularClient.customCommand(new String[] {"FUNCTION", "FLUSH", "SYNC"}).get());
+
         String libName = "mylib1c";
         String funcName = "myfunc1c";
         String code =
@@ -354,11 +356,11 @@ public class CommandTests {
                         + libName
                         + " \n redis.register_function('"
                         + funcName
-                        + "', function(keys, args) return args[1] end)";
+                        + "', function(keys, args) return args[1] end)"; // function returns first argument
         assertEquals(libName, regularClient.functionLoad(code).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
 
-        var flist = regularClient.functionList().get();
+        var flist = regularClient.functionList(false).get();
         var expectedDescription =
                 new HashMap<String, String>() {
                     {
@@ -373,7 +375,7 @@ public class CommandTests {
                 };
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = regularClient.functionListWithCode().get();
+        flist = regularClient.functionList(true).get();
         checkFunctionListResponse(
                 flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
@@ -391,15 +393,15 @@ public class CommandTests {
                 code
                         + "\n redis.register_function('"
                         + newFuncName
-                        + "', function(keys, args) return #args end)";
+                        + "', function(keys, args) return #args end)"; // function returns argument count
         assertEquals(libName, regularClient.functionLoadReplace(newCode).get());
 
-        flist = regularClient.functionList(libName).get();
+        flist = regularClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
         expectedFlags.put(newFuncName, Set.of());
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = regularClient.functionListWithCode(libName).get();
+        flist = regularClient.functionList(libName, true).get();
         checkFunctionListResponse(
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 

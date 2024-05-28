@@ -1188,7 +1188,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, Object>[]> response = service.functionList();
+        CompletableFuture<Map<String, Object>[]> response = service.functionList(false);
         Map<String, Object>[] payload = response.get();
 
         // verify
@@ -1199,53 +1199,6 @@ public class RedisClusterClientTest {
     @SneakyThrows
     @Test
     public void functionList_with_pattern_returns_success() {
-        // setup
-        String pattern = "*";
-        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern};
-        @SuppressWarnings("unchecked")
-        Map<String, Object>[] value = new Map[0];
-        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<Map<String, Object>[]>submitNewCommand(eq(FunctionList), eq(args), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Map<String, Object>[]> response = service.functionList(pattern);
-        Map<String, Object>[] payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void functionListWithCode_returns_success() {
-        // setup
-        String[] args = new String[] {WITH_CODE_REDIS_API};
-        @SuppressWarnings("unchecked")
-        Map<String, Object>[] value = new Map[0];
-        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<Map<String, Object>[]>submitNewCommand(eq(FunctionList), eq(args), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Map<String, Object>[]> response = service.functionListWithCode();
-        Map<String, Object>[] payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void functionListWithCode_with_pattern_returns_success() {
         // setup
         String pattern = "*";
         String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern, WITH_CODE_REDIS_API};
@@ -1259,7 +1212,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, Object>[]> response = service.functionListWithCode(pattern);
+        CompletableFuture<Map<String, Object>[]> response = service.functionList(pattern, true);
         Map<String, Object>[] payload = response.get();
 
         // verify
@@ -1271,7 +1224,7 @@ public class RedisClusterClientTest {
     @Test
     public void functionList_with_route_returns_success() {
         // setup
-        String[] args = new String[0];
+        String[] args = new String[] {WITH_CODE_REDIS_API};
         @SuppressWarnings("unchecked")
         Map<String, Object>[] value = new Map[0];
         CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
@@ -1283,7 +1236,8 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<Map<String, Object>[]>> response = service.functionList(RANDOM);
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
+                service.functionList(true, RANDOM);
         ClusterValue<Map<String, Object>[]> payload = response.get();
 
         // verify
@@ -1309,58 +1263,7 @@ public class RedisClusterClientTest {
 
         // exercise
         CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
-                service.functionList(pattern, RANDOM);
-        ClusterValue<Map<String, Object>[]> payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload.getSingleValue());
-    }
-
-    @SneakyThrows
-    @Test
-    public void functionListWithCode_with_route_returns_success() {
-        // setup
-        String[] args = new String[] {WITH_CODE_REDIS_API};
-        @SuppressWarnings("unchecked")
-        Map<String, Object>[] value = new Map[0];
-        CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
-        testResponse.complete(ClusterValue.ofSingleValue(value));
-
-        // match on protobuf request
-        when(commandManager.<ClusterValue<Map<String, Object>[]>>submitNewCommand(
-                        eq(FunctionList), eq(args), eq(RANDOM), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
-                service.functionListWithCode(RANDOM);
-        ClusterValue<Map<String, Object>[]> payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload.getSingleValue());
-    }
-
-    @SneakyThrows
-    @Test
-    public void functionListWithCode_with_pattern_and_route_returns_success() {
-        // setup
-        String pattern = "*";
-        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern, WITH_CODE_REDIS_API};
-        @SuppressWarnings("unchecked")
-        Map<String, Object>[] value = new Map[0];
-        CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
-        testResponse.complete(ClusterValue.ofSingleValue(value));
-
-        // match on protobuf request
-        when(commandManager.<ClusterValue<Map<String, Object>[]>>submitNewCommand(
-                        eq(FunctionList), eq(args), eq(RANDOM), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
-                service.functionListWithCode(pattern, RANDOM);
+                service.functionList(pattern, false, RANDOM);
         ClusterValue<Map<String, Object>[]> payload = response.get();
 
         // verify

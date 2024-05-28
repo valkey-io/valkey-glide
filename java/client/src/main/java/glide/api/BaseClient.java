@@ -362,6 +362,7 @@ public abstract class BaseClient
         return handleRedisResponse(Set.class, false, response);
     }
 
+    /** Process a <code>FUNCTION LIST</code> standalone response. */
     @SuppressWarnings("unchecked")
     protected Map<String, Object>[] handleFunctionListResponse(Object[] response) {
         Map<String, Object>[] data = castArray(response, Map.class);

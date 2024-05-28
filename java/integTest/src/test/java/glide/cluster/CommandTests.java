@@ -810,7 +810,7 @@ public class CommandTests {
                     }
                 };
 
-        var response = clusterClient.functionList(route).get();
+        var response = clusterClient.functionList(false, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
             checkFunctionListResponse(
@@ -822,7 +822,7 @@ public class CommandTests {
             }
         }
 
-        response = clusterClient.functionListWithCode(route).get();
+        response = clusterClient.functionList(true, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
             checkFunctionListResponse(
@@ -855,7 +855,7 @@ public class CommandTests {
         expectedDescription.put(newFuncName, null);
         expectedFlags.put(newFuncName, Set.of());
 
-        response = clusterClient.functionList(route).get();
+        response = clusterClient.functionList(false, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
             checkFunctionListResponse(
@@ -867,7 +867,7 @@ public class CommandTests {
             }
         }
 
-        response = clusterClient.functionListWithCode(route).get();
+        response = clusterClient.functionList(true, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
             checkFunctionListResponse(
@@ -909,7 +909,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
 
-        var flist = clusterClient.functionList().get();
+        var flist = clusterClient.functionList(false).get();
         var expectedDescription =
                 new HashMap<String, String>() {
                     {
@@ -924,7 +924,7 @@ public class CommandTests {
                 };
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = clusterClient.functionListWithCode().get();
+        flist = clusterClient.functionList(true).get();
         checkFunctionListResponse(
                 flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
@@ -945,12 +945,12 @@ public class CommandTests {
                         + "', function(keys, args) return #args end)"; // function returns argument count
         assertEquals(libName, clusterClient.functionLoadReplace(newCode).get());
 
-        flist = clusterClient.functionList(libName).get();
+        flist = clusterClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
         expectedFlags.put(newFuncName, Set.of());
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
-        flist = clusterClient.functionListWithCode(libName).get();
+        flist = clusterClient.functionList(libName, true).get();
         checkFunctionListResponse(
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 

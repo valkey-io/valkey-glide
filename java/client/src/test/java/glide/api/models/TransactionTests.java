@@ -814,11 +814,9 @@ public class TransactionTests {
         results.add(Pair.of(FunctionLoad, buildArgs("pewpew")));
         results.add(Pair.of(FunctionLoad, buildArgs("REPLACE", "ololo")));
 
-        transaction.functionList().functionList("*").functionListWithCode().functionListWithCode("*");
-        results.add(Pair.of(FunctionList, buildArgs()));
-        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*")));
+        transaction.functionList(true).functionList("*", false);
         results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_REDIS_API)));
-        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*", WITH_CODE_REDIS_API)));
+        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*")));
 
         transaction.geodist("key", "Place", "Place2");
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2")));

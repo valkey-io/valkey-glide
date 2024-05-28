@@ -603,22 +603,22 @@ public class TransactionTestUtilities {
 
         transaction
                 .customCommand(new String[] {"function", "flush", "sync"})
-                .functionList()
-                .functionListWithCode()
+                .functionList(false)
+                .functionList(true)
                 .functionLoad(code)
                 .functionLoadReplace(code)
-                .functionList("otherLib")
-                .functionListWithCode("mylib1T")
+                .functionList("otherLib", false)
+                .functionList("mylib1T", true)
                 .customCommand(new String[] {"function", "flush", "sync"});
 
         return new Object[] {
             OK, // customCommand("function", "flush", "sync")
-            new Map[0], // functionList()
-            new Map[0], // functionListWithCode()
+            new Map[0], // functionList(false)
+            new Map[0], // functionList(true)
             "mylib1T", // functionLoad(code)
             "mylib1T", // functionLoadReplace(code)
-            new Map[0], // functionList("otherLib")
-            expectedLibData, // functionListWithCode("mylib1T")
+            new Map[0], // functionList("otherLib", false)
+            expectedLibData, // functionList("mylib1T", true)
             OK, // customCommand("function", "flush", "sync")
         };
     }

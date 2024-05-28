@@ -208,35 +208,21 @@ public class RedisClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, Object>[]> functionListWithCode(
-            @NonNull String libNamePattern) {
+    public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API},
+                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
     @Override
-    public CompletableFuture<Map<String, Object>[]> functionList(@NonNull String libNamePattern) {
+    public CompletableFuture<Map<String, Object>[]> functionList(
+            @NonNull String libNamePattern, boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
-                response -> handleFunctionListResponse(handleArrayResponse(response)));
-    }
-
-    @Override
-    public CompletableFuture<Map<String, Object>[]> functionListWithCode() {
-        return commandManager.submitNewCommand(
-                FunctionList,
-                new String[] {WITH_CODE_REDIS_API},
-                response -> handleFunctionListResponse(handleArrayResponse(response)));
-    }
-
-    @Override
-    public CompletableFuture<Map<String, Object>[]> functionList() {
-        return commandManager.submitNewCommand(
-                FunctionList,
-                new String[0],
+                withCode
+                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
+                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 }

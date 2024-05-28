@@ -451,16 +451,7 @@ public class RedisClusterClient extends BaseClient
                 this::handleStringResponse);
     }
 
-    @Override
-    @SuppressWarnings("unchecked")
-    public CompletableFuture<Map<String, Object>[]> functionListWithCode(
-            @NonNull String libNamePattern) {
-        return commandManager.submitNewCommand(
-                FunctionList,
-                new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API},
-                response -> castArray(handleArrayResponse(response), Map.class));
-    }
-
+    /** Process a <code>FUNCTION LIST</code> cluster response. */
     protected ClusterValue<Map<String, Object>[]> handleFunctionListResponse(
             Response response, Route route) {
         if (route instanceof SingleNodeRoute) {
@@ -478,64 +469,42 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, Object>[]> functionList(@NonNull String libNamePattern) {
+    public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
     @Override
-    public CompletableFuture<Map<String, Object>[]> functionListWithCode() {
+    public CompletableFuture<Map<String, Object>[]> functionList(
+            @NonNull String libNamePattern, boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new String[] {WITH_CODE_REDIS_API},
+                withCode
+                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
+                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 
     @Override
-    public CompletableFuture<Map<String, Object>[]> functionList() {
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
+            boolean withCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new String[0],
-                response -> handleFunctionListResponse(handleArrayResponse(response)));
-    }
-
-    @Override
-    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionListWithCode(
-            @NonNull String libNamePattern, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                FunctionList,
-                new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API},
+                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
                 route,
                 response -> handleFunctionListResponse(response, route));
     }
 
     @Override
     public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
-            @NonNull String libNamePattern, @NonNull Route route) {
+            @NonNull String libNamePattern, boolean withCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
-                route,
-                response -> handleFunctionListResponse(response, route));
-    }
-
-    @Override
-    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionListWithCode(
-            @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                FunctionList,
-                new String[] {WITH_CODE_REDIS_API},
-                route,
-                response -> handleFunctionListResponse(response, route));
-    }
-
-    @Override
-    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(@NonNull Route route) {
-        return commandManager.submitNewCommand(
-                FunctionList,
-                new String[0],
+                withCode
+                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
+                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
                 route,
                 response -> handleFunctionListResponse(response, route));
     }

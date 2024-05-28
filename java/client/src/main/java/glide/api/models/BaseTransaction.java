@@ -3478,22 +3478,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @param withCode Specifies whether to request the library code from the server or not.
      * @return Command Response - Info about all libraries and their functions.
      */
-    public T functionList() {
-        protobufTransaction.addCommands(buildCommand(FunctionList));
-        return getThis();
-    }
-
-    /**
-     * Returns information about the functions and libraries.
-     *
-     * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
-     * @return Command Response - Info about all libraries, their functions, and their code.
-     */
-    public T functionListWithCode() {
-        ArgsArray commandArgs = buildArgs(WITH_CODE_REDIS_API);
+    public T functionList(boolean withCode) {
+        ArgsArray commandArgs = withCode ? buildArgs(WITH_CODE_REDIS_API) : buildArgs();
         protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
         return getThis();
     }
@@ -3504,24 +3493,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
+     * @param withCode Specifies whether to request the library code from the server or not.
      * @return Command Response - Info about queried libraries and their functions.
      */
-    public T functionList(@NonNull String libNamePattern) {
-        ArgsArray commandArgs = buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern);
-        protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Returns information about the functions and libraries.
-     *
-     * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
-     * @param libNamePattern A wildcard pattern for matching library names.
-     * @return Command Response - Info about queried libraries, their functions, and their code.
-     */
-    public T functionListWithCode(@NonNull String libNamePattern) {
-        ArgsArray commandArgs = buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API);
+    public T functionList(@NonNull String libNamePattern, boolean withCode) {
+        ArgsArray commandArgs =
+                withCode
+                        ? buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API)
+                        : buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern);
         protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
         return getThis();
     }
