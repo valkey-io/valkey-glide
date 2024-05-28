@@ -3545,7 +3545,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ObjectEncoding, [key]),
         )
 
-    async def object_freq(self, key: str) -> int:
+    async def object_freq(self, key: str) -> Optional[int]:
         """
         Returns the logarithmic access frequency counter of a Redis object stored at `key`.
 
@@ -3555,7 +3555,7 @@ class CoreCommands(Protocol):
             key (str): The key of the object to get the logarithmic access frequency counter of.
 
         Returns:
-            int: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
+            Optional[int]: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
                 integer. Otherwise, returns None.
 
         Examples:
@@ -3563,6 +3563,27 @@ class CoreCommands(Protocol):
                 2  # The logarithmic access frequency counter of "my_hash" has a value of 2.
         """
         return cast(
-            int,
+            Optional[int],
             await self._execute_command(RequestType.ObjectFreq, [key]),
+        )
+
+    async def object_idletime(self, key: str) -> Optional[int]:
+        """
+        Returns the time in seconds since the last access to the value stored at `key`.
+
+        See https://valkey.io/commands/object-idletime for more details.
+
+        Args:
+            key (str): The key of the object to get the idle time of.
+
+        Returns:
+            Optional[int]: If `key` exists, returns the idle time in seconds. Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_idletime("my_hash")
+                13  # "my_hash" was last accessed 13 seconds ago.
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ObjectIdleTime, [key]),
         )

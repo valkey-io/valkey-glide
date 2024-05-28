@@ -2485,10 +2485,24 @@ class BaseTransaction:
             key (str): The key of the object to get the logarithmic access frequency counter of.
 
         Command response:
-            int: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
+            Optional[int]: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
                 integer. Otherwise, returns None.
         """
         return self.append_command(RequestType.ObjectFreq, [key])
+
+    def object_idletime(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the time in seconds since the last access to the value stored at `key`.
+
+        See https://valkey.io/commands/object-idletime for more details.
+
+        Args:
+            key (str): The key of the object to get the idle time of.
+
+        Command response:
+            Optional[int]: If `key` exists, returns the idle time in seconds. Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectIdleTime, [key])
 
 
 class Transaction(BaseTransaction):
