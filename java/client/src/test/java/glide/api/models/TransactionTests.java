@@ -128,6 +128,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -674,6 +675,9 @@ public class TransactionTests {
 
         transaction.xtrim("key", new MinId(true, "id"));
         results.add(Pair.of(XTrim, buildArgs("key", TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "id")));
+
+        transaction.xlen("key");
+        results.add(Pair.of(XLen, buildArgs("key")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
