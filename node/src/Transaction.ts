@@ -92,7 +92,7 @@ import {
     createZRem,
     createZRemRangeByRank,
     createZRemRangeByScore,
-    createZScore
+    createZScore,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
