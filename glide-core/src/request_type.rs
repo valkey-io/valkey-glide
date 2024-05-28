@@ -156,8 +156,15 @@ pub enum RequestType {
     ZMPop = 144,
     GetBit = 145,
     ZInter = 146,
+    BitPos = 147,
+    BitOp = 148,
+    HStrlen = 149,
     FunctionLoad = 150,
     FunctionList = 151,
+    LMPop = 155,
+    ExpireTime = 156,
+    PExpireTime = 157,
+    BLMPop = 158,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -313,12 +320,19 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BitCount => RequestType::BitCount,
             ProtobufRequestType::BZMPop => RequestType::BZMPop,
             ProtobufRequestType::SetBit => RequestType::SetBit,
+            ProtobufRequestType::LMPop => RequestType::LMPop,
+            ProtobufRequestType::BLMPop => RequestType::BLMPop,
             ProtobufRequestType::ZInterCard => RequestType::ZInterCard,
             ProtobufRequestType::ZMPop => RequestType::ZMPop,
             ProtobufRequestType::GetBit => RequestType::GetBit,
             ProtobufRequestType::ZInter => RequestType::ZInter,
             ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
             ProtobufRequestType::FunctionList => RequestType::FunctionList,
+            ProtobufRequestType::BitPos => RequestType::BitPos,
+            ProtobufRequestType::BitOp => RequestType::BitOp,
+            ProtobufRequestType::HStrlen => RequestType::HStrlen,
+            ProtobufRequestType::ExpireTime => RequestType::ExpireTime,
+            ProtobufRequestType::PExpireTime => RequestType::PExpireTime,
         }
     }
 }
@@ -469,6 +483,8 @@ impl RequestType {
             RequestType::ZRandMember => Some(cmd("ZRANDMEMBER")),
             RequestType::BitCount => Some(cmd("BITCOUNT")),
             RequestType::BZMPop => Some(cmd("BZMPOP")),
+            RequestType::LMPop => Some(cmd("LMPOP")),
+            RequestType::BLMPop => Some(cmd("BLMPOP")),
             RequestType::SetBit => Some(cmd("SETBIT")),
             RequestType::ZInterCard => Some(cmd("ZINTERCARD")),
             RequestType::ZMPop => Some(cmd("ZMPOP")),
@@ -476,6 +492,11 @@ impl RequestType {
             RequestType::ZInter => Some(cmd("ZINTER")),
             RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
             RequestType::FunctionList => Some(get_two_word_command("FUNCTION", "LIST")),
+            RequestType::BitPos => Some(cmd("BITPOS")),
+            RequestType::BitOp => Some(cmd("BITOP")),
+            RequestType::HStrlen => Some(cmd("HSTRLEN")),
+            RequestType::ExpireTime => Some(cmd("EXPIRETIME")),
+            RequestType::PExpireTime => Some(cmd("PEXPIRETIME")),
         }
     }
 }

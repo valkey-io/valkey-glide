@@ -11,6 +11,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.PopDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -20,6 +21,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -114,7 +116,9 @@ public class TransactionTestUtilities {
                     .expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                     .expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
                     .pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
-                    .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY);
+                    .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                    .expiretime(genericKey1)
+                    .pexpiretime(genericKey1);
         }
 
         var expectedResults =
@@ -149,6 +153,8 @@ public class TransactionTestUtilities {
                         true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
                         false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
                         false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                        -2L, // expiretime(genericKey1)
+                        -2L, // pexpiretime(genericKey1)
                     });
         }
         return expectedResults;
@@ -164,6 +170,7 @@ public class TransactionTestUtilities {
                 .get(stringKey1)
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
                 .strlen(stringKey2)
+                .append(stringKey2, value2)
                 .mset(Map.of(stringKey1, value2, stringKey2, value1))
                 .mget(new String[] {stringKey1, stringKey2})
                 .incr(stringKey3)
@@ -179,6 +186,7 @@ public class TransactionTestUtilities {
             value1, // get(stringKey1)
             null, // set(stringKey2, value2, returnOldValue(true))
             (long) value1.length(), // strlen(key2)
+            Long.valueOf(value2.length() * 2), // append(key2, value2)
             OK, // mset(Map.of(stringKey1, value2, stringKey2, value1))
             new String[] {value2, value1}, // mget(new String[] {stringKey1, stringKey2})
             1L, // incr(stringKey3)
@@ -204,9 +212,15 @@ public class TransactionTestUtilities {
                 .hgetall(hashKey1)
                 .hdel(hashKey1, new String[] {field1})
                 .hvals(hashKey1)
+                .hrandfield(hashKey1)
+                .hrandfieldWithCount(hashKey1, 2)
+                .hrandfieldWithCount(hashKey1, -2)
+                .hrandfieldWithCountWithValues(hashKey1, 2)
+                .hrandfieldWithCountWithValues(hashKey1, -2)
                 .hincrBy(hashKey1, field3, 5)
                 .hincrByFloat(hashKey1, field3, 5.5)
-                .hkeys(hashKey1);
+                .hkeys(hashKey1)
+                .hstrlen(hashKey1, field2);
 
         return new Object[] {
             2L, // hset(hashKey1, Map.of(field1, value1, field2, value2))
@@ -218,9 +232,17 @@ public class TransactionTestUtilities {
             Map.of(field1, value1, field2, value2), // hgetall(hashKey1)
             1L, // hdel(hashKey1, new String[] {field1})
             new String[] {value2}, // hvals(hashKey1)
+            field2, // hrandfield(hashKey1)
+            new String[] {field2}, // hrandfieldWithCount(hashKey1, 2)
+            new String[] {field2, field2}, // hrandfieldWithCount(hashKey1, -2)
+            new String[][] {{field2, value2}}, // hrandfieldWithCountWithValues(hashKey1, 2)
+            new String[][] {
+                {field2, value2}, {field2, value2}
+            }, // hrandfieldWithCountWithValues(hashKey1, -2)
             5L, // hincrBy(hashKey1, field3, 5)
             10.5, // hincrByFloat(hashKey1, field3, 5.5)
             new String[] {field2, field3}, // hkeys(hashKey1)
+            (long) value2.length(), // hstrlen(hashKey1, field2)
         };
     }
 
@@ -228,6 +250,7 @@ public class TransactionTestUtilities {
         String listKey1 = "{ListKey}-1-" + UUID.randomUUID();
         String listKey2 = "{ListKey}-2-" + UUID.randomUUID();
         String listKey3 = "{ListKey}-3-" + UUID.randomUUID();
+        String listKey4 = "{ListKey}-4-" + UUID.randomUUID();
 
         transaction
                 .lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
@@ -248,25 +271,49 @@ public class TransactionTestUtilities {
                 .blpop(new String[] {listKey3}, 0.01)
                 .brpop(new String[] {listKey3}, 0.01);
 
-        return new Object[] {
-            5L, // lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
-            5L, // llen(listKey1)
-            value3, // lindex(key5, 0)
-            1L, // lrem(listKey1, 1, value1)
-            OK, // ltrim(listKey1, 1, -1)
-            new String[] {value3, value2}, // lrange(listKey1, 0, -2)
-            value3, // lpop(listKey1)
-            new String[] {value2, value1}, // lpopCount(listKey1, 2)
-            3L, // rpush(listKey2, new String[] {value1, value2, value2})
-            value2, // rpop(listKey2)
-            new String[] {value2, value1}, // rpopCount(listKey2, 2)
-            0L, // rpushx(listKey3, new String[] { "_" })
-            0L, // lpushx(listKey3, new String[] { "_" })
-            3L, // lpush(listKey3, new String[] { value1, value2, value3})
-            4L, // linsert(listKey3, AFTER, value2, value2)
-            new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
-            new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01)
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .lpush(listKey4, new String[] {value1, value2, value3, value1, value2, value3})
+                    .lmpop(new String[] {listKey4}, PopDirection.LEFT)
+                    .lmpop(new String[] {listKey4}, PopDirection.LEFT, 2L)
+                    .blmpop(new String[] {listKey4}, PopDirection.LEFT, 0.1)
+                    .blmpop(new String[] {listKey4}, PopDirection.LEFT, 2L, 0.1);
+        } // listKey4 is now empty
+
+        var expectedResults =
+                new Object[] {
+                    5L, // lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
+                    5L, // llen(listKey1)
+                    value3, // lindex(key5, 0)
+                    1L, // lrem(listKey1, 1, value1)
+                    OK, // ltrim(listKey1, 1, -1)
+                    new String[] {value3, value2}, // lrange(listKey1, 0, -2)
+                    value3, // lpop(listKey1)
+                    new String[] {value2, value1}, // lpopCount(listKey1, 2)
+                    3L, // rpush(listKey2, new String[] {value1, value2, value2})
+                    value2, // rpop(listKey2)
+                    new String[] {value2, value1}, // rpopCount(listKey2, 2)
+                    0L, // rpushx(listKey3, new String[] { "_" })
+                    0L, // lpushx(listKey3, new String[] { "_" })
+                    3L, // lpush(listKey3, new String[] { value1, value2, value3})
+                    4L, // linsert(listKey3, AFTER, value2, value2)
+                    new String[] {listKey3, value3}, // blpop(new String[] { listKey3 }, 0.01)
+                    new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01)
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            return concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        6L, // lpush(listKey4, {value1, value2, value3})
+                        Map.of(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
+                        Map.of(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
+                        Map.of(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
+                        Map.of(listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
+                    });
+        }
+
+        return expectedResults;
     }
 
     private static Object[] setCommands(BaseTransaction<?> transaction) {
@@ -316,6 +363,7 @@ public class TransactionTestUtilities {
                 .zrank(zSetKey1, "one")
                 .zrevrank(zSetKey1, "one")
                 .zaddIncr(zSetKey1, "one", 3)
+                .zincrby(zSetKey1, -3., "one")
                 .zrem(zSetKey1, new String[] {"one"})
                 .zcard(zSetKey1)
                 .zmscore(zSetKey1, new String[] {"two", "three"})
@@ -355,11 +403,14 @@ public class TransactionTestUtilities {
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
-                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
+                    .zmpop(new String[] {zSetKey3}, MAX)
+                    .zmpop(new String[] {zSetKey3}, MIN, 2)
                     .bzmpop(new String[] {zSetKey3}, MAX, .1)
                     .bzmpop(new String[] {zSetKey3}, MIN, .1, 2)
+                    .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
                     .zintercard(new String[] {zSetKey2, zSetKey3})
-                    .zintercard(new String[] {zSetKey2, zSetKey3}, 1);
+                    .zintercard(new String[] {zSetKey2, zSetKey3}, 2);
         }
 
         var expectedResults =
@@ -368,6 +419,7 @@ public class TransactionTestUtilities {
                     0L, // zrank(zSetKey1, "one")
                     2L, // zrevrank(zSetKey1, "one")
                     4.0, // zaddIncr(zSetKey1, "one", 3)
+                    1., // zincrby(zSetKey1, -3.3, "one")
                     1L, // zrem(zSetKey1, new String[] {"one"})
                     2L, // zcard(zSetKey1)
                     new Double[] {2.0, 3.0}, // zmscore(zSetKey1, new String[] {"two", "three"})
@@ -408,11 +460,14 @@ public class TransactionTestUtilities {
             return concatenateArrays(
                     expectedResults,
                     new Object[] {
-                        5L, // zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5.))
-                        new Object[] {zSetKey3, Map.of("e", 5.)}, // bzmpop(zSetKey3, MAX, .1)
-                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // bzmpop(zSetKey3, MIN, .1, 2)
-                        2L, // zintercard(new String[] {zSetKey2, zSetKey3})
-                        1L, // zintercard(new String[] {zSetKey2, zSetKey3}, 1)
+                        7L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                        new Object[] {zSetKey3, Map.of("g", 7.)}, // zmpop(zSetKey3, MAX)
+                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
+                        new Object[] {zSetKey3, Map.of("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
+                        new Object[] {zSetKey3, Map.of("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                        6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                        4L, // zintercard(new String[] {zSetKey2, zSetKey3})
+                        2L, // zintercard(new String[] {zSetKey2, zSetKey3}, 2)
                     });
         }
         return expectedResults;
@@ -571,6 +626,8 @@ public class TransactionTestUtilities {
     private static Object[] bitmapCommands(BaseTransaction<?> transaction) {
         String key1 = "{bitmapKey}-1" + UUID.randomUUID();
         String key2 = "{bitmapKey}-2" + UUID.randomUUID();
+        String key3 = "{bitmapKey}-3" + UUID.randomUUID();
+        String key4 = "{bitmapKey}-4" + UUID.randomUUID();
 
         transaction
                 .set(key1, "foobar")
@@ -578,10 +635,18 @@ public class TransactionTestUtilities {
                 .bitcount(key1, 1, 1)
                 .setbit(key2, 1, 1)
                 .setbit(key2, 1, 0)
-                .getbit(key1, 1);
+                .getbit(key1, 1)
+                .bitpos(key1, 1)
+                .bitpos(key1, 1, 3)
+                .bitpos(key1, 1, 3, 5)
+                .set(key3, "abcdef")
+                .bitop(BitwiseOperation.AND, key4, new String[] {key1, key3})
+                .get(key4);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            transaction.bitcount(key1, 5, 30, BitmapIndexType.BIT);
+            transaction
+                    .bitcount(key1, 5, 30, BitmapIndexType.BIT)
+                    .bitpos(key1, 1, 44, 50, BitmapIndexType.BIT);
         }
 
         var expectedResults =
@@ -592,6 +657,12 @@ public class TransactionTestUtilities {
                     0L, // setbit(key2, 1, 1)
                     1L, // setbit(key2, 1, 0)
                     1L, // getbit(key1, 1)
+                    1L, // bitpos(key, 1)
+                    25L, // bitpos(key, 1, 3)
+                    25L, // bitpos(key, 1, 3, 5)
+                    OK, // set(key3, "abcdef")
+                    6L, // bitop(BitwiseOperation.AND, key4, new String[] {key1, key3})
+                    "`bc`ab", // get(key4)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -599,6 +670,7 @@ public class TransactionTestUtilities {
                     expectedResults,
                     new Object[] {
                         17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
+                        46L, // bitpos(key, 1, 44, 50, BitmapIndexType.BIT)
                     });
         }
         return expectedResults;

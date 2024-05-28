@@ -564,6 +564,28 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_setrange(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+
+        # test new key and existing key
+        assert await redis_client.setrange(key1, 0, "Hello World") == 11
+        assert await redis_client.setrange(key1, 6, "GLIDE") == 11
+
+        # offset > len
+        assert await redis_client.setrange(key1, 15, "GLIDE") == 20
+
+        # negative offset
+        with pytest.raises(RequestError):
+            assert await redis_client.setrange(key1, -1, "GLIDE")
+
+        # non-string key throws RequestError
+        assert await redis_client.lpush(key2, ["_"]) == 1
+        with pytest.raises(RequestError):
+            assert await redis_client.setrange(key2, 0, "_")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_hset_hget_hgetall(self, redis_client: TRedisClient):
         key = get_random_string(10)
         field = get_random_string(5)
@@ -1218,6 +1240,49 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sinterstore(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:{get_random_string(10)}"
+        key2 = f"{{testKey}}:{get_random_string(10)}"
+        key3 = f"{{testKey}}:{get_random_string(10)}"
+        string_key = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:non_existing_key"
+        member1_list = ["a", "b", "c"]
+        member2_list = ["c", "d", "e"]
+
+        assert await redis_client.sadd(key1, member1_list) == 3
+        assert await redis_client.sadd(key2, member2_list) == 3
+
+        # store in new key
+        assert await redis_client.sinterstore(key3, [key1, key2]) == 1
+        assert await redis_client.smembers(key3) == {"c"}
+
+        # overwrite existing set, which is also a source set
+        assert await redis_client.sinterstore(key2, [key2, key3]) == 1
+        assert await redis_client.smembers(key2) == {"c"}
+
+        # source set is the same as the existing set
+        assert await redis_client.sinterstore(key2, [key2]) == 1
+        assert await redis_client.smembers(key2) == {"c"}
+
+        # intersection with non-existing key
+        assert await redis_client.sinterstore(key1, [key2, non_existing_key]) == 0
+        assert await redis_client.smembers(key1) == set()
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.sinterstore(key3, [])
+
+        # non-set key
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError) as e:
+            await redis_client.sinterstore(key3, [string_key])
+
+        # overwrite non-set key
+        assert await redis_client.sinterstore(string_key, [key2]) == 1
+        assert await redis_client.smembers(string_key) == {"c"}
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sdiff(self, redis_client: TRedisClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
@@ -1286,6 +1351,27 @@ class TestCommands:
         # Overwrite a key holding a non-set value
         assert await redis_client.sdiffstore(string_key, [key1, key2]) == 2
         assert await redis_client.smembers(string_key) == {"a", "b"}
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_smismember(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+
+        assert await redis_client.sadd(key1, ["one", "two"]) == 2
+        assert await redis_client.smismember(key1, ["two", "three"]) == [True, False]
+
+        assert await redis_client.smismember(non_existing_key, ["two"]) == [False]
+
+        # invalid argument - member list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.smismember(key1, [])
+
+        # source key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.smismember(string_key, ["two"])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1861,6 +1947,35 @@ class TestCommands:
             await redis_client.zremrangebylex(
                 key2, LexBoundary("a", False), LexBoundary("c")
             )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zremrangebyrank(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        range = RangeByIndex(0, -1)
+        members_scores = {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
+        assert await redis_client.zadd(key1, members_scores) == 5
+
+        # Test start exceeding end
+        assert await redis_client.zremrangebyrank(key1, 2, 1) == 0
+
+        # Test removing elements by rank
+        assert await redis_client.zremrangebyrank(key1, 0, 2) == 3
+        zremrangebyrank_res = await redis_client.zrange_withscores(key1, range)
+        assert compare_maps(zremrangebyrank_res, {"d": 4.0, "e": 5.0}) is True
+
+        # Test removing elements beyond the existing range
+        assert await redis_client.zremrangebyrank(key1, 0, 10) == 2
+        assert await redis_client.zrange_withscores(key1, range) == {}
+
+        # Test with non-existing key
+        assert await redis_client.zremrangebyrank("non_existing_key", 0, 1) == 0
+
+        # Key exists, but it is not a sorted set
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zremrangebyrank(key2, 0, 1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3205,6 +3320,99 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.pfadd("foo", [])
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_object_encoding(self, redis_client: TRedisClient):
+        string_key = get_random_string(10)
+        list_key = get_random_string(10)
+        hashtable_key = get_random_string(10)
+        intset_key = get_random_string(10)
+        set_listpack_key = get_random_string(10)
+        hash_hashtable_key = get_random_string(10)
+        hash_listpack_key = get_random_string(10)
+        skiplist_key = get_random_string(10)
+        zset_listpack_key = get_random_string(10)
+        stream_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+
+        assert await redis_client.object_encoding(non_existing_key) is None
+
+        assert await redis_client.set(
+            string_key, "a really loooooooooooooooooooooooooooooooooooooooong value"
+        )
+        assert await redis_client.object_encoding(string_key) == "raw"
+
+        assert await redis_client.set(string_key, "2") == OK
+        assert await redis_client.object_encoding(string_key) == "int"
+
+        assert await redis_client.set(string_key, "value") == OK
+        assert await redis_client.object_encoding(string_key) == "embstr"
+
+        assert await redis_client.lpush(list_key, ["1"]) == 1
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.object_encoding(list_key) == "quicklist"
+        else:
+            assert await redis_client.object_encoding(list_key) == "listpack"
+
+        # The default value of set-max-intset-entries is 512
+        for i in range(0, 513):
+            assert await redis_client.sadd(hashtable_key, [str(i)]) == 1
+        assert await redis_client.object_encoding(hashtable_key) == "hashtable"
+
+        assert await redis_client.sadd(intset_key, ["1"]) == 1
+        assert await redis_client.object_encoding(intset_key) == "intset"
+
+        assert await redis_client.sadd(set_listpack_key, ["foo"]) == 1
+        if await check_if_server_version_lt(redis_client, "7.2.0"):
+            assert await redis_client.object_encoding(set_listpack_key) == "hashtable"
+        else:
+            assert await redis_client.object_encoding(set_listpack_key) == "listpack"
+
+        # The default value of hash-max-listpack-entries is 512
+        for i in range(0, 513):
+            assert await redis_client.hset(hash_hashtable_key, {str(i): "2"}) == 1
+        assert await redis_client.object_encoding(hash_hashtable_key) == "hashtable"
+
+        assert await redis_client.hset(hash_listpack_key, {"1": "2"}) == 1
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.object_encoding(hash_listpack_key) == "ziplist"
+        else:
+            assert await redis_client.object_encoding(hash_listpack_key) == "listpack"
+
+        # The default value of zset-max-listpack-entries is 128
+        for i in range(0, 129):
+            assert await redis_client.zadd(skiplist_key, {str(i): 2.0}) == 1
+        assert await redis_client.object_encoding(skiplist_key) == "skiplist"
+
+        assert await redis_client.zadd(zset_listpack_key, {"1": 2.0}) == 1
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.object_encoding(zset_listpack_key) == "ziplist"
+        else:
+            assert await redis_client.object_encoding(zset_listpack_key) == "listpack"
+
+        assert await redis_client.xadd(stream_key, [("field", "value")]) is not None
+        assert await redis_client.object_encoding(stream_key) == "stream"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_object_freq(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        maxmemory_policy_key = "maxmemory-policy"
+        config = await redis_client.config_get([maxmemory_policy_key])
+        maxmemory_policy = cast(str, config.get(maxmemory_policy_key))
+
+        try:
+            assert (
+                await redis_client.config_set({maxmemory_policy_key: "allkeys-lfu"})
+                == OK
+            )
+            assert await redis_client.object_freq(non_existing_key) is None
+            assert await redis_client.set(key, "") == OK
+            assert await redis_client.object_freq(key) >= 0
+        finally:
+            await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -3227,11 +3435,12 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.smove("abc", "def", "_"),
             redis_client.sunionstore("abc", ["zxy", "lkn"]),
             redis_client.sinter(["abc", "zxy", "lkn"]),
+            redis_client.sinterstore("abc", ["zxy", "lkn"]),
             redis_client.sdiff(["abc", "zxy", "lkn"]),
             redis_client.sdiffstore("abc", ["def", "ghi"]),
         ]
 
-        if not check_if_server_version_lt(redis_client, "7.0.0"):
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
             promises.extend(
                 [
                     redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),

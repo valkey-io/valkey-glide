@@ -186,8 +186,15 @@ enum RequestType {
     ZMPop = 144;
     GetBit = 145;
     ZInter = 146;
+    BitPos = 147;
+    BitOp = 148;
+    HStrlen = 149;
     FunctionLoad = 150;
     FunctionList = 151;
+    LMPop = 155;
+    ExpireTime = 156;
+    PExpireTime = 157;
+    BLMPop = 158;
 }
 
 message Command {

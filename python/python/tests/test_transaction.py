@@ -1,7 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
 from datetime import datetime, timezone
-from typing import List, Union
+from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
@@ -63,6 +63,10 @@ async def transaction_test(
 
     transaction.set(key, value)
     args.append(OK)
+    transaction.object_encoding(key)
+    args.append("embstr")
+    transaction.setrange(key, 0, value)
+    args.append(len(value))
     transaction.get(key)
     args.append(value)
     transaction.type(key)
@@ -191,6 +195,8 @@ async def transaction_test(
 
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
+    transaction.smismember(key7, ["foo", "baz"])
+    args.append([True, False])
     transaction.sdiffstore(key7, [key7])
     args.append(2)
     transaction.srem(key7, ["foo"])
@@ -209,6 +215,8 @@ async def transaction_test(
     args.append(2)
     transaction.sinter([key7, key7])
     args.append({"foo", "bar"})
+    transaction.sinterstore(key7, [key7, key7])
+    args.append(2)
     transaction.sdiff([key7, key7])
     args.append(set())
     transaction.spop_count(key7, 4)
@@ -261,6 +269,8 @@ async def transaction_test(
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(0)
     transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
+    args.append(0)
+    transaction.zremrangebyrank(key8, 0, 10)
     args.append(0)
     transaction.zdiffstore(key8, [key8, key8])
     args.append(0)
@@ -491,3 +501,30 @@ class TestTransaction:
         transaction.set(key, "value").get(key).delete([key])
 
         assert await redis_client.exec(transaction) == [OK, "value", 1]
+
+    # object_freq is not tested in transaction_test as it requires that we set and later restore the max memory policy
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_object_freq(
+        self, redis_client: TRedisClient, cluster_mode: bool
+    ):
+        string_key = get_random_string(10)
+        maxmemory_policy_key = "maxmemory-policy"
+        config = await redis_client.config_get([maxmemory_policy_key])
+        maxmemory_policy = cast(str, config.get(maxmemory_policy_key))
+
+        try:
+            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
+            transaction.set(string_key, "foo")
+            transaction.object_freq(string_key)
+
+            response = await redis_client.exec(transaction)
+            assert response is not None
+            assert len(response) == 3
+            assert response[0] == OK
+            assert response[1] == OK
+            frequency = cast(int, response[2])
+            assert frequency >= 0
+        finally:
+            await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})

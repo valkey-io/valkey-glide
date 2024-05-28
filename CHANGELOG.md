@@ -1,4 +1,10 @@
 #### Changes
+* Python: Added OBJECT ENCODING command ([#1471](https://github.com/aws/glide-for-redis/pull/1471))
+* Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
+
+## 0.4.0 (2024-05-26)
+
+#### Changes
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
 * Python: Added STRLEN command ([#1230](https://github.com/aws/glide-for-redis/pull/1230))
 * Python: Added HKEYS command ([#1228](https://github.com/aws/glide-for-redis/pull/1228))
@@ -36,7 +42,9 @@
 * Python: Added SINTER command ([#1434](https://github.com/aws/glide-for-redis/pull/1434))
 * Python: Added SDIFF command ([#1437](https://github.com/aws/glide-for-redis/pull/1437))
 * Python: Added SDIFFSTORE command ([#1449](https://github.com/aws/glide-for-redis/pull/1449))
-
+* Python: Added SINTERSTORE command ([#1459](https://github.com/aws/glide-for-redis/pull/1459))
+* Python: Added SMISMEMBER command ([#1461](https://github.com/aws/glide-for-redis/pull/1461))
+* Python: Added SETRANGE command ([#1453](https://github.com/aws/glide-for-redis/pull/1453)
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))

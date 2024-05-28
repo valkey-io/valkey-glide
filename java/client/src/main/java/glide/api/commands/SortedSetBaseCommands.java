@@ -130,7 +130,8 @@ public interface SortedSetBaseCommands {
      * If <code>member</code> does not exist in the sorted set, it is added with <code>
      * increment</code> as its score (as if its previous score was <code>0.0</code>).<br>
      * If <code>key</code> does not exist, a new sorted set with the specified member as its sole
-     * member is created.
+     * member is created.<br>
+     * <code>zaddIncr</code> with empty option acts as {@link #zincrby(String, double, String)}.
      *
      * @see <a href="https://redis.io/commands/zadd/">redis.io</a> for more details.
      * @param key The key of the sorted set.
@@ -142,11 +143,11 @@ public interface SortedSetBaseCommands {
      *     returned.
      * @example
      *     <pre>{@code
-     * ZaddOptions options = ZaddOptions.builder().conditionalChange(ONLY_IF_DOES_NOT_EXIST).build();
+     * ZAddOptions options = ZaddOptions.builder().conditionalChange(ONLY_IF_DOES_NOT_EXIST).build();
      * Double num = client.zaddIncr("mySortedSet", member, 5.0, options).get();
      * assert num == 5.0;
      *
-     * options = ZaddOptions.builder().updateOptions(SCORE_LESS_THAN_CURRENT).build();
+     * options = ZAddOptions.builder().updateOptions(SCORE_LESS_THAN_CURRENT).build();
      * Double num = client.zaddIncr("existingSortedSet", member, 3.0, options).get();
      * assert num == null;
      * }</pre>
@@ -963,23 +964,68 @@ public interface SortedSetBaseCommands {
      */
     CompletableFuture<Long> zinterstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys);
 
-    // TODO add @link to ZMPOP when implemented
+    /**
+     * Pops a member-score pair from the first non-empty sorted set, with the given <code>keys</code>
+     * being checked in the order they are provided.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop the member with the lowest/highest score accordingly.
+     * @return A two-element <code>array</code> containing the key name of the set from which the
+     *     element was popped, and a member-score <code>Map</code> of the popped element.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX).get();
+     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * String element = data.keySet().toArray(String[]::new)[0];
+     * System.out.printf("Popped '%s' with score %d from '%s'%n", element, data.get(element), result[0]);
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zmpop(String[] keys, ScoreFilter modifier);
+
+    /**
+     * Pops multiple member-score pairs from the first non-empty sorted set, with the given <code>keys
+     * </code> being checked in the order they are provided.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zmpop/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
+     *     ScoreFilter#MAX} to pop members with the lowest/highest scores accordingly.
+     * @param count The number of elements to pop.
+     * @return A two-element <code>array</code> containing the key name of the set from which elements
+     *     were popped, and a member-score <code>Map</code> of the popped elements.<br>
+     *     If no member could be popped, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Object[] result = client.zmpop(new String[] { "zSet1", "zSet2" }, MAX, 2).get();
+     * Map<String, Double> data = (Map<String, Double>)result[1];
+     * for (Map.Entry<String, Double> entry : data.entrySet()) {
+     *     System.out.printf("Popped '%s' with score %d from '%s'%n", entry.getKey(), entry.getValue(), result[0]);
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zmpop(String[] keys, ScoreFilter modifier, long count);
+
     /**
      * Blocks the connection until it pops and returns a member-score pair from the first non-empty
      * sorted set, with the given <code>keys</code> being checked in the order they are provided.<br>
-     * To pop more than one element use {@link #bzmpop(String[], ScoreFilter, double, long)}.<br>
-     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter)}.
      *
      * @apiNote
      *     <ol>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZMPOP</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -999,23 +1045,21 @@ public interface SortedSetBaseCommands {
      */
     CompletableFuture<Object[]> bzmpop(String[] keys, ScoreFilter modifier, double timeout);
 
-    // TODO add @link to ZMPOP when implemented
     /**
      * Blocks the connection until it pops and returns multiple member-score pairs from the first
      * non-empty sorted set, with the given <code>keys</code> being checked in the order they are
      * provided.<br>
-     * <code>BZMPOP</code> is the blocking variant of <code>ZMPOP</code>.
+     * <code>BZMPOP</code> is the blocking variant of {@link #zmpop(String[], ScoreFilter, long)}.
      *
      * @apiNote
      *     <ol>
-     *       <li>When in cluster mode, all <code>keys</code> must map to the same <code>hash slot
-     *           </code>.
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
      *       <li><code>BZMPOP</code> is a client blocking command, see <a
      *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
      *           Commands</a> for more details and best practices.
      *     </ol>
      *
-     * @since Redis 7.0 and above
+     * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/commands/bzmpop/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @param modifier The element pop criteria - either {@link ScoreFilter#MIN} or {@link
@@ -1334,7 +1378,7 @@ public interface SortedSetBaseCommands {
      *     </code>.
      * @example
      *     <pre>{@code
-     * Object[][] data = client.zrandmemberWithCountWithScores(key1, -3).get();
+     * Object[][] data = client.zrandmemberWithCountWithScores("mySortedSet", -3).get();
      * assert data.length == 3;
      * for (Object[] memberScorePair : data) {
      *     System.out.printf("Member: '%s', score: %d", memberScorePair[0], memberScorePair[1]);
@@ -1342,6 +1386,26 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[][]> zrandmemberWithCountWithScores(String key, long count);
+
+    /**
+     * Increments the score of <code>member</code> in the sorted set stored at <code>key</code> by
+     * <code>increment</code>.<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code>increment
+     * </code> as its score. If <code>key</code> does not exist, a new sorted set with the specified
+     * member as its sole member is created.
+     *
+     * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param increment The score increment.
+     * @param member A member of the sorted set.
+     * @return The new score of <code>member</code>.
+     * @example
+     *     <pre>{@code
+     * Double score = client.zincrby("mySortedSet", -3.14, "value").get();
+     * assert score > 0; // member "value" existed in the set before score was altered
+     * }</pre>
+     */
+    CompletableFuture<Double> zincrby(String key, double increment, String member);
 
     /**
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.

@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
@@ -25,12 +26,16 @@ import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_A
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.Append;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
+import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -44,6 +49,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
@@ -63,8 +69,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
+import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -73,6 +81,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -89,6 +98,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
@@ -127,10 +137,12 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -149,6 +161,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.PopDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -163,6 +176,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -200,6 +214,9 @@ public class TransactionTests {
 
         transaction.set("key", "value", SetOptions.builder().returnOldValue(true).build());
         results.add(Pair.of(Set, buildArgs("key", "value", RETURN_OLD_VALUE)));
+
+        transaction.append("key", "value");
+        results.add(Pair.of(Append, buildArgs("key", "value")));
 
         transaction.del(new String[] {"key1", "key2"});
         results.add(Pair.of(Del, buildArgs("key1", "key2")));
@@ -284,6 +301,17 @@ public class TransactionTests {
 
         transaction.hkeys("key");
         results.add(Pair.of(HKeys, buildArgs("key")));
+
+        transaction.hstrlen("key", "field");
+        results.add(Pair.of(HStrlen, buildArgs("key", "field")));
+
+        transaction
+                .hrandfield("key")
+                .hrandfieldWithCount("key", 2)
+                .hrandfieldWithCountWithValues("key", 3);
+        results.add(Pair.of(HRandField, buildArgs("key")));
+        results.add(Pair.of(HRandField, buildArgs("key", "2")));
+        results.add(Pair.of(HRandField, buildArgs("key", "3", WITH_VALUES_REDIS_API)));
 
         transaction.lpush("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPush, buildArgs("key", "element1", "element2")));
@@ -380,6 +408,12 @@ public class TransactionTests {
 
         transaction.pttl("key");
         results.add(Pair.of(PTTL, buildArgs("key")));
+
+        transaction.expiretime("key");
+        results.add(Pair.of(ExpireTime, buildArgs("key")));
+
+        transaction.pexpiretime("key");
+        results.add(Pair.of(PExpireTime, buildArgs("key")));
 
         transaction.clientId();
         results.add(Pair.of(ClientId, buildArgs()));
@@ -478,6 +512,10 @@ public class TransactionTests {
 
         transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
+
+        transaction.zmpop(new String[] {"key1", "key2"}, MAX).zmpop(new String[] {"key"}, MIN, 42);
+        results.add(Pair.of(ZMPop, buildArgs("2", "key1", "key2", "MAX")));
+        results.add(Pair.of(ZMPop, buildArgs("1", "key", "MIN", "COUNT", "42")));
 
         transaction
                 .bzmpop(new String[] {"key1", "key2"}, MAX, .1)
@@ -675,6 +713,9 @@ public class TransactionTests {
                                 .addArgs(WITH_SCORES_REDIS_API)
                                 .build()));
 
+        transaction.zincrby("key", 3.14, "value");
+        results.add(Pair.of(ZIncrBy, buildArgs("key", "3.14", "value")));
+
         transaction.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
 
@@ -798,6 +839,28 @@ public class TransactionTests {
 
         transaction.setbit("key", 8, 1);
         results.add(Pair.of(SetBit, buildArgs("key", "8", "1")));
+
+        transaction.bitpos("key", 1);
+        results.add(Pair.of(BitPos, buildArgs("key", "1")));
+        transaction.bitpos("key", 0, 8);
+        results.add(Pair.of(BitPos, buildArgs("key", "0", "8")));
+        transaction.bitpos("key", 1, 8, 10);
+        results.add(Pair.of(BitPos, buildArgs("key", "1", "8", "10")));
+        transaction.bitpos("key", 1, 8, 10, BitmapIndexType.BIT);
+        results.add(Pair.of(BitPos, buildArgs("key", "1", "8", "10", BitmapIndexType.BIT.toString())));
+
+        transaction.bitop(BitwiseOperation.AND, "destination", new String[] {"key"});
+        results.add(Pair.of(BitOp, buildArgs(BitwiseOperation.AND.toString(), "destination", "key")));
+
+        transaction.lmpop(new String[] {"key"}, PopDirection.LEFT);
+        results.add(Pair.of(LMPop, buildArgs("1", "key", "LEFT")));
+        transaction.lmpop(new String[] {"key"}, PopDirection.LEFT, 1L);
+        results.add(Pair.of(LMPop, buildArgs("1", "key", "LEFT", "COUNT", "1")));
+
+        transaction.blmpop(new String[] {"key"}, PopDirection.LEFT, 0.1);
+        results.add(Pair.of(BLMPop, buildArgs("0.1", "1", "key", "LEFT")));
+        transaction.blmpop(new String[] {"key"}, PopDirection.LEFT, 1L, 0.1);
+        results.add(Pair.of(BLMPop, buildArgs("0.1", "1", "key", "LEFT", "COUNT", "1")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
