@@ -2972,7 +2972,6 @@ public class SharedCommandTests {
         assertTrue(executionException.getCause() instanceof RequestException);
         executionException = assertThrows(ExecutionException.class, () -> client.xlen(key2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
-
     }
 
     @SneakyThrows

@@ -3,12 +3,12 @@ module glide.api {
     exports glide.api.commands;
     exports glide.api.models;
     exports glide.api.models.commands;
-    exports glide.api.models.commands.stream;
-    exports glide.api.models.configuration;
-    exports glide.api.models.exceptions;
     exports glide.api.models.commands.bitmap;
     exports glide.api.models.commands.geospatial;
     exports glide.api.models.commands.function;
+    exports glide.api.models.commands.stream;
+    exports glide.api.models.configuration;
+    exports glide.api.models.exceptions;
 
     requires com.google.protobuf;
     requires io.netty.codec;

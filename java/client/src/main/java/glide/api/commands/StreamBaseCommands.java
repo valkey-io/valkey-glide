@@ -88,5 +88,4 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xlen(String key);
-
 }
