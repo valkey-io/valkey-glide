@@ -490,6 +490,26 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> objectRefcount(String key);
 
     /**
+     * Renames <code>key</code> to <code>newKey</code>.<br>
+     * If <code>newKey</code> already exists it is overwritten.
+     *
+     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://redis.io/commands/rename/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new name of the key.
+     * @return If the <code>key</code> was successfully renamed, return <code>"OK"</code>. If <code>
+     *     key</code> does not exist, an error is thrown.
+     * @example
+     *     <pre>{@code
+     * String value = client.set("key", "value").get();
+     * value = client.rename("key", "newKeyName").get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> rename(String key, String newKey);
+
+    /**
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
      * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
