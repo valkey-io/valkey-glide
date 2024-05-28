@@ -1116,6 +1116,24 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void rename(BaseClient client) {
+        String key1 = "{key}" + UUID.randomUUID();
+
+        assertEquals(OK, client.set(key1, "foo").get());
+        assertEquals(OK, client.rename(key1, key1 + "_rename").get());
+        assertEquals(1L, client.exists(new String[] {key1 + "_rename"}).get());
+
+        // key doesn't exist
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client.rename("{same_slot}" + "non_existing_key", "{same_slot}" + "_rename").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void renamenx(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
