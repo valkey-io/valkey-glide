@@ -16,6 +16,7 @@ use std::sync::Arc;
 #[cfg(standalone_heartbeat)]
 use tokio::task;
 
+#[derive(Debug)]
 enum ReadFrom {
     Primary,
     PreferReplica {
@@ -23,6 +24,7 @@ enum ReadFrom {
     },
 }
 
+#[derive(Debug)]
 struct DropWrapper {
     /// Connection to the primary node in the client.
     primary_index: usize,
@@ -38,7 +40,7 @@ impl Drop for DropWrapper {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct StandaloneClient {
     inner: Arc<DropWrapper>,
 }
@@ -46,6 +48,7 @@ pub struct StandaloneClient {
 pub enum StandaloneClientConnectionError {
     NoAddressesProvided,
     FailedConnection(Vec<(Option<String>, RedisError)>),
+    PrimaryConflictFound(String),
 }
 
 impl std::fmt::Debug for StandaloneClientConnectionError {
@@ -79,6 +82,12 @@ impl std::fmt::Debug for StandaloneClientConnectionError {
                     }
                 };
                 Ok(())
+            }
+            StandaloneClientConnectionError::PrimaryConflictFound(found_primaries) => {
+                writeln!(
+                    f,
+                    "Primary conflict. More than one primary found in a Standalone cluster: {found_primaries}"
+                )
             }
         }
     }
@@ -116,10 +125,19 @@ impl StandaloneClient {
             match result {
                 Ok((connection, replication_status)) => {
                     nodes.push(connection);
-                    if primary_index.is_none()
-                        && redis::from_owned_redis_value::<String>(replication_status)
-                            .is_ok_and(|val| val.contains("role:master"))
+                    if redis::from_owned_redis_value::<String>(replication_status)
+                        .is_ok_and(|val| val.contains("role:master"))
                     {
+                        if primary_index.is_some() {
+                            // More than one primary found
+                            return Err(StandaloneClientConnectionError::PrimaryConflictFound(
+                                format!(
+                                    "Primary nodes: {:?}, {:?}",
+                                    nodes.pop(),
+                                    nodes.get(primary_index.unwrap())
+                                ),
+                            ));
+                        }
                         primary_index = Some(nodes.len() - 1);
                     }
                 }
