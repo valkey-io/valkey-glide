@@ -88,4 +88,21 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xlen(String key);
+
+    /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * @see <a href="https://valkey.io/commands/xdel/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param ids An array of entry ids.
+     * @return The number of entries removed from the stream. This number may be less than the number
+     *     of entries in <code>ids</code>, if the specified <code>ids</code> don't exist in the
+     *     stream.
+     * @example
+     *     <pre>{@code
+     * Long num = client.xdel("key", new String[] {"1538561698944-0", "1538561698944-1"}).get();
+     * assert num == 2L; // Stream marked 2 entries as deleted
+     * }</pre>
+     */
+    CompletableFuture<Long> xdel(String key, String[] ids);
 }

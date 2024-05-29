@@ -2995,6 +2995,48 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void xdel(BaseClient client) {
+
+        String key = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String streamId1 = "0-1";
+        String streamId2 = "0-2";
+        String streamId3 = "0-3";
+
+        assertEquals(
+                streamId1,
+                client
+                        .xadd(
+                                key,
+                                Map.of("f1", "foo1", "f2", "bar2"),
+                                StreamAddOptions.builder().id(streamId1).build())
+                        .get());
+        assertEquals(
+                streamId2,
+                client
+                        .xadd(
+                                key,
+                                Map.of("f1", "foo1", "f2", "bar2"),
+                                StreamAddOptions.builder().id(streamId2).build())
+                        .get());
+        assertEquals(2L, client.xlen(key).get());
+
+        // Deletes one stream id, and ignores anything invalid:
+        assertEquals(1L, client.xdel(key, new String[] {streamId1, streamId3}).get());
+        assertEquals(0L, client.xdel(key2, new String[] {streamId3}).get());
+
+        // Throw Exception: Key exists - but it is not a stream
+        assertEquals(OK, client.set(key2, "xdeltest").get());
+
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xdel(key2, new String[] {streamId3}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zrandmember(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();

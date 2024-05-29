@@ -120,6 +120,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
@@ -2644,6 +2645,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T xlen(@NonNull String key) {
         protobufTransaction.addCommands(buildCommand(XLen, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * @see <a href="https://valkey.io/commands/xdel/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param ids An array of entry ids.
+     * @return Command Response - The number of entries removed from the stream. This number may be
+     *     less than the number of entries in <code>ids</code>, if the specified <code>ids</code>
+     *     don't exist in the stream.
+     */
+    public T xdel(String key, String[] ids) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(ids, key));
+        protobufTransaction.addCommands(buildCommand(XDel, commandArgs));
         return getThis();
     }
 
