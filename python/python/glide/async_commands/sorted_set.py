@@ -220,7 +220,7 @@ def separate_keys(
     return key_list, weight_list
 
 
-def _create_z_cmd_store_args(
+def _create_zinter_zunion_cmd_args(
     keys: Union[List[str], List[Tuple[str, float]]],
     aggregation_type: Optional[AggregationType] = None,
     destination: Optional[str] = None,

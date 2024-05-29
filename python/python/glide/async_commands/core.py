@@ -25,7 +25,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
-    _create_z_cmd_store_args,
+    _create_zinter_zunion_cmd_args,
     _create_zrange_args,
 )
 from glide.constants import TOK, TResult
@@ -3263,7 +3263,7 @@ class CoreCommands(Protocol):
             >>> await client.zinter_withscores(["key1", "key2"], AggregationType.MAX)
                 {'member1': 10.5}  # "member1" with score of 10.5 is the result.
         """
-        args = _create_z_cmd_store_args(keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
         return cast(
             Mapping[str, float],
@@ -3308,7 +3308,7 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
         """
-        args = _create_z_cmd_store_args(keys, aggregation_type, destination=destination)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination=destination)
         return cast(
             int,
             await self._execute_command(RequestType.ZInterStore, args),
@@ -3372,7 +3372,7 @@ class CoreCommands(Protocol):
             >>> await client.zunion_withscores(["key1", "key2"], AggregationType.MAX)
                 {'member1': 10.5, 'member2': 8.2}
         """
-        args = _create_z_cmd_store_args(keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
         return cast(
             Mapping[str, float],
@@ -3417,7 +3417,7 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 10.5, 'member2': 8.2}
         """
-        args = _create_z_cmd_store_args(keys, aggregation_type, destination=destination)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination=destination)
         return cast(
             int,
             await self._execute_command(RequestType.ZUnionStore, args),

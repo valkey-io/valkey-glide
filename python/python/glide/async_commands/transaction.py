@@ -24,7 +24,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
-    _create_z_cmd_store_args,
+    _create_zinter_zunion_cmd_args,
     _create_zrange_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -2295,7 +2295,7 @@ class BaseTransaction:
         Command response:
             Mapping[str, float]: The resulting sorted set with scores.
         """
-        args = _create_z_cmd_store_args(keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
         return self.append_command(RequestType.ZInter, args)
 
@@ -2324,7 +2324,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_z_cmd_store_args(keys, aggregation_type, destination=destination)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination=destination)
         return self.append_command(RequestType.ZInterStore, args)
 
     def zunion(
@@ -2364,7 +2364,7 @@ class BaseTransaction:
         Command response:
             Mapping[str, float]: The resulting sorted set with scores.
         """
-        args = _create_z_cmd_store_args(keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
         return self.append_command(RequestType.ZUnion, args)
 
@@ -2393,7 +2393,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_z_cmd_store_args(keys, aggregation_type, destination=destination)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination=destination)
         return self.append_command(RequestType.ZUnionStore, args)
 
     def zrandmember(self: TTransaction, key: str) -> TTransaction:
