@@ -330,7 +330,7 @@ class StandaloneCommands(CoreCommands):
     async def sort_store(
         self,
         key: str,
-        store: str,
+        destination: str,
         by_pattern: Optional[str] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[str]] = None,
@@ -346,7 +346,7 @@ class StandaloneCommands(CoreCommands):
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
-            store (str): The key where the sorted result will be stored.
+            destination (str): The key where the sorted result will be stored.
             by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
@@ -379,7 +379,7 @@ class StandaloneCommands(CoreCommands):
             ['1', '2', '3']
         """
         args = _build_sort_args(
-            key, by_pattern, limit, get_patterns, order, alpha, store=store
+            key, by_pattern, limit, get_patterns, order, alpha, store=destination
         )
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)

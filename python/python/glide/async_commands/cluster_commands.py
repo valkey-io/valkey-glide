@@ -418,7 +418,7 @@ class ClusterCommands(CoreCommands):
     async def sort_store(
         self,
         key: str,
-        store: str,
+        destination: str,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
@@ -432,7 +432,7 @@ class ClusterCommands(CoreCommands):
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
-            store (str): The key where the sorted result will be stored.
+            destination (str): The key where the sorted result will be stored.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
@@ -449,6 +449,6 @@ class ClusterCommands(CoreCommands):
             >>> await client.lrange("sorted_list", 0, -1)
             ['1', '2', '3']
         """
-        args = _build_sort_args(key, None, limit, None, order, alpha, store=store)
+        args = _build_sort_args(key, None, limit, None, order, alpha, store=destination)
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)

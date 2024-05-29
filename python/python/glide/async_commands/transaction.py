@@ -2797,7 +2797,7 @@ class Transaction(BaseTransaction):
     def sort_store(
         self: TTransaction,
         key: str,
-        store: str,
+        destination: str,
         by_pattern: Optional[str] = None,
         limit: Optional[Limit] = None,
         get_patterns: Optional[List[str]] = None,
@@ -2813,6 +2813,7 @@ class Transaction(BaseTransaction):
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
+            destination (str): The key where the sorted result will be stored.
             by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
@@ -2840,7 +2841,7 @@ class Transaction(BaseTransaction):
             int: The number of elements in the sorted key stored at `store`.
         """
         args = _build_sort_args(
-            key, by_pattern, limit, get_patterns, order, alpha, store=store
+            key, by_pattern, limit, get_patterns, order, alpha, store=destination
         )
         return self.append_command(RequestType.Sort, args)
 
@@ -2884,7 +2885,7 @@ class ClusterTransaction(BaseTransaction):
     def sort_store(
         self: TTransaction,
         key: str,
-        store: str,
+        destination: str,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
@@ -2898,7 +2899,7 @@ class ClusterTransaction(BaseTransaction):
 
         Args:
             key (str): The key of the list, set, or sorted set to be sorted.
-            store (str): The key where the sorted result will be stored.
+            destination (str): The key where the sorted result will be stored.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
@@ -2908,7 +2909,7 @@ class ClusterTransaction(BaseTransaction):
         Command response:
             int: The number of elements in the sorted key stored at `store`.
         """
-        args = _build_sort_args(key, None, limit, None, order, alpha, store=store)
+        args = _build_sort_args(key, None, limit, None, order, alpha, store=destination)
         return self.append_command(RequestType.Sort, args)
 
     # TODO: add all CLUSTER commands
