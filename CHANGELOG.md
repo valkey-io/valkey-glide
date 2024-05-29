@@ -19,6 +19,10 @@
 #### Fixes
 * Node: Fix set command bug with expiry option ([#1508](https://github.com/aws/glide-for-redis/pull/1508))
 
+### Breaking Changes
+* Node: Update XREAD to return a Map of Map ([TODO](TODO))
+
+
 ## 0.4.0 (2024-05-26)
 
 #### Changes
