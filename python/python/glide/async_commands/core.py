@@ -3587,3 +3587,25 @@ class CoreCommands(Protocol):
             Optional[int],
             await self._execute_command(RequestType.ObjectIdleTime, [key]),
         )
+
+    async def object_refcount(self, key: str) -> Optional[int]:
+        """
+        Returns the reference count of the object stored at `key`.
+
+        See https://valkey.io/commands/object-refcount for more details.
+
+        Args:
+            key (str): The key of the object to get the reference count of.
+
+        Returns:
+            Optional[int]: If `key` exists, returns the reference count of the object stored at `key` as an integer.
+                Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_refcount("my_hash")
+                2  # "my_hash" has a reference count of 2.
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ObjectRefCount, [key]),
+        )
