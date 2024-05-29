@@ -3473,6 +3473,14 @@ class TestCommands:
         )
         assert result == ["Dave", "Bob", "Alice", "Charlie", "Eve"]
 
+        # Test Limit with count 0
+        result = await redis_client.sort(
+            "user_ids",
+            limit=Limit(0, 0),
+            alpha=True,
+        )
+        assert result == []
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sort_and_sort_store_without_get_or_by_args(
@@ -3494,7 +3502,7 @@ class TestCommands:
         # Test each argument separately
         assert await redis_client.lpush(key, ["5", "2", "4", "1", "3"]) == 5
 
-        # by_pattern argument
+        # Test w/o flags
         result = await redis_client.sort(key)
         assert result == ["1", "2", "3", "4", "5"]
 
