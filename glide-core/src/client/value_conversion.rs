@@ -428,8 +428,8 @@ pub(crate) fn convert_to_expected_type(
     }
 }
 
-/// Similar to [`convert_array_to_map`], but converts a map to a map.
-/// Converts every key and value to the given type.
+/// Similar to [`convert_array_to_map`], but converts keys and values to the given types inside the map.
+/// The input data is [`Value::Map`] payload, the output is the new [`Value::Map`].
 fn convert_map_entries(
     map: Vec<(Value, Value)>,
     key_expected_return_type: Option<ExpectedReturnType>,
