@@ -382,7 +382,7 @@ public interface ListBaseCommands {
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
-     * @param listDirection The direction based on which elements are popped from - see {@link
+     * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.
@@ -395,7 +395,7 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, String[]>> lmpop(
-            String[] keys, ListDirection listDirection, long count);
+            String[] keys, ListDirection direction, long count);
 
     /**
      * Pops one element from the first non-empty list from the provided <code>keys</code>.
@@ -404,7 +404,7 @@ public interface ListBaseCommands {
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
-     * @param listDirection The direction based on which elements are popped from - see {@link
+     * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
      * @example
@@ -415,7 +415,7 @@ public interface ListBaseCommands {
      * assertArrayEquals(new String[] {"three"}, resultValue);
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> lmpop(String[] keys, ListDirection listDirection);
+    CompletableFuture<Map<String, String[]>> lmpop(String[] keys, ListDirection direction);
 
     /**
      * Blocks the connection until it pops one or more elements from the first non-empty list from the
@@ -433,7 +433,7 @@ public interface ListBaseCommands {
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
-     * @param listDirection The direction based on which elements are popped from - see {@link
+     * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
@@ -449,7 +449,7 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, String[]>> blmpop(
-            String[] keys, ListDirection listDirection, long count, double timeout);
+            String[] keys, ListDirection direction, long count, double timeout);
 
     /**
      * Blocks the connection until it pops one element from the first non-empty list from the provided
@@ -467,7 +467,7 @@ public interface ListBaseCommands {
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
-     * @param listDirection The direction based on which elements are popped from - see {@link
+     * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -482,7 +482,7 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, String[]>> blmpop(
-            String[] keys, ListDirection listDirection, double timeout);
+            String[] keys, ListDirection direction, double timeout);
 
     /**
      * Sets the list element at <code>index</code> to <code>element</code>.<br>

@@ -3568,7 +3568,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
      * @param keys The list of provided <code>key</code> names.
-     * @param listDirection The direction based on which elements are popped from - see {@link
+     * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
@@ -3579,7 +3579,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T blmpop(
             @NonNull String[] keys,
-            @NonNull ListDirection listDirection,
+            @NonNull ListDirection direction,
             @NonNull Long count,
             double timeout) {
         ArgsArray commandArgs =
@@ -3588,7 +3588,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 new String[] {Double.toString(timeout), Long.toString(keys.length)},
                                 keys,
                                 new String[] {
-                                    listDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                                    direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
                                 }));
         protobufTransaction.addCommands(buildCommand(BLMPop, commandArgs));
         return getThis();
@@ -3605,7 +3605,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys The list of provided <code>key</code> names.
-     * @param listDirection The direction based on which elements are popped from - see {@link
+     * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -3613,13 +3613,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      */
-    public T blmpop(@NonNull String[] keys, @NonNull ListDirection listDirection, double timeout) {
+    public T blmpop(@NonNull String[] keys, @NonNull ListDirection direction, double timeout) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
                                 new String[] {Double.toString(timeout), Long.toString(keys.length)},
                                 keys,
-                                new String[] {listDirection.toString()}));
+                                new String[] {direction.toString()}));
         protobufTransaction.addCommands(buildCommand(BLMPop, commandArgs));
         return getThis();
     }
@@ -3748,21 +3748,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
-     * @param listDirection The direction based on which elements are popped from - see {@link
+     * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped arrays of popped
      *     elements.
      */
     public T lmpop(
-            @NonNull String[] keys, @NonNull ListDirection listDirection, @NonNull Long count) {
+            @NonNull String[] keys, @NonNull ListDirection direction, @NonNull Long count) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
                                 new String[] {Long.toString(keys.length)},
                                 keys,
                                 new String[] {
-                                    listDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                                    direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
                                 }));
         protobufTransaction.addCommands(buildCommand(LMPop, commandArgs));
         return getThis();
@@ -3774,18 +3774,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
-     * @param listDirection The direction based on which elements are popped from - see {@link
+     * @param direction The direction based on which elements are popped from - see {@link
      *     ListDirection}.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped array of the
      *     popped element.
      */
-    public T lmpop(@NonNull String[] keys, @NonNull ListDirection listDirection) {
+    public T lmpop(@NonNull String[] keys, @NonNull ListDirection direction) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
                                 new String[] {Long.toString(keys.length)},
                                 keys,
-                                new String[] {listDirection.toString()}));
+                                new String[] {direction.toString()}));
         protobufTransaction.addCommands(buildCommand(LMPop, commandArgs));
         return getThis();
     }
