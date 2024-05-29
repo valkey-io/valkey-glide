@@ -2367,6 +2367,37 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    it.only.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "renamenx test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+
+                // renamenx missing key
+                try {
+                    expect(await client.renamenx(key1, key2)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch("no such key");
+                }
+
+                // renamenx a string
+                await client.set(key1, "key1");
+                await client.set(key3, "key3");
+                // Test that renamenx can rename key1 to key2 (non-existing value)
+                expect(await client.renamenx(key1, key2)).toEqual(true);
+                // sanity check
+                expect(await client.get(key2)).toEqual("key1");
+                // Test that renamenx doesn't rename key2 to key3 (with an existing value)
+                expect(await client.renamenx(key2, key3)).toEqual(false);
+                // sanity check
+                expect(await client.get(key3)).toEqual("key3");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "pfadd test_%p",
         async (protocol) => {
