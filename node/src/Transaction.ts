@@ -683,13 +683,11 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Creates a new destination set if needed. The operation is atomic.
      * See https://valkey.io/commands/smove for more details.
      *
-     * Note: When in cluster mode, `source` and `destination` must map to the same hash slot.
-     *
      * @param source - The key of the set to remove the element from.
      * @param destination - The key of the set to add the element to.
      * @param member - The set element to move.
      *
-     * Command Response - True on success, or False if the `source` set does not exist or the element is not a member of the source set.
+     * Command Response - `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
      */
     public smove(source: string, destination: string, member: string): T {
         return this.addAndReturn(createSMove(source, destination, member));

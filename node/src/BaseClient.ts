@@ -1229,17 +1229,17 @@ export class BaseClient {
      * Creates a new destination set if needed. The operation is atomic.
      * See https://valkey.io/commands/smove for more details.
      *
-     * Note: When in cluster mode, `source` and `destination` must map to the same hash slot.
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
      *
      * @param source - The key of the set to remove the element from.
      * @param destination - The key of the set to add the element to.
      * @param member - The set element to move.
-     * @returns True on success, or False if the `source` set does not exist or the element is not a member of the source set.
+     * @returns `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
      *
      * @example
      * ```typescript
      * const result = await client.smove("set1", "set2", "member1");
-     * console.log(result); // Output: True - "member1" was moved from "set1" to "set2".
+     * console.log(result); // Output: true - "member1" was moved from "set1" to "set2".
      * ```
      */
     public smove(
