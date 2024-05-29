@@ -3346,6 +3346,34 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pfcount(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        assert await redis_client.pfadd(key1, ["a", "b", "c"]) == 1
+        assert await redis_client.pfadd(key2, ["b", "c", "d"]) == 1
+        assert await redis_client.pfcount([key1]) == 3
+        assert await redis_client.pfcount([key2]) == 3
+        assert await redis_client.pfcount([key1, key2]) == 4
+        assert await redis_client.pfcount([key1, key2, non_existing_key]) == 4
+        # empty HyperLogLog data set
+        assert await redis_client.pfadd(key3, []) == 1
+        assert await redis_client.pfcount([key3]) == 0
+
+        # incorrect argument - key list cannot be empty
+        with pytest.raises(RequestError):
+            await redis_client.pfcount([])
+
+        # key exists, but it is not a HyperLogLog
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.pfcount([string_key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_object_encoding(self, redis_client: TRedisClient):
         string_key = get_random_string(10)
         list_key = get_random_string(10)
@@ -3487,6 +3515,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.sdiff(["abc", "zxy", "lkn"]),
             redis_client.sdiffstore("abc", ["def", "ghi"]),
             redis_client.renamenx("abc", "def"),
+            redis_client.pfcount(["def", "ghi"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
