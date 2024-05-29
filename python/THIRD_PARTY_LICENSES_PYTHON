@@ -212,7 +212,7 @@ The applicable license information is listed below:
 
 ----
 
-Package: addr2line:0.21.0
+Package: addr2line:0.22.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -2535,7 +2535,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: backtrace:0.3.71
+Package: backtrace:0.3.72
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -9734,7 +9734,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: gimli:0.28.1
+Package: gimli:0.29.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15187,7 +15187,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: object:0.32.2
+Package: object:0.35.0
 
 The following copyrights and licenses were found in the source code of this package:
 
