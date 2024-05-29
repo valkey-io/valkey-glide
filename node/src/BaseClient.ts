@@ -2182,12 +2182,12 @@ export class BaseClient {
      *
      * @param keys_and_ids - pairs of keys and entry ids to read from. A pair is composed of a stream's key and the id of the entry after which the stream will be read.
      * @param options - options detailing how to read the stream.
-     * @returns A map between a stream key, and an array of entries in the matching key. The entries are in an [id, fields[]] format.
+     * @returns A map of stream keys, to a map of stream ids, to an array of entries.
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
-    ): Promise<Record<string, [string, string[]][]>> {
+    ): Promise<Record<string, Record<string, string[]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
     }
 
