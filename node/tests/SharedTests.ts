@@ -2391,7 +2391,12 @@ export function runBaseTests<Context>(config: {
                 const expected = {
                     [key1]: {
                         [timestamp_1_2 as string]: [field1, "foo2"],
-                        [timestamp_1_3 as string]:  [field1, "foo3", field3, "barvaz3"],
+                        [timestamp_1_3 as string]: [
+                            field1,
+                            "foo3",
+                            field3,
+                            "barvaz3",
+                        ],
                     },
                     [key2]: {
                         [timestamp_2_2 as string]: ["bar", "bar2"],
