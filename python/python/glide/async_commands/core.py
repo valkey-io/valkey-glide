@@ -3214,6 +3214,8 @@ class CoreCommands(Protocol):
         To get the scores as well, see `zinter_withscores`.
         To store the result in a key as a sorted set, see `zinterstore`.
 
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
         See https://valkey.io/commands/zinter/ for more details.
 
         Args:
@@ -3242,6 +3244,8 @@ class CoreCommands(Protocol):
         Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
         To get the elements only, see `zinter`.
         To store the result in a key as a sorted set, see `zinterstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
 
         See https://valkey.io/commands/zinter/ for more details.
 
@@ -3308,7 +3312,9 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
         """
-        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination=destination)
+        args = _create_zinter_zunion_cmd_args(
+            keys, aggregation_type, destination=destination
+        )
         return cast(
             int,
             await self._execute_command(RequestType.ZInterStore, args),
@@ -3322,6 +3328,8 @@ class CoreCommands(Protocol):
         Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
         To get the scores as well, see `zunion_withscores`.
         To store the result in a key as a sorted set, see `zunionstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
 
         See https://valkey.io/commands/zunion/ for more details.
 
@@ -3351,6 +3359,8 @@ class CoreCommands(Protocol):
         Computes the union of sorted sets given by the specified `keys` and returns a sorted set of union elements with scores.
         To get the elements only, see `zunion`.
         To store the result in a key as a sorted set, see `zunionstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
 
         See https://valkey.io/commands/zunion/ for more details.
 
@@ -3417,7 +3427,9 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 10.5, 'member2': 8.2}
         """
-        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination=destination)
+        args = _create_zinter_zunion_cmd_args(
+            keys, aggregation_type, destination=destination
+        )
         return cast(
             int,
             await self._execute_command(RequestType.ZUnionStore, args),

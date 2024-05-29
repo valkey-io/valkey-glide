@@ -3720,6 +3720,10 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.renamenx("abc", "def"),
             redis_client.pfcount(["def", "ghi"]),
             redis_client.pfmerge("abc", ["def", "ghi"]),
+            redis_client.zinter(["def", "ghi"]),
+            redis_client.zinter_withscores(["def", "ghi"]),
+            redis_client.zunion(["def", "ghi"]),
+            redis_client.zunion_withscores(["def", "ghi"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
