@@ -953,10 +953,10 @@ mod tests {
             *value,
             Value::Map(vec![(
                 Value::BulkString(b"streamid-1".to_vec()),
-                Value::Map(vec![(
+                Value::Array(vec![
                     Value::BulkString(b"field1".to_vec()),
                     Value::BulkString(b"value1".to_vec()),
-                ),]),
+                ]),
             ),]),
         );
 
@@ -967,23 +967,19 @@ mod tests {
             Value::Map(vec![
                 (
                     Value::BulkString(b"streamid-2".to_vec()),
-                    Value::Map(vec![
-                        (
+                    Value::Array(vec![
                             Value::BulkString(b"field21".to_vec()),
                             Value::BulkString(b"value21".to_vec()),
-                        ),
-                        (
                             Value::BulkString(b"field22".to_vec()),
                             Value::BulkString(b"value22".to_vec()),
-                        )
                     ]),
                 ),
                 (
                     Value::BulkString(b"streamid-3".to_vec()),
-                    Value::Map(vec![(
+                    Value::Array(vec![
                         Value::BulkString(b"field3".to_vec()),
                         Value::BulkString(b"value3".to_vec()),
-                    ),]),
+                    ]),
                 ),
             ]),
         );
