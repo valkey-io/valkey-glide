@@ -1267,7 +1267,8 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The key to rename.
      * @param newKey - The new name of the key.
-     * Command Response - If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
+     * Command Response - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
+     * If `key` does not exist, an error is thrown.
      */
     public renamenx(key: string, newKey: string): T {
         return this.addAndReturn(createRenameNX(key, newKey));
