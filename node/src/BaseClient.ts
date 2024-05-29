@@ -61,6 +61,7 @@ import {
     createRPop,
     createRPush,
     createRename,
+    createRenameNX,
     createSAdd,
     createSCard,
     createSIsMember,
@@ -2208,6 +2209,28 @@ export class BaseClient {
      */
     public rename(key: string, newKey: string): Promise<"OK"> {
         return this.createWritePromise(createRename(key, newKey));
+    }
+
+    /**
+     * Renames `key` to `newkey` if `newkey` does not yet exist.
+     * See https://redis.io/commands/renamenx/ for more details.
+     *
+     * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
+     * @param key - The key to rename.
+     * @param newKey - The new name of the key.
+     * @returns - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
+     * If `key` does not exist, an error is thrown.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of renamenx method to rename a key
+     * await client.set("old_key", "value");
+     * const result = await client.renamenx("old_key", "new_key");
+     * console.log(result); // Output: true - Indicates successful renaming of the key "old_key" to "new_key".
+     * ```
+     */
+    public renamenx(key: string, newKey: string): Promise<boolean> {
+        return this.createWritePromise(createRenameNX(key, newKey));
     }
 
     /** Blocking list pop primitive.
