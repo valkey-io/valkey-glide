@@ -3754,8 +3754,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped arrays of popped
      *     elements.
      */
-    public T lmpop(
-            @NonNull String[] keys, @NonNull ListDirection direction, @NonNull Long count) {
+    public T lmpop(@NonNull String[] keys, @NonNull ListDirection direction, @NonNull Long count) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
