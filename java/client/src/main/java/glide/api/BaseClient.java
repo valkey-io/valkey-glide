@@ -54,6 +54,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -144,7 +145,7 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
@@ -1513,12 +1514,14 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<String, String[]>> lmpop(
-            @NonNull String[] keys, @NonNull PopDirection direction, long count) {
+            @NonNull String[] keys, @NonNull ListDirection listDirection, long count) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Long.toString(keys.length)},
                         keys,
-                        new String[] {direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)});
+                        new String[] {
+                            listDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                        });
         return commandManager.submitNewCommand(
                 LMPop,
                 arguments,
@@ -1527,10 +1530,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<String, String[]>> lmpop(
-            @NonNull String[] keys, @NonNull PopDirection direction) {
+            @NonNull String[] keys, @NonNull ListDirection listDirection) {
         String[] arguments =
                 concatenateArrays(
-                        new String[] {Long.toString(keys.length)}, keys, new String[] {direction.toString()});
+                        new String[] {Long.toString(keys.length)},
+                        keys,
+                        new String[] {listDirection.toString()});
         return commandManager.submitNewCommand(
                 LMPop,
                 arguments,
@@ -1539,12 +1544,14 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<String, String[]>> blmpop(
-            @NonNull String[] keys, @NonNull PopDirection direction, long count, double timeout) {
+            @NonNull String[] keys, @NonNull ListDirection listDirection, long count, double timeout) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Long.toString(keys.length)},
                         keys,
-                        new String[] {direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)});
+                        new String[] {
+                            listDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                        });
         return commandManager.submitNewCommand(
                 BLMPop,
                 arguments,
@@ -1553,12 +1560,12 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<String, String[]>> blmpop(
-            @NonNull String[] keys, @NonNull PopDirection direction, double timeout) {
+            @NonNull String[] keys, @NonNull ListDirection listDirection, double timeout) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Long.toString(keys.length)},
                         keys,
-                        new String[] {direction.toString()});
+                        new String[] {listDirection.toString()});
         return commandManager.submitNewCommand(
                 BLMPop,
                 arguments,
@@ -1569,5 +1576,16 @@ public abstract class BaseClient
     public CompletableFuture<String> lset(@NonNull String key, long index, @NonNull String element) {
         String[] arguments = new String[] {key, Long.toString(index), element};
         return commandManager.submitNewCommand(LSet, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lmove(
+            @NonNull String source,
+            @NonNull String destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto) {
+        String[] arguments =
+                new String[] {source, destination, wherefrom.toString(), whereto.toString()};
+        return commandManager.submitNewCommand(LMove, arguments, this::handleStringOrNullResponse);
     }
 }

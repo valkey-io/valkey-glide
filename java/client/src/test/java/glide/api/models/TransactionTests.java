@@ -79,6 +79,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -162,7 +163,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -856,18 +857,21 @@ public class TransactionTests {
         transaction.bitop(BitwiseOperation.AND, "destination", new String[] {"key"});
         results.add(Pair.of(BitOp, buildArgs(BitwiseOperation.AND.toString(), "destination", "key")));
 
-        transaction.lmpop(new String[] {"key"}, PopDirection.LEFT);
+        transaction.lmpop(new String[] {"key"}, ListDirection.LEFT);
         results.add(Pair.of(LMPop, buildArgs("1", "key", "LEFT")));
-        transaction.lmpop(new String[] {"key"}, PopDirection.LEFT, 1L);
+        transaction.lmpop(new String[] {"key"}, ListDirection.LEFT, 1L);
         results.add(Pair.of(LMPop, buildArgs("1", "key", "LEFT", "COUNT", "1")));
 
-        transaction.blmpop(new String[] {"key"}, PopDirection.LEFT, 0.1);
+        transaction.blmpop(new String[] {"key"}, ListDirection.LEFT, 0.1);
         results.add(Pair.of(BLMPop, buildArgs("0.1", "1", "key", "LEFT")));
-        transaction.blmpop(new String[] {"key"}, PopDirection.LEFT, 1L, 0.1);
+        transaction.blmpop(new String[] {"key"}, ListDirection.LEFT, 1L, 0.1);
         results.add(Pair.of(BLMPop, buildArgs("0.1", "1", "key", "LEFT", "COUNT", "1")));
 
         transaction.lset("key", 0, "zero");
         results.add(Pair.of(LSet, buildArgs("key", "0", "zero")));
+
+        transaction.lmove("key1", "key2", ListDirection.LEFT, ListDirection.LEFT);
+        results.add(Pair.of(LMove, buildArgs("key1", "key2", "LEFT", "LEFT")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

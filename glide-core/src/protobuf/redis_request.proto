@@ -197,6 +197,7 @@ enum RequestType {
     XLen = 159;
     LSet = 165;
     XDel = 166;
+    LMove = 168;
 }
 
 message Command {
