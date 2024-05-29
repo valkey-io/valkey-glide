@@ -2807,7 +2807,7 @@ class Transaction(BaseTransaction):
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
         The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements, and store the result in a new key.
-        To get the sort result, see `sort`.
+        To get the sort result without storing it into a key, see `sort`.
 
         See https://valkey.io/commands/sort for more details.
 
@@ -2893,7 +2893,7 @@ class ClusterTransaction(BaseTransaction):
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
         When in cluster mode, `key` and `store` must map to the same hash slot.
-        To get the sort result, see `sort`.
+        To get the sort result without storing it into a key, see `sort`.
 
         See https://valkey.io/commands/sort for more details.
 

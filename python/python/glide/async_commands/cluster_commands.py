@@ -426,7 +426,7 @@ class ClusterCommands(CoreCommands):
         """
         Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
         When in cluster mode, `key` and `store` must map to the same hash slot.
-        To get the sort result, see `sort`.
+        To get the sort result without storing it into a key, see `sort`.
 
         See https://valkey.io/commands/sort for more details.
 
