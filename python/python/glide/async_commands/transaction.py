@@ -2504,6 +2504,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ObjectIdleTime, [key])
 
+    def object_refcount(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the reference count of the object stored at `key`.
+
+        See https://valkey.io/commands/object-refcount for more details.
+
+        Args:
+            key (str): The key of the object to get the reference count of.
+
+        Command response:
+            Optional[int]: If `key` exists, returns the reference count of the object stored at `key` as an integer.
+                Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectRefCount, [key])
+
 
 class Transaction(BaseTransaction):
     """
