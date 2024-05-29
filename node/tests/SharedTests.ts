@@ -2389,7 +2389,6 @@ export function runBaseTests<Context>(config: {
                 expect(await client.renamenx(key2, key3)).toEqual(false);
                 const result2 = await client.get(key2);
                 expect(result2).toEqual("key1");
-                await client.del([key1, key2]);
 
                 // this one remains unchanged
                 const result3 = await client.get(key3);
