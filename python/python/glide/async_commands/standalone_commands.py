@@ -314,8 +314,8 @@ class StandaloneCommands(CoreCommands):
             ['1', '2', '3']
             >>> await client.sort("mylist", order=OrderBy.DESC)
             ['3', '2', '1']
-            >>> await client.lpush("mylist", 2, 1, 2, 3, 3, 1)
-            >>> await client.sort("mylist", limit=Limit(2, 3))
+            >>> await client.lpush("mylist2", 2, 1, 2, 3, 3, 1)
+            >>> await client.sort("mylist2", limit=Limit(2, 3))
             ['2', '2', '3']
             >>> await client.hset("user:1", "name", "Alice", "age", 30)
             >>> await client.hset("user:2", "name", "Bob", "age", 25)
