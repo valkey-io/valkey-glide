@@ -413,7 +413,7 @@ class ClusterCommands(CoreCommands):
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         result = await self._execute_command(RequestType.Sort, args)
-        return cast(List[Optional[str]], result)
+        return cast(List[str], result)
 
     async def sort_store(
         self,
