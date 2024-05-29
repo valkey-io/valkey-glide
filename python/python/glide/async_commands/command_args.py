@@ -28,8 +28,6 @@ class Limit:
         self.offset = offset
         self.count = count
 
-        self.count = count
-
 
 class OrderBy(Enum):
     """
