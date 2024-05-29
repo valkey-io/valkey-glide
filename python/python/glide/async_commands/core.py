@@ -19,6 +19,11 @@ from typing import (
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByBox,
+    GeoSearchByRadius,
+    GeoSearchCount,
+    GeospatialData,
+    GeoUnit,
     InfBound,
     LexBoundary,
     RangeByIndex,
@@ -26,6 +31,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    _create_geosearch_args,
     _create_zinter_zunion_cmd_args,
     _create_zrange_args,
 )
@@ -134,23 +140,6 @@ class UpdateOptions(Enum):
 
     LESS_THAN = "LT"
     GREATER_THAN = "GT"
-
-
-class GeospatialData:
-    def __init__(self, longitude: float, latitude: float):
-        """
-        Represents a geographic position defined by longitude and latitude.
-
-        The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
-            - Valid longitudes are from -180 to 180 degrees.
-            - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
-
-        Args:
-            longitude (float): The longitude coordinate.
-            latitude (float): The latitude coordinate.
-        """
-        self.longitude = longitude
-        self.latitude = latitude
 
 
 class StreamTrimOptions(ABC):
@@ -279,29 +268,6 @@ class StreamAddOptions:
         option_args.append(self.id if self.id else "*")
 
         return option_args
-
-
-class GeoUnit(Enum):
-    """
-    Enumeration representing distance units options for the `GEODIST` command.
-    """
-
-    METERS = "m"
-    """
-    Represents distance in meters.
-    """
-    KILOMETERS = "km"
-    """
-    Represents distance in kilometers.
-    """
-    MILES = "mi"
-    """
-    Represents distance in miles.
-    """
-    FEET = "ft"
-    """
-    Represents distance in feet.
-    """
 
 
 class ExpirySet:
@@ -2646,6 +2612,91 @@ class CoreCommands(Protocol):
         return cast(
             List[Optional[List[float]]],
             await self._execute_command(RequestType.GeoPos, [key] + members),
+        )
+
+    async def geosearch(
+        self,
+        key: str,
+        search_from: Union[str, GeospatialData],
+        seach_by: Union[GeoSearchByRadius, GeoSearchByBox],
+        order_by: Optional[OrderBy] = None,
+        count: Optional[GeoSearchCount] = None,
+        with_coord: bool = False,
+        with_dist: bool = False,
+        with_hash: bool = False,
+    ) -> List[Union[str, List[Union[str, float, int, List[float]]]]]:
+        """
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area.
+
+        See https://valkey.io/commands/geosearch/ for more details.
+
+        Args:
+            key (str): The key of the sorted set representing geospatial data.
+            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
+                from the sorted set or as a geospatial data (see `GeospatialData`).
+            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                For circular area search, see `GeoSearchByRadius`.
+                For rectengal area search, see `GeoSearchByBox`.
+            order_by (Optional[OrderBy]): Specifies the order in which the results should be returned.
+                    - `ASC`: Sorts items from the nearest to the farthest, relative to the center point.
+                    - `DESC`: Sorts items from the farthest to the nearest, relative to the center point.
+                If not specified, the results would be unsorted.
+            count (Optional[GeoSearchCount]): Specifies the maximum number of results to return. See `GeoSearchCount`.
+                If not specified, return all results.
+            with_coord (bool): Whether to include coordinates of the returned items. Defaults to False.
+            with_dist (bool): Whether to include distance from the center in the returned items.
+                The distance is returned in the same unit as specified for the `search_by` arguments. Defaults to False.
+            with_hash (bool): Whether to include geohash of the returned items. Defaults to False.
+
+        Returns:
+            List[Union[str, List[Union[str, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
+            If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, we're each sub array represents a single item in the following order:
+                (str): The member (location) name.
+                (float): The distance from the center as a floating point number, in the same unit specified in the radius, if `with_dist` is set to True.
+                (int): The Geohash integer, if `with_hash` is set to True.
+                List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
+
+        Examples:
+            >>> await client.geoadd("my_geo_sorted_set", {"edge1": GeospatialData(12.758489, 38.788135), "edge2": GeospatialData(17.241510, 38.788135)}})
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geosearch("my_geo_sorted_set", "Catania", GeoSearchByRadius(175, GeoUnit.MILES), OrderBy.DESC)
+                ['Palermo', 'Catania'] # Returned the locations names within the radius of 175 miles, with the center being 'Catania' from farthest to nearest.
+            >>> await client.geosearch("my_geo_sorted_set", GeospatialData(15, 37), GeoSearchByBox(400, 400, GeoUnit.KILOMETERS), OrderBy.DESC, with_coord=true, with_dist=true, with_hash=true)
+                [
+                    [
+                        "Catania",
+                        [56.4413, 3479447370796909, [15.087267458438873, 37.50266842333162]],
+                    ],
+                    [
+                        "Palermo",
+                        [190.4424, 3479099956230698, [13.361389338970184, 38.1155563954963]],
+                    ],
+                    [
+                        "edge2",
+                        [279.7403, 3481342659049484, [17.241510450839996, 38.78813451624225]],
+                    ],
+                    [
+                        "edge1",
+                        [279.7405, 3479273021651468, [12.75848776102066, 38.78813451624225]],
+                    ],
+                ]  # Returns locations within the square box of 400 km, with the center being a specific point, from nearest to farthest with the dist, hash and coords.
+
+        Since: Redis version 6.2.0.
+        """
+        args = _create_geosearch_args(
+            key,
+            search_from,
+            seach_by,
+            order_by,
+            count,
+            with_coord,
+            with_dist,
+            with_hash,
+        )
+
+        return cast(
+            List[Union[str, List[Union[str, float, int, List[float]]]]],
+            await self._execute_command(RequestType.GeoSearch, args),
         )
 
     async def zadd(

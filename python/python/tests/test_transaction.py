@@ -7,16 +7,15 @@ from typing import List, Union, cast
 import pytest
 from glide import RequestError
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
-from glide.async_commands.core import (
-    GeospatialData,
-    InsertPosition,
-    StreamAddOptions,
-    TrimByMinId,
-)
+from glide.async_commands.core import InsertPosition, StreamAddOptions, TrimByMinId
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByRadius,
+    GeospatialData,
+    GeoUnit,
     InfBound,
     LexBoundary,
+    OrderBy,
     RangeByIndex,
     ScoreBoundary,
     ScoreFilter,
@@ -374,6 +373,10 @@ async def transaction_test(
             None,
         ]
     )
+    transaction.geosearch(
+        key12, "Catania", GeoSearchByRadius(200, GeoUnit.KILOMETERS), OrderBy.ASC
+    )
+    args.append(["Catania", "Palermo"])
 
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-1"))
     args.append("0-1")
