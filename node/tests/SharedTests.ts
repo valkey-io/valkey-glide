@@ -2389,7 +2389,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.renamenx(key1, key2)).toEqual(true);
                 // sanity check
                 expect(await client.get(key2)).toEqual("key1");
-                // verify
+                // Test that renamenx doesn't rename key2 to key3 (with an existing value)
                 expect(await client.renamenx(key2, key3)).toEqual(false);
                 // sanity check
                 expect(await client.get(key3)).toEqual("key3");
