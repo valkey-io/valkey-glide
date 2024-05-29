@@ -3548,6 +3548,32 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.PfAdd, [key] + elements),
         )
 
+    async def pfcount(self, keys: List[str]) -> int:
+        """
+        Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+        calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+
+        See https://valkey.io/commands/pfcount for more details.
+
+        Note:
+            When in Cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the HyperLogLog data structures to be analyzed.
+
+        Returns:
+            int: The approximated cardinality of given HyperLogLog data structures.
+                The cardinality of a key that does not exist is 0.
+
+        Examples:
+            >>> await client.pfcount(["hll_1", "hll_2"])
+                4  # The approximated cardinality of the union of "hll_1" and "hll_2" is 4.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.PfCount, keys),
+        )
+
     async def object_encoding(self, key: str) -> Optional[str]:
         """
         Returns the internal encoding for the Redis object stored at `key`.
