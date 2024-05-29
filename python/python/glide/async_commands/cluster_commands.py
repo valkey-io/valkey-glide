@@ -434,8 +434,10 @@ class ClusterCommands(CoreCommands):
             key (str): The key of the list, set, or sorted set to be sorted.
             store (str): The key where the sorted result will be stored.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
-            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
         Returns:
             int: The number of elements in the sorted key stored at `store`.
