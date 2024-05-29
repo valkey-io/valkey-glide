@@ -90,6 +90,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -176,7 +177,7 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -4901,10 +4902,10 @@ public class RedisClientTest {
         String key = "testKey";
         String key2 = "testKey2";
         String[] keys = {key, key2};
-        PopDirection popDirection = PopDirection.LEFT;
+        ListDirection listDirection = ListDirection.LEFT;
         double timeout = 0.1;
         String[] arguments =
-                new String[] {Double.toString(timeout), "2", key, key2, popDirection.toString()};
+                new String[] {Double.toString(timeout), "2", key, key2, listDirection.toString()};
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
 
         CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
@@ -4915,7 +4916,8 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.blmpop(keys, popDirection, timeout);
+        CompletableFuture<Map<String, String[]>> response =
+                service.blmpop(keys, listDirection, timeout);
         Map<String, String[]> payload = response.get();
 
         // verify
@@ -4930,7 +4932,7 @@ public class RedisClientTest {
         String key = "testKey";
         String key2 = "testKey2";
         String[] keys = {key, key2};
-        PopDirection popDirection = PopDirection.LEFT;
+        ListDirection listDirection = ListDirection.LEFT;
         long count = 1L;
         double timeout = 0.1;
         String[] arguments =
@@ -4939,7 +4941,7 @@ public class RedisClientTest {
                     "2",
                     key,
                     key2,
-                    popDirection.toString(),
+                    listDirection.toString(),
                     COUNT_FOR_LIST_REDIS_API,
                     Long.toString(count)
                 };
@@ -4954,7 +4956,7 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Map<String, String[]>> response =
-                service.blmpop(keys, popDirection, count, timeout);
+                service.blmpop(keys, listDirection, count, timeout);
         Map<String, String[]> payload = response.get();
 
         // verify
@@ -5125,8 +5127,8 @@ public class RedisClientTest {
         String key = "testKey";
         String key2 = "testKey2";
         String[] keys = {key, key2};
-        PopDirection popDirection = PopDirection.LEFT;
-        String[] arguments = new String[] {"2", key, key2, popDirection.toString()};
+        ListDirection listDirection = ListDirection.LEFT;
+        String[] arguments = new String[] {"2", key, key2, listDirection.toString()};
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
 
         CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
@@ -5137,7 +5139,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, popDirection);
+        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, listDirection);
         Map<String, String[]> payload = response.get();
 
         // verify
@@ -5152,11 +5154,11 @@ public class RedisClientTest {
         String key = "testKey";
         String key2 = "testKey2";
         String[] keys = {key, key2};
-        PopDirection popDirection = PopDirection.LEFT;
+        ListDirection listDirection = ListDirection.LEFT;
         long count = 1L;
         String[] arguments =
                 new String[] {
-                    "2", key, key2, popDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                    "2", key, key2, listDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
                 };
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
 
@@ -5168,8 +5170,35 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, popDirection, count);
+        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, listDirection, count);
         Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lmove_returns_success() {
+        // setup
+        String key1 = "testKey";
+        String key2 = "testKey2";
+        ListDirection wherefrom = ListDirection.LEFT;
+        ListDirection whereto = ListDirection.RIGHT;
+        String[] arguments = new String[] {key1, key2, wherefrom.toString(), whereto.toString()};
+        String value = "one";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LMove), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lmove(key1, key2, wherefrom, whereto);
+        String payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

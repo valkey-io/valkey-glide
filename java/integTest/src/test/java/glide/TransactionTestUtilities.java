@@ -11,7 +11,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -253,6 +253,8 @@ public class TransactionTestUtilities {
         String listKey3 = "{ListKey}-3-" + UUID.randomUUID();
         String listKey4 = "{ListKey}-4-" + UUID.randomUUID();
         String listKey5 = "{ListKey}-5-" + UUID.randomUUID();
+        String listKey6 = "{ListKey}-6-" + UUID.randomUUID();
+        String listKey7 = "{ListKey}-7-" + UUID.randomUUID();
 
         transaction
                 .lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
@@ -279,11 +281,21 @@ public class TransactionTestUtilities {
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .lpush(listKey4, new String[] {value1, value2, value3, value1, value2, value3})
-                    .lmpop(new String[] {listKey4}, PopDirection.LEFT)
-                    .lmpop(new String[] {listKey4}, PopDirection.LEFT, 2L)
-                    .blmpop(new String[] {listKey4}, PopDirection.LEFT, 0.1)
-                    .blmpop(new String[] {listKey4}, PopDirection.LEFT, 2L, 0.1);
+                    .lmpop(new String[] {listKey4}, ListDirection.LEFT)
+                    .lmpop(new String[] {listKey4}, ListDirection.LEFT, 2L)
+                    .blmpop(new String[] {listKey4}, ListDirection.LEFT, 0.1)
+                    .blmpop(new String[] {listKey4}, ListDirection.LEFT, 2L, 0.1);
         } // listKey4 is now empty
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            transaction
+                    .lpush(listKey6, new String[] {value3, value2, value1})
+                    .lpush(listKey7, new String[] {value1, value2, value3})
+                    .lmove(listKey7, listKey7, ListDirection.LEFT, ListDirection.LEFT)
+                    .lmove(listKey6, listKey7, ListDirection.LEFT, ListDirection.RIGHT)
+                    .lrange(listKey6, 0, -1)
+                    .lrange(listKey7, 0, -1);
+        }
 
         var expectedResults =
                 new Object[] {
@@ -310,15 +322,30 @@ public class TransactionTestUtilities {
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            return concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        6L, // lpush(listKey4, {value1, value2, value3})
-                        Map.of(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
-                        Map.of(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
-                        Map.of(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
-                        Map.of(listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
-                    });
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                6L, // lpush(listKey4, {value1, value2, value3})
+                                Map.of(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
+                                Map.of(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
+                                Map.of(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
+                                Map.of(listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
+                            });
+        }
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                3L, // lpush(listKey6, {value3, value2, value1})
+                                3L, // lpush(listKey7, {value1, value2, value3})
+                                value3, // lmove(listKey7, listKey5, LEFT, LEFT)
+                                value1, // lmove(listKey6, listKey5, RIGHT, LEFT)
+                                new String[] {value2, value3}, // lrange(listKey6, 0, -1)
+                                new String[] {value3, value2, value1, value1}, // lrange(listKey7, 0, -1);
+                            });
         }
 
         return expectedResults;

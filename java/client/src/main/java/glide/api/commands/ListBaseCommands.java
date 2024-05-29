@@ -2,7 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.commands.LInsertOptions.InsertPosition;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -383,7 +383,7 @@ public interface ListBaseCommands {
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.
      * @example
@@ -394,7 +394,8 @@ public interface ListBaseCommands {
      * assertArrayEquals(new String[] {"three"}, resultValue);
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> lmpop(String[] keys, PopDirection direction, long count);
+    CompletableFuture<Map<String, String[]>> lmpop(
+            String[] keys, ListDirection direction, long count);
 
     /**
      * Pops one element from the first non-empty list from the provided <code>keys</code>.
@@ -404,7 +405,7 @@ public interface ListBaseCommands {
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
      * @example
      *     <pre>{@code
@@ -414,12 +415,12 @@ public interface ListBaseCommands {
      * assertArrayEquals(new String[] {"three"}, resultValue);
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> lmpop(String[] keys, PopDirection direction);
+    CompletableFuture<Map<String, String[]>> lmpop(String[] keys, ListDirection direction);
 
     /**
      * Blocks the connection until it pops one or more elements from the first non-empty list from the
      * provided <code>keys</code> <code>BLMPOP</code> is the blocking variant of {@link
-     * #lmpop(String[], PopDirection, long)}.
+     * #lmpop(String[], ListDirection, long)}.
      *
      * @apiNote
      *     <ol>
@@ -433,7 +434,7 @@ public interface ListBaseCommands {
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -448,12 +449,12 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, String[]>> blmpop(
-            String[] keys, PopDirection direction, long count, double timeout);
+            String[] keys, ListDirection direction, long count, double timeout);
 
     /**
      * Blocks the connection until it pops one element from the first non-empty list from the provided
      * <code>keys</code> <code>BLMPOP</code> is the blocking variant of {@link #lmpop(String[],
-     * PopDirection)}.
+     * ListDirection)}.
      *
      * @apiNote
      *     <ol>
@@ -467,7 +468,7 @@ public interface ListBaseCommands {
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.<br>
@@ -481,7 +482,7 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, String[]>> blmpop(
-            String[] keys, PopDirection direction, double timeout);
+            String[] keys, ListDirection direction, double timeout);
 
     /**
      * Sets the list element at <code>index</code> to <code>element</code>.<br>
@@ -501,4 +502,33 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> lset(String key, long index, String element);
+
+    /**
+     * Atomically pops and removes the left/right-most element to the list stored at <code>source
+     * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
+     * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
+     *
+     * @since Redis 6.2.0 and above.
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
+     * @param source The key to the source list.
+     * @param destination The key to the destination list.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
+     * @return The popped element or <code>null</code> if <code>source</code> does not exist.
+     * @example
+     *     <pre>{@code
+     * client.lpush("testKey1", new String[] {"two", "one"}).get();
+     * client.lpush("testKey2", new String[] {"four", "three"}).get();
+     * var result = client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT).get();
+     * assertEquals(result, "one");
+     * String[] upratedArray1 = client.lrange("testKey1", 0, -1).get();
+     * String[] upratedArray2 = client.lrange("testKey2", 0, -1).get();
+     * assertArrayEquals(new String[] {"two"}, updatedArray1);
+     * assertArrayEquals(new String[] {"one", "three", "four"}, updatedArray2);
+     * }</pre>
+     */
+    CompletableFuture<String> lmove(
+            String source, String destination, ListDirection wherefrom, ListDirection whereto);
 }
