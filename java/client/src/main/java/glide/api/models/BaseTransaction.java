@@ -3809,16 +3809,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Atomically pops and removes the first/last element of the list stored at <code>source</code>
-     * depending on <code>wherefrom</code>, and pushes the element at the first/last element of the
-     * list stored at <code>destination</code> depending on <code>wherefrom</code>.
+     * Atomically pops and removes the left/right-most element to the list stored at <code>source
+     * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
+     * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
      *
      * @since Redis 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
      * @param source The key to the source list.
      * @param destination The key to the destination list.
-     * @param wherefrom The direction the element should be removed from.
-     * @param whereto The direction the element should be added to.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
      * @return Command Response - The popped element or <code>null</code> if <code>source</code> does
      *     not exist.
      */

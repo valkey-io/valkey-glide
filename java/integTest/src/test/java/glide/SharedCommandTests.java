@@ -4292,7 +4292,7 @@ public class SharedCommandTests {
         // source does not exist or is empty
         assertNull(client.lmove(key1, key2, ListDirection.LEFT, ListDirection.RIGHT).get());
 
-        // only source exists, only source elements gets popped, nothing gets added
+        // only source exists, only source elements gets popped, creates a list at nonExistingKey
         assertEquals(lpushArgs1.length, client.lpush(key1, lpushArgs1).get());
         assertEquals(
                 "four", client.lmove(key1, nonExistingKey, ListDirection.RIGHT, ListDirection.LEFT).get());
@@ -4310,13 +4310,19 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new String[] {"three", "four", "five", "six"}, client.lrange(key2, 0, -1).get());
 
-        // key exists but is not a list type key
+        // source exists but is not a list type key
         assertEquals(OK, client.set(nonListKey, "NotAList").get());
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () ->
-                                client.lmove(nonListKey, nonListKey, ListDirection.LEFT, ListDirection.LEFT).get());
+                        () -> client.lmove(nonListKey, key1, ListDirection.LEFT, ListDirection.LEFT).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // destination exists but is not a list type key
+        ExecutionException executionException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lmove(key1, nonListKey, ListDirection.LEFT, ListDirection.LEFT).get());
+        assertInstanceOf(RequestException.class, executionException2.getCause());
     }
 }
