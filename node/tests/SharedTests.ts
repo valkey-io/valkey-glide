@@ -2385,7 +2385,7 @@ export function runBaseTests<Context>(config: {
                 // renamenx a string
                 await client.set(key1, "key1");
                 await client.set(key3, "key3");
-                // Test that renamenx can rename key1 to key (non-existing value)
+                // Test that renamenx can rename key1 to key2 (non-existing value)
                 expect(await client.renamenx(key1, key2)).toEqual(true);
                 // sanity check
                 expect(await client.get(key2)).toEqual("key1");
