@@ -95,6 +95,9 @@ async def transaction_test(
     transaction.mget([key, key2])
     args.append([value, value2])
 
+    transaction.renamenx(key, key2)
+    args.append(False)
+
     transaction.incr(key3)
     args.append(1)
     transaction.incrby(key3, 2)

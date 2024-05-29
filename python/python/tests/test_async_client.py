@@ -1459,6 +1459,30 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_renamenx(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        # Verify that attempting to rename a non-existing key throws an error
+        with pytest.raises(RequestError):
+            assert await redis_client.renamenx(non_existing_key, key1)
+
+        # Test RENAMENX with string values
+        assert await redis_client.set(key1, "key1") == OK
+        assert await redis_client.set(key3, "key3") == OK
+        # Test that RENAMENX can rename key1 to key2 (where key2 does not yet exist)
+        assert await redis_client.renamenx(key1, key2) is True
+        # Verify that key2 now holds the value that was in key1
+        assert await redis_client.get(key2) == "key1"
+        # Verify that RENAMENX doesn't rename key2 to key3, since key3 already exists
+        assert await redis_client.renamenx(key2, key3) is False
+        # Verify that key3 remains unchanged
+        assert await redis_client.get(key3) == "key3"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_exists(self, redis_client: TRedisClient):
         keys = [get_random_string(10), get_random_string(10)]
 
@@ -3462,6 +3486,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.sinterstore("abc", ["zxy", "lkn"]),
             redis_client.sdiff(["abc", "zxy", "lkn"]),
             redis_client.sdiffstore("abc", ["def", "ghi"]),
+            redis_client.renamenx("abc", "def"),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):

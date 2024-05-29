@@ -154,6 +154,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Rename, [key, new_key])
 
+    def renamenx(self: TTransaction, key: str, new_key: str) -> TTransaction:
+        """
+        Renames `key` to `new_key` if `new_key` does not yet exist.
+
+        See https://valkey.io/commands/renamenx for more details.
+
+        Args:
+            key (str): The key to rename.
+            new_key (str): The new key name.
+
+        Command response:
+            bool: True if `key` was renamed to `new_key`, or False if `new_key` already exists.
+        """
+        return self.append_command(RequestType.RenameNX, [key, new_key])
+
     def custom_command(self: TTransaction, command_args: List[str]) -> TTransaction:
         """
         Executes a single command, without checking inputs.

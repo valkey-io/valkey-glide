@@ -511,6 +511,31 @@ class CoreCommands(Protocol):
             TOK, await self._execute_command(RequestType.Rename, [key, new_key])
         )
 
+    async def renamenx(self, key: str, new_key: str) -> bool:
+        """
+        Renames `key` to `new_key` if `new_key` does not yet exist.
+
+        See https://valkey.io/commands/renamenx for more details.
+
+        Note:
+            When in cluster mode, both `key` and `new_key` must map to the same hash slot.
+
+        Args:
+            key (str): The key to rename.
+            new_key (str): The new key name.
+
+        Returns:
+            bool: True if `key` was renamed to `new_key`, or False if `new_key` already exists.
+
+        Examples:
+            >>> await client.renamenx("old_key", "new_key")
+                True  # "old_key" was renamed to "new_key"
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.RenameNX, [key, new_key]),
+        )
+
     async def delete(self, keys: List[str]) -> int:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
