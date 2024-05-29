@@ -2385,14 +2385,14 @@ export function runBaseTests<Context>(config: {
                 // renamenx a string
                 await client.set(key1, "key1");
                 await client.set(key3, "key3");
+                // verify
                 expect(await client.renamenx(key1, key2)).toEqual(true);
+                // sanity check
+                expect(await client.get(key2)).toEqual("key1");
+                // verify
                 expect(await client.renamenx(key2, key3)).toEqual(false);
-                const result2 = await client.get(key2);
-                expect(result2).toEqual("key1");
-
-                // this one remains unchanged
-                const result3 = await client.get(key3);
-                expect(result3).toEqual("key3");
+                // sanity check
+                expect(await client.get(key3)).toEqual("key3");
             }, protocol);
         },
         config.timeout,
