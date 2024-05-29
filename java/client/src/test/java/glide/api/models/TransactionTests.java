@@ -371,7 +371,7 @@ public class TransactionTests {
         transaction.pexpireAt("key", 99999999L, HAS_NO_EXPIRY);
         results.add(Pair.of(PExpireAt, buildArgs("key", "99999999", "NX")));
 
-        transaction.get("key");
+        transaction.getdel("key");
         results.add(Pair.of(GetDel, buildArgs("key")));
 
         transaction.ttl("key");

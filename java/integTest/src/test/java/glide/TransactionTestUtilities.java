@@ -158,6 +158,7 @@ public class TransactionTestUtilities {
         transaction
                 .set(stringKey1, value1)
                 .get(stringKey1)
+                .getdel(stringKey1)
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
                 .strlen(stringKey2)
                 .mset(Map.of(stringKey1, value2, stringKey2, value1))
@@ -173,6 +174,7 @@ public class TransactionTestUtilities {
         return new Object[] {
             OK, // set(stringKey1, value1)
             value1, // get(stringKey1)
+            value1, // getdel(stringKey1)
             null, // set(stringKey2, value2, returnOldValue(true))
             (long) value1.length(), // strlen(key2)
             OK, // mset(Map.of(stringKey1, value2, stringKey2, value1))

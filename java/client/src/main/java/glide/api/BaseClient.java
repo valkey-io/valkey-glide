@@ -352,7 +352,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> getdel(@NonNull String key) {
         return commandManager.submitNewCommand(
-            GetDel, new String[] {key}, this::handleStringOrNullResponse);
+                GetDel, new String[] {key}, this::handleStringOrNullResponse);
     }
 
     @Override

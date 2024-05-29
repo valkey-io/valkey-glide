@@ -307,14 +307,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Get the value associated with the given <code>key</code>.
-     * <code>GETDEL</code> is similar to {@see #get}, except for the fact that it also deletes the key on success
-     * (if and only if the key's value type is a string).
+     * Get the value associated with the given <code>key</code>. <code>GETDEL</code> is similar to
+     * {@see #get}, except for the fact that it also deletes the key on success (if and only if the
+     * value of the <code>key</code> is a string).
      *
      * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return Command Response - If <code>key</code> exists, returns the <code>value</code> of
-     *         <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
+     * @return Command Response - If <code>key</code> exists, returns the <code>value</code> of <code>
+     *     key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
      */
     public T getdel(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);

@@ -422,18 +422,15 @@ public class RedisClientTest {
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
         when(commandManager.<String>submitNewCommand(eq(GetDel), eq(new String[] {key}), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response = service.getdel(key);
         String payload = response.get();
-        CompletableFuture<String> responseValue = service.get(key);
-        String payload2 = responseValue.get();
 
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
-        assertNull(payload2);
     }
 
     @SneakyThrows
