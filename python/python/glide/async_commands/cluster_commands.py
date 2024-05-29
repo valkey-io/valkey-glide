@@ -405,10 +405,10 @@ class ClusterCommands(CoreCommands):
 
             >>> await client.lpush("mylist", '2', '1', '2', '3', '3', '1')
             >>> await client.sort("mylist", limit=Limit(2, 3))
-            ['2', '2', '3']
+            ['1', '2', '2']
 
             >>> await client.lpush("mylist", "a", "b", "c", "d")
-            >>> await client.sort("mylist", limit=Limit(3, 2), order=OrderBy.DESC, alpha=True)
+            >>> await client.sort("mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
             ['b', 'a']
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
