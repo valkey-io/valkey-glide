@@ -41,9 +41,16 @@ public interface StringBaseCommands {
      *
      * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return
+     * @return If <code>key</code> exists, returns the <code>value</code> of
+     *         <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String value = client.getdel("key").get();
+     * assert value.equals("value");
      *
-     *
+     * String value = client.get("key").get();
+     * assert value.equals(null);
+     * }</pre>
      * */
     CompletableFuture<String> getdel(String key);
 

@@ -26,6 +26,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
+import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -348,7 +349,11 @@ public abstract class BaseClient
                 Get, new String[] {key}, this::handleStringOrNullResponse);
     }
 
-
+    @Override
+    public CompletableFuture<String> getdel(@NonNull String key) {
+        return commandManager.submitNewCommand(
+            GetDel, new String[] {key}, this::handleStringOrNullResponse);
+    }
 
     @Override
     public CompletableFuture<String> set(@NonNull String key, @NonNull String value) {

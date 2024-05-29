@@ -155,7 +155,7 @@ pub enum RequestType {
     ZInterCard = 143,
     ZMPop = 144,
     GetBit = 145,
-    GetDel = 146;
+    GetDel = 146,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
