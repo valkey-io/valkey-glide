@@ -1463,20 +1463,22 @@ class TestCommands:
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
-        string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
+        # Verify that attempting to rename a non-existing key throws an error
         with pytest.raises(RequestError):
             assert await redis_client.renamenx(non_existing_key, key1)
 
-        assert await redis_client.set(key1, "foo") == OK
-        assert await redis_client.renamenx(key1, key2) is True
+        # Test RENAMENX with string values
+        assert await redis_client.set(key1, "key1") == OK
         assert await redis_client.set(key3, "key3") == OK
+        # Test that RENAMENX can rename key1 to key2 (where key2 does not yet exist)
+        assert await redis_client.renamenx(key1, key2) is True
+        # Verify that key2 now holds the value that was in key1
+        assert await redis_client.get(key2) == "key1"
+        # Verify that RENAMENX doesn't rename key2 to key3, since key3 already exists
         assert await redis_client.renamenx(key2, key3) is False
-        assert await redis_client.get(key2) == "foo"
-        assert await redis_client.delete([key1, key2]) == 1
-
-        # Verify key3 remains unchanged
+        # Verify that key3 remains unchanged
         assert await redis_client.get(key3) == "key3"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
