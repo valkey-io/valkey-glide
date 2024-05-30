@@ -4480,6 +4480,18 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void randomKey() {
+        // setup
+
+        // match on protobuf request
+
+        // exercise
+
+        // verify
+    }
+
+    @SneakyThrows
+    @Test
     public void rename() {
         // setup
         String key = "key1";
