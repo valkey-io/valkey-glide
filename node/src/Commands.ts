@@ -550,6 +550,18 @@ export function createSMembers(key: string): redis_request.Command {
 }
 
 /**
+ *
+ * @internal
+ */
+export function createSMove(
+    source: string,
+    destination: string,
+    member: string,
+): redis_request.Command {
+    return createCommand(RequestType.SMove, [source, destination, member]);
+}
+
+/**
  * @internal
  */
 export function createSCard(key: string): redis_request.Command {

@@ -285,6 +285,7 @@ describe("RedisClusterClient", () => {
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
+                client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 // TODO all rest multi-key commands except ones tested below
             ];
