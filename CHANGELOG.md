@@ -6,6 +6,7 @@
 * Python: Added OBJECT REFCOUNT command ([#1485](https://github.com/aws/glide-for-redis/pull/1485))
 * Python: Added RENAMENX command ([#1492](https://github.com/aws/glide-for-redis/pull/1492))
 * Python: Added PFCOUNT command ([#1493](https://github.com/aws/glide-for-redis/pull/1493))
+* Python: Added PFMERGE command ([#1497](https://github.com/aws/glide-for-redis/pull/1497))
 
 ## 0.4.0 (2024-05-26)
 

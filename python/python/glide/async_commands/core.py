@@ -3574,6 +3574,38 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.PfCount, keys),
         )
 
+    async def pfmerge(self, destination: str, source_keys: List[str]) -> TOK:
+        """
+        Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
+        of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+
+        See https://valkey.io/commands/pfmerge for more details.
+
+        Note:
+            When in Cluster mode, all keys in `source_keys` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key of the destination HyperLogLog where the merged data sets will be stored.
+            source_keys (List[str]): The keys of the HyperLogLog structures to be merged.
+
+        Returns:
+            OK: A simple OK response.
+
+        Examples:
+            >>> await client.pfadd("hll1", ["a", "b"])
+            >>> await client.pfadd("hll2", ["b", "c"])
+            >>> await client.pfmerge("new_hll", ["hll1", "hll2"])
+                OK  # The value of "hll1" merged with "hll2" was stored in "new_hll".
+            >>> await client.pfcount(["new_hll"])
+                3  # The approximated cardinality of "new_hll" is 3.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.PfMerge, [destination] + source_keys
+            ),
+        )
+
     async def object_encoding(self, key: str) -> Optional[str]:
         """
         Returns the internal encoding for the Redis object stored at `key`.

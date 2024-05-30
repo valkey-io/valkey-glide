@@ -3374,6 +3374,43 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pfmerge(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        assert await redis_client.pfadd(key1, ["a", "b", "c"]) == 1
+        assert await redis_client.pfadd(key2, ["b", "c", "d"]) == 1
+
+        # merge into new HyperLogLog data set
+        assert await redis_client.pfmerge(key3, [key1, key2]) == OK
+        assert await redis_client.pfcount([key3]) == 4
+
+        # merge into existing HyperLogLog data set
+        assert await redis_client.pfmerge(key1, [key2]) == OK
+        assert await redis_client.pfcount([key1]) == 4
+
+        # non-existing source key
+        assert await redis_client.pfmerge(key2, [key1, non_existing_key]) == OK
+        assert await redis_client.pfcount([key2]) == 4
+
+        # empty source key list
+        assert await redis_client.pfmerge(key1, []) == OK
+        assert await redis_client.pfcount([key1]) == 4
+
+        # source key exists, but it is not a HyperLogLog
+        assert await redis_client.set(string_key, "foo")
+        with pytest.raises(RequestError):
+            assert await redis_client.pfmerge(key3, [string_key])
+
+        # destination key exists, but it is not a HyperLogLog
+        with pytest.raises(RequestError):
+            assert await redis_client.pfmerge(string_key, [key3])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_object_encoding(self, redis_client: TRedisClient):
         string_key = get_random_string(10)
         list_key = get_random_string(10)
@@ -3516,6 +3553,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.sdiffstore("abc", ["def", "ghi"]),
             redis_client.renamenx("abc", "def"),
             redis_client.pfcount(["def", "ghi"]),
+            redis_client.pfmerge("abc", ["def", "ghi"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
