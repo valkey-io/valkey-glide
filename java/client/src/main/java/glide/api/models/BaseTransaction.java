@@ -307,8 +307,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Gets a string value associated with the given <code>key</code> and deletes the key. {@see
-     * #get}.
+     * Gets a string value associated with the given <code>key</code> and deletes the key.
      *
      * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
