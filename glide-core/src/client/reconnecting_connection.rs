@@ -49,7 +49,7 @@ pub(super) struct ReconnectingConnection {
 
 impl fmt::Debug for ReconnectingConnection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.get_node_address())
+        write!(f, "{}", self.node_address())
     }
 }
 
@@ -156,7 +156,7 @@ impl ReconnectingConnection {
         create_connection(backend, connection_retry_strategy).await
     }
 
-    fn get_node_address(&self) -> String {
+    fn node_address(&self) -> String {
         self.inner
             .backend
             .connection_info

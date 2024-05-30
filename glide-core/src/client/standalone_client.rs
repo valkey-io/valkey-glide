@@ -86,7 +86,7 @@ impl std::fmt::Debug for StandaloneClientConnectionError {
             StandaloneClientConnectionError::PrimaryConflictFound(found_primaries) => {
                 writeln!(
                     f,
-                    "Primary conflict. More than one primary found in a Standalone cluster: {found_primaries}"
+                    "Primary conflict. More than one primary found in a Standalone setup: {found_primaries}"
                 )
             }
         }
@@ -128,17 +128,17 @@ impl StandaloneClient {
                     if redis::from_owned_redis_value::<String>(replication_status)
                         .is_ok_and(|val| val.contains("role:master"))
                     {
-                        if primary_index.is_some() {
+                        if let Some(primary_index) = primary_index {
                             // More than one primary found
                             return Err(StandaloneClientConnectionError::PrimaryConflictFound(
                                 format!(
                                     "Primary nodes: {:?}, {:?}",
                                     nodes.pop(),
-                                    nodes.get(primary_index.unwrap())
+                                    nodes.get(primary_index)
                                 ),
                             ));
                         }
-                        primary_index = Some(nodes.len() - 1);
+                        primary_index = Some(nodes.len().saturating_sub(1));
                     }
                 }
                 Err((address, (connection, err))) => {
