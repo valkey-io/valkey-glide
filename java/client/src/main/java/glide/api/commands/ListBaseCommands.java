@@ -557,7 +557,8 @@ public interface ListBaseCommands {
      * @param whereto The {@link ListDirection} the element should be added to.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
-     * @return The popped element or <code>null</code> if <code>source</code> does not exist.
+     * @return The popped element or <code>null</code> if <code>source</code> does not exist or if the
+     *     operation timed-out.
      * @example
      *     <pre>{@code
      * client.lpush("testKey1", new String[] {"two", "one"}).get();

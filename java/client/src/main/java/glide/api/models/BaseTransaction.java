@@ -3853,7 +3853,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @return Command Response - The popped element or <code>null</code> if <code>source</code> does
-     *     not exist.
+     *     not exist or if the operation timed-out.
      */
     public T blmove(
             @NonNull String source,
