@@ -17,7 +17,7 @@ use std::ops::Deref;
 use std::time::Duration;
 pub use types::*;
 
-use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd};
+use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
@@ -165,7 +165,7 @@ fn get_timeout_from_cmd_arg(
         Err(RedisError::from((
             ErrorKind::ResponseError,
             "Timeout cannot be negative",
-            format!("Received timeout = {:?}", timeout_secs),
+            format!("Received timeout = {:?}.", timeout_secs),
         )))
     } else if timeout_secs == 0.0 {
         // `0` means we should set no timeout
@@ -176,7 +176,7 @@ fn get_timeout_from_cmd_arg(
             Err(RedisError::from((
                 ErrorKind::ResponseError,
                 "Timeout is out of range, max timeout is 2^32 - 1 (u32::MAX)",
-                format!("Received timeout = {:?}", timeout_secs),
+                format!("Received timeout = {:?}.", timeout_secs),
             )))
         } else {
             // Extend the request timeout to ensure we don't timeout before receiving a response from the server.
@@ -261,6 +261,7 @@ impl Client {
                     return Err((
                         ErrorKind::ResponseError,
                         "Received non-array response for transaction",
+                        format!("(response was {:?})", get_value_type(&value)),
                     )
                         .into());
                 }
