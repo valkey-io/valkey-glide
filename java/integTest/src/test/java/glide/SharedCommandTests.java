@@ -239,9 +239,10 @@ public class SharedCommandTests {
         assertEquals(data, value1);
         data = client.getdel(key1).get();
         assertNull(data);
+        assertNull(client.getdel(key2).get());
 
         // key isn't a string
-        assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
+        client.sadd(key2, new String[] {"a"}).get();
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.getdel(key2).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
