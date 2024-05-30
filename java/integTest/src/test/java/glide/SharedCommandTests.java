@@ -237,6 +237,8 @@ public class SharedCommandTests {
         client.set(key1, value1).get();
         String data = client.getdel(key1).get();
         assertEquals(data, value1);
+        data = client.getdel(key1).get();
+        assertNull(data);
 
         // key isn't a string
         assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
