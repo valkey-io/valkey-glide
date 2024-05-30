@@ -1310,6 +1310,16 @@ export function createRename(
 /**
  * @internal
  */
+export function createRenameNX(
+    key: string,
+    newKey: string,
+): redis_request.Command {
+    return createCommand(RequestType.RenameNX, [key, newKey]);
+}
+
+/**
+ * @internal
+ */
 export function createPfAdd(
     key: string,
     elements: string[],

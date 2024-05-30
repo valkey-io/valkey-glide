@@ -18,9 +18,9 @@ import {
     ProtocolVersion,
     RedisClusterClient,
 } from "..";
+import { RedisCluster } from "../../utils/TestUtils.js";
 import { runBaseTests } from "./SharedTests";
 import {
-    RedisCluster,
     flushAndCloseClient,
     getClientConfigurationOption,
     getFirstResult,
@@ -28,7 +28,6 @@ import {
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
-
 type Context = {
     client: RedisClusterClient;
 };
@@ -287,6 +286,7 @@ describe("RedisClusterClient", () => {
                 client.rename("abc", "zxy"),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
                 client.smove("abc", "zxy", "value"),
+                client.renamenx("abc", "zxy"),
                 // TODO all rest multi-key commands except ones tested below
             ];
 

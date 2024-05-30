@@ -177,4 +177,42 @@ jobs:
 
             - name: Test compatibility
               run: npm test -- -t "set and get flow works"
-              working-directory: ./node
+              working-directory: ./node                   
+        
+    build-and-test-linux-musl-on-x86:
+        name: Build and test Node wrapper on Linux musl
+        runs-on: ubuntu-latest
+        container:
+            image: node:alpine
+            options: --user root --privileged
+
+        steps:
+          - name: Install git
+            run: |
+                apk update
+                apk add git
+
+          - uses: actions/checkout@v4
+            with:
+                submodules: recursive
+
+          - name: Setup musl on Linux
+            uses: ./.github/workflows/setup-musl-on-linux
+            with:
+                workspace: $GITHUB_WORKSPACE
+                npm-scope: ${{ secrets.NPM_SCOPE }}
+                npm-auth-token: ${{ secrets.NPM_AUTH_TOKEN }}
+
+          - name: Build Node wrapper
+            uses: ./.github/workflows/build-node-wrapper
+            with:
+                os: ubuntu
+                named_os: linux
+                arch: x64
+                target: x86_64-unknown-linux-musl
+                github-token: ${{ secrets.GITHUB_TOKEN }}
+          
+          - name: Test compatibility
+            shell: bash
+            run: npm test -- -t "set and get flow works"
+            working-directory: ./node

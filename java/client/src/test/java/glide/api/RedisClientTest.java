@@ -2,7 +2,10 @@
 package glide.api;
 
 import static glide.api.BaseClient.OK;
+import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
+import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.FlushMode.SYNC;
@@ -31,12 +34,16 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
+import static redis_request.RedisRequestOuterClass.RequestType.Append;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
-import static redis_request.RedisRequestOuterClass.RequestType.Bitcount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
+import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
@@ -51,12 +58,15 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
+import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -67,8 +77,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.HIncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
+import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
+import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
@@ -77,11 +89,14 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
+import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
+import static redis_request.RedisRequestOuterClass.RequestType.LSet;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
@@ -93,6 +108,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
@@ -102,6 +118,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
@@ -116,6 +133,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
+import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
@@ -124,14 +142,20 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XDel;
+import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCount;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.ZDiffStore;
+import static redis_request.RedisRequestOuterClass.RequestType.ZIncrBy;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInter;
+import static redis_request.RedisRequestOuterClass.RequestType.ZInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.ZInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZLexCount;
+import static redis_request.RedisRequestOuterClass.RequestType.ZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.ZMScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.ZPopMin;
@@ -150,10 +174,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import glide.api.models.Script;
 import glide.api.models.Transaction;
-import glide.api.models.commands.BitmapIndexType;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -170,6 +194,9 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -710,6 +737,48 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(ttl, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void expiretime_returns_success() {
+        // setup
+        String key = "testKey";
+        long value = 999L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ExpireTime), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.expiretime(key);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void pexpiretime_returns_success() {
+        // setup
+        String key = "testKey";
+        long value = 999L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(PExpireTime), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.pexpiretime(key);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
     }
 
     @SneakyThrows
@@ -1409,6 +1478,103 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(values, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hstrlen_returns_success() {
+        // setup
+        String key = "testKey";
+        String field = "field";
+        String[] args = {key, field};
+        Long value = 42L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(HStrlen), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hstrlen(key, field);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hrandfield_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] args = {key};
+        String field = "field";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(field);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(HRandField), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.hrandfield(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(field, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hrandfieldWithCount_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] args = {key, "2"};
+        String[] fields = new String[] {"field_1", "field_2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(fields);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(HRandField), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.hrandfieldWithCount(key, 2);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(fields, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hrandfieldWithCountWithValues_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] args = {key, "2", WITH_VALUES_REDIS_API};
+        String[][] fields = new String[][] {{"field_1", "value_1"}, {"field_2", "value_2"}};
+
+        CompletableFuture<String[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(fields);
+
+        // match on protobuf request
+        when(commandManager.<String[][]>submitNewCommand(eq(HRandField), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[][]> response = service.hrandfieldWithCountWithValues(key, 2);
+        String[][] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(fields, payload);
     }
 
     @SneakyThrows
@@ -2115,6 +2281,57 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zmpop_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        ScoreFilter modifier = MAX;
+        String[] arguments = {"2", "key1", "key2", "MAX"};
+        Object[] value = new Object[] {"key1", "elem"};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.zmpop(keys, modifier);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zmpop_with_count_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        ScoreFilter modifier = MAX;
+        long count = 42;
+        String[] arguments = {"2", "key1", "key2", "MAX", "COUNT", "42"};
+        Object[] value = new Object[] {"key1", "elem"};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.zmpop(keys, modifier, count);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
     }
 
     @SneakyThrows
@@ -3238,6 +3455,115 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zinter_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        KeyArray keyArray = new KeyArray(keys);
+        String[] arguments = keyArray.toArgs();
+        String[] value = new String[] {"elem1", "elem2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.zinter(keyArray);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zinter_with_aggregation_returns_success() {
+        // setup
+        List<Pair<String, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of("key1", 10.0));
+        keysWeights.add(Pair.of("key2", 20.0));
+        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
+        Aggregate aggregate = Aggregate.MIN;
+        String[] arguments = concatenateArrays(weightedKeys.toArgs(), aggregate.toArgs());
+        String[] value = new String[] {"elem1", "elem2"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.zinter(weightedKeys, aggregate);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zinterWithScores_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        KeyArray keyArray = new KeyArray(keys);
+        String[] arguments = concatenateArrays(keyArray.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
+
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Double>> response = service.zinterWithScores(keyArray);
+        Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zinterWithScores_with_aggregation_returns_success() {
+        // setup
+        List<Pair<String, Double>> keysWeights = new ArrayList<>();
+        keysWeights.add(Pair.of("key1", 10.0));
+        keysWeights.add(Pair.of("key2", 20.0));
+        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
+        Aggregate aggregate = Aggregate.MIN;
+        String[] arguments =
+                concatenateArrays(
+                        weightedKeys.toArgs(), aggregate.toArgs(), new String[] {WITH_SCORES_REDIS_API});
+        Map<String, Double> value = Map.of("elem1", 1.0, "elem2", 2.0);
+
+        CompletableFuture<Map<String, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Double>>submitNewCommand(eq(ZInter), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Double>> response =
+                service.zinterWithScores(weightedKeys, aggregate);
+        Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zinterstore_returns_success() {
         // setup
         String destination = "destinationKey";
@@ -3285,6 +3611,55 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.zinterstore(destination, weightedKeys, aggregate);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zintercard_with_limit_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        long limit = 3L;
+        String[] arguments = new String[] {"2", "key1", "key2", LIMIT_REDIS_API, "3"};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zintercard(keys, limit);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zintercard_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        String[] arguments = new String[] {"2", "key1", "key2"};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zintercard(keys);
         Long payload = response.get();
 
         // verify
@@ -3388,6 +3763,32 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Object[][]> response = service.zrandmemberWithCountWithScores(key, count);
         Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zincrby_returns_success() {
+        // setup
+        String key = "testKey";
+        double increment = 4.2;
+        String member = "member";
+        String[] arguments = new String[] {key, "4.2", member};
+        Double value = 3.14;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(ZIncrBy), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.zincrby(key, increment, member);
+        Double payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -3577,6 +3978,54 @@ public class RedisClientTest {
         assertArrayEquals(expectedArgs, options.toArgs());
     }
 
+    @Test
+    @SneakyThrows
+    public void xlen_returns_success() {
+        // setup
+        String key = "testKey";
+        Long completedResult = 99L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(XLen), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xlen(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @Test
+    @SneakyThrows
+    public void xdel_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] ids = {"one-1", "two-2", "three-3"};
+        Long completedResult = 69L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(XDel), eq(new String[] {key, "one-1", "two-2", "three-3"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xdel(key, ids);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
     @SneakyThrows
     @Test
     public void type_returns_success() {
@@ -3599,6 +4048,28 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void rename() {
+        // setup
+        String key = "key1";
+        String newKey = "key2";
+        String[] arguments = new String[] {key, newKey};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Rename), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.rename(key, newKey);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
     }
 
     @SneakyThrows
@@ -4191,6 +4662,26 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void append() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(1L);
+        when(commandManager.<Long>submitNewCommand(eq(Append), eq(new String[] {key, value}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.append(key, value);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(1L, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void geohash_returns_success() {
         // setup
         String key = "testKey";
@@ -4269,6 +4760,52 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void functionLoad_returns_success() {
+        // setup
+        String code = "The best code ever";
+        String[] args = new String[] {code};
+        String value = "42";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionLoad), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionLoad(code);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionLoadReplace_returns_success() {
+        // setup
+        String code = "The best code ever";
+        String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
+        String value = "42";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionLoad), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionLoadReplace(code);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bitcount_returns_success() {
         // setup
         String key = "testKey";
@@ -4277,7 +4814,7 @@ public class RedisClientTest {
         testResponse.complete(bitcount);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(Bitcount), eq(new String[] {key}), any()))
+        when(commandManager.<Long>submitNewCommand(eq(BitCount), eq(new String[] {key}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4286,6 +4823,7 @@ public class RedisClientTest {
 
         // verify
         assertEquals(testResponse, response);
+        assertEquals(1L, payload);
         assertEquals(bitcount, payload);
     }
 
@@ -4300,7 +4838,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(
-                        eq(Bitcount), eq(new String[] {key, "1", "2"}), any()))
+                        eq(BitCount), eq(new String[] {key, "1", "2"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4323,7 +4861,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(
-                        eq(Bitcount), eq(new String[] {key, "1", "2", "BIT"}), any()))
+                        eq(BitCount), eq(new String[] {key, "1", "2", "BIT"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -4333,5 +4871,362 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(bitcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void setbit_returns_success() {
+        // setup
+        String key = "testKey";
+        Long value = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SetBit), eq(new String[] {key, "8", "1"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.setbit(key, 8, 1);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void blmpop_returns_success() {
+        // setup
+        String key = "testKey";
+        String key2 = "testKey2";
+        String[] keys = {key, key2};
+        ListDirection listDirection = ListDirection.LEFT;
+        double timeout = 0.1;
+        String[] arguments =
+                new String[] {Double.toString(timeout), "2", key, key2, listDirection.toString()};
+        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+
+        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[]>> response =
+                service.blmpop(keys, listDirection, timeout);
+        Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void blmpop_with_count_returns_success() {
+        // setup
+        String key = "testKey";
+        String key2 = "testKey2";
+        String[] keys = {key, key2};
+        ListDirection listDirection = ListDirection.LEFT;
+        long count = 1L;
+        double timeout = 0.1;
+        String[] arguments =
+                new String[] {
+                    Double.toString(timeout),
+                    "2",
+                    key,
+                    key2,
+                    listDirection.toString(),
+                    COUNT_FOR_LIST_REDIS_API,
+                    Long.toString(count)
+                };
+        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+
+        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[]>> response =
+                service.blmpop(keys, listDirection, count, timeout);
+        Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void getbit_returns_success() {
+        // setup
+        String key = "testKey";
+        Long bit = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bit);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(GetBit), eq(new String[] {key, "8"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.getbit(key, 8);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bit, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitpos_returns_success() {
+        // setup
+        String key = "testKey";
+        Long bit = 0L;
+        Long bitPosition = 10L;
+        String[] arguments = new String[] {key, Long.toString(bit)};
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitPosition);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(BitPos), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitpos(key, bit);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitPosition, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitpos_with_start_returns_success() {
+        // setup
+        String key = "testKey";
+        Long bit = 0L;
+        Long start = 5L;
+        Long bitPosition = 10L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitPosition);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(BitPos), eq(new String[] {key, Long.toString(bit), Long.toString(start)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitpos(key, bit, start);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitPosition, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitpos_with_start_and_end_returns_success() {
+        // setup
+        String key = "testKey";
+        Long bit = 0L;
+        Long start = 5L;
+        Long end = 10L;
+        Long bitPosition = 10L;
+        String[] arguments =
+                new String[] {key, Long.toString(bit), Long.toString(start), Long.toString(end)};
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitPosition);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(BitPos), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitpos(key, bit, start, end);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitPosition, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitpos_with_start_and_end_and_type_returns_success() {
+        // setup
+        String key = "testKey";
+        Long bit = 0L;
+        Long start = 5L;
+        Long end = 10L;
+        Long bitPosition = 10L;
+        String[] arguments =
+                new String[] {
+                    key,
+                    Long.toString(bit),
+                    Long.toString(start),
+                    Long.toString(end),
+                    BitmapIndexType.BIT.toString()
+                };
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitPosition);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(BitPos), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitpos(key, bit, start, end, BitmapIndexType.BIT);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitPosition, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitop_returns_success() {
+        // setup
+        String destination = "destination";
+        String[] keys = new String[] {"key1", "key2"};
+        Long result = 6L;
+        BitwiseOperation bitwiseAnd = BitwiseOperation.AND;
+        String[] arguments = concatenateArrays(new String[] {bitwiseAnd.toString(), destination}, keys);
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(BitOp), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitop(bitwiseAnd, destination, keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lmpop_returns_success() {
+        // setup
+        String key = "testKey";
+        String key2 = "testKey2";
+        String[] keys = {key, key2};
+        ListDirection listDirection = ListDirection.LEFT;
+        String[] arguments = new String[] {"2", key, key2, listDirection.toString()};
+        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+
+        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(LMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, listDirection);
+        Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lmpop_with_count_returns_success() {
+        // setup
+        String key = "testKey";
+        String key2 = "testKey2";
+        String[] keys = {key, key2};
+        ListDirection listDirection = ListDirection.LEFT;
+        long count = 1L;
+        String[] arguments =
+                new String[] {
+                    "2", key, key2, listDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                };
+        Map<String, String[]> value = Map.of(key, new String[] {"five"});
+
+        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[]>>submitNewCommand(eq(LMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, listDirection, count);
+        Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lmove_returns_success() {
+        // setup
+        String key1 = "testKey";
+        String key2 = "testKey2";
+        ListDirection wherefrom = ListDirection.LEFT;
+        ListDirection whereto = ListDirection.RIGHT;
+        String[] arguments = new String[] {key1, key2, wherefrom.toString(), whereto.toString()};
+        String value = "one";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LMove), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lmove(key1, key2, wherefrom, whereto);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lset_returns_success() {
+        // setup
+        String key = "testKey";
+        long index = 0;
+        String element = "two";
+        String[] arguments = new String[] {key, "0", element};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LSet), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lset(key, index, element);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 }

@@ -27,7 +27,6 @@ from glide.async_commands.sorted_set import (
     ScoreFilter,
     _create_z_cmd_store_args,
     _create_zrange_args,
-    _create_zrangestore_args,
 )
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -512,6 +511,31 @@ class CoreCommands(Protocol):
             TOK, await self._execute_command(RequestType.Rename, [key, new_key])
         )
 
+    async def renamenx(self, key: str, new_key: str) -> bool:
+        """
+        Renames `key` to `new_key` if `new_key` does not yet exist.
+
+        See https://valkey.io/commands/renamenx for more details.
+
+        Note:
+            When in cluster mode, both `key` and `new_key` must map to the same hash slot.
+
+        Args:
+            key (str): The key to rename.
+            new_key (str): The new key name.
+
+        Returns:
+            bool: True if `key` was renamed to `new_key`, or False if `new_key` already exists.
+
+        Examples:
+            >>> await client.renamenx("old_key", "new_key")
+                True  # "old_key" was renamed to "new_key"
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.RenameNX, [key, new_key]),
+        )
+
     async def delete(self, keys: List[str]) -> int:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
@@ -597,6 +621,36 @@ class CoreCommands(Protocol):
         return cast(
             float,
             await self._execute_command(RequestType.IncrByFloat, [key, str(amount)]),
+        )
+
+    async def setrange(self, key: str, offset: int, value: str) -> int:
+        """
+        Overwrites part of the string stored at `key`, starting at the specified
+        `offset`, for the entire length of `value`.
+        If the `offset` is larger than the current length of the string at `key`,
+        the string is padded with zero bytes to make `offset` fit. Creates the `key`
+        if it doesn't exist.
+
+        See https://valkey.io/commands/setrange for more details.
+
+        Args:
+            key (str): The key of the string to update.
+            offset (int): The position in the string where `value` should be written.
+            value (str): The string written with `offset`.
+
+        Returns:
+            int: The length of the string stored at `key` after it was modified.
+
+        Examples:
+            >>> await client.set("key", "Hello World")
+            >>> await client.setrange("key", 6, "Redis")
+                11  # The length of the string stored at `key` after it was modified.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.SetRange, [key, str(offset), value]
+            ),
         )
 
     async def mset(self, key_value_map: Mapping[str, str]) -> TOK:
@@ -1601,6 +1655,137 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SUnionStore, [destination] + keys),
         )
 
+    async def sdiffstore(self, destination: str, keys: List[str]) -> int:
+        """
+        Stores the difference between the first set and all the successive sets in `keys` into a new set at
+        `destination`.
+
+        See https://valkey.io/commands/sdiffstore for more details.
+
+        Note:
+            When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys of the sets to diff.
+
+        Returns:
+            int: The number of elements in the resulting set.
+
+        Examples:
+            >>> await client.sadd("set1", ["member1", "member2"])
+            >>> await client.sadd("set2", ["member1"])
+            >>> await client.sdiffstore("set3", ["set1", "set2"])
+                1  # Indicates that one member was stored in "set3", and that member is the diff between "set1" and "set2".
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.SDiffStore, [destination] + keys),
+        )
+
+    async def sinter(self, keys: List[str]) -> Set[str]:
+        """
+        Gets the intersection of all the given sets.
+
+        See https://valkey.io/commands/sinter for more details.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the sets.
+
+        Returns:
+            Set[str]: A set of members which are present in all given sets.
+                If one or more sets do no exist, an empty set will be returned.
+
+        Examples:
+            >>> await client.sadd("my_set1", ["member1", "member2"])
+            >>> await client.sadd("my_set2", ["member2", "member3"])
+            >>> await client.sinter(["my_set1", "my_set2"])
+                 {"member2"} # sets "my_set1" and "my_set2" have one commom member
+            >>> await client.sinter([my_set1", "non_existing_set"])
+                None
+        """
+        return cast(Set[str], await self._execute_command(RequestType.SInter, keys))
+
+    async def sinterstore(self, destination: str, keys: List[str]) -> int:
+        """
+        Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+
+        See https://valkey.io/commands/sinterstore for more details.
+
+        Note:
+            When in Cluster mode, all `keys` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys from which to retrieve the set members.
+
+        Returns:
+            int: The number of elements in the resulting set.
+
+        Examples:
+            >>> await client.sadd("my_set1", ["member1", "member2"])
+            >>> await client.sadd("my_set2", ["member2", "member3"])
+            >>> await client.sinterstore("my_set3", ["my_set1", "my_set2"])
+                1  # One element was stored at "my_set3", and that element is the intersection of "my_set1" and "myset2".
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.SInterStore, [destination] + keys),
+        )
+
+    async def sdiff(self, keys: List[str]) -> Set[str]:
+        """
+        Computes the difference between the first set and all the successive sets in `keys`.
+
+        See https://valkey.io/commands/sdiff for more details.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the sets to diff.
+
+        Returns:
+            Set[str]: A set of elements representing the difference between the sets.
+                If any of the keys in `keys` do not exist, they are treated as empty sets.
+
+        Examples:
+            >>> await client.sadd("set1", ["member1", "member2"])
+            >>> await client.sadd("set2", ["member1"])
+            >>> await client.sdiff("set1", "set2")
+                {"member2"}  # "member2" is in "set1" but not "set2"
+        """
+        return cast(
+            Set[str],
+            await self._execute_command(RequestType.SDiff, keys),
+        )
+
+    async def smismember(self, key: str, members: List[str]) -> List[bool]:
+        """
+        Checks whether each member is contained in the members of the set stored at `key`.
+
+        See https://valkey.io/commands/smismember for more details.
+
+        Args:
+            key (str): The key of the set to check.
+            members (List[str]): A list of members to check for existence in the set.
+
+        Returns:
+            List[bool]: A list of bool values, each indicating if the respective member exists in the set.
+
+        Examples:
+            >>> await client.sadd("set1", ["a", "b", "c"])
+            >>> await client.smismember("set1", ["b", "c", "d"])
+                [True, True, False]  # "b" and "c" are members of "set1", but "d" is not.
+        """
+        return cast(
+            List[bool],
+            await self._execute_command(RequestType.SMIsMember, [key] + members),
+        )
+
     async def ltrim(self, key: str, start: int, end: int) -> TOK:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
@@ -2560,7 +2745,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zrangestore for more details.
 
         Note:
-            When in Cluster mode, all `keys` must map to the same hash slot.
+            When in Cluster mode, `source` and `destination` must map to the same hash slot.
 
         Args:
             destination (str): The key for the destination sorted set.
@@ -2580,7 +2765,7 @@ class CoreCommands(Protocol):
             >>> await client.zrangestore("destination_key", "my_sorted_set", RangeByScore(InfBound.NEG_INF, ScoreBoundary(3)))
                 2  # The 2 members with scores between negative infinity and 3 (inclusive) from "my_sorted_set" were stored in the sorted set at "destination_key".
         """
-        args = _create_zrangestore_args(destination, source, range_query, reverse)
+        args = _create_zrange_args(source, range_query, reverse, False, destination)
 
         return cast(int, await self._execute_command(RequestType.ZRangeStore, args))
 
@@ -2766,6 +2951,43 @@ class CoreCommands(Protocol):
             int,
             await self._execute_command(
                 RequestType.ZRemRangeByLex, [key, min_lex_arg, max_lex_arg]
+            ),
+        )
+
+    async def zremrangebyrank(
+        self,
+        key: str,
+        start: int,
+        end: int,
+    ) -> int:
+        """
+        Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
+        Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
+        These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
+
+        See https://valkey.io/commands/zremrangebyrank/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            start (int): The starting point of the range.
+            end (int): The end of the range.
+
+        Returns:
+            int: The number of elements that were removed.
+                If `start` exceeds the end of the sorted set, or if `start` is greater than `end`, `0` is returned.
+                If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
+                If `key` does not exist, `0` is returned.
+
+        Examples:
+            >>> await client.zremrangebyrank("my_sorted_set", 0, 4)
+                5  # Indicates that 5 elements, with ranks ranging from 0 to 4 (inclusive), have been removed from "my_sorted_set".
+            >>> await client.zremrangebyrank("my_sorted_set", 0, 4)
+                0  # Indicates that nothing was removed.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.ZRemRangeByRank, [key, str(start), str(end)]
             ),
         )
 
@@ -3159,7 +3381,7 @@ class CoreCommands(Protocol):
         Returns:
             Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
                 which elements were popped, and a member-score mapping of the popped elements. If no members could be
-                popped and the timeout expired, returns None.
+                popped, returns None.
 
         Examples:
             >>> await client.zadd("zSet1", {"one": 1.0, "two": 2.0, "three": 3.0})
@@ -3324,4 +3546,117 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(RequestType.PfAdd, [key] + elements),
+        )
+
+    async def pfcount(self, keys: List[str]) -> int:
+        """
+        Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+        calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+
+        See https://valkey.io/commands/pfcount for more details.
+
+        Note:
+            When in Cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the HyperLogLog data structures to be analyzed.
+
+        Returns:
+            int: The approximated cardinality of given HyperLogLog data structures.
+                The cardinality of a key that does not exist is 0.
+
+        Examples:
+            >>> await client.pfcount(["hll_1", "hll_2"])
+                4  # The approximated cardinality of the union of "hll_1" and "hll_2" is 4.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.PfCount, keys),
+        )
+
+    async def object_encoding(self, key: str) -> Optional[str]:
+        """
+        Returns the internal encoding for the Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-encoding for more details.
+
+        Args:
+            key (str): The `key` of the object to get the internal encoding of.
+
+        Returns:
+            Optional[str]: If `key` exists, returns the internal encoding of the object stored at
+                `key` as a string. Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_encoding("my_hash")
+                "listpack"  # The hash stored at "my_hash" has an internal encoding of "listpack".
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.ObjectEncoding, [key]),
+        )
+
+    async def object_freq(self, key: str) -> Optional[int]:
+        """
+        Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-freq for more details.
+
+        Args:
+            key (str): The key of the object to get the logarithmic access frequency counter of.
+
+        Returns:
+            Optional[int]: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
+                integer. Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_freq("my_hash")
+                2  # The logarithmic access frequency counter of "my_hash" has a value of 2.
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ObjectFreq, [key]),
+        )
+
+    async def object_idletime(self, key: str) -> Optional[int]:
+        """
+        Returns the time in seconds since the last access to the value stored at `key`.
+
+        See https://valkey.io/commands/object-idletime for more details.
+
+        Args:
+            key (str): The key of the object to get the idle time of.
+
+        Returns:
+            Optional[int]: If `key` exists, returns the idle time in seconds. Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_idletime("my_hash")
+                13  # "my_hash" was last accessed 13 seconds ago.
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ObjectIdleTime, [key]),
+        )
+
+    async def object_refcount(self, key: str) -> Optional[int]:
+        """
+        Returns the reference count of the object stored at `key`.
+
+        See https://valkey.io/commands/object-refcount for more details.
+
+        Args:
+            key (str): The key of the object to get the reference count of.
+
+        Returns:
+            Optional[int]: If `key` exists, returns the reference count of the object stored at `key` as an integer.
+                Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_refcount("my_hash")
+                2  # "my_hash" has a reference count of 2.
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ObjectRefCount, [key]),
         )

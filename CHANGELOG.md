@@ -1,4 +1,15 @@
 #### Changes
+* Python: Added OBJECT ENCODING command ([#1471](https://github.com/aws/glide-for-redis/pull/1471))
+* Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
+* Python: Added OBJECT IDLETIME command ([#1474](https://github.com/aws/glide-for-redis/pull/1474))
+* Node: Added RENAMENX command ([#1483](https://github.com/aws/glide-for-redis/pull/1483))
+* Python: Added OBJECT REFCOUNT command ([#1485](https://github.com/aws/glide-for-redis/pull/1485))
+* Python: Added RENAMENX command ([#1492](https://github.com/aws/glide-for-redis/pull/1492))
+* Python: Added PFCOUNT command ([#1493](https://github.com/aws/glide-for-redis/pull/1493))
+
+## 0.4.0 (2024-05-26)
+
+#### Changes
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
 * Python: Added STRLEN command ([#1230](https://github.com/aws/glide-for-redis/pull/1230))
 * Python: Added HKEYS command ([#1228](https://github.com/aws/glide-for-redis/pull/1228))
@@ -33,7 +44,12 @@
 * Python: Added ZMPOP command ([#1417](https://github.com/aws/glide-for-redis/pull/1417))
 * Python: Added SMOVE command ([#1421](https://github.com/aws/glide-for-redis/pull/1421))
 * Python: Added SUNIONSTORE command ([#1423](https://github.com/aws/glide-for-redis/pull/1423))
-
+* Python: Added SINTER command ([#1434](https://github.com/aws/glide-for-redis/pull/1434))
+* Python: Added SDIFF command ([#1437](https://github.com/aws/glide-for-redis/pull/1437))
+* Python: Added SDIFFSTORE command ([#1449](https://github.com/aws/glide-for-redis/pull/1449))
+* Python: Added SINTERSTORE command ([#1459](https://github.com/aws/glide-for-redis/pull/1459))
+* Python: Added SMISMEMBER command ([#1461](https://github.com/aws/glide-for-redis/pull/1461))
+* Python: Added SETRANGE command ([#1453](https://github.com/aws/glide-for-redis/pull/1453)
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))
@@ -41,6 +57,9 @@
 
 ### Breaking Changes
 * Node: Changed `smembers` and `spopCount` functions to return Set instead of string[] ([#1299](https://github.com/aws/glide-for-redis/pull/1299))
+
+#### Features
+* Node: Added support for alpine based platform (Or any x64-musl or arm64-musl based platforms) ([#1379](https://github.com/aws/glide-for-redis/pull/1379))
 
 ## 0.3.3 (2024-03-28)
 

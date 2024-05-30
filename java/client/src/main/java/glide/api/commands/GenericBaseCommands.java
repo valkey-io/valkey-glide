@@ -266,7 +266,7 @@ public interface GenericBaseCommands {
      * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
      * @param key The <code>key</code> to return its timeout.
      * @return TTL in seconds, <code>-2</code> if <code>key</code> does not exist, or <code>-1</code>
-     *     if <code>key</code> exists but has no associated expire.
+     *     if <code>key</code> exists but has no associated expiration.
      * @example
      *     <pre>{@code
      * Long timeRemaining = client.ttl("my_key").get();
@@ -278,6 +278,43 @@ public interface GenericBaseCommands {
      */
     CompletableFuture<Long> ttl(String key);
 
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire, in seconds.<br>
+     * To get the expiration with millisecond precision, use {@link #pexpiretime(String)}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/expiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to determine the expiration value of.
+     * @return The expiration Unix timestamp in seconds. <code>-2</code> if <code>key</code> does not
+     *     exist, or <code>-1</code> if <code>key</code> exists but has no associated expiration.
+     * @example
+     *     <pre>{@code
+     * Long expiration = client.expiretime("my_key").get();
+     * System.out.printf("The key expires at %d epoch time", expiration);
+     * }</pre>
+     */
+    CompletableFuture<Long> expiretime(String key);
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire, in milliseconds.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/pexpiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to determine the expiration value of.
+     * @return The expiration Unix timestamp in milliseconds. <code>-2</code> if <code>key</code> does
+     *     not exist, or <code>-1</code> if <code>key</code> exists but has no associated expiration.
+     * @example
+     *     <pre>{@code
+     * Long expiration = client.pexpiretime("my_key").get();
+     * System.out.printf("The key expires at %d epoch time (ms)", expiration);
+     * }</pre>
+     */
+    CompletableFuture<Long> pexpiretime(String key);
+
+    // TODO move invokeScript to ScriptingAndFunctionsBaseCommands
+    // TODO add note to invokeScript about routing on cluster client
     /**
      * Invokes a Lua script.<br>
      * This method simplifies the process of invoking scripts on a Redis server by using an object
@@ -363,7 +400,7 @@ public interface GenericBaseCommands {
     /**
      * Returns the string representation of the type of the value stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/type/>redis.io</a> for details.
+     * @see <a href="https://redis.io/commands/type/">redis.io</a> for details.
      * @param key The <code>key</code> to check its data type.
      * @return If the <code>key</code> exists, the type of the stored value is returned. Otherwise, a
      *     "none" string is returned.
@@ -451,6 +488,26 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> objectRefcount(String key);
+
+    /**
+     * Renames <code>key</code> to <code>newKey</code>.<br>
+     * If <code>newKey</code> already exists it is overwritten.
+     *
+     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://redis.io/commands/rename/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new name of the key.
+     * @return If the <code>key</code> was successfully renamed, return <code>"OK"</code>. If <code>
+     *     key</code> does not exist, an error is thrown.
+     * @example
+     *     <pre>{@code
+     * String value = client.set("key", "value").get();
+     * value = client.rename("key", "newKeyName").get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> rename(String key, String newKey);
 
     /**
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.

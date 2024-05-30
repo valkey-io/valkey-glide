@@ -1,7 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
 from datetime import datetime, timezone
-from typing import List, Union
+from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
@@ -63,6 +63,8 @@ async def transaction_test(
 
     transaction.set(key, value)
     args.append(OK)
+    transaction.setrange(key, 0, value)
+    args.append(len(value))
     transaction.get(key)
     args.append(value)
     transaction.type(key)
@@ -92,6 +94,9 @@ async def transaction_test(
     args.append(OK)
     transaction.mget([key, key2])
     args.append([value, value2])
+
+    transaction.renamenx(key, key2)
+    args.append(False)
 
     transaction.incr(key3)
     args.append(1)
@@ -191,6 +196,10 @@ async def transaction_test(
 
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)
+    transaction.smismember(key7, ["foo", "baz"])
+    args.append([True, False])
+    transaction.sdiffstore(key7, [key7])
+    args.append(2)
     transaction.srem(key7, ["foo"])
     args.append(1)
     transaction.smembers(key7)
@@ -205,6 +214,12 @@ async def transaction_test(
     args.append(2)
     transaction.sunionstore(key7, [key7, key7])
     args.append(2)
+    transaction.sinter([key7, key7])
+    args.append({"foo", "bar"})
+    transaction.sinterstore(key7, [key7, key7])
+    args.append(2)
+    transaction.sdiff([key7, key7])
+    args.append(set())
     transaction.spop_count(key7, 4)
     args.append({"foo", "bar"})
     transaction.smove(key7, key7, "non_existing_member")
@@ -256,6 +271,8 @@ async def transaction_test(
     args.append(0)
     transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(0)
+    transaction.zremrangebyrank(key8, 0, 10)
+    args.append(0)
     transaction.zdiffstore(key8, [key8, key8])
     args.append(0)
     if not await check_if_server_version_lt(redis_client, "7.0.0"):
@@ -287,6 +304,8 @@ async def transaction_test(
 
     transaction.pfadd(key10, ["a", "b", "c"])
     args.append(1)
+    transaction.pfcount([key10])
+    args.append(3)
 
     transaction.geoadd(
         key12,
@@ -485,3 +504,45 @@ class TestTransaction:
         transaction.set(key, "value").get(key).delete([key])
 
         assert await redis_client.exec(transaction) == [OK, "value", 1]
+
+    # The object commands are tested here instead of transaction_test because they have special requirements:
+    # - OBJECT FREQ and OBJECT IDLETIME require specific maxmemory policies to be set on the config
+    # - we cannot reliably predict the exact response values for OBJECT FREQ, OBJECT IDLETIME, and OBJECT REFCOUNT
+    # - OBJECT ENCODING is tested here since all the other OBJECT commands are tested here
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_object_commands(
+        self, redis_client: TRedisClient, cluster_mode: bool
+    ):
+        string_key = get_random_string(10)
+        maxmemory_policy_key = "maxmemory-policy"
+        config = await redis_client.config_get([maxmemory_policy_key])
+        maxmemory_policy = cast(str, config.get(maxmemory_policy_key))
+
+        try:
+            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction.set(string_key, "foo")
+            transaction.object_encoding(string_key)
+            transaction.object_refcount(string_key)
+            # OBJECT FREQ requires a LFU maxmemory-policy
+            transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
+            transaction.object_freq(string_key)
+            # OBJECT IDLETIME requires a non-LFU maxmemory-policy
+            transaction.config_set({maxmemory_policy_key: "allkeys-random"})
+            transaction.object_idletime(string_key)
+
+            response = await redis_client.exec(transaction)
+            assert response is not None
+            assert response[0] == OK  # transaction.set(string_key, "foo")
+            assert response[1] == "embstr"  # transaction.object_encoding(string_key)
+            # transaction.object_refcount(string_key)
+            assert cast(int, response[2]) >= 0
+            # transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
+            assert response[3] == OK
+            assert cast(int, response[4]) >= 0  # transaction.object_freq(string_key)
+            # transaction.config_set({maxmemory_policy_key: "allkeys-random"})
+            assert response[5] == OK
+            # transaction.object_idletime(string_key)
+            assert cast(int, response[6]) >= 0
+        finally:
+            await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})

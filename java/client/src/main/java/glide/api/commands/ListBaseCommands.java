@@ -2,6 +2,8 @@
 package glide.api.commands;
 
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.ListDirection;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -11,6 +13,8 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=list">List Commands</a>
  */
 public interface ListBaseCommands {
+    /** Redis API keyword used to extract specific count of members from a sorted set. */
+    String COUNT_FOR_LIST_REDIS_API = "COUNT";
 
     /**
      * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
@@ -369,4 +373,162 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> lpushx(String key, String[] elements);
+
+    /**
+     * Pops one or more elements from the first non-empty list from the provided <code>keys
+     * </code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys An array of keys to lists.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     ListDirection}.
+     * @param count The maximum number of popped elements.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.
+     * @example
+     *     <pre>{@code
+     * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
+     * Map<String, String[]> result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L).get();
+     * String[] resultValue = result.get("testKey");
+     * assertArrayEquals(new String[] {"three"}, resultValue);
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[]>> lmpop(
+            String[] keys, ListDirection direction, long count);
+
+    /**
+     * Pops one element from the first non-empty list from the provided <code>keys</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys An array of keys to lists.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     ListDirection}.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.
+     * @example
+     *     <pre>{@code
+     * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
+     * Map<String, String[]> result = client.lmpop(new String[] {"testKey"}, PopDirection.LEFT).get();
+     * String[] resultValue = result.get("testKey");
+     * assertArrayEquals(new String[] {"three"}, resultValue);
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[]>> lmpop(String[] keys, ListDirection direction);
+
+    /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided <code>keys</code> <code>BLMPOP</code> is the blocking variant of {@link
+     * #lmpop(String[], ListDirection, long)}.
+     *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BLMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
+     * @param keys An array of keys to lists.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     ListDirection}.
+     * @param count The maximum number of popped elements.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of popped elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
+     * Map<String, String[]> result = client.blmpop(new String[] {"testKey"}, PopDirection.LEFT, 1L, 0.1).get();
+     * String[] resultValue = result.get("testKey");
+     * assertArrayEquals(new String[] {"three"}, resultValue);
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[]>> blmpop(
+            String[] keys, ListDirection direction, long count, double timeout);
+
+    /**
+     * Blocks the connection until it pops one element from the first non-empty list from the provided
+     * <code>keys</code> <code>BLMPOP</code> is the blocking variant of {@link #lmpop(String[],
+     * ListDirection)}.
+     *
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     *       <li><code>BLMPOP</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys An array of keys to lists.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     ListDirection}.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return A <code>Map</code> of <code>key</code> name mapped array of the popped element.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * client.lpush("testKey", new String[] {"one", "two", "three"}).get();
+     * Map<String, String[]> result = client.blmpop(new String[] {"testKey"}, PopDirection.LEFT, 0.1).get();
+     * String[] resultValue = result.get("testKey");
+     * assertArrayEquals(new String[] {"three"}, resultValue);
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[]>> blmpop(
+            String[] keys, ListDirection direction, double timeout);
+
+    /**
+     * Sets the list element at <code>index</code> to <code>element</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to be set.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.lset("testKey", 1, "two").get();
+     * assertEquals(response, "OK");
+     * }</pre>
+     */
+    CompletableFuture<String> lset(String key, long index, String element);
+
+    /**
+     * Atomically pops and removes the left/right-most element to the list stored at <code>source
+     * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
+     * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
+     *
+     * @since Redis 6.2.0 and above.
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
+     * @param source The key to the source list.
+     * @param destination The key to the destination list.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
+     * @return The popped element or <code>null</code> if <code>source</code> does not exist.
+     * @example
+     *     <pre>{@code
+     * client.lpush("testKey1", new String[] {"two", "one"}).get();
+     * client.lpush("testKey2", new String[] {"four", "three"}).get();
+     * var result = client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT).get();
+     * assertEquals(result, "one");
+     * String[] upratedArray1 = client.lrange("testKey1", 0, -1).get();
+     * String[] upratedArray2 = client.lrange("testKey2", 0, -1).get();
+     * assertArrayEquals(new String[] {"two"}, updatedArray1);
+     * assertArrayEquals(new String[] {"one", "three", "four"}, updatedArray2);
+     * }</pre>
+     */
+    CompletableFuture<String> lmove(
+            String source, String destination, ListDirection wherefrom, ListDirection whereto);
 }
