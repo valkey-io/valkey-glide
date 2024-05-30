@@ -304,6 +304,8 @@ async def transaction_test(
 
     transaction.pfadd(key10, ["a", "b", "c"])
     args.append(1)
+    transaction.pfmerge(key10, [])
+    args.append(OK)
     transaction.pfcount([key10])
     args.append(3)
 
