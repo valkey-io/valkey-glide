@@ -36,13 +36,12 @@ public interface StringBaseCommands {
 
     /**
      * Gets a string value associated with the given <code>key</code> and deletes the key. {@see
-     * #get}, except for the fact that it also deletes the key on success (if and only if the value of
-     * the <code>key</code> is a string).
+     * #get}.
      *
      * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code> as a
-     *     <code>String</code>. Otherwise, return <code>null</code>.
+     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code>.
+     *     Otherwise, return <code>null</code>.
      * @example
      *     <pre>{@code
      * String value = client.getdel("key").get();
