@@ -168,6 +168,7 @@ pub enum RequestType {
     LSet = 165,
     XDel = 166,
     LMove = 168,
+    BLMove = 169,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -339,6 +340,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::LSet => RequestType::LSet,
             ProtobufRequestType::XDel => RequestType::XDel,
             ProtobufRequestType::LMove => RequestType::LMove,
+            ProtobufRequestType::BLMove => RequestType::BLMove,
         }
     }
 }
@@ -506,6 +508,7 @@ impl RequestType {
             RequestType::LSet => Some(cmd("LSET")),
             RequestType::XDel => Some(cmd("XDEL")),
             RequestType::LMove => Some(cmd("LMOVE")),
+            RequestType::BLMove => Some(cmd("BLMOVE")),
         }
     }
 }
