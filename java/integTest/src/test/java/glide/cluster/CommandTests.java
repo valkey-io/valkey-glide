@@ -710,7 +710,11 @@ public class CommandTests {
                 Arguments.of(
                         "lmove",
                         "6.2.0",
-                        clusterClient.lmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT)));
+                        clusterClient.lmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT)),
+                Arguments.of(
+                        "blmove",
+                        "6.2.0",
+                        clusterClient.blmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT, 1)));
     }
 
     @SneakyThrows
