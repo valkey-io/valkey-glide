@@ -113,14 +113,22 @@ public interface StreamBaseCommands {
      * Returns stream entries matching a given range of IDs.
      *
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range, use {@link IdBound#of} to specify a stream ID,
-     *     or {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID. Use {@link
-     *     InfRangeBound#MIN} to start with the minimum available ID.
-     * @param end Ending stream ID bound for range, use {@link IdBound#of} to specify a stream ID, or
-     *     {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID. Use {@link
-     *     InfRangeBound#MAX>} to end with the maximum available ID.
-     * @return A <code>Map</code> of key to stream entry data, where entry data is an array with pairs
-     *     of item, data.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @return @return A <code>Map</code> of key to stream entry data, where entry data is an array of
+     *     item pairings.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
@@ -142,15 +150,23 @@ public interface StreamBaseCommands {
      * Returns stream entries matching a given range of IDs.
      *
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range, use {@link IdBound#of} to specify a stream ID,
-     *     or {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID. Use {@link
-     *     InfRangeBound#MIN} to start with the minimum available ID.
-     * @param end Ending stream ID bound for range, use {@link IdBound#of} to specify a stream ID, or
-     *     {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID. Use {@link
-     *     InfRangeBound#MAX>} to end with the maximum available ID.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
      * @param count Maximum count of stream entries to return.
-     * @return A <code>Map</code> of key to stream entry data, where entry data is an array with pairs
-     *     of item, data.
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of item
+     *     pairings.
      * @example
      *     <pre>{@code
      * // Retrieve the first 2 stream entries

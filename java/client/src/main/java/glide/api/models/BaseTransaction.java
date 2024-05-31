@@ -2671,15 +2671,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns stream entries matching a given range of IDs.
      *
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range, use {@link StreamRange.IdBound#of} to specify
-     *     a stream ID, or {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded
-     *     stream ID. Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available
-     *     ID.
-     * @param end Ending stream ID bound for range, use {@link StreamRange.IdBound#of} to specify a
-     *     stream ID, or {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded
-     *     stream ID. Use {@link StreamRange.InfRangeBound#MAX>} to end with the maximum available ID.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array with pairs of item, data.
+     *     an array of item pairings.
      */
     public T xrange(@NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end), key));
@@ -2691,16 +2700,25 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns stream entries matching a given range of IDs.
      *
      * @param key The key of the stream.
-     * @param start Starting stream ID bound for range, use {@link StreamRange.IdBound#of} to specify
-     *     a stream ID, or {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded
-     *     stream ID. Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available
-     *     ID.
-     * @param end Ending stream ID bound for range, use {@link StreamRange.IdBound#of} to specify a
-     *     stream ID, or {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded
-     *     stream ID. Use {@link StreamRange.InfRangeBound#MAX>} to end with the maximum available ID.
-     *     * @param count Maximum count of stream entries to return.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param count Maximum count of stream entries to return.
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array with pairs of item, data.
+     *     an array of item pairings.
      */
     public T xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {

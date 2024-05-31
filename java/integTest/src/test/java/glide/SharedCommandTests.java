@@ -3071,6 +3071,11 @@ public class SharedCommandTests {
         assertNotNull(result.get(streamId1));
         assertNotNull(result.get(streamId2));
 
+        // returns empty if + before -
+        Map<String, String[]> emptyResult =
+                client.xrange(key, InfRangeBound.MAX, InfRangeBound.MIN).get();
+        assertEquals(0, emptyResult.size());
+
         assertEquals(
                 streamId3,
                 client
@@ -3093,7 +3098,7 @@ public class SharedCommandTests {
         assertEquals(0, emptiedResult.size());
 
         // xrange against a non-existent stream
-        Map<String, String[]> emptyResult =
+        emptyResult =
                 client.xrange(key2, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(0, emptyResult.size());
 
