@@ -1432,6 +1432,17 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Echo, [message])
 
+    def lastsave(self: TTransaction) -> TTransaction:
+        """
+        Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
+
+        See https://valkey.io/commands/lastsave for more details.
+
+        Command response:
+            int: The Unix time of the last successful DB save.
+        """
+        return self.append_command(RequestType.LastSave, [])
+
     def type(self: TTransaction, key: str) -> TTransaction:
         """
          Returns the string representation of the type of the value stored at `key`.
