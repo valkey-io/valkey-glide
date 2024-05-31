@@ -571,6 +571,13 @@ export function createSCard(key: string): redis_request.Command {
 /**
  * @internal
  */
+export function createSInter(keys: string[]): redis_request.Command {
+    return createCommand(RequestType.SInter, keys);
+}
+
+/**
+ * @internal
+ */
 export function createSIsMember(
     key: string,
     member: string,
