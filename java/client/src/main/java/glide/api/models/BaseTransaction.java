@@ -47,6 +47,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
+import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -326,6 +327,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T get(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Get, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets a string value associated with the given <code>key</code> and deletes the key.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return Command Response - If <code>key</code> exists, returns the <code>value</code> of <code>
+     *     key</code>. Otherwise, return <code>null</code>.
+     */
+    public T getdel(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(GetDel, commandArgs));
         return getThis();
     }
 
