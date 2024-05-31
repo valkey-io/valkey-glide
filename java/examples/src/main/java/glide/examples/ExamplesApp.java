@@ -1,7 +1,10 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.examples;
 
+import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
+
 import glide.api.RedisClient;
+import glide.api.models.commands.SetOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import java.util.concurrent.ExecutionException;
@@ -32,6 +35,8 @@ public class ExamplesApp {
 
             System.out.println("SET(apples, oranges): " + client.set("apples", "oranges").get());
             System.out.println("GET(apples): " + client.get("apples").get());
+
+            client.set("key", "value", SetOptions.builder().conditionalSet(ONLY_IF_DOES_NOT_EXIST).returnOldValue(true).build());
 
         } catch (ExecutionException | InterruptedException e) {
             System.out.println("Glide example failed with an exception: ");

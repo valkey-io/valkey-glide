@@ -54,4 +54,6 @@ public interface GenericCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> exec(Transaction transaction);
+
+    CompletableFuture<String> randomkey();
 }

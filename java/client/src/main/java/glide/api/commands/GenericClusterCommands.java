@@ -112,4 +112,7 @@ public interface GenericClusterCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> exec(ClusterTransaction transaction, SingleNodeRoute route);
+
+    CompletableFuture<String> randomkey();
+    CompletableFuture<String> randomkey(SingleNodeRoute route);
 }

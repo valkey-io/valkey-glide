@@ -571,7 +571,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             key_type: &Some(ExpectedReturnType::BulkString),
             value_type: &Some(ExpectedReturnType::Map {
                 key_type: &Some(ExpectedReturnType::BulkString),
-                value_type: &Some(ExpectedReturnType::ArrayOfStrings),
+                value_type: &Some(ExpectedReturnType::ArrayOfPairs),
             }),
         }),
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
@@ -706,19 +706,27 @@ mod tests {
     }
 
     #[test]
+    fn convert_xread() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XREAD").arg("STREAMS").arg("key").arg("id")),
+            Some(ExpectedReturnType::Map {
+                key_type: &None,
+                value_type: &Some(ExpectedReturnType::Map {
+                    key_type: &None,
+                    value_type: &Some(ExpectedReturnType::ArrayOfPairs)
+                })
+            })
+        ));
+    }
+
+    #[test]
     fn test_convert_empty_array_to_map_is_nil() {
+        let expected_type =
+            expected_type_for_cmd(redis::cmd("XREAD").arg("STREAMS").arg("key").arg("id"));
+
         // test convert nil is OK
         assert_eq!(
-            convert_to_expected_type(
-                Value::Nil,
-                Some(ExpectedReturnType::Map {
-                    key_type: &None,
-                    value_type: &Some(ExpectedReturnType::Map {
-                        key_type: &None,
-                        value_type: &Some(ExpectedReturnType::ArrayOfStrings)
-                    })
-                }),
-            ),
+            convert_to_expected_type(Value::Nil, expected_type,),
             Ok(Value::Nil)
         );
     }
@@ -780,17 +788,10 @@ mod tests {
         //    ...
         // #2) "key2"
         // ...
-        let converted_map = convert_to_expected_type(
-            Value::Array(array_of_arrays),
-            Some(ExpectedReturnType::Map {
-                key_type: &Some(ExpectedReturnType::BulkString),
-                value_type: &Some(ExpectedReturnType::Map {
-                    key_type: &Some(ExpectedReturnType::BulkString),
-                    value_type: &Some(ExpectedReturnType::ArrayOfStrings),
-                }),
-            }),
-        )
-        .unwrap();
+        let expected_type =
+            expected_type_for_cmd(redis::cmd("XREAD").arg("STREAMS").arg("key").arg("id"));
+        let converted_map =
+            convert_to_expected_type(Value::Array(array_of_arrays), expected_type).unwrap();
 
         let converted_map = if let Value::Map(map) = converted_map {
             map
@@ -895,17 +896,10 @@ mod tests {
         //    ...
         // #2) "key2"
         // ...
-        let converted_map = convert_to_expected_type(
-            Value::Map(map_of_arrays),
-            Some(ExpectedReturnType::Map {
-                key_type: &Some(ExpectedReturnType::BulkString),
-                value_type: &Some(ExpectedReturnType::Map {
-                    key_type: &Some(ExpectedReturnType::BulkString),
-                    value_type: &Some(ExpectedReturnType::ArrayOfStrings),
-                }),
-            }),
-        )
-        .unwrap();
+        let expected_type =
+            expected_type_for_cmd(redis::cmd("XREAD").arg("STREAMS").arg("key").arg("id"));
+        let converted_map =
+            convert_to_expected_type(Value::Map(map_of_arrays), expected_type).unwrap();
 
         let converted_map = if let Value::Map(map) = converted_map {
             map
