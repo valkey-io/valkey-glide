@@ -47,6 +47,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
 import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
+import static redis_request.RedisRequestOuterClass.RequestType.BitField;
+import static redis_request.RedisRequestOuterClass.RequestType.BitFieldReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
@@ -201,6 +203,12 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
+import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.function.FunctionLoadOptions;
@@ -5398,5 +5406,55 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitfieldReadOnly_returns_success() {
+        // setup
+        String key = "testKey";
+        Long[] result = new Long[] {7L};
+        BitFieldGet subcommand = new BitFieldGet(new SignedEncoding(4), new Offset(2));
+        String[] args = ArrayUtils.addFirst(subcommand.toArgs(), key);
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(BitFieldReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response =
+                service.bitfieldReadOnly(key, new BitFieldReadOnlySubCommands[] {subcommand});
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitfield_returns_success() {
+        // setup
+        String key = "testKey";
+        Long[] result = new Long[] {7L};
+        BitFieldSet subcommand = new BitFieldSet(new SignedEncoding(4), new Offset(2), 3);
+        String[] args = ArrayUtils.addFirst(subcommand.toArgs(), key);
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(BitField), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response =
+                service.bitfield(key, new BitFieldSubCommands[] {subcommand});
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
     }
 }
