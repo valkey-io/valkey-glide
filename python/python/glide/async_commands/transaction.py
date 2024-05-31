@@ -2475,6 +2475,40 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.PfAdd, [key] + elements)
 
+    def pfcount(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+        calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+
+        See https://valkey.io/commands/pfcount for more details.
+
+        Args:
+            keys (List[str]): The keys of the HyperLogLog data structures to be analyzed.
+
+        Command response:
+            int: The approximated cardinality of given HyperLogLog data structures.
+                The cardinality of a key that does not exist is 0.
+        """
+        return self.append_command(RequestType.PfCount, keys)
+
+    def pfmerge(
+        self: TTransaction, destination: str, source_keys: List[str]
+    ) -> TTransaction:
+        """
+        Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
+        of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+
+        See https://valkey.io/commands/pfmerge for more details.
+
+        Args:
+            destination (str): The key of the destination HyperLogLog where the merged data sets will be stored.
+            source_keys (List[str]): The keys of the HyperLogLog structures to be merged.
+
+        Command response:
+            OK: A simple OK response.
+        """
+        return self.append_command(RequestType.PfMerge, [destination] + source_keys)
+
     def object_encoding(self: TTransaction, key: str) -> TTransaction:
         """
         Returns the internal encoding for the Redis object stored at `key`.

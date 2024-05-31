@@ -3548,6 +3548,64 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.PfAdd, [key] + elements),
         )
 
+    async def pfcount(self, keys: List[str]) -> int:
+        """
+        Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+        calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+
+        See https://valkey.io/commands/pfcount for more details.
+
+        Note:
+            When in Cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the HyperLogLog data structures to be analyzed.
+
+        Returns:
+            int: The approximated cardinality of given HyperLogLog data structures.
+                The cardinality of a key that does not exist is 0.
+
+        Examples:
+            >>> await client.pfcount(["hll_1", "hll_2"])
+                4  # The approximated cardinality of the union of "hll_1" and "hll_2" is 4.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.PfCount, keys),
+        )
+
+    async def pfmerge(self, destination: str, source_keys: List[str]) -> TOK:
+        """
+        Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
+        of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+
+        See https://valkey.io/commands/pfmerge for more details.
+
+        Note:
+            When in Cluster mode, all keys in `source_keys` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key of the destination HyperLogLog where the merged data sets will be stored.
+            source_keys (List[str]): The keys of the HyperLogLog structures to be merged.
+
+        Returns:
+            OK: A simple OK response.
+
+        Examples:
+            >>> await client.pfadd("hll1", ["a", "b"])
+            >>> await client.pfadd("hll2", ["b", "c"])
+            >>> await client.pfmerge("new_hll", ["hll1", "hll2"])
+                OK  # The value of "hll1" merged with "hll2" was stored in "new_hll".
+            >>> await client.pfcount(["new_hll"])
+                3  # The approximated cardinality of "new_hll" is 3.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.PfMerge, [destination] + source_keys
+            ),
+        )
+
     async def object_encoding(self, key: str) -> Optional[str]:
         """
         Returns the internal encoding for the Redis object stored at `key`.
