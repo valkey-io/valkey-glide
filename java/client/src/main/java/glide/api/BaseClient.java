@@ -11,6 +11,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -1581,5 +1582,19 @@ public abstract class BaseClient
         String[] arguments =
                 new String[] {source, destination, wherefrom.toString(), whereto.toString()};
         return commandManager.submitNewCommand(LMove, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> blmove(
+            @NonNull String source,
+            @NonNull String destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto,
+            double timeout) {
+        String[] arguments =
+                new String[] {
+                    source, destination, wherefrom.toString(), whereto.toString(), Double.toString(timeout)
+                };
+        return commandManager.submitNewCommand(BLMove, arguments, this::handleStringOrNullResponse);
     }
 }

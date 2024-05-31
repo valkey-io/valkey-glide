@@ -4325,4 +4325,93 @@ public class SharedCommandTests {
                         () -> client.lmove(key1, nonListKey, ListDirection.LEFT, ListDirection.LEFT).get());
         assertInstanceOf(RequestException.class, executionException2.getCause());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmove(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonExistingKey = "{key}-3" + UUID.randomUUID();
+        String nonListKey = "{key}-4" + UUID.randomUUID();
+        String[] lpushArgs1 = {"four", "three", "two", "one"};
+        String[] lpushArgs2 = {"six", "five", "four"};
+        double timeout = 1;
+
+        // source does not exist or is empty
+        assertNull(client.blmove(key1, key2, ListDirection.LEFT, ListDirection.RIGHT, timeout).get());
+
+        // only source exists, only source elements gets popped, creates a list at nonExistingKey
+        assertEquals(lpushArgs1.length, client.lpush(key1, lpushArgs1).get());
+        assertEquals(
+                "four",
+                client
+                        .blmove(key1, nonExistingKey, ListDirection.RIGHT, ListDirection.LEFT, timeout)
+                        .get());
+        assertArrayEquals(new String[] {"one", "two", "three"}, client.lrange(key1, 0, -1).get());
+
+        // source and destination are the same, performing list rotation, "three" gets popped and added
+        // back
+        assertEquals(
+                "one", client.blmove(key1, key1, ListDirection.LEFT, ListDirection.LEFT, timeout).get());
+        assertArrayEquals(new String[] {"one", "two", "three"}, client.lrange(key1, 0, -1).get());
+
+        // normal use case, "three" gets popped and added to the left of destination
+        assertEquals(lpushArgs2.length, client.lpush(key2, lpushArgs2).get());
+        assertEquals(
+                "three", client.blmove(key1, key2, ListDirection.RIGHT, ListDirection.LEFT, timeout).get());
+        assertArrayEquals(new String[] {"one", "two"}, client.lrange(key1, 0, -1).get());
+        assertArrayEquals(
+                new String[] {"three", "four", "five", "six"}, client.lrange(key2, 0, -1).get());
+
+        // source exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, "NotAList").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .blmove(nonListKey, key1, ListDirection.LEFT, ListDirection.LEFT, timeout)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // destination exists but is not a list type key
+        ExecutionException executionException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .blmove(key1, nonListKey, ListDirection.LEFT, ListDirection.LEFT, timeout)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmove_timeout_check(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 0)
+                                    .get(3, TimeUnit.SECONDS));
+        }
+    }
 }
