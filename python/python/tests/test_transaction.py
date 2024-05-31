@@ -1,6 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
-from datetime import datetime, timezone
+import time
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Union, cast
 
 import pytest
@@ -548,3 +549,18 @@ class TestTransaction:
             assert cast(int, response[6]) >= 0
         finally:
             await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_lastsave(
+        self, redis_client: TRedisClient, cluster_mode: bool
+    ):
+        yesterday = date.today() - timedelta(1)
+        yesterday_unix_time = time.mktime(yesterday.timetuple())
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.lastsave()
+        response = await redis_client.exec(transaction)
+        assert isinstance(response, list)
+        lastsave_time = response[0]
+        assert isinstance(lastsave_time, int)
+        assert lastsave_time > yesterday_unix_time

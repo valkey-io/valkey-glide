@@ -6,7 +6,7 @@ import asyncio
 import math
 import time
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Union, cast
 
 import pytest
@@ -3270,6 +3270,28 @@ class TestCommands:
         assert isinstance(result[1], str)
         assert int(result[0]) > current_time
         assert 0 < int(result[1]) < 1000000
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lastsave(self, redis_client: TRedisClient):
+        yesterday = date.today() - timedelta(1)
+        yesterday_unix_time = time.mktime(yesterday.timetuple())
+
+        result = await redis_client.lastsave()
+        assert isinstance(result, int)
+        assert result > yesterday_unix_time
+
+        if isinstance(redis_client, RedisClusterClient):
+            # test with single-node route
+            result = await redis_client.lastsave(RandomNode())
+            assert isinstance(result, int)
+            assert result > yesterday_unix_time
+
+            # test with multi-node route
+            result = await redis_client.lastsave(AllNodes())
+            assert isinstance(result, dict)
+            for lastsave_time in result.values():
+                assert lastsave_time > yesterday_unix_time
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
