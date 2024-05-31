@@ -531,4 +531,50 @@ public interface ListBaseCommands {
      */
     CompletableFuture<String> lmove(
             String source, String destination, ListDirection wherefrom, ListDirection whereto);
+
+    /**
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at <code>source</code> depending on <code>wherefrom</code>, and pushes the element
+     * at the first/last element of the list stored at <code>destination</code> depending on <code>
+     * wherefrom</code>.<br>
+     * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
+     * ListDirection)}.
+     *
+     * @since Redis 6.2.0 and above.
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map
+     *           to the same hash slot.
+     *       <li><code>BLMove</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @see <a href="https://valkey.io/commands/blmove/">valkey.io</a> for details.
+     * @param source The key to the source list.
+     * @param destination The key to the destination list.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return The popped element or <code>null</code> if <code>source</code> does not exist or if the
+     *     operation timed-out.
+     * @example
+     *     <pre>{@code
+     * client.lpush("testKey1", new String[] {"two", "one"}).get();
+     * client.lpush("testKey2", new String[] {"four", "three"}).get();
+     * var result = client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1).get();
+     * assertEquals(result, "one");
+     * String[] upratedArray1 = client.lrange("testKey1", 0, -1).get();
+     * String[] upratedArray2 = client.lrange("testKey2", 0, -1).get();
+     * assertArrayEquals(new String[] {"two"}, updatedArray1);
+     * assertArrayEquals(new String[] {"one", "three", "four"}, updatedArray2);
+     * }</pre>
+     */
+    CompletableFuture<String> blmove(
+            String source,
+            String destination,
+            ListDirection wherefrom,
+            ListDirection whereto,
+            double timeout);
 }
