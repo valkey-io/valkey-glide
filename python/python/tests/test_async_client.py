@@ -3304,8 +3304,10 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xadd_xtrim(self, redis_client: TRedisClient):
+    async def test_xadd_xtrim_xlen(self, redis_client: TRedisClient):
         key = get_random_string(10)
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
         field, field2 = get_random_string(10), get_random_string(10)
 
         assert (
@@ -3327,7 +3329,7 @@ class TestCommands:
         assert (
             await redis_client.xadd(key, [(field, "foo2"), (field2, "bar2")])
         ) is not None
-        assert await redis_client.custom_command(["XLEN", key]) == 2
+        assert await redis_client.xlen(key) == 2
 
         # This will trim the first entry.
         id = await redis_client.xadd(
@@ -3337,7 +3339,7 @@ class TestCommands:
         )
 
         assert id is not None
-        assert await redis_client.custom_command(["XLEN", key]) == 2
+        assert await redis_client.xlen(key) == 2
 
         # This will trim the 2nd entry.
         assert (
@@ -3348,10 +3350,30 @@ class TestCommands:
             )
             is not None
         )
-        assert await redis_client.custom_command(["XLEN", key]) == 2
+        assert await redis_client.xlen(key) == 2
 
         assert await redis_client.xtrim(key, TrimByMaxLen(threshold=1, exact=True)) == 1
-        assert await redis_client.custom_command(["XLEN", key]) == 1
+        assert await redis_client.xlen(key) == 1
+
+        assert await redis_client.xtrim(key, TrimByMaxLen(threshold=0, exact=True)) == 1
+        # Unlike other Redis collection types, stream keys still exist even after removing all entries
+        assert await redis_client.exists([key]) == 1
+        assert await redis_client.xlen(key) == 0
+
+        assert (
+            await redis_client.xtrim(
+                non_existing_key, TrimByMaxLen(threshold=1, exact=True)
+            )
+            == 0
+        )
+        assert await redis_client.xlen(non_existing_key) == 0
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo")
+        with pytest.raises(RequestError):
+            await redis_client.xtrim(string_key, TrimByMaxLen(threshold=1, exact=True))
+        with pytest.raises(RequestError):
+            await redis_client.xlen(string_key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

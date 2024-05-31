@@ -337,6 +337,8 @@ async def transaction_test(
     args.append("0-1")
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-2"))
     args.append("0-2")
+    transaction.xlen(key11)
+    args.append(2)
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
 
