@@ -68,6 +68,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
+import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -429,6 +430,26 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String> response = service.get(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void getdel() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<String>submitNewCommand(eq(GetDel), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.getdel(key);
         String payload = response.get();
 
         // verify

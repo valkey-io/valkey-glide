@@ -169,6 +169,7 @@ public class TransactionTestUtilities {
         transaction
                 .set(stringKey1, value1)
                 .get(stringKey1)
+                .getdel(stringKey1)
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
                 .strlen(stringKey2)
                 .append(stringKey2, value2)
@@ -185,6 +186,7 @@ public class TransactionTestUtilities {
         return new Object[] {
             OK, // set(stringKey1, value1)
             value1, // get(stringKey1)
+            value1, // getdel(stringKey1)
             null, // set(stringKey2, value2, returnOldValue(true))
             (long) value1.length(), // strlen(key2)
             Long.valueOf(value2.length() * 2), // append(key2, value2)
