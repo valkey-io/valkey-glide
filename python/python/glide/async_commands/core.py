@@ -2185,6 +2185,29 @@ class CoreCommands(Protocol):
 
         return cast(int, await self._execute_command(RequestType.XTrim, args))
 
+    async def xlen(self, key: str) -> int:
+        """
+        Returns the number of entries in the stream stored at `key`.
+
+        See https://valkey.io/commands/xlen for more details.
+
+        Args:
+            key (str): The key of the stream.
+
+        Returns:
+            int: The number of entries in the stream. If `key` does not exist, returns 0.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field", "value")])
+            >>> await client.xadd("mystream", [("field2", "value2")])
+            >>> await client.xlen("mystream")
+                2  # There are 2 entries in "mystream".
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.XLen, [key]),
+        )
+
     async def geoadd(
         self,
         key: str,

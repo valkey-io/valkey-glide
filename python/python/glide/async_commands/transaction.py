@@ -1507,6 +1507,20 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XTrim, args)
 
+    def xlen(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the number of entries in the stream stored at `key`.
+
+        See https://valkey.io/commands/xlen for more details.
+
+        Args:
+            key (str): The key of the stream.
+
+        Command response:
+            int: The number of entries in the stream. If `key` does not exist, returns 0.
+        """
+        return self.append_command(RequestType.XLen, [key])
+
     def geoadd(
         self: TTransaction,
         key: str,
