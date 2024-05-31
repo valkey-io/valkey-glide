@@ -26,6 +26,7 @@ import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDI
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -872,6 +873,9 @@ public class TransactionTests {
 
         transaction.lmove("key1", "key2", ListDirection.LEFT, ListDirection.LEFT);
         results.add(Pair.of(LMove, buildArgs("key1", "key2", "LEFT", "LEFT")));
+
+        transaction.blmove("key1", "key2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
+        results.add(Pair.of(BLMove, buildArgs("key1", "key2", "LEFT", "LEFT", "0.1")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
