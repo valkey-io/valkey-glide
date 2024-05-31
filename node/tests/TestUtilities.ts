@@ -288,6 +288,8 @@ export async function transactionTest(
     args.push([field + "2", field + "1"]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     args.push(2);
+    baseTransaction.sinter([key7, key7]);
+    args.push(new Set(["bar", "foo"]));
     baseTransaction.srem(key7, ["foo"]);
     args.push(1);
     baseTransaction.scard(key7);
