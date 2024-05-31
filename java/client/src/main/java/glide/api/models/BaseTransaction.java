@@ -122,6 +122,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
+import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -186,6 +187,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Arrays;
 import java.util.Map;
@@ -2658,9 +2660,52 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     less than the number of entries in <code>ids</code>, if the specified <code>ids</code>
      *     don't exist in the stream.
      */
-    public T xdel(String key, String[] ids) {
+    public T xdel(@NonNull String key, @NonNull String[] ids) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(ids, key));
         protobufTransaction.addCommands(buildCommand(XDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs.
+     *
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range, use {@link StreamRange.IdBound#of} to specify
+     *     a stream ID, or {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded
+     *     stream ID. Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available
+     *     ID.
+     * @param end Ending stream ID bound for range, use {@link StreamRange.IdBound#of} to specify a
+     *     stream ID, or {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded
+     *     stream ID. Use {@link StreamRange.InfRangeBound#MAX>} to end with the maximum available ID.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
+     *     an array with pairs of item, data.
+     */
+    public T xrange(@NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end), key));
+        protobufTransaction.addCommands(buildCommand(XRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs.
+     *
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range, use {@link StreamRange.IdBound#of} to specify
+     *     a stream ID, or {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded
+     *     stream ID. Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available
+     *     ID.
+     * @param end Ending stream ID bound for range, use {@link StreamRange.IdBound#of} to specify a
+     *     stream ID, or {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded
+     *     stream ID. Use {@link StreamRange.InfRangeBound#MAX>} to end with the maximum available ID.
+     *     * @param count Maximum count of stream entries to return.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
+     *     an array with pairs of item, data.
+     */
+    public T xrange(
+            @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key));
+        protobufTransaction.addCommands(buildCommand(XRange, commandArgs));
         return getThis();
     }
 
