@@ -3,6 +3,9 @@ package glide.api.commands;
 
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamRange.IdBound;
+import glide.api.models.commands.stream.StreamRange.InfRangeBound;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -105,4 +108,77 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xdel(String key, String[] ids);
+
+    /**
+     * Returns stream entries matching a given range of IDs.
+     *
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @return @return A <code>Map</code> of key to stream entry data, where entry data is an array of
+     *     item pairings.
+     * @example
+     *     <pre>{@code
+     * // Retrieve all stream entries
+     * Map<String, String[]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX).get();
+     * result.forEach((k, v) -> {
+     *     System.out.println("Stream ID: " + k);
+     *     for (int i = 0; i < v.length;) {
+     *         System.out.println(v[i++] + ": " + v[i++]);
+     *     }
+     * });
+     * // Retrieve exactly one stream entry by id
+     * Map<String, String[]> result = client.xrange("key", IdBound.of(streamId), IdBound.of(streamId)).get();
+     * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[]>> xrange(String key, StreamRange start, StreamRange end);
+
+    /**
+     * Returns stream entries matching a given range of IDs.
+     *
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param count Maximum count of stream entries to return.
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of item
+     *     pairings.
+     * @example
+     *     <pre>{@code
+     * // Retrieve the first 2 stream entries
+     * Map<String, String[]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 2).get();
+     * result.forEach((k, v) -> {
+     *     System.out.println("Stream ID: " + k);
+     *     for (int i = 0; i < v.length;) {
+     *         System.out.println(v[i++] + ": " + v[i++]);
+     *     }
+     * });
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[]>> xrange(
+            String key, StreamRange start, StreamRange end, long count);
 }
