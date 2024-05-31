@@ -199,6 +199,7 @@ enum RequestType {
     XDel = 166;
     LMove = 168;
     BLMove = 169;
+    GetDel = 170;
 }
 
 message Command {

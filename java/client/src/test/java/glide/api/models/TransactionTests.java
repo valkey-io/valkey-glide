@@ -57,6 +57,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
+import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -405,6 +406,9 @@ public class TransactionTests {
 
         transaction.pexpireAt("key", 99999999L, HAS_NO_EXPIRY);
         results.add(Pair.of(PExpireAt, buildArgs("key", "99999999", "NX")));
+
+        transaction.getdel("key");
+        results.add(Pair.of(GetDel, buildArgs("key")));
 
         transaction.ttl("key");
         results.add(Pair.of(TTL, buildArgs("key")));
