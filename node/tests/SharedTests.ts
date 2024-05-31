@@ -1047,6 +1047,72 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `smove test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = "{key}" + uuidv4();
+                const key2 = "{key}" + uuidv4();
+                const key3 = "{key}" + uuidv4();
+                const string_key = "{key}" + uuidv4();
+                const non_existing_key = "{key}" + uuidv4();
+
+                expect(await client.sadd(key1, ["1", "2", "3"])).toEqual(3);
+                expect(await client.sadd(key2, ["2", "3"])).toEqual(2);
+
+                // move an element
+                expect(await client.smove(key1, key2, "1"));
+                expect(await client.smembers(key1)).toEqual(
+                    new Set(["2", "3"]),
+                );
+                expect(await client.smembers(key2)).toEqual(
+                    new Set(["1", "2", "3"]),
+                );
+
+                // moved element already exists in the destination set
+                expect(await client.smove(key2, key1, "2"));
+                expect(await client.smembers(key1)).toEqual(
+                    new Set(["2", "3"]),
+                );
+                expect(await client.smembers(key2)).toEqual(
+                    new Set(["1", "3"]),
+                );
+
+                // attempt to move from a non-existing key
+                expect(await client.smove(non_existing_key, key1, "4")).toEqual(
+                    false,
+                );
+                expect(await client.smembers(key1)).toEqual(
+                    new Set(["2", "3"]),
+                );
+
+                // move to a new set
+                expect(await client.smove(key1, key3, "2"));
+                expect(await client.smembers(key1)).toEqual(new Set(["3"]));
+                expect(await client.smembers(key3)).toEqual(new Set(["2"]));
+
+                // attempt to move a missing element
+                expect(await client.smove(key1, key3, "42")).toEqual(false);
+                expect(await client.smembers(key1)).toEqual(new Set(["3"]));
+                expect(await client.smembers(key3)).toEqual(new Set(["2"]));
+
+                // move missing element to missing key
+                expect(
+                    await client.smove(key1, non_existing_key, "42"),
+                ).toEqual(false);
+                expect(await client.smembers(key1)).toEqual(new Set(["3"]));
+                expect(await client.type(non_existing_key)).toEqual("none");
+
+                // key exists, but it is not a set
+                expect(await client.set(string_key, "value")).toEqual("OK");
+                await expect(
+                    client.smove(string_key, key1, "_"),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `srem, scard and smembers with non existing key_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -1095,6 +1161,52 @@ export function runBaseTests<Context>(config: {
 
                 try {
                     expect(await client.smembers(key)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "Operation against a key holding the wrong kind of value",
+                    );
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sinter test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const non_existing_key = `{key}`;
+                const member1_list = ["a", "b", "c", "d"];
+                const member2_list = ["c", "d", "e"];
+
+                // positive test case
+                expect(await client.sadd(key1, member1_list)).toEqual(4);
+                expect(await client.sadd(key2, member2_list)).toEqual(3);
+                expect(await client.sinter([key1, key2])).toEqual(
+                    new Set(["c", "d"]),
+                );
+
+                // invalid argument - key list must not be empty
+                try {
+                    expect(await client.sinter([])).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "ResponseError: wrong number of arguments",
+                    );
+                }
+
+                // non-existing key returns empty set
+                expect(await client.sinter([key1, non_existing_key])).toEqual(
+                    new Set(),
+                );
+
+                // non-set key
+                expect(await client.set(key2, "value")).toEqual("OK");
+
+                try {
+                    expect(await client.sinter([key2])).toThrow();
                 } catch (e) {
                     expect((e as Error).message).toMatch(
                         "Operation against a key holding the wrong kind of value",
@@ -2362,6 +2474,37 @@ export function runBaseTests<Context>(config: {
                 expect(result).toEqual("value");
                 // If key doesn't exist it should throw, it also test that key has successfully been renamed
                 await expect(client.rename(key, newKey)).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.only.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "renamenx test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+
+                // renamenx missing key
+                try {
+                    expect(await client.renamenx(key1, key2)).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch("no such key");
+                }
+
+                // renamenx a string
+                await client.set(key1, "key1");
+                await client.set(key3, "key3");
+                // Test that renamenx can rename key1 to key2 (non-existing value)
+                expect(await client.renamenx(key1, key2)).toEqual(true);
+                // sanity check
+                expect(await client.get(key2)).toEqual("key1");
+                // Test that renamenx doesn't rename key2 to key3 (with an existing value)
+                expect(await client.renamenx(key2, key3)).toEqual(false);
+                // sanity check
+                expect(await client.get(key3)).toEqual("key3");
             }, protocol);
         },
         config.timeout,

@@ -288,6 +288,8 @@ export async function transactionTest(
     args.push([field + "2", field + "1"]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     args.push(2);
+    baseTransaction.sinter([key7, key7]);
+    args.push(new Set(["bar", "foo"]));
     baseTransaction.srem(key7, ["foo"]);
     args.push(1);
     baseTransaction.scard(key7);
@@ -300,6 +302,8 @@ export async function transactionTest(
     args.push("bar");
     baseTransaction.spopCount(key7, 2);
     args.push(new Set());
+    baseTransaction.smove(key7, key7, "non_existing_member");
+    args.push(false);
     baseTransaction.scard(key7);
     args.push(0);
     baseTransaction.zadd(key8, {
@@ -367,6 +371,10 @@ export async function transactionTest(
     args.push("OK");
     baseTransaction.exists([key10]);
     args.push(1);
+    baseTransaction.renamenx(key10, key9);
+    args.push(true);
+    baseTransaction.exists([key9, key10]);
+    args.push(1);
     baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
     args.push(3);
     baseTransaction.brpop([key6], 0.1);
@@ -376,113 +384,4 @@ export async function transactionTest(
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
     return args;
-}
-
-export class RedisCluster {
-    private addresses: [string, number][];
-    private clusterFolder: string | undefined;
-
-    private constructor(addresses: [string, number][], clusterFolder?: string) {
-        this.addresses = addresses;
-        this.clusterFolder = clusterFolder;
-    }
-
-    private static parseOutput(input: string): {
-        clusterFolder: string;
-        addresses: [string, number][];
-    } {
-        const lines = input.split(/\r\n|\r|\n/);
-        const clusterFolder = lines
-            .find((line) => line.startsWith("CLUSTER_FOLDER"))
-            ?.split("=")[1];
-        const ports = lines
-            .find((line) => line.startsWith("CLUSTER_NODES"))
-            ?.split("=")[1]
-            .split(",")
-            .map((address) => address.split(":"))
-            .map((address) => [address[0], Number(address[1])]) as [
-            string,
-            number,
-        ][];
-
-        if (clusterFolder === undefined || ports === undefined) {
-            throw new Error(`Insufficient data in input: ${input}`);
-        }
-
-        return {
-            clusterFolder,
-            addresses: ports,
-        };
-    }
-
-    public static createCluster(
-        cluster_mode: boolean,
-        shardCount: number,
-        replicaCount: number,
-        loadModule?: string[],
-    ): Promise<RedisCluster> {
-        return new Promise<RedisCluster>((resolve, reject) => {
-            let command = `python3 ../utils/cluster_manager.py start -r ${replicaCount} -n ${shardCount}`;
-
-            if (cluster_mode) {
-                command += " --cluster-mode";
-            }
-
-            if (loadModule) {
-                if (loadModule.length === 0) {
-                    throw new Error(
-                        "Please provide the path(s) to the module(s) you want to load.",
-                    );
-                }
-
-                for (const module of loadModule) {
-                    command += ` --load-module ${module}`;
-                }
-            }
-
-            console.log(command);
-            exec(command, (error, stdout, stderr) => {
-                if (error) {
-                    console.error(stderr);
-                    reject(error);
-                } else {
-                    const { clusterFolder, addresses: ports } =
-                        this.parseOutput(stdout);
-                    resolve(new RedisCluster(ports, clusterFolder));
-                }
-            });
-        });
-    }
-
-    public static initFromExistingCluster(
-        addresses: [string, number][],
-    ): RedisCluster {
-        return new RedisCluster(addresses, "");
-    }
-
-    public ports(): number[] {
-        return this.addresses.map((address) => address[1]);
-    }
-
-    public getAddresses(): [string, number][] {
-        return this.addresses;
-    }
-
-    public async close() {
-        if (this.clusterFolder) {
-            await new Promise<void>((resolve, reject) => {
-                exec(
-                    `python3 ../utils/cluster_manager.py stop --cluster-folder ${this.clusterFolder}`,
-                    (error, _, stderr) => {
-                        if (error) {
-                            console.error(stderr);
-                            reject(error);
-                        } else {
-                            resolve();
-                        }
-                    },
-                );
-            });
-        }
-    }
 }

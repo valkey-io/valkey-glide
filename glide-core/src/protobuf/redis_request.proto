@@ -185,7 +185,21 @@ enum RequestType {
     ZInterCard = 143;
     ZMPop = 144;
     GetBit = 145;
-    GetDel = 146;
+    ZInter = 146;
+    BitPos = 147;
+    BitOp = 148;
+    HStrlen = 149;
+    FunctionLoad = 150;
+    LMPop = 155;
+    ExpireTime = 156;
+    PExpireTime = 157;
+    BLMPop = 158;
+    XLen = 159;
+    LSet = 165;
+    XDel = 166;
+    LMove = 168;
+    BLMove = 169;
+    GetDel = 170;
 }
 
 message Command {

@@ -26,7 +26,6 @@ from glide.async_commands.sorted_set import (
     ScoreFilter,
     _create_z_cmd_store_args,
     _create_zrange_args,
-    _create_zrangestore_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -154,6 +153,21 @@ class BaseTransaction:
             OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, the transaction fails with an error.
         """
         return self.append_command(RequestType.Rename, [key, new_key])
+
+    def renamenx(self: TTransaction, key: str, new_key: str) -> TTransaction:
+        """
+        Renames `key` to `new_key` if `new_key` does not yet exist.
+
+        See https://valkey.io/commands/renamenx for more details.
+
+        Args:
+            key (str): The key to rename.
+            new_key (str): The new key name.
+
+        Command response:
+            bool: True if `key` was renamed to `new_key`, or False if `new_key` already exists.
+        """
+        return self.append_command(RequestType.RenameNX, [key, new_key])
 
     def custom_command(self: TTransaction, command_args: List[str]) -> TTransaction:
         """
@@ -402,6 +416,26 @@ class BaseTransaction:
               int: The value of `key` after the decrement.
         """
         return self.append_command(RequestType.DecrBy, [key, str(amount)])
+
+    def setrange(self: TTransaction, key: str, offset: int, value: str) -> TTransaction:
+        """
+        Overwrites part of the string stored at `key`, starting at the specified
+        `offset`, for the entire length of `value`.
+        If the `offset` is larger than the current length of the string at `key`,
+        the string is padded with zero bytes to make `offset` fit. Creates the `key`
+        if it doesn't exist.
+
+        See https://valkey.io/commands/setrange for more details.
+
+        Args:
+            key (str): The key of the string to update.
+            offset (int): The position in the string where `value` should be written.
+            value (str): The string written with `offset`.
+
+        Command response:
+            int: The length of the string stored at `key` after it was modified.
+        """
+        return self.append_command(RequestType.SetRange, [key, str(offset), value])
 
     def hset(
         self: TTransaction, key: str, field_value_map: Mapping[str, str]
@@ -1056,7 +1090,7 @@ class BaseTransaction:
         """
         Gets the intersection of all the given sets.
 
-        See https://valkey.io/docs/latest/commands/sinter for more details.
+        See https://valkey.io/commands/sinter for more details.
 
         Args:
             keys (List[str]): The keys of the sets.
@@ -1066,6 +1100,23 @@ class BaseTransaction:
                 If one or more sets do not exist, an empty set will be returned.
         """
         return self.append_command(RequestType.SInter, keys)
+
+    def sinterstore(
+        self: TTransaction, destination: str, keys: List[str]
+    ) -> TTransaction:
+        """
+        Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
+
+        See https://valkey.io/commands/sinterstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys from which to retrieve the set members.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SInterStore, [destination] + keys)
 
     def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
         """
@@ -1081,6 +1132,39 @@ class BaseTransaction:
                 If any of the keys in `keys` do not exist, they are treated as empty sets.
         """
         return self.append_command(RequestType.SDiff, keys)
+
+    def sdiffstore(
+        self: TTransaction, destination: str, keys: List[str]
+    ) -> TTransaction:
+        """
+        Stores the difference between the first set and all the successive sets in `keys` into a new set at
+        `destination`.
+
+        See https://valkey.io/commands/sdiffstore for more details.
+
+        Args:
+            destination (str): The key of the destination set.
+            keys (List[str]): The keys of the sets to diff.
+
+        Command response:
+            int: The number of elements in the resulting set.
+        """
+        return self.append_command(RequestType.SDiffStore, [destination] + keys)
+
+    def smismember(self: TTransaction, key: str, members: List[str]) -> TTransaction:
+        """
+        Checks whether each member is contained in the members of the set stored at `key`.
+
+        See https://valkey.io/commands/smismember for more details.
+
+        Args:
+            key (str): The key of the set to check.
+            members (List[str]): A list of members to check for existence in the set.
+
+        Command response:
+            List[bool]: A list of bool values, each indicating if the respective member exists in the set.
+        """
+        return self.append_command(RequestType.SMIsMember, [key] + members)
 
     def ltrim(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
@@ -1851,7 +1935,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set.
         """
-        args = _create_zrangestore_args(destination, source, range_query, reverse)
+        args = _create_zrange_args(source, range_query, reverse, False, destination)
 
         return self.append_command(RequestType.ZRangeStore, args)
 
@@ -1994,6 +2078,34 @@ class BaseTransaction:
 
         return self.append_command(
             RequestType.ZRemRangeByLex, [key, min_lex_arg, max_lex_arg]
+        )
+
+    def zremrangebyrank(
+        self: TTransaction,
+        key: str,
+        start: int,
+        end: int,
+    ) -> TTransaction:
+        """
+        Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
+        Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
+        These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
+
+        See https://valkey.io/commands/zremrangebyrank/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            start (int): The starting point of the range.
+            end (int): The end of the range.
+
+        Command response:
+            int: The number of elements that were removed.
+                If `start` exceeds the end of the sorted set, or if `start` is greater than `end`, `0` is returned.
+                If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
+                If `key` does not exist, `0` is returned.
+        """
+        return self.append_command(
+            RequestType.ZRemRangeByRank, [key, str(start), str(end)]
         )
 
     def zlexcount(
@@ -2362,6 +2474,99 @@ class BaseTransaction:
             altered, then returns 1. Otherwise, returns 0.
         """
         return self.append_command(RequestType.PfAdd, [key] + elements)
+
+    def pfcount(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+        calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+
+        See https://valkey.io/commands/pfcount for more details.
+
+        Args:
+            keys (List[str]): The keys of the HyperLogLog data structures to be analyzed.
+
+        Command response:
+            int: The approximated cardinality of given HyperLogLog data structures.
+                The cardinality of a key that does not exist is 0.
+        """
+        return self.append_command(RequestType.PfCount, keys)
+
+    def pfmerge(
+        self: TTransaction, destination: str, source_keys: List[str]
+    ) -> TTransaction:
+        """
+        Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
+        of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+
+        See https://valkey.io/commands/pfmerge for more details.
+
+        Args:
+            destination (str): The key of the destination HyperLogLog where the merged data sets will be stored.
+            source_keys (List[str]): The keys of the HyperLogLog structures to be merged.
+
+        Command response:
+            OK: A simple OK response.
+        """
+        return self.append_command(RequestType.PfMerge, [destination] + source_keys)
+
+    def object_encoding(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the internal encoding for the Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-encoding for more details.
+
+        Args:
+            key (str): The `key` of the object to get the internal encoding of.
+
+        Command response:
+            Optional[str]: If `key` exists, returns the internal encoding of the object stored at
+                `key` as a string. Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectEncoding, [key])
+
+    def object_freq(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-freq for more details.
+
+        Args:
+            key (str): The key of the object to get the logarithmic access frequency counter of.
+
+        Command response:
+            Optional[int]: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
+                integer. Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectFreq, [key])
+
+    def object_idletime(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the time in seconds since the last access to the value stored at `key`.
+
+        See https://valkey.io/commands/object-idletime for more details.
+
+        Args:
+            key (str): The key of the object to get the idle time of.
+
+        Command response:
+            Optional[int]: If `key` exists, returns the idle time in seconds. Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectIdleTime, [key])
+
+    def object_refcount(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the reference count of the object stored at `key`.
+
+        See https://valkey.io/commands/object-refcount for more details.
+
+        Args:
+            key (str): The key of the object to get the reference count of.
+
+        Command response:
+            Optional[int]: If `key` exists, returns the reference count of the object stored at `key` as an integer.
+                Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectRefCount, [key])
 
 
 class Transaction(BaseTransaction):

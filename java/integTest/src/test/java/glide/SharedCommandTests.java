@@ -4,6 +4,7 @@ package glide;
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
@@ -32,6 +33,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -47,6 +49,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
+import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -166,6 +169,27 @@ public class SharedCommandTests {
     public void get_missing_value(BaseClient client) {
         String data = client.get("invalid").get();
         assertNull(data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void append(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String value1 = String.valueOf(UUID.randomUUID());
+        String key2 = UUID.randomUUID().toString();
+
+        // Append on non-existing string(similar to SET)
+        assertEquals(value1.length(), client.append(key1, value1).get());
+
+        assertEquals(value1.length() * 2L, client.append(key1, value1).get());
+        assertEquals(value1.concat(value1), client.get(key1).get());
+
+        // key exists but holding the wrong kind of value
+        assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.append(key2, "z").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
@@ -773,11 +797,90 @@ public class SharedCommandTests {
 
         assertEquals(0, client.hkeys(key2).get().length);
 
-        // Key exists, but it is not a List
+        // Key exists, but it is not a hash
         assertEquals(OK, client.set(key2, "value").get());
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.hkeys(key2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hstrlen(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        assertEquals(1, client.hset(key1, Map.of("field", "value")).get());
+        assertEquals(5L, client.hstrlen(key1, "field").get());
+
+        // missing value
+        assertEquals(0, client.hstrlen(key1, "field 2").get());
+
+        // missing key
+        assertEquals(0, client.hstrlen(key2, "field").get());
+
+        // Key exists, but it is not a hash
+        assertEquals(OK, client.set(key2, "value").get());
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.hstrlen(key2, "field").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hrandfield(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        // key does not exist
+        assertNull(client.hrandfield(key1).get());
+        assertEquals(0, client.hrandfieldWithCount(key1, 5).get().length);
+        assertEquals(0, client.hrandfieldWithCountWithValues(key1, 5).get().length);
+
+        var data = Map.of("f 1", "v 1", "f 2", "v 2", "f 3", "v 3");
+        assertEquals(3, client.hset(key1, data).get());
+
+        // random key
+        assertTrue(data.containsKey(client.hrandfield(key1).get()));
+
+        // WithCount - positive count
+        var keys = client.hrandfieldWithCount(key1, 5).get();
+        assertEquals(data.keySet().size(), keys.length);
+        assertEquals(data.keySet(), Set.of(keys));
+
+        // WithCount - negative count
+        keys = client.hrandfieldWithCount(key1, -5).get();
+        assertEquals(5, keys.length);
+        Arrays.stream(keys).forEach(key -> assertTrue(data.containsKey(key)));
+
+        // WithCountWithValues - positive count
+        var keysWithValues = client.hrandfieldWithCountWithValues(key1, 5).get();
+        assertEquals(data.keySet().size(), keysWithValues.length);
+        for (var pair : keysWithValues) {
+            assertEquals(data.get(pair[0]), pair[1]);
+        }
+
+        // WithCountWithValues - negative count
+        keysWithValues = client.hrandfieldWithCountWithValues(key1, -5).get();
+        assertEquals(5, keysWithValues.length);
+        for (var pair : keysWithValues) {
+            assertEquals(data.get(pair[0]), pair[1]);
+        }
+
+        // Key exists, but it is not a List
+        assertEquals(OK, client.set(key2, "value").get());
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.hrandfield(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.hrandfieldWithCount(key2, 2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.hrandfieldWithCountWithValues(key2, 3).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -1030,6 +1133,24 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(ExecutionException.class, () -> client.smove(setKey1, nonSetKey, "_").get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void rename(BaseClient client) {
+        String key1 = "{key}" + UUID.randomUUID();
+
+        assertEquals(OK, client.set(key1, "foo").get());
+        assertEquals(OK, client.rename(key1, key1 + "_rename").get());
+        assertEquals(1L, client.exists(new String[] {key1 + "_rename"}).get());
+
+        // key doesn't exist
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client.rename("{same_slot}" + "non_existing_key", "{same_slot}" + "_rename").get());
     }
 
     @SneakyThrows
@@ -1310,7 +1431,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void expire_pexpire_and_ttl_with_positive_timeout(BaseClient client) {
+    public void expire_pexpire_ttl_and_expiretime_with_positive_timeout(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "expire_timeout").get());
         assertTrue(client.expire(key, 10L).get());
@@ -1330,6 +1451,8 @@ public class SharedCommandTests {
             assertTrue(client.expire(key, 15L).get());
         } else {
             assertTrue(client.expire(key, 15L, ExpireOptions.HAS_EXISTING_EXPIRY).get());
+            assertTrue(client.expiretime(key).get() > Instant.now().getEpochSecond());
+            assertTrue(client.pexpiretime(key).get() > Instant.now().toEpochMilli());
         }
         assertTrue(client.ttl(key).get() <= 15L);
     }
@@ -1373,11 +1496,18 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void expire_pexpire_ttl_with_timestamp_in_the_past_or_negative_timeout(BaseClient client) {
+    public void expire_pexpire_ttl_and_expiretime_with_timestamp_in_the_past_or_negative_timeout(
+            BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertEquals(OK, client.set(key, "expire_with_past_timestamp").get());
+        // no timeout set yet
         assertEquals(-1L, client.ttl(key).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(-1L, client.expiretime(key).get());
+            assertEquals(-1L, client.pexpiretime(key).get());
+        }
+
         assertTrue(client.expire(key, -10L).get());
         assertEquals(-2L, client.ttl(key).get());
 
@@ -1407,13 +1537,17 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void expire_pexpire_and_ttl_with_non_existing_key(BaseClient client) {
+    public void expire_pexpire_ttl_and_expiretime_with_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertFalse(client.expire(key, 10L).get());
         assertFalse(client.pexpire(key, 10000L).get());
 
         assertEquals(-2L, client.ttl(key).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(-2L, client.expiretime(key).get());
+            assertEquals(-2L, client.pexpiretime(key).get());
+        }
     }
 
     @SneakyThrows
@@ -2504,6 +2638,97 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zinter(BaseClient client) {
+        String key1 = "{testKey}:1-" + UUID.randomUUID();
+        String key2 = "{testKey}:2-" + UUID.randomUUID();
+        String key3 = "{testKey}:3-" + UUID.randomUUID();
+        Map<String, Double> membersScores1 = Map.of("one", 1.0, "two", 2.0);
+        Map<String, Double> membersScores2 = Map.of("two", 3.5, "three", 3.0);
+
+        assertEquals(2, client.zadd(key1, membersScores1).get());
+        assertEquals(2, client.zadd(key2, membersScores2).get());
+
+        // Intersection results are aggregated by the sum of the scores of elements by default
+        assertArrayEquals(
+                new String[] {"two"}, client.zinter(new KeyArray(new String[] {key1, key2})).get());
+        assertEquals(
+                Map.of("two", 5.5), client.zinterWithScores(new KeyArray(new String[] {key1, key2})).get());
+
+        // Intersection results are aggregated by the max score of elements
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
+        assertEquals(
+                Map.of("two", 3.5),
+                client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
+
+        // Intersection results are aggregated by the min score of elements
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
+        assertEquals(
+                Map.of("two", 2.0),
+                client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
+
+        // Intersection results are aggregated by the sum of the scores of elements
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
+        assertEquals(
+                Map.of("two", 5.5),
+                client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        assertArrayEquals(
+                new String[] {"two"},
+                client.zinter(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0)))).get());
+        assertEquals(
+                Map.of("two", 11.0),
+                client
+                        .zinterWithScores(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0))))
+                        .get());
+
+        // Intersection results are aggregated by the minimum score,
+        // with scores for key1 multiplied by 1.0 and for key2 by -2.0.
+        assertArrayEquals(
+                new String[] {"two"},
+                client
+                        .zinter(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
+                        .get());
+        assertEquals(
+                Map.of("two", -7.0),
+                client
+                        .zinterWithScores(
+                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
+                        .get());
+
+        // Non-existing Key - empty intersection
+        assertEquals(0, client.zinter(new KeyArray(new String[] {key1, key3})).get().length);
+        assertEquals(0, client.zinterWithScores(new KeyArray(new String[] {key1, key3})).get().size());
+
+        // empty key list
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zinter(new KeyArray(new String[0])).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zinter(new WeightedKeys(List.of())).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, "value").get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zinter(new KeyArray(new String[] {key1, key3})).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zintercard(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"));
         String key1 = "{zintercard}-" + UUID.randomUUID();
@@ -2600,6 +2825,57 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void zmpop(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String key1 = "{zmpop}-1-" + UUID.randomUUID();
+        String key2 = "{zmpop}-2-" + UUID.randomUUID();
+        String key3 = "{zmpop}-3-" + UUID.randomUUID();
+
+        assertEquals(2, client.zadd(key1, Map.of("a1", 1., "b1", 2.)).get());
+        assertEquals(2, client.zadd(key2, Map.of("a2", .1, "b2", .2)).get());
+
+        assertArrayEquals(
+                new Object[] {key1, Map.of("b1", 2.)}, client.zmpop(new String[] {key1, key2}, MAX).get());
+        assertArrayEquals(
+                new Object[] {key2, Map.of("b2", .2, "a2", .1)},
+                client.zmpop(new String[] {key2, key1}, MAX, 10).get());
+
+        // nothing popped out
+        assertNull(client.zmpop(new String[] {key3}, MIN).get());
+        assertNull(client.zmpop(new String[] {key3}, MIN, 1).get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(OK, client.set(key3, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zmpop(new String[] {key3}, MAX).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zmpop(new String[] {key3}, MAX, 1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // incorrect argument
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.zmpop(new String[] {key1}, MAX, 0).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.zmpop(new String[0], MAX).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // check that order of entries in the response is preserved
+        var entries = new LinkedHashMap<String, Double>();
+        for (int i = 0; i < 10; i++) {
+            // a => 1., b => 2. etc
+            entries.put("" + ('a' + i), (double) i);
+        }
+        assertEquals(10, client.zadd(key2, entries).get());
+        assertEquals(entries, client.zmpop(new String[] {key2}, MIN, 10).get()[1]);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void bzmpop(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         String key1 = "{bzmpop}-1-" + UUID.randomUUID();
@@ -2673,7 +2949,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void xadd_and_xtrim(BaseClient client) {
+    public void xadd_xlen_and_xtrim(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
         String field2 = UUID.randomUUID().toString();
@@ -2698,17 +2974,7 @@ public class SharedCommandTests {
                         .get());
 
         assertNotNull(client.xadd(key, Map.of(field1, "foo2", field2, "bar2")).get());
-        // TODO update test when XLEN is available
-        if (client instanceof RedisClient) {
-            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertEquals(
-                    2L,
-                    ((RedisClusterClient) client)
-                            .customCommand(new String[] {"XLEN", key})
-                            .get()
-                            .getSingleValue());
-        }
+        assertEquals(2L, client.xlen(key).get());
 
         // this will trim the first entry.
         String id =
@@ -2719,17 +2985,7 @@ public class SharedCommandTests {
                                 StreamAddOptions.builder().trim(new MaxLen(true, 2L)).build())
                         .get();
         assertNotNull(id);
-        // TODO update test when XLEN is available
-        if (client instanceof RedisClient) {
-            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertEquals(
-                    2L,
-                    ((RedisClusterClient) client)
-                            .customCommand(new String[] {"XLEN", key})
-                            .get()
-                            .getSingleValue());
-        }
+        assertEquals(2L, client.xlen(key).get());
 
         // this will trim the second entry.
         assertNotNull(
@@ -2739,39 +2995,64 @@ public class SharedCommandTests {
                                 Map.of(field1, "foo4", field2, "bar4"),
                                 StreamAddOptions.builder().trim(new MinId(true, id)).build())
                         .get());
-        // TODO update test when XLEN is available
-        if (client instanceof RedisClient) {
-            assertEquals(2L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertEquals(
-                    2L,
-                    ((RedisClusterClient) client)
-                            .customCommand(new String[] {"XLEN", key})
-                            .get()
-                            .getSingleValue());
-        }
+        assertEquals(2L, client.xlen(key).get());
 
         // test xtrim to remove 1 element
         assertEquals(1L, client.xtrim(key, new MaxLen(1)).get());
-        // TODO update test when XLEN is available
-        if (client instanceof RedisClient) {
-            assertEquals(1L, ((RedisClient) client).customCommand(new String[] {"XLEN", key}).get());
-        } else if (client instanceof RedisClusterClient) {
-            assertEquals(
-                    1L,
-                    ((RedisClusterClient) client)
-                            .customCommand(new String[] {"XLEN", key})
-                            .get()
-                            .getSingleValue());
-        }
+        assertEquals(1L, client.xlen(key).get());
 
         // Key does not exist - returns 0
-        assertEquals(0L, client.xtrim(key, new MaxLen(true, 1)).get());
+        assertEquals(0L, client.xtrim(key2, new MaxLen(true, 1)).get());
+        assertEquals(0L, client.xlen(key2).get());
 
-        // Key exists, but it is not a stream
+        // Throw Exception: Key exists - but it is not a stream
         assertEquals(OK, client.set(key2, "xtrimtest").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.xtrim(key2, new MinId("0-1")).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException = assertThrows(ExecutionException.class, () -> client.xlen(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xdel(BaseClient client) {
+
+        String key = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String streamId1 = "0-1";
+        String streamId2 = "0-2";
+        String streamId3 = "0-3";
+
+        assertEquals(
+                streamId1,
+                client
+                        .xadd(
+                                key,
+                                Map.of("f1", "foo1", "f2", "bar2"),
+                                StreamAddOptions.builder().id(streamId1).build())
+                        .get());
+        assertEquals(
+                streamId2,
+                client
+                        .xadd(
+                                key,
+                                Map.of("f1", "foo1", "f2", "bar2"),
+                                StreamAddOptions.builder().id(streamId2).build())
+                        .get());
+        assertEquals(2L, client.xlen(key).get());
+
+        // Deletes one stream id, and ignores anything invalid:
+        assertEquals(1L, client.xdel(key, new String[] {streamId1, streamId3}).get());
+        assertEquals(0L, client.xdel(key2, new String[] {streamId3}).get());
+
+        // Throw Exception: Key exists - but it is not a stream
+        assertEquals(OK, client.set(key2, "xdeltest").get());
+
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xdel(key2, new String[] {streamId3}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -2862,6 +3143,32 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.zrandmemberWithCountWithScores(key2, 5).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zincrby(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+
+        // key does not exist
+        assertEquals(2.5, client.zincrby(key1, 2.5, "value1").get());
+        assertEquals(2.5, client.zscore(key1, "value1").get());
+
+        // key exists, but value doesn't
+        assertEquals(-3.3, client.zincrby(key1, -3.3, "value2").get());
+        assertEquals(-3.3, client.zscore(key1, "value2").get());
+
+        // updating existing value in existing key
+        assertEquals(3.5, client.zincrby(key1, 1., "value1").get());
+        assertEquals(3.5, client.zscore(key1, "value1").get());
+
+        // Key exists, but it is not a sorted set
+        assertEquals(2L, client.sadd(key2, new String[] {"one", "two"}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zincrby(key2, .5, "_").get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -3376,7 +3683,7 @@ public class SharedCommandTests {
     public void objectIdletime(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "").get());
-        Thread.sleep(1000);
+        Thread.sleep(2000);
         assertTrue(client.objectIdletime(key).get() > 0L);
     }
 
@@ -3697,5 +4004,436 @@ public class SharedCommandTests {
         assertEquals(1, client.sadd(key2, new String[] {value}).get());
         executionException = assertThrows(ExecutionException.class, () -> client.getbit(key2, 1).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bitpos(BaseClient client) {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+        String value = "?f0obar"; // 00111111 01100110 00110000 01101111 01100010 01100001 01110010
+
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(0, client.bitpos(key1, 0).get());
+        assertEquals(2, client.bitpos(key1, 1).get());
+        assertEquals(9, client.bitpos(key1, 1, 1).get());
+        assertEquals(24, client.bitpos(key1, 0, 3, 5).get());
+
+        // Bitpos returns -1 for empty strings
+        assertEquals(-1, client.bitpos(key2, 1).get());
+        assertEquals(-1, client.bitpos(key2, 1, 1).get());
+        assertEquals(-1, client.bitpos(key2, 1, 3, 5).get());
+
+        // Exception thrown due to the key holding a value with the wrong type
+        assertEquals(1, client.sadd(key3, new String[] {value}).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.bitpos(key3, 0).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.bitpos(key3, 1, 2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.bitpos(key3, 0, 1, 4).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(24, client.bitpos(key1, 0, 3, 5, BitmapIndexType.BYTE).get());
+            assertEquals(47, client.bitpos(key1, 1, 43, -2, BitmapIndexType.BIT).get());
+            assertEquals(-1, client.bitpos(key2, 1, 3, 5, BitmapIndexType.BYTE).get());
+            assertEquals(-1, client.bitpos(key2, 1, 3, 5, BitmapIndexType.BIT).get());
+
+            // Exception thrown due to the key holding a value with the wrong type
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitpos(key3, 1, 4, 5, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        } else {
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitpos(key1, 0, 3, 5, BitmapIndexType.BYTE).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+
+            // Exception thrown because BIT and BYTE options were implemented after 7.0.0
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.bitpos(key1, 1, 43, -2, BitmapIndexType.BIT).get());
+            assertTrue(executionException.getCause() instanceof RequestException);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bitop(BaseClient client) {
+        String key1 = "{key}-1".concat(UUID.randomUUID().toString());
+        String key2 = "{key}-2".concat(UUID.randomUUID().toString());
+        String emptyKey1 = "{key}-3".concat(UUID.randomUUID().toString());
+        String emptyKey2 = "{key}-4".concat(UUID.randomUUID().toString());
+        String destination = "{key}-5".concat(UUID.randomUUID().toString());
+        String[] keys = new String[] {key1, key2};
+        String[] emptyKeys = new String[] {emptyKey1, emptyKey2};
+        String value1 = "foobar";
+        String value2 = "abcdef";
+
+        assertEquals(OK, client.set(key1, value1).get());
+        assertEquals(OK, client.set(key2, value2).get());
+        assertEquals(6L, client.bitop(BitwiseOperation.AND, destination, keys).get());
+        assertEquals("`bc`ab", client.get(destination).get());
+        assertEquals(6L, client.bitop(BitwiseOperation.OR, destination, keys).get());
+        assertEquals("goofev", client.get(destination).get());
+
+        // Reset values for simplicity of results in XOR
+        assertEquals(OK, client.set(key1, "a").get());
+        assertEquals(OK, client.set(key2, "b").get());
+        assertEquals(1L, client.bitop(BitwiseOperation.XOR, destination, keys).get());
+        assertEquals("\u0003", client.get(destination).get());
+
+        // Test single source key
+        assertEquals(1L, client.bitop(BitwiseOperation.AND, destination, new String[] {key1}).get());
+        assertEquals("a", client.get(destination).get());
+        assertEquals(1L, client.bitop(BitwiseOperation.OR, destination, new String[] {key1}).get());
+        assertEquals("a", client.get(destination).get());
+        assertEquals(1L, client.bitop(BitwiseOperation.XOR, destination, new String[] {key1}).get());
+        assertEquals("a", client.get(destination).get());
+        assertEquals(1L, client.bitop(BitwiseOperation.NOT, destination, new String[] {key1}).get());
+        // First bit is flipped to 1 and throws 'utf-8' codec can't decode byte 0x9e in position 0:
+        // invalid start byte
+        // TODO: update once fix is implemented for https://github.com/aws/glide-for-redis/issues/1447
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.get(destination).get());
+        assertTrue(executionException.getCause() instanceof RuntimeException);
+        assertEquals(0, client.setbit(key1, 0, 1).get());
+        assertEquals(1L, client.bitop(BitwiseOperation.NOT, destination, new String[] {key1}).get());
+        assertEquals("\u001e", client.get(destination).get());
+
+        // Returns null when all keys hold empty strings
+        assertEquals(0L, client.bitop(BitwiseOperation.AND, destination, emptyKeys).get());
+        assertEquals(null, client.get(destination).get());
+        assertEquals(0L, client.bitop(BitwiseOperation.OR, destination, emptyKeys).get());
+        assertEquals(null, client.get(destination).get());
+        assertEquals(0L, client.bitop(BitwiseOperation.XOR, destination, emptyKeys).get());
+        assertEquals(null, client.get(destination).get());
+        assertEquals(
+                0L, client.bitop(BitwiseOperation.NOT, destination, new String[] {emptyKey1}).get());
+        assertEquals(null, client.get(destination).get());
+
+        // Exception thrown due to the key holding a value with the wrong type
+        assertEquals(1, client.sadd(emptyKey1, new String[] {value1}).get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.bitop(BitwiseOperation.AND, destination, new String[] {emptyKey1}).get());
+
+        // Source keys is an empty list
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.bitop(BitwiseOperation.OR, destination, new String[] {}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // NOT with more than one source key
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.bitop(BitwiseOperation.NOT, destination, new String[] {key1, key2}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lmpop(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonListKey = "{key}-3" + UUID.randomUUID();
+        String[] singleKeyArray = {key1};
+        String[] multiKeyArray = {key2, key1};
+        long count = 1L;
+        Long arraySize = 5L;
+        String[] lpushArgs = {"one", "two", "three", "four", "five"};
+        Map<String, String[]> expected = Map.of(key1, new String[] {"five"});
+        Map<String, String[]> expected2 = Map.of(key2, new String[] {"one", "two"});
+
+        // nothing to be popped
+        assertNull(client.lmpop(singleKeyArray, ListDirection.LEFT).get());
+        assertNull(client.lmpop(singleKeyArray, ListDirection.LEFT, count).get());
+
+        // pushing to the arrays to be popped
+        assertEquals(arraySize, client.lpush(key1, lpushArgs).get());
+        assertEquals(arraySize, client.lpush(key2, lpushArgs).get());
+
+        // assert correct result from popping
+        Map<String, String[]> result = client.lmpop(singleKeyArray, ListDirection.LEFT).get();
+        assertDeepEquals(result, expected);
+
+        // assert popping multiple elements from the right
+        Map<String, String[]> result2 = client.lmpop(multiKeyArray, ListDirection.RIGHT, 2L).get();
+        assertDeepEquals(result2, expected2);
+
+        // key exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, "lmpop").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lmpop(new String[] {nonListKey}, ListDirection.LEFT).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmpop(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonListKey = "{key}-3" + UUID.randomUUID();
+        String[] singleKeyArray = {key1};
+        String[] multiKeyArray = {key2, key1};
+        long count = 1L;
+        Long arraySize = 5L;
+        String[] lpushArgs = {"one", "two", "three", "four", "five"};
+        Map<String, String[]> expected = Map.of(key1, new String[] {"five"});
+        Map<String, String[]> expected2 = Map.of(key2, new String[] {"one", "two"});
+
+        // nothing to be popped
+        assertNull(client.blmpop(singleKeyArray, ListDirection.LEFT, 0.1).get());
+        assertNull(client.blmpop(singleKeyArray, ListDirection.LEFT, count, 0.1).get());
+
+        // pushing to the arrays to be popped
+        assertEquals(arraySize, client.lpush(key1, lpushArgs).get());
+        assertEquals(arraySize, client.lpush(key2, lpushArgs).get());
+
+        // assert correct result from popping
+        Map<String, String[]> result = client.blmpop(singleKeyArray, ListDirection.LEFT, 0.1).get();
+        assertDeepEquals(result, expected);
+
+        // assert popping multiple elements from the right
+        Map<String, String[]> result2 =
+                client.blmpop(multiKeyArray, ListDirection.RIGHT, 2L, 0.1).get();
+        assertDeepEquals(result2, expected2);
+
+        // key exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, "blmpop").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.blmpop(new String[] {nonListKey}, ListDirection.LEFT, 0.1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmpop_timeout_check(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        String key = UUID.randomUUID().toString();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.blmpop(new String[] {key}, ListDirection.LEFT, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .blmpop(new String[] {key}, ListDirection.LEFT, 0)
+                                    .get(3, TimeUnit.SECONDS));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lset(BaseClient client) {
+        // setup
+        String key = "testKey";
+        String nonExistingKey = "nonExisting";
+        long index = 0;
+        long oobIndex = 10;
+        long negativeIndex = -1;
+        String element = "zero";
+        String[] lpushArgs = {"four", "three", "two", "one"};
+        String[] expectedList = {"zero", "two", "three", "four"};
+        String[] expectedList2 = {"zero", "two", "three", "zero"};
+
+        // key does not exist
+        ExecutionException noSuchKeyException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lset(nonExistingKey, index, element).get());
+        assertInstanceOf(RequestException.class, noSuchKeyException.getCause());
+
+        // pushing elements to list
+        client.lpush(key, lpushArgs).get();
+
+        // index out of range
+        ExecutionException indexOutOfBoundException =
+                assertThrows(ExecutionException.class, () -> client.lset(key, oobIndex, element).get());
+        assertInstanceOf(RequestException.class, indexOutOfBoundException.getCause());
+
+        // assert lset result
+        String response = client.lset(key, index, element).get();
+        assertEquals(OK, response);
+        String[] updatedList = client.lrange(key, 0, -1).get();
+        assertArrayEquals(updatedList, expectedList);
+
+        // assert lset with a negative index for the last element in the list
+        String response2 = client.lset(key, negativeIndex, element).get();
+        assertEquals(OK, response2);
+        String[] updatedList2 = client.lrange(key, 0, -1).get();
+        assertArrayEquals(updatedList2, expectedList2);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lmove(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonExistingKey = "{key}-3" + UUID.randomUUID();
+        String nonListKey = "{key}-4" + UUID.randomUUID();
+        String[] lpushArgs1 = {"four", "three", "two", "one"};
+        String[] lpushArgs2 = {"six", "five", "four"};
+
+        // source does not exist or is empty
+        assertNull(client.lmove(key1, key2, ListDirection.LEFT, ListDirection.RIGHT).get());
+
+        // only source exists, only source elements gets popped, creates a list at nonExistingKey
+        assertEquals(lpushArgs1.length, client.lpush(key1, lpushArgs1).get());
+        assertEquals(
+                "four", client.lmove(key1, nonExistingKey, ListDirection.RIGHT, ListDirection.LEFT).get());
+        assertArrayEquals(new String[] {"one", "two", "three"}, client.lrange(key1, 0, -1).get());
+
+        // source and destination are the same, performing list rotation, "three" gets popped and added
+        // back
+        assertEquals("one", client.lmove(key1, key1, ListDirection.LEFT, ListDirection.LEFT).get());
+        assertArrayEquals(new String[] {"one", "two", "three"}, client.lrange(key1, 0, -1).get());
+
+        // normal use case, "three" gets popped and added to the left of destination
+        assertEquals(lpushArgs2.length, client.lpush(key2, lpushArgs2).get());
+        assertEquals("three", client.lmove(key1, key2, ListDirection.RIGHT, ListDirection.LEFT).get());
+        assertArrayEquals(new String[] {"one", "two"}, client.lrange(key1, 0, -1).get());
+        assertArrayEquals(
+                new String[] {"three", "four", "five", "six"}, client.lrange(key2, 0, -1).get());
+
+        // source exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, "NotAList").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lmove(nonListKey, key1, ListDirection.LEFT, ListDirection.LEFT).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // destination exists but is not a list type key
+        ExecutionException executionException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lmove(key1, nonListKey, ListDirection.LEFT, ListDirection.LEFT).get());
+        assertInstanceOf(RequestException.class, executionException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmove(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonExistingKey = "{key}-3" + UUID.randomUUID();
+        String nonListKey = "{key}-4" + UUID.randomUUID();
+        String[] lpushArgs1 = {"four", "three", "two", "one"};
+        String[] lpushArgs2 = {"six", "five", "four"};
+        double timeout = 1;
+
+        // source does not exist or is empty
+        assertNull(client.blmove(key1, key2, ListDirection.LEFT, ListDirection.RIGHT, timeout).get());
+
+        // only source exists, only source elements gets popped, creates a list at nonExistingKey
+        assertEquals(lpushArgs1.length, client.lpush(key1, lpushArgs1).get());
+        assertEquals(
+                "four",
+                client
+                        .blmove(key1, nonExistingKey, ListDirection.RIGHT, ListDirection.LEFT, timeout)
+                        .get());
+        assertArrayEquals(new String[] {"one", "two", "three"}, client.lrange(key1, 0, -1).get());
+
+        // source and destination are the same, performing list rotation, "three" gets popped and added
+        // back
+        assertEquals(
+                "one", client.blmove(key1, key1, ListDirection.LEFT, ListDirection.LEFT, timeout).get());
+        assertArrayEquals(new String[] {"one", "two", "three"}, client.lrange(key1, 0, -1).get());
+
+        // normal use case, "three" gets popped and added to the left of destination
+        assertEquals(lpushArgs2.length, client.lpush(key2, lpushArgs2).get());
+        assertEquals(
+                "three", client.blmove(key1, key2, ListDirection.RIGHT, ListDirection.LEFT, timeout).get());
+        assertArrayEquals(new String[] {"one", "two"}, client.lrange(key1, 0, -1).get());
+        assertArrayEquals(
+                new String[] {"three", "four", "five", "six"}, client.lrange(key2, 0, -1).get());
+
+        // source exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, "NotAList").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .blmove(nonListKey, key1, ListDirection.LEFT, ListDirection.LEFT, timeout)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // destination exists but is not a list type key
+        ExecutionException executionException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .blmove(key1, nonListKey, ListDirection.LEFT, ListDirection.LEFT, timeout)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmove_timeout_check(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 0)
+                                    .get(3, TimeUnit.SECONDS));
+        }
     }
 }

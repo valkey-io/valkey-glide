@@ -61,10 +61,13 @@ import {
     createRPop,
     createRPush,
     createRename,
+    createRenameNX,
     createSAdd,
     createSCard,
+    createSInter,
     createSIsMember,
     createSMembers,
+    createSMove,
     createSPop,
     createSRem,
     createSet,
@@ -1224,6 +1227,33 @@ export class BaseClient {
         );
     }
 
+    /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
+     * Creates a new destination set if needed. The operation is atomic.
+     * See https://valkey.io/commands/smove for more details.
+     *
+     * @remarks When in cluster mode, `source` and `destination` must map to the same hash slot.
+     *
+     * @param source - The key of the set to remove the element from.
+     * @param destination - The key of the set to add the element to.
+     * @param member - The set element to move.
+     * @returns `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.smove("set1", "set2", "member1");
+     * console.log(result); // Output: true - "member1" was moved from "set1" to "set2".
+     * ```
+     */
+    public smove(
+        source: string,
+        destination: string,
+        member: string,
+    ): Promise<boolean> {
+        return this.createWritePromise(
+            createSMove(source, destination, member),
+        );
+    }
+
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
      * See https://redis.io/commands/scard/ for details.
      *
@@ -1239,6 +1269,34 @@ export class BaseClient {
      */
     public scard(key: string): Promise<number> {
         return this.createWritePromise(createSCard(key));
+    }
+
+    /** Gets the intersection of all the given sets.
+     * See https://valkey.io/docs/latest/commands/sinter/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The `keys` of the sets to get the intersection.
+     * @returns - A set of members which are present in all given sets.
+     * If one or more sets do not exist, an empty set will be returned.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of sinter method when member exists
+     * const result = await client.sinter(["my_set1", "my_set2"]);
+     * console.log(result); // Output: Set {'member2'} - Indicates that sets have one common member
+     * ```
+     *
+     * @example
+     * ```typescript
+     * // Example usage of sinter method with non-existing key
+     * const result = await client.sinter(["my_set", "non_existing_key"]);
+     * console.log(result); // Output: Set {} - An empty set is returned since the key does not exist.
+     * ```
+     */
+    public sinter(keys: string[]): Promise<Set<string>> {
+        return this.createWritePromise<string[]>(createSInter(keys)).then(
+            (sinter) => new Set<string>(sinter),
+        );
     }
 
     /** Returns if `member` is a member of the set stored at `key`.
@@ -2208,6 +2266,28 @@ export class BaseClient {
      */
     public rename(key: string, newKey: string): Promise<"OK"> {
         return this.createWritePromise(createRename(key, newKey));
+    }
+
+    /**
+     * Renames `key` to `newkey` if `newkey` does not yet exist.
+     * See https://redis.io/commands/renamenx/ for more details.
+     *
+     * @remarks When in cluster mode, `key` and `newKey` must map to the same hash slot.
+     * @param key - The key to rename.
+     * @param newKey - The new name of the key.
+     * @returns - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
+     * If `key` does not exist, an error is thrown.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of renamenx method to rename a key
+     * await client.set("old_key", "value");
+     * const result = await client.renamenx("old_key", "new_key");
+     * console.log(result); // Output: true - Indicates successful renaming of the key "old_key" to "new_key".
+     * ```
+     */
+    public renamenx(key: string, newKey: string): Promise<boolean> {
+        return this.createWritePromise(createRenameNX(key, newKey));
     }
 
     /** Blocking list pop primitive.
