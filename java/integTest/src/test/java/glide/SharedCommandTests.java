@@ -4436,4 +4436,49 @@ public class SharedCommandTests {
                                     .get(3, TimeUnit.SECONDS));
         }
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void srandmember(BaseClient client) {
+        // setup
+        String key = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String nonExistingKey = "nonExisting";
+        String nonSetKey = "NonSet";
+        long count = 2;
+        long countNegative = -2;
+        String[] singleArr = new String[] {"one"};
+
+        // expected results
+        String expectedNoCount = "one";
+        String[] expectedNegCount = new String[] {"one", "one"};
+
+        // key does not exist, without count the command returns null, and with count command returns an
+        // empty array
+        assertNull(client.srandmember(nonExistingKey).get());
+        assertEquals(0, client.srandmember(nonExistingKey, count).get().length);
+
+        // adding element to set
+        client.sadd(key, singleArr).get();
+
+        // with no count or a positive count, single array result should only contain element "one"
+        String resultNoCount = client.srandmember(key).get();
+        assertEquals(resultNoCount, expectedNoCount);
+        String[] resultPosCount = client.srandmember(key, count).get();
+        assertArrayEquals(resultPosCount, singleArr);
+
+        // with negative count, the same element can be returned multiple times
+        String[] resultNegCount = client.srandmember(key, countNegative).get();
+        assertArrayEquals(resultNegCount, expectedNegCount);
+
+        // key exists but is not a list type key
+        assertEquals(OK, client.set(nonSetKey, "notaset").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.srandmember(nonSetKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        ExecutionException executionExceptionWithCount =
+                assertThrows(ExecutionException.class, () -> client.srandmember(nonSetKey, count).get());
+        assertInstanceOf(RequestException.class, executionExceptionWithCount.getCause());
+    }
 }

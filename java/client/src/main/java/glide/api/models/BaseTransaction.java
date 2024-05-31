@@ -111,6 +111,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -3884,6 +3885,37 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         whereto.toString(),
                         Double.toString(timeout));
         protobufTransaction.addCommands(buildCommand(BLMove, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns a random element from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set member.
+     * @return Command Response - A random element from the set, or <code>null</code> if <code>key
+     *     </code> does not exist.
+     */
+    public T srandmember(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns random elements from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set members.
+     * @param count The number of elements to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.<br>
+     * @return Command Response - An <code>array</code> of elements from the set, or an empty <code>
+     *     array</code> if <code>key</code> does not exist.
+     */
+    public T srandmember(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+        protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
         return getThis();
     }
 
