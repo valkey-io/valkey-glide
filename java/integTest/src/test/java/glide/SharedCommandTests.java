@@ -3098,8 +3098,7 @@ public class SharedCommandTests {
         assertEquals(0, emptiedResult.size());
 
         // xrange against a non-existent stream
-        emptyResult =
-                client.xrange(key2, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        emptyResult = client.xrange(key2, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(0, emptyResult.size());
 
         assertEquals(OK, client.set(key2, "not_a_stream").get());
