@@ -200,6 +200,7 @@ enum RequestType {
     LMove = 168;
     BLMove = 169;
     GetDel = 170;
+    SRandMember = 171;
 }
 
 message Command {
