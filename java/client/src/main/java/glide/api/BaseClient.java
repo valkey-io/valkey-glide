@@ -93,6 +93,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -1603,5 +1604,19 @@ public abstract class BaseClient
                     source, destination, wherefrom.toString(), whereto.toString(), Double.toString(timeout)
                 };
         return commandManager.submitNewCommand(BLMove, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> srandmember(@NonNull String key) {
+        String[] arguments = new String[] {key};
+        return commandManager.submitNewCommand(
+                SRandMember, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> srandmember(@NonNull String key, long count) {
+        String[] arguments = new String[] {key, Long.toString(count)};
+        return commandManager.submitNewCommand(
+                SRandMember, arguments, response -> castArray(handleArrayResponse(response), String.class));
     }
 }

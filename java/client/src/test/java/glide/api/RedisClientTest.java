@@ -132,6 +132,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
@@ -5277,5 +5278,54 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void srandmember_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] arguments = new String[] {key};
+        String value = "one";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(SRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.srandmember(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void srandmember_with_count_returns_success() {
+        // setup
+        String key = "testKey";
+        long count = 2;
+        String[] arguments = new String[] {key, Long.toString(count)};
+        String[] value = {"one", "two"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(SRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.srandmember(key, count);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
     }
 }

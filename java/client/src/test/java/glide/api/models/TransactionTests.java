@@ -121,6 +121,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -880,6 +881,12 @@ public class TransactionTests {
 
         transaction.blmove("key1", "key2", ListDirection.LEFT, ListDirection.LEFT, 0.1);
         results.add(Pair.of(BLMove, buildArgs("key1", "key2", "LEFT", "LEFT", "0.1")));
+
+        transaction.srandmember("key");
+        results.add(Pair.of(SRandMember, buildArgs("key")));
+
+        transaction.srandmember("key", 1);
+        results.add(Pair.of(SRandMember, buildArgs("key", "1")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

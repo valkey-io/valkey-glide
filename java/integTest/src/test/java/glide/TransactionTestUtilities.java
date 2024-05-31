@@ -365,6 +365,7 @@ public class TransactionTestUtilities {
         String setKey1 = "{setKey}-1-" + UUID.randomUUID();
         String setKey2 = "{setKey}-2-" + UUID.randomUUID();
         String setKey3 = "{setKey}-3-" + UUID.randomUUID();
+        String setKey4 = "{setKey}-4-" + UUID.randomUUID();
 
         transaction
                 .sadd(setKey1, new String[] {"baz", "foo"})
@@ -379,7 +380,11 @@ public class TransactionTestUtilities {
                 .sdiffstore(setKey3, new String[] {setKey2, setKey1})
                 .sinterstore(setKey3, new String[] {setKey2, setKey1})
                 .sdiff(new String[] {setKey2, setKey3})
-                .smove(setKey1, setKey2, "baz");
+                .smove(setKey1, setKey2, "baz")
+                .sadd(setKey4, new String[] {"foo"})
+                .srandmember(setKey4)
+                .srandmember(setKey4, 2)
+                .srandmember(setKey4, -2);
 
         return new Object[] {
             2L, // sadd(setKey1, new String[] {"baz", "foo"});
@@ -395,6 +400,10 @@ public class TransactionTestUtilities {
             0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
             Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
             true, // smove(setKey1, setKey2, "baz")
+            1L, // sadd(setKey4, {"foo})
+            "foo", // srandmember(setKey4)
+            new String[] {"foo"}, // srandmember(setKey4, 2)
+            new String[] {"foo", "foo"}, // srandmember(setKey4, -2)
         };
     }
 
