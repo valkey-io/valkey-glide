@@ -340,3 +340,30 @@ class ClusterCommands(CoreCommands):
             TClusterResponse[List[str]],
             await self._execute_command(RequestType.Time, [], route),
         )
+
+    async def lastsave(self, route: Optional[Route] = None) -> TClusterResponse[int]:
+        """
+        Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
+
+        See https://valkey.io/commands/lastsave for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[int]: The Unix time of the last successful DB save.
+                If no route is provided, or a single node route is requested, returns an int representing the Unix time
+                of the last successful DB save. Otherwise, returns a dict of [str , int] where each key contains the
+                address of the queried node and the value contains the Unix time of the last successful DB save.
+
+        Examples:
+            >>> await client.lastsave()
+            1710925775  # Unix time of the last DB save
+            >>> await client.lastsave(AllNodes())
+            {'addr1': 1710925775, 'addr2': 1710925775, 'addr3': 1710925775}  # Unix time of the last DB save on each node
+        """
+        return cast(
+            TClusterResponse[int],
+            await self._execute_command(RequestType.LastSave, [], route),
+        )
