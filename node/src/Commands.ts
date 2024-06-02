@@ -827,6 +827,16 @@ export function createZAdd(
     return createCommand(RequestType.ZAdd, args);
 }
 
+export function createZInterstore(
+    destination: string,
+    key: string,
+): redis_request.Command {
+    const args = createZInterstoreArgs();
+    return createCommand(RequestType.ZInterStore, args);
+}
+
+function createZInterstoreArgs();
+
 /**
  * @internal
  */
