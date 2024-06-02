@@ -524,12 +524,13 @@ describe("SocketConnectionInternals", () => {
                     throw new Error("no args");
                 }
 
-                expect(args.length).toEqual(5);
+                expect(args.length).toEqual(6);
                 expect(args[0]).toEqual("foo");
                 expect(args[1]).toEqual("bar");
                 expect(args[2]).toEqual("XX");
                 expect(args[3]).toEqual("GET");
-                expect(args[4]).toEqual("EX 10");
+                expect(args[4]).toEqual("EX");
+                expect(args[5]).toEqual("10");
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
             });
             const request1 = connection.set("foo", "bar", {
@@ -538,7 +539,7 @@ describe("SocketConnectionInternals", () => {
                 expiry: { type: "seconds", count: 10 },
             });
 
-            await expect(await request1).toMatch("OK");
+            expect(await request1).toMatch("OK");
         });
     });
 
