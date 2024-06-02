@@ -38,23 +38,24 @@ jobs:
                 aws-region: ${{ secrets.AWS_REGION }}
                 ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
-    output-matrix:
+    load-platform-matrix:
         runs-on: ubuntu-latest
         outputs:
-            MATRIX: ${{ steps.output-matrix.outputs.MATRIX }}
+            PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
         steps:
             - name: Checkout
               uses: actions/checkout@v4
 
-            - name: output-matrix
-              id: output-matrix
+            - name: load-platform-matrix
+              id: load-platform-matrix
               shell: bash
               run: |
-                export "MATRIX=$(jq -c . <  .github/workflows/build-matrix.json)"
-                echo "MATRIX=${MATRIX}" >> $GITHUB_OUTPUT
+                # Get the matrix from the matrix.json file, without the object that has the IMAGE key
+                export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["npm"]))' < .github/workflows/build-matrix.json | jq -c .)"
+                echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
 
     publish-binaries:
-        needs: [start-self-hosted-runner, output-matrix]
+        needs: [start-self-hosted-runner, load-platform-matrix]
         if: github.repository_owner == 'aws'
         name: Publish packages to NPM
         runs-on: ${{ matrix.build.RUNNER }}
@@ -64,7 +65,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build: ${{fromJson(needs.output-matrix.outputs.MATRIX)}}                   
+                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}                   
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
@@ -135,29 +136,25 @@ jobs:
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
             
-            - name: Del package.json.tmpl
-              shell: bash
-              working-directory: ./node
-              run: |
-                rm package.json.tmpl
-                echo $(ls *json*) 
-
             - name: Check if RC and set a distribution tag for the package
               shell: bash
               run: |
                   if [[ "${GITHUB_REF:11}" == *"rc"* ]]
                   then
-                    echo "This is a release candidate"
+                    echo "This is a release candidate: ${GITHUB_REF:11}"
                     export npm_tag="next"
                   else
-                    echo "This is a stable release"
+                    echo "This is a stable release: ${GITHUB_REF:11}"
                     export npm_tag="latest"
                   fi
                   echo "NPM_TAG=${npm_tag}" >> $GITHUB_ENV
 
             - name: Check that the release version dont have typo init
               if: ${{ github.event_name != 'pull_request' && contains(github.ref, '-') && !contains(github.ref, 'rc') }}
-              run: exit 1
+              run: |
+                echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
+                echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
+                exit 1
 
             - name: Publish to NPM
               if: github.event_name != 'pull_request'
@@ -166,8 +163,9 @@ jobs:
               run: |
                   npm pkg fix
                   set +e
-                  # Redirect only stderr
-                  { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 >&3 3>&- | grep -v "npm notice" | grep -v "warn" | grep -v "WARN"); } 3>&1
+                  # 2>&1 1>&3- redirects stderr to stdout and then redirects the original stdout to another file descriptor,
+                  # effectively separating stderr and stdout. The 3>&1 at the end redirects the original stdout back to the console. 
+                  { npm_publish_err=$(npm publish --tag ${{ env.NPM_TAG }} --access public 2>&1 1>&3-) ;} 3>&1
                   if [[ "$npm_publish_err" == *"You cannot publish over the previously published versions"* ]]
                   then
                     echo "Skipping publishing, package already published"
@@ -256,10 +254,10 @@ jobs:
               env:
                   NODE_AUTH_TOKEN: ${{ secrets.NPM_AUTH_TOKEN }}
 
-    test-release-candidate:
+    test-release:
         if: github.event_name != 'pull_request'
-        name: Test the release candidate
-        needs: [publish-base-to-npm, output-matrix]
+        name: Test the release
+        needs: [publish-base-to-npm, load-platform-matrix]
         runs-on: ${{ matrix.build.RUNNER }}
         container:
             image: ${{ matrix.build.IMAGE || '' }}
@@ -267,7 +265,7 @@ jobs:
         strategy:
             fail-fast: false
             matrix:
-                build: ${{fromJson(needs.output-matrix.outputs.MATRIX)}}                   
+                build: ${{fromJson(needs.load-platform-matrix.outputs.PLATFORM_MATRIX)}}                   
         steps:
             - name: Setup self-hosted runner access
               if: ${{ matrix.build.TARGET == 'aarch64-unknown-linux-gnu' }}
@@ -322,8 +320,7 @@ jobs:
               working-directory: ./utils
               run: |
                   npm install
-                  npm install -g typescript
-                  npx tsc -p ./tsconfig.json
+                  tsc
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash

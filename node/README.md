@@ -95,5 +95,8 @@ Development instructions for local building & testing the package are in the [DE
 ### Supported platforms
 
 Currentlly the package is supported on:
-Linux with both glibc and musl libc, and on both x86_64 and aarch64 architectures.
-macOS with both aarch64 and x86_64 architectures.
+
+| Operation systems | C lib                | Architecture      |
+| ----------------- | -------------------- | ----------------- |
+| `Linux`           | `glibc`, `musl libc` | `x86_64`, `arm64` |
+| `macOS`           | `Darwin`             | `x86_64`, `arm64` |
