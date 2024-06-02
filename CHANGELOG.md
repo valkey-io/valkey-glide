@@ -11,6 +11,11 @@
 * Python: Added XLEN command ([#1503](https://github.com/aws/glide-for-redis/pull/1503))
 * Python: Added LASTSAVE command ([#1509](https://github.com/aws/glide-for-redis/pull/1509))
 
+## 0.4.1 (2024-02-06)
+
+#### Fixes
+* Node: Fix set command bug with expiry option ([#1508](https://github.com/aws/glide-for-redis/pull/1508))
+
 ## 0.4.0 (2024-05-26)
 
 #### Changes
