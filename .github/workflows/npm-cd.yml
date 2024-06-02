@@ -322,7 +322,7 @@ jobs:
               run: |
                   npm install
                   npm install -g typescript
-                  npx tsc ./tsconfig.json
+                  npx tsc -p ./tsconfig.json
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
