@@ -2,6 +2,11 @@
 * Python: Added OBJECT ENCODING command ([#1471](https://github.com/aws/glide-for-redis/pull/1471))
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
 
+## 0.4.1 (2024-02-06)
+
+#### Fixes
+* Node: Fix set command bug with expiry option ([#1508](https://github.com/aws/glide-for-redis/pull/1508))
+
 ## 0.4.0 (2024-05-26)
 
 #### Changes
