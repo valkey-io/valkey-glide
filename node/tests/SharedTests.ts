@@ -1301,7 +1301,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.set(key2, value)).toEqual("OK");
 
-                expect(await client.hkeys(key2)).rejects.toThrow();
+                await expect(client.hkeys(key2)).rejects.toThrow();
             }, protocol);
         },
         config.timeout,

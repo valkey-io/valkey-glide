@@ -2,6 +2,7 @@
 * Java: Added PUBSUB CHANNELS, NUMPAT and NUMSUB commands ([#2105](https://github.com/valkey-io/valkey-glide/pull/2105))
 * Java: Added binary support for custom command ([#2109](https://github.com/valkey-io/valkey-glide/pull/2109))
 * Node: Added SSCAN command ([#2132](https://github.com/valkey-io/valkey-glide/pull/2132))
+* Node: Added HKEYS command ([#1499](https://github.com/aws/glide-for-redis/pull/1499))
 * Node: Added FUNCTION KILL command ([#2114](https://github.com/valkey-io/valkey-glide/pull/2114))
 * Node: Update all commands to use `async` ([#2110](https://github.com/valkey-io/valkey-glide/pull/2110))
 * Node: Added XAUTOCLAIM command ([#2108](https://github.com/valkey-io/valkey-glide/pull/2108))
@@ -92,6 +93,7 @@
 ## 1.0.0 (2024-07-09)
 
 #### Changes
+* Node: Added SMOVE command ([#1476](https://github.com/aws/glide-for-redis/pull/1476))
 * Node: Added ZINTERSTORE command ([#1513](https://github.com/valkey-io/valkey-glide/pull/1513))
 * Python: Added OBJECT ENCODING command ([#1471](https://github.com/valkey-io/valkey-glide/pull/1471))
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/valkey-io/valkey-glide/pull/1472))
