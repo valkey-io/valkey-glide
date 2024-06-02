@@ -2265,8 +2265,6 @@ class BaseTransaction:
         """
         Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
 
-        When in cluster mode, all keys in `keys` must map to the same hash slot.
-
         See https://valkey.io/commands/zinter/ for more details.
 
         Args:
@@ -2284,8 +2282,6 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
-
-        When in cluster mode, all keys in `keys` must map to the same hash slot.
 
         See https://valkey.io/commands/zinter/ for more details.
 
@@ -2329,7 +2325,7 @@ class BaseTransaction:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
         args = _create_zinter_zunion_cmd_args(
-            keys, aggregation_type, destination=destination
+            keys, aggregation_type, destination
         )
         return self.append_command(RequestType.ZInterStore, args)
 
@@ -2400,7 +2396,7 @@ class BaseTransaction:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
         args = _create_zinter_zunion_cmd_args(
-            keys, aggregation_type, destination=destination
+            keys, aggregation_type, destination
         )
         return self.append_command(RequestType.ZUnionStore, args)
 

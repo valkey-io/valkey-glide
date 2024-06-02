@@ -3313,7 +3313,7 @@ class CoreCommands(Protocol):
                 {'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
         """
         args = _create_zinter_zunion_cmd_args(
-            keys, aggregation_type, destination=destination
+            keys, aggregation_type, destination
         )
         return cast(
             int,
@@ -3428,7 +3428,7 @@ class CoreCommands(Protocol):
                 {'member1': 10.5, 'member2': 8.2}
         """
         args = _create_zinter_zunion_cmd_args(
-            keys, aggregation_type, destination=destination
+            keys, aggregation_type, destination
         )
         return cast(
             int,

@@ -10,7 +10,7 @@
 * Node: Added SINTER command ([#1500](https://github.com/aws/glide-for-redis/pull/1500))
 * Python: Added XLEN command ([#1503](https://github.com/aws/glide-for-redis/pull/1503))
 * Python: Added LASTSAVE command ([#1509](https://github.com/aws/glide-for-redis/pull/1509))
-* Python: Added ZINTER,ZUNION commands ([#1477](https://github.com/aws/glide-for-redis/pull/1477))
+* Python: Added ZINTER, ZUNION commands ([#1478](https://github.com/aws/glide-for-redis/pull/1478))
 
 ## 0.4.0 (2024-05-26)
 
