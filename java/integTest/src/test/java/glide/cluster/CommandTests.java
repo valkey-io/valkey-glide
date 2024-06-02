@@ -760,7 +760,8 @@ public class CommandTests {
                 Arguments.of("copy", "6.2.0", clusterClient.copy("abc", "def", true)),
                 Arguments.of("msetnx", null, clusterClient.msetnx(Map.of("abc", "def", "ghi", "jkl"))),
                 Arguments.of("lcs", "7.0.0", clusterClient.lcs("abc", "def")),
-                Arguments.of("lcsLEN", "7.0.0", clusterClient.lcsLen("abc", "def")));
+                Arguments.of("lcsLEN", "7.0.0", clusterClient.lcsLen("abc", "def")),
+                Arguments.of("watch", "2.2.0", clusterClient.watch(new String[] {"abc", "def"})));
     }
 
     @SneakyThrows

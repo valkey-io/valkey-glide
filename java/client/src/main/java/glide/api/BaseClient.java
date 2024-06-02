@@ -117,7 +117,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
+import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
@@ -163,6 +165,7 @@ import glide.api.commands.SetBaseCommands;
 import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
+import glide.api.commands.TransactionsBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -229,7 +232,8 @@ public abstract class BaseClient
                 StreamBaseCommands,
                 HyperLogLogBaseCommands,
                 GeospatialIndicesBaseCommands,
-                ScriptingAndFunctionsBaseCommands {
+                ScriptingAndFunctionsBaseCommands,
+                TransactionsBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
@@ -1871,5 +1875,15 @@ public abstract class BaseClient
     public CompletableFuture<Long> lcsLen(@NonNull String key1, @NonNull String key2) {
         String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
         return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> watch(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> unwatch() {
+        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
     }
 }
