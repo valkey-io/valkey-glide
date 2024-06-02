@@ -321,7 +321,8 @@ jobs:
               working-directory: ./utils
               run: |
                   npm install
-                  tsc
+                  npm install -g typescript
+                  npx tsc ./tsconfig.json
 
             - name: Check if RC and set a distribution tag for the package
               shell: bash
