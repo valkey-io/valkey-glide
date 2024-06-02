@@ -3473,6 +3473,25 @@ class TestCommands:
         )
         assert result == ["Dave", "Bob", "Alice", "Charlie", "Eve"]
 
+        # Test sort with `by` argument with missing keys to sort by
+        assert await redis_client.lpush("user_ids", ["a"]) == 6
+        result = await redis_client.sort(
+            "user_ids",
+            by_pattern="user:*->age",
+            get_patterns=["user:*->name"],
+            alpha=True,
+        )
+        assert result == [None, "Dave", "Bob", "Alice", "Charlie", "Eve"]
+
+        # Test sort with `by` argument with missing keys to sort by
+        result = await redis_client.sort(
+            "user_ids",
+            by_pattern="user:*->name",
+            get_patterns=["user:*->age"],
+            alpha=True,
+        )
+        assert result == [None, "30", "25", "35", "20", "40"]
+
         # Test Limit with count 0
         result = await redis_client.sort(
             "user_ids",
