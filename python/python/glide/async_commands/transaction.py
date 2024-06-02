@@ -1118,6 +1118,29 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SInterStore, [destination] + keys)
 
+    def sintercard(
+        self: TTransaction,
+        keys: List[str],
+        limit: Optional[int] = None
+    ) -> TTransaction:
+        """
+        Computes the intersection of sets given by the specified `keys` and returns the cardinality (number of elements) of the resulting set.
+        Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
+
+        Args:
+            keys (List[str]): A list of keys representing the sets to intersect.
+            limit (Optional[int]): An optional limit to the maximum number of intersecting elements to count.
+                If specified, the computation stops as soon as the cardinality reaches this limit.
+
+        Command response:
+            int: The number of elements in the resulting set of the intersection.
+        """
+        args = [str(len(keys))]
+        args += keys
+        if limit is not None:
+            args += ["LIMIT", str(limit)]
+        return self.append_command(RequestType.SInterCard, args)
+
     def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
         """
         Computes the difference between the first set and all the successive sets in `keys`.

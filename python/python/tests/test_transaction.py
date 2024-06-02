@@ -219,6 +219,8 @@ async def transaction_test(
     args.append({"foo", "bar"})
     transaction.sinterstore(key7, [key7, key7])
     args.append(2)
+    transaction.sintercard([key7, key7])
+    args.append(2)
     transaction.sdiff([key7, key7])
     args.append(set())
     transaction.spop_count(key7, 4)
