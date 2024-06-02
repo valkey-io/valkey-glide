@@ -145,13 +145,13 @@ export function createSet(
         if (options.expiry === "keepExisting") {
             args.push("KEEPTTL");
         } else if (options.expiry?.type === "seconds") {
-            args.push("EX " + options.expiry.count);
+            args.push("EX", options.expiry.count.toString());
         } else if (options.expiry?.type === "milliseconds") {
-            args.push("PX " + options.expiry.count);
+            args.push("PX", options.expiry.count.toString());
         } else if (options.expiry?.type === "unixSeconds") {
-            args.push("EXAT " + options.expiry.count);
+            args.push("EXAT", options.expiry.count.toString());
         } else if (options.expiry?.type === "unixMilliseconds") {
-            args.push("PXAT " + options.expiry.count);
+            args.push("PXAT", options.expiry.count.toString());
         }
     }
 
