@@ -33,7 +33,7 @@ jobs:
               shell: bash
               run: |
                 # Get the matrix from the matrix.json file, without the object that has the IMAGE key
-                export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["pypi"]))' < .github/workflows/build-matrix.json | jq -c .)"
+                export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["pypi"])))' < .github/workflows/build-matrix.json | jq -c .)"
                 echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
                 
 
