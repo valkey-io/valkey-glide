@@ -302,8 +302,10 @@ class StandaloneCommands(CoreCommands):
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
-            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point
 
         Returns:
             List[Optional[str]]: Returns a list of sorted elements.
@@ -365,8 +367,10 @@ class StandaloneCommands(CoreCommands):
                 for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
                 The special value `#` can be used to include the actual element from `key` being sorted.
                 If not provided, only the sorted elements themselves are returned.
-            order (Optional[OrderBy]): Specifies the order to sort the elements. Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
-            alpha (Optional[bool]): Whether to sort elements lexicographically. If `False`, elements are sorted numerically.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point
 
         Returns:
             int: The number of elements in the sorted key stored at `store`.
