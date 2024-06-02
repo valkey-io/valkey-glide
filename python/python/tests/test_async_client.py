@@ -1298,16 +1298,22 @@ class TestCommands:
         assert await redis_client.sadd(key3, member3_list) == 4
 
         # Basic intersection
-        assert await redis_client.sintercard([key1, key2]) == 2  # Intersection of key1 and key2 is {"b", "c"}
+        assert (
+            await redis_client.sintercard([key1, key2]) == 2
+        )  # Intersection of key1 and key2 is {"b", "c"}
 
         # Intersection with non-existing key
-        assert await redis_client.sintercard([key1, non_existing_key]) == 0  # No common elements
+        assert (
+            await redis_client.sintercard([key1, non_existing_key]) == 0
+        )  # No common elements
 
         # Intersection with a single key
         assert await redis_client.sintercard([key1]) == 3  # All elements in key1
 
         # Intersection with limit
-        assert await redis_client.sintercard([key1, key2, key3], limit=1) == 1  # Stops early at limit
+        assert (
+            await redis_client.sintercard([key1, key2, key3], limit=1) == 1
+        )  # Stops early at limit
 
         # Invalid argument - key list must not be empty
         with pytest.raises(RequestError):

@@ -1735,15 +1735,13 @@ class CoreCommands(Protocol):
             int,
             await self._execute_command(RequestType.SInterStore, [destination] + keys),
         )
-    
-    async def sintercard(
-        self,
-        keys: List[str],
-        limit: Optional[int] = None
-    ) -> int:
+
+    async def sintercard(self, keys: List[str], limit: Optional[int] = None) -> int:
         """
         Computes the intersection of sets given by the specified `keys` and returns the cardinality (number of elements) of the resulting set.
         Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
+
+        See https://valkey.io/commands/sintercard for more details.
 
         Args:
             keys (List[str]): A list of keys representing the sets to intersect.

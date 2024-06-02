@@ -1119,13 +1119,13 @@ class BaseTransaction:
         return self.append_command(RequestType.SInterStore, [destination] + keys)
 
     def sintercard(
-        self: TTransaction,
-        keys: List[str],
-        limit: Optional[int] = None
+        self: TTransaction, keys: List[str], limit: Optional[int] = None
     ) -> TTransaction:
         """
         Computes the intersection of sets given by the specified `keys` and returns the cardinality (number of elements) of the resulting set.
         Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
+
+        See https://valkey.io/commands/sintercard for more details.
 
         Args:
             keys (List[str]): A list of keys representing the sets to intersect.
