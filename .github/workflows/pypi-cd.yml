@@ -20,6 +20,23 @@ permissions:
       id-token: write
 
 jobs:
+    load-platform-matrix:
+        runs-on: ubuntu-latest
+        outputs:
+            PLATFORM_MATRIX: ${{ steps.load-platform-matrix.outputs.PLATFORM_MATRIX }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+
+            - name: load-platform-matrix
+              id: load-platform-matrix
+              shell: bash
+              run: |
+                # Get the matrix from the matrix.json file, without the object that has the IMAGE key
+                export "PLATFORM_MATRIX=$(jq 'map(select(.PACKAGE_MANAGERS | contains(["pypi"])))' < .github/workflows/build-matrix.json | jq -c .)"
+                echo "PLATFORM_MATRIX=${PLATFORM_MATRIX}" >> $GITHUB_OUTPUT
+                
+
     start-self-hosted-runner:
         if: github.repository_owner == 'aws'
         runs-on: ubuntu-latest
@@ -35,7 +52,7 @@ jobs:
                 ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     publish-binaries:
-        needs: start-self-hosted-runner
+        needs: [start-self-hosted-runner, load-platform-matrix]
         if: github.repository_owner == 'aws'
         name: Publish packages to PyPi
         runs-on: ${{ matrix.build.RUNNER }}
@@ -44,35 +61,7 @@ jobs:
             fail-fast: false
             matrix:
                 build:
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          RUNNER: ubuntu-latest,
-                          ARCH: x64,
-                          TARGET: x86_64-unknown-linux-gnu,
-                      }
-                    - {
-                          OS: ubuntu,
-                          NAMED_OS: linux,
-                          RUNNER: [self-hosted, Linux, ARM64],
-                          ARCH: arm64,
-                          TARGET: aarch64-unknown-linux-gnu,
-                          CONTAINER: "2_28",
-                      }
-                    - {
-                          OS: macos,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-12,
-                          ARCH: x64,
-                          TARGET: x86_64-apple-darwin,
-                      }
-                    - {
-                          OS: macos,
-                          NAMED_OS: darwin,
-                          RUNNER: macos-13-xlarge,
-                          arch: arm64,
-                          TARGET: aarch64-apple-darwin,
-                      }
+                    ${{fromJson( needs.load-platform-matrix.outputs.PLATFORM_MATRIX )}}
         steps:
             - name: Setup self-hosted runner access
               if: ${{ contains(matrix.build.RUNNER, 'self-hosted') }}
@@ -88,6 +77,23 @@ jobs:
               run: |
                   export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
                   echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
+              
+              # For NPM and Cargo we need the the rc version to be {version}-rc{number} while for PyPi we need it to be {version}rc{number}
+              # This is because PyPi does not allow the '-' character in the version name
+              # So the tag will be as NPM and Cargo ask: v1.0.0-rc1 and for PyPi we'll chnage it to: v1.0.0rc1
+            - name: Change and set realease version for RC
+              if: ${{ github.event_name != 'pull_request' && contains(github.ref, 'rc') }}
+              shell: bash
+              run: |
+                  export py_version=`echo ${GITHUB_REF:11} | sed 's/-rc/rc/'`
+                  echo "PY_RELEASE_VERSION=${py_version}" >> $GITHUB_ENV
+
+            - name: Check that the release version dont have typo init
+              if: ${{ github.event_name != 'pull_request' && contains(github.ref, '-') && !contains(github.ref, 'rc') }}
+              run: |
+                echo "The release version "${GITHUB_REF:11}" contains a typo, please fix it"
+                echo "The release version should be in the format v{major-version}.{minor-version}.{patch-version}-rc{release-candidate-number} when it a release candidate or v{major-version}.{minor-version}.{patch-version} in a stable release."
+                exit 1
 
             - name: Set the package version for Python
               working-directory: ./python
