@@ -3312,9 +3312,7 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
         """
-        args = _create_zinter_zunion_cmd_args(
-            keys, aggregation_type, destination
-        )
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
             int,
             await self._execute_command(RequestType.ZInterStore, args),
@@ -3427,9 +3425,7 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 10.5, 'member2': 8.2}
         """
-        args = _create_zinter_zunion_cmd_args(
-            keys, aggregation_type, destination
-        )
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
             int,
             await self._execute_command(RequestType.ZUnionStore, args),

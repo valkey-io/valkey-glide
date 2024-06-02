@@ -2324,9 +2324,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_zinter_zunion_cmd_args(
-            keys, aggregation_type, destination
-        )
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return self.append_command(RequestType.ZInterStore, args)
 
     def zunion(
@@ -2395,9 +2393,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_zinter_zunion_cmd_args(
-            keys, aggregation_type, destination
-        )
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return self.append_command(RequestType.ZUnionStore, args)
 
     def zrandmember(self: TTransaction, key: str) -> TTransaction:
