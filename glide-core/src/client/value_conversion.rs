@@ -734,6 +734,45 @@ mod tests {
     }
 
     #[test]
+    fn test_convert_array_to_map_with_none() {
+        let redis_map = vec![
+            (
+                Value::BulkString(b"key1".to_vec()),
+                Value::BulkString(b"10.5".to_vec()),
+            ),
+            (Value::Double(20.5), Value::Double(19.5)),
+            (Value::Double(18.5), Value::BulkString(b"30.2".to_vec())),
+        ];
+
+        let converted_type = ExpectedReturnType::Map {
+            key_type: &None,
+            value_type: &None,
+        };
+        let converted_map =
+            convert_to_expected_type(Value::Map(redis_map), Some(converted_type)).unwrap();
+
+        let converted_map = if let Value::Map(map) = converted_map {
+            map
+        } else {
+            panic!("Expected a Map, but got {:?}", converted_map);
+        };
+
+        assert_eq!(converted_map.len(), 3);
+
+        let (key, value) = &converted_map[0];
+        assert_eq!(*key, Value::BulkString(b"key1".to_vec()));
+        assert_eq!(*value, Value::BulkString(b"10.5".to_vec()));
+
+        let (key, value) = &converted_map[1];
+        assert_eq!(*key, Value::Double(20.5));
+        assert_eq!(*value, Value::Double(19.5));
+
+        let (key, value) = &converted_map[2];
+        assert_eq!(*key, Value::Double(18.5));
+        assert_eq!(*value, Value::BulkString(b"30.2".to_vec()));
+    }
+
+    #[test]
     fn test_convert_2d_array_to_map_using_expected_return_type_map() {
         // in RESP2, we get an array of arrays value like this:
         // 1) 1) "key1"
