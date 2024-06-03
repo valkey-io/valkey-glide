@@ -2188,18 +2188,19 @@ export class BaseClient {
      * const streamResults = await client.xread({"my_stream": "0-0", "writers": "0-0"});
      * console.log(result); // Output: {
      *                      //     "my_stream": {
-     *                      //         "1526984818136-0": ["duration", "1532", "event-id", "5", "user-id", "7782813"],
-     *                      //         "1526999352406-0": ["duration", "812", "event-id", "9", "user-id", "388234"],
+     *                      //         "1526984818136-0": [["duration", "1532"], ["event-id", "5"], ["user-id", "7782813"]],
+     *                      //         "1526999352406-0": [["duration", "812"], ["event-id", "9"], ["user-id", "388234"]],
      *                      //     }, "writers": {
-     *                      //         "1526985676425-0": ["name", "Virginia", "surname", "Woolf"],
-     *                      //         "1526985685298-0": ["name", "Jane", "surname", "Austen"],
-     *                      //     },
+     *                      //         "1526985676425-0": [["name", "Virginia"], ["surname", "Woolf"]],
+     *                      //         "1526985685298-0": [["name", "Jane"], ["surname", "Austen"]],
+     *                      //     }
+     *                      // }
      * ```
      */
     public xread(
         keys_and_ids: Record<string, string>,
         options?: StreamReadOptions,
-    ): Promise<Record<string, Record<string, string[]>>> {
+    ): Promise<Record<string, Record<string, string[][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
     }
 
