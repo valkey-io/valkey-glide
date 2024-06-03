@@ -790,14 +790,18 @@ public class CommandTests {
         Route route = new SlotKeyRoute("1", PRIMARY);
 
         var promise =
-                withRoute ? clusterClient.functionLoad(code, route) : clusterClient.functionLoad(code);
+                withRoute
+                        ? clusterClient.functionLoad(code, false, route)
+                        : clusterClient.functionLoad(code, false);
         assertEquals(libName, promise.get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
         // TODO test with FUNCTION LIST
 
         // re-load library without overwriting
         promise =
-                withRoute ? clusterClient.functionLoad(code, route) : clusterClient.functionLoad(code);
+                withRoute
+                        ? clusterClient.functionLoad(code, false, route)
+                        : clusterClient.functionLoad(code, false);
         var executionException = assertThrows(ExecutionException.class, promise::get);
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
@@ -806,8 +810,8 @@ public class CommandTests {
         // re-load library with overwriting
         var promise2 =
                 withRoute
-                        ? clusterClient.functionLoadReplace(code, route)
-                        : clusterClient.functionLoadReplace(code);
+                        ? clusterClient.functionLoad(code, true, route)
+                        : clusterClient.functionLoad(code, true);
         assertEquals(libName, promise2.get());
         String newCode =
                 code
@@ -816,8 +820,8 @@ public class CommandTests {
                         + "', function(keys, args) return #args end)";
         promise2 =
                 withRoute
-                        ? clusterClient.functionLoadReplace(newCode, route)
-                        : clusterClient.functionLoadReplace(newCode);
+                        ? clusterClient.functionLoad(newCode, true, route)
+                        : clusterClient.functionLoad(newCode, true);
         assertEquals(libName, promise2.get());
         // TODO test with FCALL
     }

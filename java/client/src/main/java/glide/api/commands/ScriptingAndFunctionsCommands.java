@@ -13,35 +13,20 @@ import java.util.concurrent.CompletableFuture;
 public interface ScriptingAndFunctionsCommands {
 
     /**
-     * Loads a library to Redis unless a library with the same name exists. Use {@link
-     * #functionLoadReplace} to replace existing libraries.
+     * Loads a library to Redis.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
+     * @param replace Whether the given library should overwrite a library with the same name if it
+     *     already exists.
      * @return The library name that was loaded.
      * @example
      *     <pre>{@code
      * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * String response = client.functionLoad(code).get();
+     * String response = client.functionLoad(code, true).get();
      * assert response.equals("mylib");
      * }</pre>
      */
-    CompletableFuture<String> functionLoad(String libraryCode);
-
-    /**
-     * Loads a library to Redis and overwrites a library with the same name if it exists.
-     *
-     * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
-     * @param libraryCode The source code that implements the library.
-     * @return The library name that was loaded.
-     * @example
-     *     <pre>{@code
-     * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * String response = client.functionLoadReplace(code).get();
-     * assert response.equals("mylib");
-     * }</pre>
-     */
-    CompletableFuture<String> functionLoadReplace(String libraryCode);
+    CompletableFuture<String> functionLoad(String libraryCode, boolean replace);
 }

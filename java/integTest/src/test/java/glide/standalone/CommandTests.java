@@ -346,22 +346,22 @@ public class CommandTests {
                 "#!lua name="
                         + libName
                         + " \n redis.register_function('myfunc1c', function(keys, args) return args[1] end)";
-        assertEquals(libName, regularClient.functionLoad(code).get());
+        assertEquals(libName, regularClient.functionLoad(code, false).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
         // TODO test with FUNCTION LIST
 
         // re-load library without overwriting
         var executionException =
-                assertThrows(ExecutionException.class, () -> regularClient.functionLoad(code).get());
+                assertThrows(ExecutionException.class, () -> regularClient.functionLoad(code, false).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("Library '" + libName + "' already exists"));
 
         // re-load library with overwriting
-        assertEquals(libName, regularClient.functionLoadReplace(code).get());
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
         String newCode =
                 code + "\n redis.register_function('myfunc2c', function(keys, args) return #args end)";
-        assertEquals(libName, regularClient.functionLoadReplace(newCode).get());
+        assertEquals(libName, regularClient.functionLoad(newCode, true).get());
         // TODO test with FCALL
     }
 }

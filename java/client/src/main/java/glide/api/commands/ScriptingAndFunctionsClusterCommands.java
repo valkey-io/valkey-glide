@@ -13,47 +13,32 @@ import java.util.concurrent.CompletableFuture;
 public interface ScriptingAndFunctionsClusterCommands {
 
     /**
-     * Loads a library to Redis unless a library with the same name exists. Use {@link
-     * #functionLoadReplace(String)} to replace existing libraries.<br>
+     * Loads a library to Redis.<br>
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
+     * @param replace Whether the given library should overwrite a library with the same name if it
+     *     already exists.
      * @return The library name that was loaded.
      * @example
      *     <pre>{@code
      * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * String response = client.functionLoad(code).get();
+     * String response = client.functionLoad(code, true).get();
      * assert response.equals("mylib");
      * }</pre>
      */
-    CompletableFuture<String> functionLoad(String libraryCode);
+    CompletableFuture<String> functionLoad(String libraryCode, boolean replace);
 
     /**
-     * Loads a library to Redis and overwrites a library with the same name if it exists.<br>
-     * The command will be routed to all primary nodes.
+     * Loads a library to Redis.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
-     * @return The library name that was loaded.
-     * @example
-     *     <pre>{@code
-     * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * String response = client.functionLoadReplace(code).get();
-     * assert response.equals("mylib");
-     * }</pre>
-     */
-    CompletableFuture<String> functionLoadReplace(String libraryCode);
-
-    /**
-     * Loads a library to Redis unless a library with the same name exists. Use {@link
-     * #functionLoadReplace(String, Route)} to replace existing libraries.<br>
-     *
-     * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
-     * @param libraryCode The source code that implements the library.
+     * @param replace Whether the given library should overwrite a library with the same name if it
+     *     already exists.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return The library name that was loaded.
@@ -61,27 +46,9 @@ public interface ScriptingAndFunctionsClusterCommands {
      *     <pre>{@code
      * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
      * Route route = new SlotKeyRoute("key", PRIMARY);
-     * String response = client.functionLoad(code, route).get();
+     * String response = client.functionLoad(code, true, route).get();
      * assert response.equals("mylib");
      * }</pre>
      */
-    CompletableFuture<String> functionLoad(String libraryCode, Route route);
-
-    /**
-     * Loads a library to Redis and overwrites a library with the same name if it exists.
-     *
-     * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
-     * @param libraryCode The source code that implements the library.
-     * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>.
-     * @return The library name that was loaded.
-     * @example
-     *     <pre>{@code
-     * String code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)";
-     * String response = client.functionLoadReplace(code, ALL_NODES).get();
-     * assert response.equals("mylib");
-     * }</pre>
-     */
-    CompletableFuture<String> functionLoadReplace(String libraryCode, Route route);
+    CompletableFuture<String> functionLoad(String libraryCode, boolean replace, Route route);
 }
