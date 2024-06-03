@@ -118,7 +118,7 @@ public interface GenericCommands {
     CompletableFuture<Boolean> copy(String source, String destination, long destinationDB);
 
     /**
-     * Return a random key from the currently selected database.
+     * Return a random key.
      *
      * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
      * @return A random <code>key</code> from the database.
