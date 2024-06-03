@@ -9,6 +9,7 @@ import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
+import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -186,7 +187,6 @@ import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
-import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -3573,30 +3573,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Loads a library to Redis unless a library with the same name exists. Use {@link
-     * #functionLoadReplace} to replace existing libraries.
+     * Loads a library to Redis.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
+     * @param replace Whether the given library should overwrite a library with the same name if it
+     *     already exists.
      * @return Command Response - The library name that was loaded.
      */
-    public T functionLoad(@NonNull String libraryCode) {
-        ArgsArray commandArgs = buildArgs(libraryCode);
-        protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Loads a library to Redis and overwrites a library with the same name if it exists.
-     *
-     * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
-     * @param libraryCode The source code that implements the library.
-     * @return Command Response - The library name that was loaded.
-     */
-    public T functionLoadReplace(@NonNull String libraryCode) {
-        ArgsArray commandArgs = buildArgs(FunctionLoadOptions.REPLACE.toString(), libraryCode);
+    public T functionLoad(@NonNull String libraryCode, boolean replace) {
+        ArgsArray commandArgs =
+                replace ? buildArgs(REPLACE.toString(), libraryCode) : buildArgs(libraryCode);
         protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
         return getThis();
     }
