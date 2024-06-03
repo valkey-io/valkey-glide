@@ -11,6 +11,7 @@ import {
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
+    AggregationType,
     ExpireOptions,
     KeyWeight,
     RangeByIndex,
@@ -1899,7 +1900,7 @@ export class BaseClient {
     public zinterstore(
         destination: string,
         keys: (string | KeyWeight)[],
-        aggregationType?: "SUM" | "MIN" | "MAX",
+        aggregationType?: AggregationType,
     ): Promise<number> {
         return this.createWritePromise(
             createZInterstore(destination, keys, aggregationType),

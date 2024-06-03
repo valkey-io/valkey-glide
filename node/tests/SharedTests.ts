@@ -1890,7 +1890,7 @@ export function runBaseTests<Context>(config: {
                     stop: -1,
                 };
                 const membersScores1 = { one: 1.0, two: 2.0 };
-                const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+                const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
 
                 expect(await client.zadd(key1, membersScores1)).toEqual(2);
                 expect(await client.zadd(key2, membersScores2)).toEqual(3);
@@ -1901,8 +1901,8 @@ export function runBaseTests<Context>(config: {
                     range,
                 );
                 const expectedMap = {
-                    one: 2.5,
-                    two: 4.5,
+                    one: 3,
+                    two: 5,
                 };
                 expect(compareMaps(zinterstoreMap, expectedMap)).toBe(true);
 
@@ -1915,8 +1915,8 @@ export function runBaseTests<Context>(config: {
                     range,
                 );
                 const expectedMapMax = {
-                    one: 1.5,
-                    two: 2.5,
+                    one: 2,
+                    two: 3,
                 };
                 expect(compareMaps(zinterstoreMapMax, expectedMapMax)).toBe(
                     true,
@@ -1931,8 +1931,8 @@ export function runBaseTests<Context>(config: {
                     range,
                 );
                 const expectedMapMin = {
-                    one: 1.0,
-                    two: 2.0,
+                    one: 1,
+                    two: 2,
                 };
                 expect(compareMaps(zinterstoreMapMin, expectedMapMin)).toBe(
                     true,
@@ -1947,8 +1947,8 @@ export function runBaseTests<Context>(config: {
                     range,
                 );
                 const expectedMapSum = {
-                    one: 2.5,
-                    two: 4.5,
+                    one: 3,
+                    two: 5,
                 };
                 expect(compareMaps(zinterstoreMapSum, expectedMapSum)).toBe(
                     true,
@@ -1970,8 +1970,8 @@ export function runBaseTests<Context>(config: {
                     range,
                 );
                 const expectedMapMultiplied = {
-                    one: 5.0,
-                    two: 9.0,
+                    one: 6,
+                    two: 10,
                 };
                 expect(
                     compareMaps(

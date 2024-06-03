@@ -3,6 +3,7 @@
  */
 
 import {
+    AggregationType,
     ExpireOptions,
     InfoOptions,
     KeyWeight,
@@ -1053,7 +1054,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     public zinterstore(
         destination: string,
         keys: (string | KeyWeight)[],
-        aggregationType?: "SUM" | "MIN" | "MAX",
+        aggregationType?: AggregationType,
     ): T {
         return this.addAndReturn(
             createZInterstore(destination, keys, aggregationType),
