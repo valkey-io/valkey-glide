@@ -1304,6 +1304,10 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sintercard(self, redis_client: TRedisClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         key3 = f"{{testKey}}:{get_random_string(10)}"
