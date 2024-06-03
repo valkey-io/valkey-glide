@@ -14,6 +14,10 @@ import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
+import static glide.api.models.commands.bitmap.BitFieldOptions.GET_COMMAND_STRING;
+import static glide.api.models.commands.bitmap.BitFieldOptions.INCRBY_COMMAND_STRING;
+import static glide.api.models.commands.bitmap.BitFieldOptions.OVERFLOW_COMMAND_STRING;
+import static glide.api.models.commands.bitmap.BitFieldOptions.SET_COMMAND_STRING;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
@@ -203,12 +207,15 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitFieldOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
+import glide.api.models.commands.bitmap.BitFieldOptions.OffsetMultiplier;
 import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
+import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.function.FunctionLoadOptions;
@@ -5413,9 +5420,20 @@ public class RedisClientTest {
     public void bitfieldReadOnly_returns_success() {
         // setup
         String key = "testKey";
-        Long[] result = new Long[] {7L};
-        BitFieldGet subcommand = new BitFieldGet(new SignedEncoding(4), new Offset(2));
-        String[] args = ArrayUtils.addFirst(subcommand.toArgs(), key);
+        Long[] result = new Long[] {7L, 8L};
+        Offset offset = new Offset(1);
+        OffsetMultiplier offsetMultiplier = new OffsetMultiplier(8);
+        BitFieldGet subcommand1 = new BitFieldGet(new UnsignedEncoding(4), offset);
+        BitFieldGet subcommand2 = new BitFieldGet(new SignedEncoding(5), offsetMultiplier);
+        String[] args = {
+            key,
+            BitFieldOptions.GET_COMMAND_STRING,
+            BitFieldOptions.UNSIGNED_ENCODING_PREFIX.concat("4"),
+            offset.getOffset(),
+            BitFieldOptions.GET_COMMAND_STRING,
+            BitFieldOptions.SIGNED_ENCODING_PREFIX.concat("5"),
+            offsetMultiplier.getOffset()
+        };
         CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
         testResponse.complete(result);
 
@@ -5425,7 +5443,7 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long[]> response =
-                service.bitfieldReadOnly(key, new BitFieldReadOnlySubCommands[] {subcommand});
+                service.bitfieldReadOnly(key, new BitFieldReadOnlySubCommands[] {subcommand1, subcommand2});
         Long[] payload = response.get();
 
         // verify
@@ -5438,9 +5456,30 @@ public class RedisClientTest {
     public void bitfield_returns_success() {
         // setup
         String key = "testKey";
-        Long[] result = new Long[] {7L};
-        BitFieldSet subcommand = new BitFieldSet(new SignedEncoding(4), new Offset(2), 3);
-        String[] args = ArrayUtils.addFirst(subcommand.toArgs(), key);
+        Long[] result = new Long[] {7L, 8L, 9L};
+        UnsignedEncoding u2 = new UnsignedEncoding(2);
+        SignedEncoding i8 = new SignedEncoding(8);
+        Offset offset = new Offset(1);
+        OffsetMultiplier offsetMultiplier = new OffsetMultiplier(8);
+        long setValue = 2;
+        long incrbyValue = 5;
+        String[] args =
+                new String[] {
+                    key,
+                    SET_COMMAND_STRING,
+                    u2.getEncoding(),
+                    offset.getOffset(),
+                    Long.toString(setValue),
+                    GET_COMMAND_STRING,
+                    i8.getEncoding(),
+                    offsetMultiplier.getOffset(),
+                    OVERFLOW_COMMAND_STRING,
+                    BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT.toString(),
+                    INCRBY_COMMAND_STRING,
+                    u2.getEncoding(),
+                    offset.getOffset(),
+                    Long.toString(incrbyValue)
+                };
         CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
         testResponse.complete(result);
 
@@ -5450,7 +5489,15 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long[]> response =
-                service.bitfield(key, new BitFieldSubCommands[] {subcommand});
+                service.bitfield(
+                        key,
+                        new BitFieldSubCommands[] {
+                            new BitFieldSet(u2, offset, setValue),
+                            new BitFieldGet(i8, offsetMultiplier),
+                            new BitFieldOptions.BitFieldOverflow(
+                                    BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT),
+                            new BitFieldOptions.BitFieldIncrby(u2, offset, incrbyValue),
+                        });
         Long[] payload = response.get();
 
         // verify

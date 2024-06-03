@@ -254,7 +254,7 @@ public interface BitmapBaseCommands {
      * @see <a href="https://redis.io/commands/bitfield/">redis.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed on the binary value of the
-     *     string at <code>key</code>.
+     *     string at <code>key</code>, which could be any of the following:
      *     <ul>
      *       <li>{@link BitFieldGet}.
      *       <li>{@link BitFieldSet}.
@@ -262,7 +262,7 @@ public interface BitmapBaseCommands {
      *       <li>{@link BitFieldOverflow}.
      *     </ul>
      *
-     * @return An <code>array</code> of results from subcommands.
+     * @return An <code>array</code> of results from the executed subcommands.
      *     <ul>
      *       <li>{@link BitFieldGet} returns the value in {@link Offset} or {@link OffsetMultiplier}.
      *       <li>{@link BitFieldSet} returns the old value in {@link Offset} or {@link
@@ -271,7 +271,7 @@ public interface BitmapBaseCommands {
      *           OffsetMultiplier}.
      *       <li>{@link BitFieldOverflow} determines the behaviour of <code>SET</code> and <code>
      *           INCRBY</code> when an overflow occurs. <code>OVERFLOW</code> does not return a value
-     *           does not contribute a value to the array response.
+     *           and does not contribute a value to the array response.
      *     </ul>
      *
      * @example
@@ -295,15 +295,15 @@ public interface BitmapBaseCommands {
      * @see <a href="https://redis.io/docs/latest/commands/bitfield_ro/">redis.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed.
-     * @return An array of results from <code>GET</code> subcommands.
+     * @return An array of results from the <code>GET</code> subcommands.
      * @example
      *     <pre>{@code
      * client.set("sampleKey", "A"); // "A" has binary value 01000001
      * Long[] payload =
      *      client.
-     *          bitfield(
+     *          bitfieldReadOnly(
      *              "sampleKey",
-     *              new BitFieldSubCommands[] {
+     *              new BitFieldReadOnlySubCommands[] {
      *                  new BitFieldGet(new UnsignedEncoding(2), new Offset(1))
      *              })
      *          .get();

@@ -187,6 +187,7 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitFieldOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSet;
@@ -897,13 +898,28 @@ public class TransactionTests {
         transaction.bitfieldReadOnly(
                 "key",
                 new BitFieldReadOnlySubCommands[] {new BitFieldGet(new SignedEncoding(5), new Offset(3))});
-        results.add(Pair.of(BitFieldReadOnly, buildArgs("key", "GET", "i5", "3")));
+        results.add(
+                Pair.of(
+                        BitFieldReadOnly,
+                        buildArgs(
+                                "key",
+                                BitFieldOptions.GET_COMMAND_STRING,
+                                BitFieldOptions.SIGNED_ENCODING_PREFIX.concat("5"),
+                                "3")));
         transaction.bitfield(
                 "key",
                 new BitFieldSubCommands[] {
                     new BitFieldSet(new UnsignedEncoding(10), new OffsetMultiplier(3), 4)
                 });
-        results.add(Pair.of(BitField, buildArgs("key", "SET", "u10", "#3", "4")));
+        results.add(
+                Pair.of(
+                        BitField,
+                        buildArgs(
+                                "key",
+                                BitFieldOptions.SET_COMMAND_STRING,
+                                BitFieldOptions.UNSIGNED_ENCODING_PREFIX.concat("10"),
+                                BitFieldOptions.OFFSET_MULTIPLIER_PREFIX.concat("3"),
+                                "4")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

@@ -4005,7 +4005,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/bitfield/">redis.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed on the binary value of the
-     *     string at <code>key</code>.
+     *     string at <code>key</code>, which could be any of the following:
      *     <ul>
      *       <li>{@link BitFieldGet}.
      *       <li>{@link BitFieldSet}.
@@ -4013,7 +4013,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>{@link BitFieldOverflow}.
      *     </ul>
      *
-     * @return Command Response - An <code>array</code> of results from subcommands.
+     * @return Command Response - An <code>array</code> of results from the executed subcommands.
      *     <ul>
      *       <li>{@link BitFieldGet} returns the value in {@link Offset} or {@link OffsetMultiplier}.
      *       <li>{@link BitFieldSet} returns the old value in {@link Offset} or {@link
@@ -4039,7 +4039,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/docs/latest/commands/bitfield_ro/">redis.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed.
-     * @return Command Response - An array of results from <code>GET</code> subcommands.
+     * @return Command Response - An array of results from the <code>GET</code> subcommands.
      */
     public T bitfieldReadOnly(
             @NonNull String key, @NonNull BitFieldReadOnlySubCommands[] subCommands) {

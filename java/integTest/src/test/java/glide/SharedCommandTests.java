@@ -4607,7 +4607,7 @@ public class SharedCommandTests {
                                     unsignedOffsetGet,
                                     // Get value in: 01100(110) 01101111 01101111 01100010 01100001 01110010 00010100
                                     new BitFieldGet(new SignedEncoding(3), new Offset(5)),
-                                    // Get value in: 01100110 01101(111 0110)1111 01100010 01100001 01110010 00010100
+                                    // Get value in: 01100110 01101111 01101(111 0110)0010 01100001 01110010 00010100
                                     new BitFieldGet(new UnsignedEncoding(7), new OffsetMultiplier(3)),
                                     // Get value in: 01100110 01101111 (01101111) 01100010 01100001 01110010 00010100
                                     new BitFieldGet(new SignedEncoding(8), new OffsetMultiplier(2))
@@ -4618,6 +4618,10 @@ public class SharedCommandTests {
                 client
                         .bitfieldReadOnly(emptyKey, new BitFieldReadOnlySubCommands[] {unsignedOffsetGet})
                         .get());
+
+        // Empty subcommands return an empty array
+        assertArrayEquals(
+                new Long[] {}, client.bitfieldReadOnly(key2, new BitFieldReadOnlySubCommands[] {}).get());
 
         // Exception thrown due to the key holding a value with the wrong type
         assertEquals(1, client.sadd(key2, new String[] {foobar}).get());
@@ -4658,7 +4662,7 @@ public class SharedCommandTests {
                                         .get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
-        // Encoding must be < 65 for unsigned bit encoding
+        // Encoding must be < 64 for unsigned bit encoding
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -4672,7 +4676,7 @@ public class SharedCommandTests {
                                         .get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
-        // Encoding must be < 64 for signed bit encoding
+        // Encoding must be < 65 for signed bit encoding
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -4719,10 +4723,10 @@ public class SharedCommandTests {
                                     new BitFieldSet(u2, offset1, 2),
                                     // binary value becomes: 01000(011) 01101111 01101111 01100010 01100001 01110010
                                     new BitFieldSet(i3, offset5, 3),
-                                    // binary value becomes: 01000011 01101111 01101111 011(00010 010)00001 01110010
+                                    // binary value becomes: 01000011 01101111 01101111 0110(0010 010)00001 01110010
                                     new BitFieldSet(u7, offsetMultiplier4, 18),
                                     // binary value becomes: 01000011 01101111 01101111 01100010 01000001 01110010
-                                    // (00010100)
+                                    // 00000000 00000000 (00010100)
                                     new BitFieldSet(i8, offsetMultiplier8, 20),
                                     new BitFieldGet(u2, offset1),
                                     new BitFieldGet(i3, offset5),
@@ -4739,21 +4743,21 @@ public class SharedCommandTests {
                                 key1,
                                 new BitFieldSubCommands[] {
                                     // binary value becomes: 0(11)00011 01101111 01101111 01100010 01000001 01110010
-                                    // 00010100
+                                    // 00000000 00000000  00010100
                                     new BitFieldIncrby(u2, offset1, 1),
                                     // binary value becomes: 01100(101) 01101111 01101111 01100010 01000001 01110010
-                                    // 00010100
+                                    // 00000000 00000000 00010100
                                     new BitFieldIncrby(i3, offset5, 2),
                                     // binary value becomes: 01100101 01101111 01101111 011(00001 111)00001 01110010
-                                    // 00010100
+                                    // 00000000 00000000 00010100
                                     new BitFieldIncrby(u7, offsetMultiplier4, -3),
                                     // binary value becomes: 01100101 01101111 01101111 01100001 11100001 01110010
-                                    // (00011110)
+                                    // 00000000 00000000 (00011110)
                                     new BitFieldIncrby(i8, offsetMultiplier8, 10)
                                 })
                         .get());
 
-        // OVERFLOW WRAP is equal to without OVERFLOW WRAP when an overflow occurs
+        // OVERFLOW WRAP is used by default if no OVERFLOW is specified
         assertArrayEquals(
                 new Long[] {0L, 2L, 2L},
                 client
@@ -4782,6 +4786,9 @@ public class SharedCommandTests {
                                     overflowSet
                                 })
                         .get());
+
+        // Empty subcommands return an empty array
+        assertArrayEquals(new Long[] {}, client.bitfield(key2, new BitFieldSubCommands[] {}).get());
 
         // Exceptions
         // Encoding must be > 0
@@ -4812,7 +4819,7 @@ public class SharedCommandTests {
                                         .get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
-        // Unsigned bit encoding must be < 65
+        // Unsigned bit encoding must be < 64
         executionException =
                 assertThrows(
                         ExecutionException.class,
@@ -4826,7 +4833,7 @@ public class SharedCommandTests {
                                         .get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
-        // Signed bit encoding must be < 64
+        // Signed bit encoding must be < 65
         executionException =
                 assertThrows(
                         ExecutionException.class,
