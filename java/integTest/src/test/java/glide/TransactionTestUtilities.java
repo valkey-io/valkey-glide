@@ -375,6 +375,8 @@ public class TransactionTestUtilities {
         String setKey2 = "{setKey}-2-" + UUID.randomUUID();
         String setKey3 = "{setKey}-3-" + UUID.randomUUID();
         String setKey4 = "{setKey}-4-" + UUID.randomUUID();
+        String setKey5 = "{setKey}-5-" + UUID.randomUUID();
+        String setKey6 = "{setKey}-6-" + UUID.randomUUID();
 
         transaction
                 .sadd(setKey1, new String[] {"baz", "foo"})
@@ -395,25 +397,47 @@ public class TransactionTestUtilities {
                 .srandmember(setKey4, 2)
                 .srandmember(setKey4, -2);
 
-        return new Object[] {
-            2L, // sadd(setKey1, new String[] {"baz", "foo"});
-            1L, // srem(setKey1, new String[] {"foo"});
-            1L, // scard(setKey1);
-            true, // sismember(setKey1, "baz")
-            Set.of("baz"), // smembers(setKey1);
-            new Boolean[] {true, false}, // smismembmer(setKey1, new String[] {"baz", "foo"})
-            Set.of("baz"), // sinter(new String[] { setKey1, setKey1 })
-            2L, // sadd(setKey2, new String[] { "a", "b" })
-            3L, // sunionstore(setKey3, new String[] { setKey2, setKey1 })
-            2L, // sdiffstore(setKey3, new String[] { setKey2, setKey1 })
-            0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
-            Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
-            true, // smove(setKey1, setKey2, "baz")
-            1L, // sadd(setKey4, {"foo})
-            "foo", // srandmember(setKey4)
-            new String[] {"foo"}, // srandmember(setKey4, 2)
-            new String[] {"foo", "foo"}, // srandmember(setKey4, -2)
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .sadd(setKey5, new String[] {"one", "two", "three", "four"})
+                    .sadd(setKey6, new String[] {"two", "three", "four", "five"})
+                    .sintercard(new String[] {setKey5, setKey6})
+                    .sintercard(new String[] {setKey5, setKey6}, 2);
+        }
+
+        var expectedResults =
+                new Object[] {
+                    2L, // sadd(setKey1, new String[] {"baz", "foo"});
+                    1L, // srem(setKey1, new String[] {"foo"});
+                    1L, // scard(setKey1);
+                    true, // sismember(setKey1, "baz")
+                    Set.of("baz"), // smembers(setKey1);
+                    new Boolean[] {true, false}, // smismembmer(setKey1, new String[] {"baz", "foo"})
+                    Set.of("baz"), // sinter(new String[] { setKey1, setKey1 })
+                    2L, // sadd(setKey2, new String[] { "a", "b" })
+                    3L, // sunionstore(setKey3, new String[] { setKey2, setKey1 })
+                    2L, // sdiffstore(setKey3, new String[] { setKey2, setKey1 })
+                    0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
+                    Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
+                    true, // smove(setKey1, setKey2, "baz")
+                    1L, // sadd(setKey4, {"foo})
+                    "foo", // srandmember(setKey4)
+                    new String[] {"foo"}, // srandmember(setKey4, 2)
+                    new String[] {"foo", "foo"}, // srandmember(setKey4, -2)};
+                };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                4L, // sadd(setKey5, {"one", "two", "three", "four"})
+                                4L, // sadd(setKey6, {"two", "three", "four", "five"})
+                                3L, // sintercard({setKey5, setKey6})
+                                2L, // sintercard({setKey5, setKey6}, 2)
+                            });
+        }
+
+        return expectedResults;
     }
 
     private static Object[] sortedSetCommands(BaseTransaction<?> transaction) {
