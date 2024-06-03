@@ -2,7 +2,6 @@
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener;
-use pyo3::exceptions::PyUnicodeDecodeError;
 use pyo3::prelude::*;
 use pyo3::types::{PyBool, PyDict, PyFloat, PyList, PySet};
 use pyo3::Python;
@@ -111,10 +110,13 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
             Value::SimpleString(str) => Ok(str.into_py(py)),
             Value::Okay => Ok("OK".into_py(py)),
             Value::Int(num) => Ok(num.into_py(py)),
-            Value::BulkString(data) => match std::str::from_utf8(data.as_ref()) {
-                Ok(val) => Ok(val.into_py(py)),
-                Err(_err) => Err(PyUnicodeDecodeError::new_err(data)),
-            },
+            Value::BulkString(data) => {
+                // TODO: for now, and in order to keep the current tests to work,
+                // we still return a UTF-8 encoded string instead of `&[u8]`. This needs
+                // to be changed
+                let value_str = String::from_utf8_lossy(&data);
+                Ok(value_str.into_py(py))
+            }
             Value::Array(bulk) => {
                 let elements: &PyList = PyList::new(py, iter_to_value(py, bulk)?);
                 Ok(elements.into_py(py))
