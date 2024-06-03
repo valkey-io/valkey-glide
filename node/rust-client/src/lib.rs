@@ -10,10 +10,12 @@ use tikv_jemallocator::Jemalloc;
 static GLOBAL: Jemalloc = Jemalloc;
 
 use byteorder::{LittleEndian, WriteBytesExt};
+use bytes::Bytes;
 use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 #[cfg(feature = "testing_utilities")]
 use napi::bindgen_prelude::BigInt;
+use napi::bindgen_prelude::Uint8Array;
 use napi::{Env, Error, JsObject, JsUnknown, Result, Status};
 use napi_derive::napi;
 use num_traits::sign::Signed;
@@ -256,8 +258,10 @@ pub fn create_leaked_string(message: String) -> [u32; 2] {
 }
 
 #[napi(ts_return_type = "[number, number]")]
-pub fn create_leaked_string_vec(message: Vec<String>) -> [u32; 2] {
-    let pointer = Box::leak(Box::new(message)) as *mut Vec<String>;
+pub fn create_leaked_string_vec(message: Vec<Uint8Array>) -> [u32; 2] {
+    // Convert the string vec -> Bytes vector
+    let bytes_vec: Vec<Bytes> = message.iter().map(|v| Bytes::from(v.to_vec())).collect();
+    let pointer = Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes>;
     split_pointer(pointer)
 }
 

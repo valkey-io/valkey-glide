@@ -195,7 +195,9 @@ class BaseRedisClient(CoreCommands):
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
-        request.single_command.args_array.args[:] = args  # TODO - use arg pointer
+        request.single_command.args_array.args[:] = [
+            bytes(elem, encoding="utf8") for elem in args
+        ]  # TODO - use arg pointer
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -214,7 +216,9 @@ class BaseRedisClient(CoreCommands):
         for requst_type, args in commands:
             command = Command()
             command.request_type = requst_type
-            command.args_array.args[:] = args
+            # For now, we allow the user to pass the command as array of strings
+            # we convert them here into bytearray (the datatype that our rust core expects)
+            command.args_array.args[:] = [bytes(elem, encoding="utf8") for elem in args]
             transaction_commands.append(command)
         request.transaction.commands.extend(transaction_commands)
         set_protobuf_route(request, route)

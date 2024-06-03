@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import com.google.protobuf.ByteString;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.Script;
 import glide.api.models.Transaction;
@@ -162,7 +163,7 @@ public class CommandManager {
             RequestType requestType, String[] arguments, Route route) {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
         for (var arg : arguments) {
-            commandArgs.addArgs(arg);
+            commandArgs.addArgs(ByteString.copyFromUtf8(arg));
         }
 
         var builder =
@@ -235,7 +236,7 @@ public class CommandManager {
     protected RedisRequest.Builder prepareRedisRequest(RequestType requestType, String[] arguments) {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
         for (var arg : arguments) {
-            commandArgs.addArgs(arg);
+            commandArgs.addArgs(ByteString.copyFromUtf8(arg));
         }
 
         return RedisRequest.newBuilder()

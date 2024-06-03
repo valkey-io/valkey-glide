@@ -14,6 +14,7 @@ mod standalone_client_tests {
     use utilities::*;
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_report_disconnect_and_reconnect_after_temporary_disconnect(
         #[values(false, true)] use_tls: bool,
@@ -51,6 +52,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
     #[cfg(standalone_heartbeat)]
     fn test_detect_disconnect_and_reconnect_using_heartbeat(#[values(false, true)] use_tls: bool) {
@@ -193,12 +195,14 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_always_read_from_primary() {
         test_read_from_replica(ReadFromReplicaTestConfig::default());
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -210,6 +214,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_skip_disconnected_replicas() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -222,6 +227,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_read_from_primary_if_no_replica_is_connected() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -234,6 +240,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_do_not_read_from_disconnected_replica() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -247,6 +254,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_with_single_replica() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -260,6 +268,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_send_acl_request_to_all_nodes() {
         let mocks = create_primary_mock_with_replicas(2);
@@ -293,6 +302,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_set_database_id_after_reconnection() {
         let mut client_info_cmd = redis::Cmd::new();

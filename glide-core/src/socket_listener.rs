@@ -11,6 +11,7 @@ use crate::redis_request::{
 use crate::response;
 use crate::response::Response;
 use crate::retry_strategies::get_fixed_interval_backoff;
+use bytes::Bytes;
 use directories::BaseDirs;
 use dispose::{Disposable, Dispose};
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
@@ -272,13 +273,13 @@ fn get_redis_command(command: &Command) -> Result<Cmd, ClienUsageError> {
     match &command.args {
         Some(command::Args::ArgsArray(args_vec)) => {
             for arg in args_vec.args.iter() {
-                cmd.arg(arg.as_bytes());
+                cmd.arg(arg.as_ref());
             }
         }
         Some(command::Args::ArgsVecPointer(pointer)) => {
-            let res = *unsafe { Box::from_raw(*pointer as *mut Vec<String>) };
+            let res = *unsafe { Box::from_raw(*pointer as *mut Vec<Bytes>) };
             for arg in res {
-                cmd.arg(arg.as_bytes());
+                cmd.arg(arg.as_ref());
             }
         }
         None => {

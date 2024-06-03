@@ -4,6 +4,7 @@ package glide.api.models;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 
+import com.google.protobuf.ByteString;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
@@ -19,7 +20,8 @@ public class StandaloneTransactionTests {
         Transaction transaction = new Transaction();
 
         transaction.select(5L);
-        results.add(Pair.of(Select, ArgsArray.newBuilder().addArgs("5").build()));
+        results.add(
+                Pair.of(Select, ArgsArray.newBuilder().addArgs(ByteString.copyFromUtf8("5")).build()));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

@@ -168,6 +168,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
+import com.google.protobuf.ByteString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.ListDirection;
@@ -336,7 +337,7 @@ public class TransactionTests {
         results.add(Pair.of(LRange, buildArgs("key", "1", "2")));
 
         transaction.lindex("key", 1);
-        results.add(Pair.of(LIndex, ArgsArray.newBuilder().addArgs("key").addArgs("1").build()));
+        results.add(Pair.of(LIndex, buildArgs("key", "1")));
 
         transaction.ltrim("key", 1, 2);
         results.add(Pair.of(LTrim, buildArgs("key", "1", "2")));
@@ -360,8 +361,7 @@ public class TransactionTests {
         results.add(Pair.of(SAdd, buildArgs("key", "value")));
 
         transaction.sismember("key", "member");
-        results.add(
-                Pair.of(SIsMember, ArgsArray.newBuilder().addArgs("key").addArgs("member").build()));
+        results.add(Pair.of(SIsMember, buildArgs("key", "member")));
 
         transaction.srem("key", new String[] {"value"});
         results.add(Pair.of(SRem, buildArgs("key", "value")));
@@ -385,10 +385,7 @@ public class TransactionTests {
         results.add(Pair.of(SMIsMember, buildArgs("key", "1", "2")));
 
         transaction.sunionstore("key", new String[] {"set1", "set2"});
-        results.add(
-                Pair.of(
-                        SUnionStore,
-                        ArgsArray.newBuilder().addArgs("key").addArgs("set1").addArgs("set2").build()));
+        results.add(Pair.of(SUnionStore, buildArgs("key", "set1", "set2")));
 
         transaction.exists(new String[] {"key1", "key2"});
         results.add(Pair.of(Exists, buildArgs("key1", "key2")));
@@ -513,15 +510,7 @@ public class TransactionTests {
         results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2")));
 
         transaction.zdiffWithScores(new String[] {"key1", "key2"});
-        results.add(
-                Pair.of(
-                        ZDiff,
-                        ArgsArray.newBuilder()
-                                .addArgs("2")
-                                .addArgs("key1")
-                                .addArgs("key2")
-                                .addArgs(WITH_SCORES_REDIS_API)
-                                .build()));
+        results.add(Pair.of(ZDiff, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
 
         transaction.zdiffstore("destKey", new String[] {"key1", "key2"});
         results.add(Pair.of(ZDiffStore, buildArgs("destKey", "2", "key1", "key2")));
@@ -732,20 +721,13 @@ public class TransactionTests {
         results.add(Pair.of(Persist, buildArgs("key")));
 
         transaction.zrandmember("key");
-        results.add(Pair.of(ZRandMember, ArgsArray.newBuilder().addArgs("key").build()));
+        results.add(Pair.of(ZRandMember, buildArgs("key")));
 
         transaction.zrandmemberWithCount("key", 5);
-        results.add(Pair.of(ZRandMember, ArgsArray.newBuilder().addArgs("key").addArgs("5").build()));
+        results.add(Pair.of(ZRandMember, buildArgs("key", "5")));
 
         transaction.zrandmemberWithCountWithScores("key", 5);
-        results.add(
-                Pair.of(
-                        ZRandMember,
-                        ArgsArray.newBuilder()
-                                .addArgs("key")
-                                .addArgs("5")
-                                .addArgs(WITH_SCORES_REDIS_API)
-                                .build()));
+        results.add(Pair.of(ZRandMember, buildArgs("key", "5", WITH_SCORES_REDIS_API)));
 
         transaction.zincrby("key", 3.14, "value");
         results.add(Pair.of(ZIncrBy, buildArgs("key", "3.14", "value")));
@@ -793,21 +775,15 @@ public class TransactionTests {
         results.add(Pair.of(PfAdd, buildArgs("hll", "a", "b", "c")));
 
         transaction.pfcount(new String[] {"hll1", "hll2"});
-        results.add(Pair.of(PfCount, ArgsArray.newBuilder().addArgs("hll1").addArgs("hll2").build()));
+        results.add(Pair.of(PfCount, buildArgs("hll1", "hll2")));
         transaction.pfmerge("hll", new String[] {"hll1", "hll2"});
-        results.add(
-                Pair.of(
-                        PfMerge,
-                        ArgsArray.newBuilder().addArgs("hll").addArgs("hll1").addArgs("hll2").build()));
+        results.add(Pair.of(PfMerge, buildArgs("hll", "hll1", "hll2")));
 
         transaction.sdiff(new String[] {"key1", "key2"});
         results.add(Pair.of(SDiff, buildArgs("key1", "key2")));
 
         transaction.sdiffstore("key1", new String[] {"key2", "key3"});
-        results.add(
-                Pair.of(
-                        SDiffStore,
-                        ArgsArray.newBuilder().addArgs("key1").addArgs("key2").addArgs("key3").build()));
+        results.add(Pair.of(SDiffStore, buildArgs("key1", "key2", "key3")));
 
         transaction.objectEncoding("key");
         results.add(Pair.of(ObjectEncoding, buildArgs("key")));
@@ -923,7 +899,7 @@ public class TransactionTests {
     private ArgsArray buildArgs(String... args) {
         var builder = ArgsArray.newBuilder();
         for (var arg : args) {
-            builder.addArgs(arg);
+            builder.addArgs(ByteString.copyFromUtf8(arg));
         }
         return builder.build();
     }

@@ -102,12 +102,13 @@ fn benchmark_split_data(
     benchmark(c, test_group, benchmark_fn, "split_data", split_data());
 }
 
-fn generate_random_string(length: usize) -> String {
-    rand::thread_rng()
+fn generate_random_string(length: usize) -> bytes::Bytes {
+    let s: String = rand::thread_rng()
         .sample_iter(&Alphanumeric)
         .take(length)
         .map(char::from)
-        .collect()
+        .collect();
+    bytes::Bytes::from(s)
 }
 
 fn write_length(buffer: &mut Vec<u8>, length: u32) {
@@ -163,18 +164,18 @@ fn split_data() -> Vec<Vec<u8>> {
     vec![vec, vec1, vec2]
 }
 
-fn create_request(args: Vec<String>, args_pointer: bool) -> RedisRequest {
+fn create_request(args: Vec<bytes::Bytes>, args_pointer: bool) -> RedisRequest {
     let mut request = RedisRequest::new();
     request.callback_idx = 1;
     let mut command = Command::new();
     command.request_type = RequestType::CustomCommand.into();
     if args_pointer {
         command.args = Some(command::Args::ArgsVecPointer(Box::leak(Box::new(args))
-            as *mut Vec<String>
+            as *mut Vec<bytes::Bytes>
             as u64));
     } else {
         let mut args_array = command::ArgsArray::new();
-        args_array.args = args.into_iter().map(|str| str.into()).collect();
+        args_array.args = args;
         command.args = Some(command::Args::ArgsArray(args_array));
     }
     request.command = Some(redis_request::Command::SingleCommand(command));
