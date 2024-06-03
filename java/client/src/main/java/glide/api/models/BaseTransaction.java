@@ -155,6 +155,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
+import com.google.protobuf.ByteString;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -3997,7 +3998,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
 
         for (String string : stringArgs) {
-            commandArgs.addArgs(string);
+            commandArgs.addArgs(ByteString.copyFromUtf8(string));
         }
 
         return commandArgs.build();
