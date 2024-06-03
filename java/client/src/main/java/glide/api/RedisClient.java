@@ -18,6 +18,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
+import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -195,5 +196,11 @@ public class RedisClient extends BaseClient
         String[] arguments =
                 replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
         return commandManager.submitNewCommand(FunctionLoad, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
+        return commandManager.submitNewCommand(
+                Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
     }
 }
