@@ -708,21 +708,21 @@ mod tests {
     #[test]
     fn convert_xread() {
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("XREAD").arg("STREAMS").arg("key").arg("id")),
+            expected_type_for_cmd(redis::cmd("XREAD").arg("streams").arg("key").arg("id")),
             Some(ExpectedReturnType::Map {
-                key_type: &None,
+                key_type: &Some(ExpectedReturnType::BulkString),
                 value_type: &Some(ExpectedReturnType::Map {
-                    key_type: &None,
-                    value_type: &Some(ExpectedReturnType::ArrayOfPairs)
-                })
+                    key_type: &Some(ExpectedReturnType::BulkString),
+                    value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+                }),
             })
         ));
     }
 
     #[test]
     fn test_convert_empty_array_to_map_is_nil() {
-        let expected_type =
-            expected_type_for_cmd(redis::cmd("XREAD").arg("STREAMS").arg("key").arg("id"));
+        let mut cmd = redis::cmd("XREAD");
+        let expected_type = expected_type_for_cmd(cmd.arg("STREAMS").arg("key").arg("id"));
 
         // test convert nil is OK
         assert_eq!(
@@ -732,7 +732,7 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_2d_array_to_map_using_ExpectedReturnType_Map() {
+    fn test_convert_2d_array_to_map_using_expected_return_type_map() {
         // in RESP2, we get an array of arrays value like this:
         // 1) 1) "key1"
         //    2) 1) 1) "streamid-1"
@@ -788,8 +788,8 @@ mod tests {
         //    ...
         // #2) "key2"
         // ...
-        let expected_type =
-            expected_type_for_cmd(redis::cmd("XREAD").arg("STREAMS").arg("key").arg("id"));
+        let mut cmd = redis::cmd("XREAD");
+        let expected_type = expected_type_for_cmd(cmd.arg("STREAMS").arg("key").arg("id"));
         let converted_map =
             convert_to_expected_type(Value::Array(array_of_arrays), expected_type).unwrap();
 
@@ -806,10 +806,10 @@ mod tests {
         assert_eq!(
             Value::Map(vec![(
                 Value::BulkString(b"streamid-1".to_vec()),
-                Value::Array(vec![
+                Value::Array(vec![Value::Array(vec![
                     Value::BulkString(b"field1".to_vec()),
                     Value::BulkString(b"value1".to_vec()),
-                ]),
+                ]),]),
             ),]),
             *value,
         );
@@ -821,18 +821,22 @@ mod tests {
                 (
                     Value::BulkString(b"streamid-2".to_vec()),
                     Value::Array(vec![
-                        Value::BulkString(b"field21".to_vec()),
-                        Value::BulkString(b"value21".to_vec()),
-                        Value::BulkString(b"field22".to_vec()),
-                        Value::BulkString(b"value22".to_vec()),
+                        Value::Array(vec![
+                            Value::BulkString(b"field21".to_vec()),
+                            Value::BulkString(b"value21".to_vec()),
+                        ]),
+                        Value::Array(vec![
+                            Value::BulkString(b"field22".to_vec()),
+                            Value::BulkString(b"value22".to_vec()),
+                        ]),
                     ]),
                 ),
                 (
                     Value::BulkString(b"streamid-3".to_vec()),
-                    Value::Array(vec![
+                    Value::Array(vec![Value::Array(vec![
                         Value::BulkString(b"field3".to_vec()),
                         Value::BulkString(b"value3".to_vec()),
-                    ]),
+                    ]),]),
                 ),
             ]),
             *value,
@@ -840,7 +844,7 @@ mod tests {
     }
 
     #[test]
-    fn test_convert_map_with_inner_array_to_map_of_maps_using_ExpectedReturnType_Map() {
+    fn test_convert_map_with_inner_array_to_map_of_maps_using_expected_return_type_map() {
         // in RESP3, we get a map of arrays value like this:
         // 1# "key1" =>
         //    1) 1) "streamid-1"
@@ -896,8 +900,8 @@ mod tests {
         //    ...
         // #2) "key2"
         // ...
-        let expected_type =
-            expected_type_for_cmd(redis::cmd("XREAD").arg("STREAMS").arg("key").arg("id"));
+        let mut cmd = redis::cmd("XREAD");
+        let expected_type = expected_type_for_cmd(cmd.arg("STREAMS").arg("key").arg("id"));
         let converted_map =
             convert_to_expected_type(Value::Map(map_of_arrays), expected_type).unwrap();
 
@@ -914,10 +918,10 @@ mod tests {
         assert_eq!(
             Value::Map(vec![(
                 Value::BulkString(b"streamid-1".to_vec()),
-                Value::Array(vec![
+                Value::Array(vec![Value::Array(vec![
                     Value::BulkString(b"field1".to_vec()),
                     Value::BulkString(b"value1".to_vec()),
-                ]),
+                ]),]),
             ),]),
             *value,
         );
@@ -929,18 +933,22 @@ mod tests {
                 (
                     Value::BulkString(b"streamid-2".to_vec()),
                     Value::Array(vec![
-                        Value::BulkString(b"field21".to_vec()),
-                        Value::BulkString(b"value21".to_vec()),
-                        Value::BulkString(b"field22".to_vec()),
-                        Value::BulkString(b"value22".to_vec()),
+                        Value::Array(vec![
+                            Value::BulkString(b"field21".to_vec()),
+                            Value::BulkString(b"value21".to_vec()),
+                        ]),
+                        Value::Array(vec![
+                            Value::BulkString(b"field22".to_vec()),
+                            Value::BulkString(b"value22".to_vec()),
+                        ]),
                     ]),
                 ),
                 (
                     Value::BulkString(b"streamid-3".to_vec()),
-                    Value::Array(vec![
+                    Value::Array(vec![Value::Array(vec![
                         Value::BulkString(b"field3".to_vec()),
                         Value::BulkString(b"value3".to_vec()),
-                    ]),
+                    ]),]),
                 ),
             ]),
             *value,
