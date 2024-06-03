@@ -17,7 +17,7 @@ use std::ops::Deref;
 use std::time::Duration;
 pub use types::*;
 
-use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd};
+use self::value_conversion::{convert_to_expected_type, expected_type_for_cmd, get_value_type};
 mod reconnecting_connection;
 mod standalone_client;
 mod value_conversion;
@@ -135,10 +135,9 @@ fn parse_timeout_to_f64(cmd: &Cmd, timeout_idx: usize) -> RedisResult<f64> {
             ErrorKind::ResponseError,
             err_msg,
             format!(
-                "Expected to find timeout value at index {:?} for command {:?}. Recieved command = {:?}",
+                "Expected to find timeout value at index {:?} for command {:?}.",
                 timeout_idx,
                 std::str::from_utf8(&cmd.command().unwrap_or_default()),
-                cmd
             ),
         ))
     };
@@ -166,7 +165,7 @@ fn get_timeout_from_cmd_arg(
         Err(RedisError::from((
             ErrorKind::ResponseError,
             "Timeout cannot be negative",
-            format!("Recieved timeout={:?}", timeout_secs),
+            format!("Received timeout = {:?}.", timeout_secs),
         )))
     } else if timeout_secs == 0.0 {
         // `0` means we should set no timeout
@@ -177,7 +176,7 @@ fn get_timeout_from_cmd_arg(
             Err(RedisError::from((
                 ErrorKind::ResponseError,
                 "Timeout is out of range, max timeout is 2^32 - 1 (u32::MAX)",
-                format!("Recieved timeout={:?}", timeout_secs),
+                format!("Received timeout = {:?}.", timeout_secs),
             )))
         } else {
             // Extend the request timeout to ensure we don't timeout before receiving a response from the server.
@@ -262,7 +261,7 @@ impl Client {
                     return Err((
                         ErrorKind::ResponseError,
                         "Received non-array response for transaction",
-                        format!("Response: `{value:?}`"),
+                        format!("(response was {:?})", get_value_type(&value)),
                     )
                         .into());
                 }

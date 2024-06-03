@@ -44,14 +44,13 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to map",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
         ExpectedReturnType::MapOfStringToDouble => match value {
             Value::Nil => Ok(value),
             Value::Map(map) => {
-                let map_clone = map.clone();
                 let result = map
                     .into_iter()
                     .map(|(key, inner_value)| {
@@ -68,7 +67,7 @@ pub(crate) fn convert_to_expected_type(
                             _ => Err((
                                 ErrorKind::TypeError,
                                 "Response couldn't be converted to map of {string: double}",
-                                format!("(response was {:?})", map_clone),
+                                format!("(response was {:?})", get_value_type(&inner_value)),
                             )
                                 .into()),
                         }
@@ -85,7 +84,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to map of {string: double}",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
@@ -96,7 +95,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to set",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
@@ -125,7 +124,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to Array (ZRankResponseType)",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
@@ -143,7 +142,7 @@ pub(crate) fn convert_to_expected_type(
                             _ => Err((
                                 ErrorKind::TypeError,
                                 "Could not convert value to boolean",
-                                format!("(value was {:?})", item),
+                                format!("(response was {:?})", get_value_type(&item)),
                             )
                                 .into()),
                         },
@@ -152,20 +151,20 @@ pub(crate) fn convert_to_expected_type(
 
                 converted_array.map(Value::Array)
             }
-            Value::BulkString(bytes) => match std::str::from_utf8(&bytes) {
+            Value::BulkString(ref bytes) => match std::str::from_utf8(bytes) {
                 Ok("true") => Ok(Value::Boolean(true)),
                 Ok("false") => Ok(Value::Boolean(false)),
                 _ => Err((
                     ErrorKind::TypeError,
                     "Response couldn't be converted to boolean",
-                    format!("(response was {:?})", bytes),
+                    format!("(response was {:?})", get_value_type(&value)),
                 )
                     .into()),
             },
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to Json Toggle return type",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
@@ -174,7 +173,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of boolean",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
@@ -191,7 +190,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of doubles",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
@@ -223,7 +222,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to ZMPOP return type",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
@@ -257,7 +256,7 @@ pub(crate) fn convert_to_expected_type(
                         _ => Err((
                             ErrorKind::TypeError,
                             "Response couldn't be converted to an array of array of double or null. Inner value of Array must be Array or Null",
-                            format!("(Inner value was {:?})", item),
+                            format!("(response was {:?})", get_value_type(&item)),
                         )
                             .into()),
                     })
@@ -268,7 +267,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array of array of double or null",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
@@ -310,7 +309,7 @@ pub(crate) fn convert_to_expected_type(
                 _ => Err((
                     ErrorKind::TypeError,
                     "LOLWUT response couldn't be converted to a user-friendly format",
-                    (&format!("(response was {:?}...)", value)[..100]).into(),
+                    format!("(response was {:?})", get_value_type(&value)),
                 )
                     .into()),
             }
@@ -375,7 +374,7 @@ pub(crate) fn convert_to_expected_type(
             _ => Err((
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array containing a key, member, and score",
-                format!("(response was {:?})", value),
+                format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
         },
@@ -490,7 +489,7 @@ fn convert_to_array_of_pairs(
         _ => Err((
             ErrorKind::TypeError,
             "Response couldn't be converted to an array of key-value pairs",
-            format!("(response was {:?})", response),
+            format!("(response was {:?})", get_value_type(&response)),
         )
             .into()),
     }
@@ -568,6 +567,27 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         }
         b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
         _ => None,
+    }
+}
+
+/// Gets the enum variant as a string for the `value` given.
+pub(crate) fn get_value_type<'a>(value: &Value) -> &'a str {
+    match value {
+        Value::Nil => "Nil",
+        Value::Int(_) => "Int",
+        Value::BulkString(_) => "BulkString",
+        Value::Array(_) => "Array",
+        Value::SimpleString(_) => "SimpleString",
+        Value::Okay => "OK",
+        Value::Map(_) => "Map",
+        Value::Attribute { .. } => "Attribute",
+        Value::Set(_) => "Set",
+        Value::Double(_) => "Double",
+        Value::Boolean(_) => "Boolean",
+        Value::VerbatimString { .. } => "VerbatimString",
+        Value::BigNumber(_) => "BigNumber",
+        Value::Push { .. } => "Push",
+        // TODO Value::ServerError from https://github.com/redis-rs/redis-rs/pull/1093
     }
 }
 
