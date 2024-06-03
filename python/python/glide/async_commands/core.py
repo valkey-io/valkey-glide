@@ -463,9 +463,9 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.set("key", "value")
             >>> await client.getdel("key")
-            'value'
+               'value'
             >>> await client.getdel("key")
-            None
+                None
         """
         return cast(
             Optional[str], await self._execute_command(RequestType.GetDel, [key])

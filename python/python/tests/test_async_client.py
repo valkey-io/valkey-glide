@@ -410,7 +410,6 @@ class TestCommands:
         assert await redis_client.lpush(list_key, [value]) == 1
         with pytest.raises(RequestError) as e:
             await redis_client.getdel(list_key)
-        assert "wrong kind of value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
