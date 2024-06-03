@@ -23,6 +23,19 @@ beforeAll(() => {
     Logger.init("info");
 });
 
+/**
+ * Convert array of strings into array of `Uint8Array`
+ */
+export function convertStringArrayToBuffer(value: string[]): Uint8Array[] {
+    const bytesarr: Uint8Array[] = [];
+
+    for (const str of value) {
+        bytesarr.push(Buffer.from(str));
+    }
+
+    return bytesarr;
+}
+
 export type Client = {
     set: (key: string, value: string) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
