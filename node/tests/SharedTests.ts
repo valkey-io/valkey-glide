@@ -166,63 +166,6 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `set with return of old value works_%p`,
-        async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                // Adding random repetition, to prevent the inputs from always having the same alignment.
-                const value = uuidv4() + "0".repeat(Math.random() * 7);
-
-                let result = await client.set(key, value);
-                expect(result).toEqual("OK");
-
-                result = await client.set(key, "", {
-                    returnOldValue: true,
-                });
-                expect(result).toEqual(value);
-
-                result = await client.get(key);
-                expect(result).toEqual("");
-            }, protocol);
-        },
-        config.timeout,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `conditional set works_%p`,
-        async (protocol) => {
-            await runTest(async (client: BaseClient) => {
-                const key = uuidv4();
-                // Adding random repetition, to prevent the inputs from always having the same alignment.
-                const value = uuidv4() + "0".repeat(Math.random() * 7);
-                let result = await client.set(key, value, {
-                    conditionalSet: "onlyIfExists",
-                });
-                expect(result).toEqual(null);
-
-                result = await client.set(key, value, {
-                    conditionalSet: "onlyIfDoesNotExist",
-                });
-                expect(result).toEqual("OK");
-                expect(await client.get(key)).toEqual(value);
-
-                result = await client.set(key, "foobar", {
-                    conditionalSet: "onlyIfDoesNotExist",
-                });
-                expect(result).toEqual(null);
-
-                result = await client.set(key, "foobar", {
-                    conditionalSet: "onlyIfExists",
-                });
-                expect(result).toEqual("OK");
-
-                expect(await client.get(key)).toEqual("foobar");
-            }, protocol);
-        },
-        config.timeout,
-    );
-
-    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `custom command works_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -2523,6 +2466,218 @@ export function runBaseTests<Context>(config: {
                 // key exists, but it is not a HyperLogLog
                 expect(await client.set("foo", "value")).toEqual("OK");
                 await expect(client.pfadd("foo", [])).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    // Set command tests
+
+    async function setWithExpiryOptions(client: BaseClient) {
+        const key = uuidv4();
+        const value = uuidv4();
+        const setResWithExpirySetMilli = await client.set(key, value, {
+            expiry: {
+                type: "milliseconds",
+                count: 500,
+            },
+        });
+        expect(setResWithExpirySetMilli).toEqual("OK");
+        const getWithExpirySetMilli = await client.get(key);
+        expect(getWithExpirySetMilli).toEqual(value);
+
+        const setResWithExpirySec = await client.set(key, value, {
+            expiry: {
+                type: "seconds",
+                count: 1,
+            },
+        });
+        expect(setResWithExpirySec).toEqual("OK");
+        const getResWithExpirySec = await client.get(key);
+        expect(getResWithExpirySec).toEqual(value);
+
+        const setWithUnixSec = await client.set(key, value, {
+            expiry: {
+                type: "unixSeconds",
+                count: 1,
+            },
+        });
+        expect(setWithUnixSec).toEqual("OK");
+        const getWithUnixSec = await client.get(key);
+        expect(getWithUnixSec).toEqual(value);
+
+        const setResWithExpiryKeep = await client.set(key, value, {
+            expiry: "keepExisting",
+        });
+        expect(setResWithExpiryKeep).toEqual("OK");
+        const getResWithExpiryKeep = await client.get(key);
+        expect(getResWithExpiryKeep).toEqual(value);
+        // wait for the key to expire base on the previous set
+        setTimeout(() => {}, 1000);
+        const getResExpire = await client.get(key);
+        // key should have expired
+        expect(getResExpire).toEqual(null);
+
+        const setResWithExpiryWithUmilli = await client.set(key, value, {
+            expiry: {
+                type: "unixMilliseconds",
+                count: 2,
+            },
+        });
+        expect(setResWithExpiryWithUmilli).toEqual("OK");
+        // wait for the key to expire
+        setTimeout(() => {}, 3);
+        const getResWithExpiryWithUmilli = await client.get(key);
+        // key should have expired
+        expect(getResWithExpiryWithUmilli).toEqual(null);
+    }
+
+    async function setWithOnlyIfExistOptions(client: BaseClient) {
+        const key = uuidv4();
+        const value = uuidv4();
+        const setExistingKeyRes = await client.set(key, value, {
+            conditionalSet: "onlyIfExists",
+        });
+        expect(setExistingKeyRes).toEqual("OK");
+        const getExistingKeyRes = await client.get(key);
+        expect(getExistingKeyRes).toEqual(value);
+
+        const notExistingKeyRes = await client.set(key, value + "1", {
+            conditionalSet: "onlyIfExists",
+        });
+        // key does not exist, so it should not be set
+        expect(notExistingKeyRes).toEqual(null);
+        const getNotExistingKey = await client.get(key);
+        // key should not have been set
+        expect(getNotExistingKey).toEqual(null);
+    }
+
+    async function setWithOnlyIfNotExistOptions(client: BaseClient) {
+        const key = uuidv4();
+        const value = uuidv4();
+        const notExistingKeyRes = await client.set(key, value, {
+            conditionalSet: "onlyIfDoesNotExist",
+        });
+        // key does not exist, so it should be set
+        expect(notExistingKeyRes).toEqual("OK");
+        const getNotExistingKey = await client.get(key);
+        // key should have been set
+        expect(getNotExistingKey).toEqual(value);
+
+        const existingKeyRes = await client.set(key, value, {
+            conditionalSet: "onlyIfDoesNotExist",
+        });
+        // key exists, so it should not be set
+        expect(existingKeyRes).toEqual(null);
+        const getExistingKey = await client.get(key);
+        // key should not have been set
+        expect(getExistingKey).toEqual(value);
+    }
+
+    async function setWithGetOldOptions(client: BaseClient) {
+        const key = uuidv4();
+        const value = uuidv4();
+
+        const setResGetNotExistOld = await client.set(key, value, {
+            returnOldValue: true,
+        });
+        // key does not exist, so old value should be null
+        expect(setResGetNotExistOld).toEqual(null);
+        // key should have been set
+        const getResGetNotExistOld = await client.get(key);
+        expect(getResGetNotExistOld).toEqual(value);
+
+        const setResGetExistOld = await client.set(key, value, {
+            returnOldValue: true,
+        });
+        // key exists, so old value should be returned
+        expect(setResGetExistOld).toEqual(value);
+        // key should have been set
+        const getResGetExistOld = await client.get(key);
+        expect(getResGetExistOld).toEqual(value);
+    }
+
+    async function setWithAllOptions(client: BaseClient) {
+        const key = uuidv4();
+        const value = uuidv4();
+
+        const setResWithAllOptions = await client.set(key, value, {
+            expiry: {
+                type: "unixSeconds",
+                count: 1,
+            },
+            conditionalSet: "onlyIfExists",
+            returnOldValue: true,
+        });
+        // key does not exist, so old value should be null
+        expect(setResWithAllOptions).toEqual(null);
+        // key should have been set
+        const getResWithAllOptions = await client.get(key);
+        expect(getResWithAllOptions).toEqual(value);
+
+        // wait for the key to expire
+        setTimeout(() => {}, 1000);
+        // key should have expired
+        const gettResWithAllOptions = await client.get(key);
+        expect(gettResWithAllOptions).toEqual(null);
+    }
+
+    async function testSetWithAllCombination(client: BaseClient) {
+        const key = uuidv4();
+        const value = uuidv4();
+        const count = 1;
+        const expiryCombination = [
+            "keepExisting",
+            { type: "seconds", count },
+            { type: "milliseconds", count },
+            { type: "unixSeconds", count },
+            { type: "unixMilliseconds", count },
+            undefined,
+        ];
+        const conditionalSetCombination = [
+            "onlyIfExists",
+            "onlyIfDoesNotExist",
+            undefined,
+        ];
+        const returnOldValueCombination = [true, false, undefined];
+
+        for (const expiryVal of expiryCombination) {
+            for (const conditionalSetVal of conditionalSetCombination) {
+                for (const returnOldValueVal of returnOldValueCombination) {
+                    const setRes = await client.set(key, value, {
+                        expiry: expiryVal as
+                            | "keepExisting"
+                            | {
+                                  type:
+                                      | "seconds"
+                                      | "milliseconds"
+                                      | "unixSeconds"
+                                      | "unixMilliseconds";
+                                  count: number;
+                              }
+                            | undefined,
+                        conditionalSet: conditionalSetVal as
+                            | "onlyIfExists"
+                            | "onlyIfDoesNotExist"
+                            | undefined,
+                        returnOldValue: returnOldValueVal,
+                    });
+                    expect(setRes).not.toBeNull();
+                }
+            }
+        }
+    }
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "Set commands with options test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await setWithExpiryOptions(client);
+                await setWithOnlyIfExistOptions(client);
+                await setWithOnlyIfNotExistOptions(client);
+                await setWithGetOldOptions(client);
+                await setWithAllOptions(client);
+                await testSetWithAllCombination(client);
             }, protocol);
         },
         config.timeout,

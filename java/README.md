@@ -87,7 +87,7 @@ Other useful gradle developer commands:
 * `./gradlew :integTest:test` to run client examples
 * `./gradlew spotlessCheck` to check for codestyle issues
 * `./gradlew spotlessApply` to apply codestyle recommendations
-* `./gradlew :examples:run` to run client examples
+* `./gradlew :examples:run` to run client examples (make sure you have a running redis on port `6379`)
 * `./gradlew :benchmarks:run` to run performance benchmarks
 
 ## Basic Examples

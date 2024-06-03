@@ -448,6 +448,29 @@ class CoreCommands(Protocol):
         """
         return cast(Optional[str], await self._execute_command(RequestType.Get, [key]))
 
+    async def getdel(self, key: str) -> Optional[str]:
+        """
+        Gets a string value associated with the given `key` and deletes the key.
+
+        See https://valkey.io/commands/getdel for more details.
+
+        Args:
+            key (str): The `key` to retrieve from the database.
+
+        Returns:
+            Optional[str]: If `key` exists, returns the `value` of `key`. Otherwise, returns `None`.
+
+        Examples:
+            >>> await client.set("key", "value")
+            >>> await client.getdel("key")
+               'value'
+            >>> await client.getdel("key")
+                None
+        """
+        return cast(
+            Optional[str], await self._execute_command(RequestType.GetDel, [key])
+        )
+
     async def append(self, key: str, value: str) -> int:
         """
         Appends a value to a key.

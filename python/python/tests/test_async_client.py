@@ -393,6 +393,26 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_getdel(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        list_key = get_random_string(10)
+        assert await redis_client.set(key, value) == "OK"
+
+        # Retrieve and delete existing key
+        assert await redis_client.getdel(key) == value
+        assert await redis_client.get(key) is None
+
+        # Try to get and delete a non-existing key
+        assert await redis_client.getdel(non_existing_key) is None
+
+        assert await redis_client.lpush(list_key, [value]) == 1
+        with pytest.raises(RequestError) as e:
+            await redis_client.getdel(list_key)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_config_reset_stat(self, redis_client: TRedisClient):
         # we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
         # after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.

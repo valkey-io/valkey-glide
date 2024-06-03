@@ -91,6 +91,13 @@ async def transaction_test(
     transaction.get(key2)
     args.append(None)
 
+    transaction.set(key, value)
+    args.append(OK)
+    transaction.getdel(key)
+    args.append(value)
+    transaction.getdel(key)
+    args.append(None)
+
     transaction.mset({key: value, key2: value2})
     args.append(OK)
     transaction.mget([key, key2])
