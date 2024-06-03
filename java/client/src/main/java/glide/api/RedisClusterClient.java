@@ -2,6 +2,7 @@
 package glide.api;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -30,7 +31,6 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -418,32 +418,18 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> functionLoad(@NonNull String libraryCode) {
-        return commandManager.submitNewCommand(
-                FunctionLoad, new String[] {libraryCode}, this::handleStringResponse);
+    public CompletableFuture<String> functionLoad(@NonNull String libraryCode, boolean replace) {
+        String[] arguments =
+                replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
+        return commandManager.submitNewCommand(FunctionLoad, arguments, this::handleStringResponse);
     }
 
     @Override
-    public CompletableFuture<String> functionLoadReplace(@NonNull String libraryCode) {
+    public CompletableFuture<String> functionLoad(
+            @NonNull String libraryCode, boolean replace, @NonNull Route route) {
+        String[] arguments =
+                replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
         return commandManager.submitNewCommand(
-                FunctionLoad,
-                new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
-                this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> functionLoad(@NonNull String libraryCode, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                FunctionLoad, new String[] {libraryCode}, route, this::handleStringResponse);
-    }
-
-    @Override
-    public CompletableFuture<String> functionLoadReplace(
-            @NonNull String libraryCode, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                FunctionLoad,
-                new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
-                route,
-                this::handleStringResponse);
+                FunctionLoad, arguments, route, this::handleStringResponse);
     }
 }
