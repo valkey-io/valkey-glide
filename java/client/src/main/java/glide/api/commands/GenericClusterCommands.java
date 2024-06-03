@@ -124,8 +124,8 @@ public interface GenericClusterCommands {
      *      <pre>{@code
      * String value = client.set("key", "value").get();
      * String value_1 = client.set("key1", "value_1").get();
-     * String key = client.randomKey();
-     * // not sure how to write an example for the SingleNodeRoute randomKey one
+     * String key = client.randomKey().get();
+     * System.out.println(key);
      * // The value of key is either "key" or "key1"
      * }</pre>
      * */
@@ -140,7 +140,8 @@ public interface GenericClusterCommands {
      *      <pre>{@code
      * String value = client.set("key", "value").get();
      * String value_1 = client.set("key1", "value_1").get();
-     * String key = client.randomKey();
+     * String key = client.randomKey().get();
+     * System.out.println(key);
      * // The value of key is either "key" or "key1"
      * }</pre>
      * */

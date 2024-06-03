@@ -126,7 +126,7 @@ public interface GenericCommands {
      *      <pre>{@code
      * String value = client.set("key", "value").get();
      * String value_1 = client.set("key1", "value_1").get();
-     * String key = client.randomKey();
+     * String key = client.randomKey().get();
      * // The value of key is either "key" or "key1"
      * }</pre>
      * */
