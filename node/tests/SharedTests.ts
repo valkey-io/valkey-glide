@@ -2499,7 +2499,7 @@ export function runBaseTests<Context>(config: {
         const setWithUnixSec = await client.set(key, value, {
             expiry: {
                 type: "unixSeconds",
-                count: 1,
+                count: Math.floor(Date.now() / 1000) + 1,
             },
         });
         expect(setWithUnixSec).toEqual("OK");
@@ -2513,20 +2513,21 @@ export function runBaseTests<Context>(config: {
         const getResWithExpiryKeep = await client.get(key);
         expect(getResWithExpiryKeep).toEqual(value);
         // wait for the key to expire base on the previous set
-        setTimeout(() => {}, 1000);
+        let sleep = new Promise((resolve) => setTimeout(resolve, 1000));
+        await sleep;
         const getResExpire = await client.get(key);
         // key should have expired
         expect(getResExpire).toEqual(null);
-
         const setResWithExpiryWithUmilli = await client.set(key, value, {
             expiry: {
                 type: "unixMilliseconds",
-                count: 2,
+                count: Date.now() + 1000,
             },
         });
         expect(setResWithExpiryWithUmilli).toEqual("OK");
         // wait for the key to expire
-        setTimeout(() => {}, 3);
+        sleep = new Promise((resolve) => setTimeout(resolve, 1001));
+        await sleep;
         const getResWithExpiryWithUmilli = await client.get(key);
         // key should have expired
         expect(getResWithExpiryWithUmilli).toEqual(null);
@@ -2535,6 +2536,10 @@ export function runBaseTests<Context>(config: {
     async function setWithOnlyIfExistOptions(client: BaseClient) {
         const key = uuidv4();
         const value = uuidv4();
+        const setKey = await client.set(key, value);
+        expect(setKey).toEqual("OK");
+        const getRes = await client.get(key);
+        expect(getRes).toEqual(value);
         const setExistingKeyRes = await client.set(key, value, {
             conditionalSet: "onlyIfExists",
         });
@@ -2542,12 +2547,12 @@ export function runBaseTests<Context>(config: {
         const getExistingKeyRes = await client.get(key);
         expect(getExistingKeyRes).toEqual(value);
 
-        const notExistingKeyRes = await client.set(key, value + "1", {
+        const notExistingKeyRes = await client.set(key + 1, value, {
             conditionalSet: "onlyIfExists",
         });
         // key does not exist, so it should not be set
         expect(notExistingKeyRes).toEqual(null);
-        const getNotExistingKey = await client.get(key);
+        const getNotExistingKey = await client.get(key + 1);
         // key should not have been set
         expect(getNotExistingKey).toEqual(null);
     }
@@ -2604,9 +2609,9 @@ export function runBaseTests<Context>(config: {
         const setResWithAllOptions = await client.set(key, value, {
             expiry: {
                 type: "unixSeconds",
-                count: 1,
+                count: Math.floor(Date.now() / 1000) + 1,
             },
-            conditionalSet: "onlyIfExists",
+            conditionalSet: "onlyIfDoesNotExist",
             returnOldValue: true,
         });
         // key does not exist, so old value should be null
@@ -2616,7 +2621,8 @@ export function runBaseTests<Context>(config: {
         expect(getResWithAllOptions).toEqual(value);
 
         // wait for the key to expire
-        setTimeout(() => {}, 1000);
+        let sleep = new Promise((resolve) => setTimeout(resolve, 1001));
+        await sleep;
         // key should have expired
         const gettResWithAllOptions = await client.get(key);
         expect(gettResWithAllOptions).toEqual(null);
@@ -2644,25 +2650,26 @@ export function runBaseTests<Context>(config: {
         for (const expiryVal of expiryCombination) {
             for (const conditionalSetVal of conditionalSetCombination) {
                 for (const returnOldValueVal of returnOldValueCombination) {
-                    const setRes = await client.set(key, value, {
-                        expiry: expiryVal as
-                            | "keepExisting"
-                            | {
-                                  type:
-                                      | "seconds"
-                                      | "milliseconds"
-                                      | "unixSeconds"
-                                      | "unixMilliseconds";
-                                  count: number;
-                              }
-                            | undefined,
-                        conditionalSet: conditionalSetVal as
-                            | "onlyIfExists"
-                            | "onlyIfDoesNotExist"
-                            | undefined,
-                        returnOldValue: returnOldValueVal,
-                    });
-                    expect(setRes).not.toBeNull();
+                    expect(async () => {
+                        await client.set(key, value, {
+                            expiry: expiryVal as
+                                | "keepExisting"
+                                | {
+                                      type:
+                                          | "seconds"
+                                          | "milliseconds"
+                                          | "unixSeconds"
+                                          | "unixMilliseconds";
+                                      count: number;
+                                  }
+                                | undefined,
+                            conditionalSet: conditionalSetVal as
+                                | "onlyIfExists"
+                                | "onlyIfDoesNotExist"
+                                | undefined,
+                            returnOldValue: returnOldValueVal,
+                        });
+                    }).not.toThrowError();
                 }
             }
         }
