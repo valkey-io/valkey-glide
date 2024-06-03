@@ -690,4 +690,6 @@ public class CommandTests {
         response = regularClient.functionStats().get();
         checkFunctionStatsResponse(response, new String[0], 0, 0);
     }
+
+    // regualr client
 }

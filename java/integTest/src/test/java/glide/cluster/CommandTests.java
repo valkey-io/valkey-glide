@@ -1560,8 +1560,16 @@ public class CommandTests {
 
         // no keys in database
         assertEquals(OK, clusterClient.flushall().get());
+        // BLOCKED TODO - SHOULD RETURN NULL INSTEAD OF RESPONSE ERROR.
+        // update redis.rs
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.randomKey().get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+
+//        Add tests for cluster with single node route and multi node route.
+//        assertEquals(OK, clusterClient.set(key1, "a").get());
+//        assertEquals(OK, clusterClient.set(key2, "b").get());
+
+//        Add tests for standalone including switching between DBs - empty and nonempty ones.
     }
 }
