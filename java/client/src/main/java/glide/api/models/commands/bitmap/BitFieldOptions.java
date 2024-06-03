@@ -129,8 +129,8 @@ public class BitFieldOptions {
         public enum BitOverflowControl {
             /**
              * Performs modulo when overflow occurs with unsigned encoding. When overflows occur with
-             * signed encoding, the value restart towards the most negative value. When underflows occur
-             * with signed, the value restart towards the most positive value.
+             * signed encoding, the value restarts at the most negative value. When underflows occur with
+             * signed encoding, the value restarts at the most positive value.
              */
             WRAP,
             /**

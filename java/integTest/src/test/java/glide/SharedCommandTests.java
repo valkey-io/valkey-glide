@@ -4748,7 +4748,7 @@ public class SharedCommandTests {
                                     // binary value becomes: 01100(101) 01101111 01101111 01100010 01000001 01110010
                                     // 00000000 00000000 00010100
                                     new BitFieldIncrby(i3, offset5, 2),
-                                    // binary value becomes: 01100101 01101111 01101111 011(00001 111)00001 01110010
+                                    // binary value becomes: 01100101 01101111 01101111 0110(0001 111)00001 01110010
                                     // 00000000 00000000 00010100
                                     new BitFieldIncrby(u7, offsetMultiplier4, -3),
                                     // binary value becomes: 01100101 01101111 01101111 01100001 11100001 01110010

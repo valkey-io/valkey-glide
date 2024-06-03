@@ -253,8 +253,8 @@ public interface BitmapBaseCommands {
      *
      * @see <a href="https://redis.io/commands/bitfield/">redis.io</a> for details.
      * @param key The key of the string.
-     * @param subCommands The subCommands to be performed on the binary value of the
-     *     string at <code>key</code>, which could be any of the following:
+     * @param subCommands The subCommands to be performed on the binary value of the string at <code>
+     *     key</code>, which could be any of the following:
      *     <ul>
      *       <li>{@link BitFieldGet}.
      *       <li>{@link BitFieldSet}.

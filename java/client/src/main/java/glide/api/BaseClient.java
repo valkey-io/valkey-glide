@@ -1648,9 +1648,7 @@ public abstract class BaseClient
             @NonNull String key, @NonNull BitFieldSubCommands[] subCommands) {
         String[] arguments = ArrayUtils.addFirst(createBitFieldArgs(subCommands), key);
         return commandManager.submitNewCommand(
-                BitField,
-                arguments,
-                response -> castArray(handleArrayOrNullResponse(response), Long.class));
+                BitField, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     @Override
@@ -1660,6 +1658,6 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 BitFieldReadOnly,
                 arguments,
-                response -> castArray(handleArrayOrNullResponse(response), Long.class));
+                response -> castArray(handleArrayResponse(response), Long.class));
     }
 }
