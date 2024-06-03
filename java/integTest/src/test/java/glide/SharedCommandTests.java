@@ -1248,34 +1248,6 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void randomKey(BaseClient client) {
-        String key1 = "{key}" + UUID.randomUUID();
-        String key2 = "{key}" + UUID.randomUUID();
-        String key3 = "{key}" + UUID.randomUUID();
-
-        assertEquals(OK, client.set(key1, "a").get());
-        assertEquals(OK, client.set(key2, "b").get());
-        assertEquals(OK, client.set(key3, "c").get());
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void randomKey(BaseClient client) {
-        String key1 = "{key}" + UUID.randomUUID();
-        String key2 = "{key}" + UUID.randomUUID();
-
-        assertEquals(OK, client.set(key1, "a").get());
-        assertEquals(OK, client.set(key2, "b").get());
-
-        // no more keys
-        // call flushall before this
-        // should give null response
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
     public void rename(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
 

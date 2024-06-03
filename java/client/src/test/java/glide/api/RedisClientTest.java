@@ -4496,15 +4496,10 @@ public class RedisClientTest {
 
         // exercise
         service.set(key1, "a");
-
         CompletableFuture<String> response = service.randomKey();
-//        String rS = response.get();
-//        String[] temp = new String[] {rS};
-//        Long exists = service.exists(temp).get();
 
         // verify
         assertEquals(testResponse, response);
-        //assertEquals(1, exists);
     }
 
     @SneakyThrows

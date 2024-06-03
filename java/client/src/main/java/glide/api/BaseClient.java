@@ -518,12 +518,6 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> randomKey() {
-        return commandManager.submitNewCommand(
-            RandomKey, new String[0], this::handleStringOrNullResponse);
-    }
-
-    @Override
     public CompletableFuture<String> rename(@NonNull String key, @NonNull String newKey) {
         return commandManager.submitNewCommand(
                 Rename, new String[] {key, newKey}, this::handleStringResponse);

@@ -492,19 +492,6 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> objectRefcount(String key);
 
     /**
-     * Return a random key from the currently selected database.
-     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
-     * @return A random <code>key</code> from the currently selected database.
-     * @example
-     *      <pre>{@code
-     * String value = client.set("key", "value").get();
-     * String value_1 = client.set("key1", "value").get();
-     * String key = client.randomKey();
-     * }</pre>
-     * */
-    CompletableFuture<String> randomKey();
-
-    /**
      * Renames <code>key</code> to <code>newKey</code>.<br>
      * If <code>newKey</code> already exists it is overwritten.
      *

@@ -113,7 +113,6 @@ public class TransactionTestUtilities {
                 .objectEncoding(genericKey1)
                 .touch(new String[] {genericKey1})
                 .set(genericKey2, value2)
-                .randomKey()
                 .rename(genericKey1, genericKey1)
                 .renamenx(genericKey1, genericKey2)
                 .unlink(new String[] {genericKey2})
@@ -156,7 +155,6 @@ public class TransactionTestUtilities {
                     "embstr", // objectEncoding(genericKey1)
                     1L, // touch(new String[] {genericKey1})
                     OK, // set(genericKey2, value2)
-                    //THE RANDOMKEY    , //randomKey()
                     OK, // rename(genericKey1, genericKey1)
                     false, // renamenx(genericKey1, genericKey2)
                     1L, // unlink(new String[] {genericKey2})
@@ -212,6 +210,7 @@ public class TransactionTestUtilities {
 
         transaction
                 .set(stringKey1, value1)
+                .randomKey()
                 .get(stringKey1)
                 .getdel(stringKey1)
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
@@ -246,6 +245,7 @@ public class TransactionTestUtilities {
         var expectedResults =
                 new Object[] {
                     OK, // set(stringKey1, value1)
+                    stringKey1, // randomKey()
                     value1, // get(stringKey1)
                     value1, // getdel(stringKey1)
                     null, // set(stringKey2, value2, returnOldValue(true))
