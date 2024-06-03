@@ -14,6 +14,7 @@ import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
+import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT;
 import static glide.api.models.commands.bitmap.BitFieldOptions.GET_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.INCRBY_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.OVERFLOW_COMMAND_STRING;
@@ -5474,7 +5475,7 @@ public class RedisClientTest {
                     i8.getEncoding(),
                     offsetMultiplier.getOffset(),
                     OVERFLOW_COMMAND_STRING,
-                    BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT.toString(),
+                    SAT.toString(),
                     INCRBY_COMMAND_STRING,
                     u2.getEncoding(),
                     offset.getOffset(),
@@ -5494,8 +5495,7 @@ public class RedisClientTest {
                         new BitFieldSubCommands[] {
                             new BitFieldSet(u2, offset, setValue),
                             new BitFieldGet(i8, offsetMultiplier),
-                            new BitFieldOptions.BitFieldOverflow(
-                                    BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT),
+                            new BitFieldOptions.BitFieldOverflow(SAT),
                             new BitFieldOptions.BitFieldIncrby(u2, offset, incrbyValue),
                         });
         Long[] payload = response.get();
