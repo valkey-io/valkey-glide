@@ -22,7 +22,9 @@ import {
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
+    convertStringArrayToBuffer,
 } from "./TestUtilities";
+
 /* eslint-disable @typescript-eslint/no-var-requires */
 
 type Context = {
@@ -66,7 +68,7 @@ describe("RedisClient", () => {
             singleCommand: {
                 requestType: 2,
                 argsArray: redis_request.Command.ArgsArray.create({
-                    args: ["bar1", "bar2"],
+                    args: convertStringArrayToBuffer(["bar1", "bar2"]),
                 }),
             },
         };
@@ -75,7 +77,7 @@ describe("RedisClient", () => {
             singleCommand: {
                 requestType: 4,
                 argsArray: redis_request.Command.ArgsArray.create({
-                    args: ["bar3", "bar4"],
+                    args: convertStringArrayToBuffer(["bar3", "bar4"]),
                 }),
             },
         };
@@ -87,18 +89,16 @@ describe("RedisClient", () => {
         const dec_msg1 = redis_request.RedisRequest.decodeDelimited(reader);
         expect(dec_msg1.callbackIdx).toEqual(1);
         expect(dec_msg1.singleCommand?.requestType).toEqual(2);
-        expect(dec_msg1.singleCommand?.argsArray?.args).toEqual([
-            "bar1",
-            "bar2",
-        ]);
+        expect(dec_msg1.singleCommand?.argsArray?.args).toEqual(
+            convertStringArrayToBuffer(["bar1", "bar2"]),
+        );
 
         const dec_msg2 = redis_request.RedisRequest.decodeDelimited(reader);
         expect(dec_msg2.callbackIdx).toEqual(3);
         expect(dec_msg2.singleCommand?.requestType).toEqual(4);
-        expect(dec_msg2.singleCommand?.argsArray?.args).toEqual([
-            "bar3",
-            "bar4",
-        ]);
+        expect(dec_msg2.singleCommand?.argsArray?.args).toEqual(
+            convertStringArrayToBuffer(["bar3", "bar4"]),
+        );
     });
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
