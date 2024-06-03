@@ -530,7 +530,7 @@ describe("SocketConnectionInternals", () => {
                 expect(args[2]).toEqual(Buffer.from("XX"));
                 expect(args[3]).toEqual(Buffer.from("GET"));
                 expect(args[4]).toEqual(Buffer.from("EX"));
-                expect(args[4]).toEqual(Buffer.from("10"));
+                expect(args[5]).toEqual(Buffer.from("10"));
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
             });
             const request1 = connection.set("foo", "bar", {
