@@ -2157,7 +2157,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zinterstore(self, redis_client: TRedisClient):
+    async def test_zinter_commands(self, redis_client: TRedisClient):
         key1 = "{testKey}:1-" + get_random_string(10)
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
@@ -2168,48 +2168,74 @@ class TestCommands:
         assert await redis_client.zadd(key1, members_scores1) == 2
         assert await redis_client.zadd(key2, members_scores2) == 3
 
+        # zinter tests
+        zinter_map = await redis_client.zinter([key1, key2])
+        expected_zinter_map = ["one", "two"]
+        assert zinter_map == expected_zinter_map
+
+        # zinterstore tests
         assert await redis_client.zinterstore(key3, [key1, key2]) == 2
         zinterstore_map = await redis_client.zrange_withscores(key3, range)
-        expected_map = {
+        expected_zinter_map_withscores = {
             "one": 2.5,
             "two": 4.5,
         }
-        assert compare_maps(zinterstore_map, expected_map) is True
+        assert compare_maps(zinterstore_map, expected_zinter_map_withscores) is True
 
-        # Intersection results are aggregated by the MAX score of elements
+        # zinter_withscores tests
+        zinter_withscores_map = await redis_client.zinter_withscores([key1, key2])
+        assert (
+            compare_maps(zinter_withscores_map, expected_zinter_map_withscores) is True
+        )
+
+        # MAX aggregation tests
         assert (
             await redis_client.zinterstore(key3, [key1, key2], AggregationType.MAX) == 2
         )
         zinterstore_map_max = await redis_client.zrange_withscores(key3, range)
-        expected_map_max = {
+        expected_zinter_map_max = {
             "one": 1.5,
             "two": 2.5,
         }
-        assert compare_maps(zinterstore_map_max, expected_map_max) is True
+        assert compare_maps(zinterstore_map_max, expected_zinter_map_max) is True
 
-        # Intersection results are aggregated by the MIN score of elements
+        zinter_withscores_map_max = await redis_client.zinter_withscores(
+            [key1, key2], AggregationType.MAX
+        )
+        assert compare_maps(zinter_withscores_map_max, expected_zinter_map_max) is True
+
+        # MIN aggregation tests
         assert (
             await redis_client.zinterstore(key3, [key1, key2], AggregationType.MIN) == 2
         )
         zinterstore_map_min = await redis_client.zrange_withscores(key3, range)
-        expected_map_min = {
+        expected_zinter_map_min = {
             "one": 1.0,
             "two": 2.0,
         }
-        assert compare_maps(zinterstore_map_min, expected_map_min) is True
+        assert compare_maps(zinterstore_map_min, expected_zinter_map_min) is True
 
-        # Intersection results are aggregated by the SUM score of elements
+        zinter_withscores_map_min = await redis_client.zinter_withscores(
+            [key1, key2], AggregationType.MIN
+        )
+        assert compare_maps(zinter_withscores_map_min, expected_zinter_map_min) is True
+
+        # SUM aggregation tests
         assert (
             await redis_client.zinterstore(key3, [key1, key2], AggregationType.SUM) == 2
         )
         zinterstore_map_sum = await redis_client.zrange_withscores(key3, range)
-        expected_map_sum = {
-            "one": 2.5,
-            "two": 4.5,
-        }
-        assert compare_maps(zinterstore_map_sum, expected_map_sum) is True
+        assert compare_maps(zinterstore_map_sum, expected_zinter_map_withscores) is True
 
-        # Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        zinter_withscores_map_sum = await redis_client.zinter_withscores(
+            [key1, key2], AggregationType.SUM
+        )
+        assert (
+            compare_maps(zinter_withscores_map_sum, expected_zinter_map_withscores)
+            is True
+        )
+
+        # Multiplying scores during aggregation tests
         assert (
             await redis_client.zinterstore(
                 key3, [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
@@ -2217,25 +2243,51 @@ class TestCommands:
             == 2
         )
         zinterstore_map_multiplied = await redis_client.zrange_withscores(key3, range)
-        expected_map_multiplied = {
+        expected_zinter_map_multiplied = {
             "one": 5.0,
             "two": 9.0,
         }
-        assert compare_maps(zinterstore_map_multiplied, expected_map_multiplied) is True
+        assert (
+            compare_maps(zinterstore_map_multiplied, expected_zinter_map_multiplied)
+            is True
+        )
 
+        zinter_withscores_map_multiplied = await redis_client.zinter_withscores(
+            [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
+        )
+        assert (
+            compare_maps(
+                zinter_withscores_map_multiplied, expected_zinter_map_multiplied
+            )
+            is True
+        )
+
+        # Non-existing key test
         assert (
             await redis_client.zinterstore(key3, [key1, "{testKey}-non_existing_key"])
             == 0
         )
+        zinter_withscores_non_existing = await redis_client.zinter_withscores(
+            [key1, "{testKey}-non_existing_key"]
+        )
+        assert zinter_withscores_non_existing == {}
 
         # Empty list check
         with pytest.raises(RequestError) as e:
             await redis_client.zinterstore("{xyz}", [])
         assert "wrong number of arguments" in str(e)
 
+        with pytest.raises(RequestError) as e:
+            await redis_client.zinter([])
+        assert "wrong number of arguments" in str(e)
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.zinter_withscores([])
+        assert "at least 1 input key is needed" in str(e)
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zunionstore(self, redis_client: TRedisClient):
+    async def test_zunion_commands(self, redis_client: TRedisClient):
         key1 = "{testKey}:1-" + get_random_string(10)
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
@@ -2246,75 +2298,145 @@ class TestCommands:
         assert await redis_client.zadd(key1, members_scores1) == 2
         assert await redis_client.zadd(key2, members_scores2) == 3
 
+        # zunion tests
+        zunion_map = await redis_client.zunion([key1, key2])
+        expected_zunion_map = ["one", "three", "two"]
+        assert zunion_map == expected_zunion_map
+
+        # zunionstore tests
         assert await redis_client.zunionstore(key3, [key1, key2]) == 3
         zunionstore_map = await redis_client.zrange_withscores(key3, range)
-        expected_map = {
+        expected_zunion_map_withscores = {
             "one": 2.5,
             "three": 3.5,
             "two": 4.5,
         }
-        assert compare_maps(zunionstore_map, expected_map) is True
+        assert compare_maps(zunionstore_map, expected_zunion_map_withscores) is True
 
-        # Intersection results are aggregated by the MAX score of elements
+        # zunion_withscores tests
+        zunion_withscores_map = await redis_client.zunion_withscores([key1, key2])
+        assert (
+            compare_maps(zunion_withscores_map, expected_zunion_map_withscores) is True
+        )
+
+        # MAX aggregation tests
         assert (
             await redis_client.zunionstore(key3, [key1, key2], AggregationType.MAX) == 3
         )
         zunionstore_map_max = await redis_client.zrange_withscores(key3, range)
-        expected_map_max = {
+        expected_zunion_map_max = {
             "one": 1.5,
             "two": 2.5,
             "three": 3.5,
         }
-        assert compare_maps(zunionstore_map_max, expected_map_max) is True
+        assert compare_maps(zunionstore_map_max, expected_zunion_map_max) is True
 
-        # Intersection results are aggregated by the MIN score of elements
+        zunion_withscores_map_max = await redis_client.zunion_withscores(
+            [key1, key2], AggregationType.MAX
+        )
+        assert compare_maps(zunion_withscores_map_max, expected_zunion_map_max) is True
+
+        # MIN aggregation tests
         assert (
             await redis_client.zunionstore(key3, [key1, key2], AggregationType.MIN) == 3
         )
         zunionstore_map_min = await redis_client.zrange_withscores(key3, range)
-        expected_map_min = {
+        expected_zunion_map_min = {
             "one": 1.0,
             "two": 2.0,
             "three": 3.5,
         }
-        assert compare_maps(zunionstore_map_min, expected_map_min) is True
+        assert compare_maps(zunionstore_map_min, expected_zunion_map_min) is True
 
-        # Intersection results are aggregated by the SUM score of elements
+        zunion_withscores_map_min = await redis_client.zunion_withscores(
+            [key1, key2], AggregationType.MIN
+        )
+        assert compare_maps(zunion_withscores_map_min, expected_zunion_map_min) is True
+
+        # SUM aggregation tests
         assert (
             await redis_client.zunionstore(key3, [key1, key2], AggregationType.SUM) == 3
         )
         zunionstore_map_sum = await redis_client.zrange_withscores(key3, range)
-        expected_map_sum = {
-            "one": 2.5,
-            "three": 3.5,
-            "two": 4.5,
-        }
-        assert compare_maps(zunionstore_map_sum, expected_map_sum) is True
+        assert compare_maps(zunionstore_map_sum, expected_zunion_map_withscores) is True
 
-        # Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        zunion_withscores_map_sum = await redis_client.zunion_withscores(
+            [key1, key2], AggregationType.SUM
+        )
+        assert (
+            compare_maps(zunion_withscores_map_sum, expected_zunion_map_withscores)
+            is True
+        )
+
+        # Multiplying scores during aggregation tests
         assert (
             await redis_client.zunionstore(
                 key3, [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
             )
             == 3
         )
-        zunionstore_map = await redis_client.zrange_withscores(key3, range)
-        expected_map = {
+        zunionstore_map_multiplied = await redis_client.zrange_withscores(key3, range)
+        expected_zunion_map_multiplied = {
             "one": 5.0,
             "three": 7.0,
             "two": 9.0,
         }
-        assert compare_maps(zunionstore_map, expected_map) is True
+        assert (
+            compare_maps(zunionstore_map_multiplied, expected_zunion_map_multiplied)
+            is True
+        )
 
+        zunion_withscores_map_multiplied = await redis_client.zunion_withscores(
+            [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
+        )
+        assert (
+            compare_maps(
+                zunion_withscores_map_multiplied, expected_zunion_map_multiplied
+            )
+            is True
+        )
+
+        # Non-existing key test
         assert (
             await redis_client.zunionstore(key3, [key1, "{testKey}-non_existing_key"])
             == 2
+        )
+        zunionstore_map_nonexistingkey = await redis_client.zrange_withscores(
+            key3, range
+        )
+        expected_zunion_map_nonexistingkey = {
+            "one": 1.0,
+            "two": 2.0,
+        }
+        assert (
+            compare_maps(
+                zunionstore_map_nonexistingkey, expected_zunion_map_nonexistingkey
+            )
+            is True
+        )
+
+        zunion_withscores_non_existing = await redis_client.zunion_withscores(
+            [key1, "{testKey}-non_existing_key"]
+        )
+        assert (
+            compare_maps(
+                zunion_withscores_non_existing, expected_zunion_map_nonexistingkey
+            )
+            is True
         )
 
         # Empty list check
         with pytest.raises(RequestError) as e:
             await redis_client.zunionstore("{xyz}", [])
         assert "wrong number of arguments" in str(e)
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.zunion([])
+        assert "wrong number of arguments" in str(e)
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.zunion_withscores([])
+        assert "at least 1 input key is needed" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3618,6 +3740,10 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.renamenx("abc", "def"),
             redis_client.pfcount(["def", "ghi"]),
             redis_client.pfmerge("abc", ["def", "ghi"]),
+            redis_client.zinter(["def", "ghi"]),
+            redis_client.zinter_withscores(["def", "ghi"]),
+            redis_client.zunion(["def", "ghi"]),
+            redis_client.zunion_withscores(["def", "ghi"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):

@@ -24,7 +24,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
-    _create_z_cmd_store_args,
+    _create_zinter_zunion_cmd_args,
     _create_zrange_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -2272,6 +2272,47 @@ class BaseTransaction:
             RequestType.ZDiffStore, [destination, str(len(keys))] + keys
         )
 
+    def zinter(
+        self: TTransaction,
+        keys: List[str],
+    ) -> TTransaction:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            List[str]: The resulting array of intersecting elements.
+        """
+        return self.append_command(RequestType.ZInter, [str(len(keys))] + keys)
+
+    def zinter_withscores(
+        self: TTransaction,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> TTransaction:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Command response:
+            Mapping[str, float]: The resulting sorted set with scores.
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return self.append_command(RequestType.ZInter, args)
+
     def zinterstore(
         self: TTransaction,
         destination: str,
@@ -2297,8 +2338,49 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return self.append_command(RequestType.ZInterStore, args)
+
+    def zunion(
+        self: TTransaction,
+        keys: List[str],
+    ) -> TTransaction:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            List[str]: The resulting array of union elements.
+        """
+        return self.append_command(RequestType.ZUnion, [str(len(keys))] + keys)
+
+    def zunion_withscores(
+        self: TTransaction,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> TTransaction:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a sorted set of union elements with scores.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Command response:
+            Mapping[str, float]: The resulting sorted set with scores.
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return self.append_command(RequestType.ZUnion, args)
 
     def zunionstore(
         self: TTransaction,
@@ -2325,7 +2407,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return self.append_command(RequestType.ZUnionStore, args)
 
     def zrandmember(self: TTransaction, key: str) -> TTransaction:
