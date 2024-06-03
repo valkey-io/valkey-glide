@@ -172,7 +172,7 @@ pub enum RequestType {
     BLMove = 169,
     GetDel = 170,
     SRandMember = 171,
-    SInterCard = 172,
+    SInterCard = 175,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
