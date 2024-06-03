@@ -25,7 +25,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
-    _create_z_cmd_store_args,
+    _create_zinter_zunion_cmd_args,
     _create_zrange_args,
 )
 from glide.constants import TOK, TResult
@@ -3228,6 +3228,75 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def zinter(
+        self,
+        keys: List[str],
+    ) -> List[str]:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+        To get the scores as well, see `zinter_withscores`.
+        To store the result in a key as a sorted set, see `zinterstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Returns:
+            List[str]: The resulting array of intersecting elements.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zinter(["key1", "key2"])
+                ['member1']
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.ZInter, [str(len(keys))] + keys),
+        )
+
+    async def zinter_withscores(
+        self,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> Mapping[str, float]:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
+        To get the elements only, see `zinter`.
+        To store the result in a key as a sorted set, see `zinterstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Returns:
+            Mapping[str, float]: The resulting sorted set with scores.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zinter_withscores(["key1", "key2"])
+                {'member1': 20}  # "member1" with score of 20 is the result
+            >>> await client.zinter_withscores(["key1", "key2"], AggregationType.MAX)
+                {'member1': 10.5}  # "member1" with score of 10.5 is the result.
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return cast(
+            Mapping[str, float],
+            await self._execute_command(RequestType.ZInter, args),
+        )
+
     async def zinterstore(
         self,
         destination: str,
@@ -3237,6 +3306,7 @@ class CoreCommands(Protocol):
         """
         Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+        To get the result directly, see `zinter_withscores`.
 
         When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
@@ -3246,7 +3316,7 @@ class CoreCommands(Protocol):
             destination (str): The key of the destination sorted set.
             keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
-                List[Tuple[str, float]]] - for weighted keys with score multipliers.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
@@ -3259,16 +3329,85 @@ class CoreCommands(Protocol):
             >>> await client.zinterstore("my_sorted_set", ["key1", "key2"])
                 1 # Indicates that the sorted set "my_sorted_set" contains one element.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 20}  # "member1"  is now stored in "my_sorted_set" with score of 20.
-            >>> await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX )
-                1 # Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+                {'member1': 20}  # "member1" is now stored in "my_sorted_set" with score of 20.
+            >>> await client.zinterstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
+                1 # Indicates that the sorted set "my_sorted_set" contains one element, and its score is the maximum score between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 10.5}  # "member1"  is now stored in "my_sorted_set" with score of 10.5.
+                {'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
             int,
             await self._execute_command(RequestType.ZInterStore, args),
+        )
+
+    async def zunion(
+        self,
+        keys: List[str],
+    ) -> List[str]:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+        To get the scores as well, see `zunion_withscores`.
+        To store the result in a key as a sorted set, see `zunionstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Returns:
+            List[str]: The resulting array of union elements.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zunion(["key1", "key2"])
+                ['member1', 'member2']
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.ZUnion, [str(len(keys))] + keys),
+        )
+
+    async def zunion_withscores(
+        self,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> Mapping[str, float]:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a sorted set of union elements with scores.
+        To get the elements only, see `zunion`.
+        To store the result in a key as a sorted set, see `zunionstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Returns:
+            Mapping[str, float]: The resulting sorted set with scores.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zunion_withscores(["key1", "key2"])
+                {'member1': 20, 'member2': 8.2}
+            >>> await client.zunion_withscores(["key1", "key2"], AggregationType.MAX)
+                {'member1': 10.5, 'member2': 8.2}
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return cast(
+            Mapping[str, float],
+            await self._execute_command(RequestType.ZUnion, args),
         )
 
     async def zunionstore(
@@ -3280,16 +3419,17 @@ class CoreCommands(Protocol):
         """
         Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+        To get the result directly, see `zunion_withscores`.
 
         When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
-        see https://valkey.io/commands/zunionstore/ for more details.
+        See https://valkey.io/commands/zunionstore/ for more details.
 
         Args:
             destination (str): The key of the destination sorted set.
             keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
-                List[Tuple[str, float]]] - for weighted keys with score multipliers.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
@@ -3300,15 +3440,15 @@ class CoreCommands(Protocol):
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
             >>> await client.zadd("key2", {"member1": 9.5})
             >>> await client.zunionstore("my_sorted_set", ["key1", "key2"])
-                2 # Indicates that the sorted set "my_sorted_set" contains two element.
+                2 # Indicates that the sorted set "my_sorted_set" contains two elements.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 20, 'member2': 8.2}
-            >>> await client.zunionstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX )
-                2 # Indicates that the sorted set "my_sorted_set" contains two element, and each score is the maximum score between the sets.
+            >>> await client.zunionstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
+                2 # Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 10.5, 'member2': 8.2}
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
             int,
             await self._execute_command(RequestType.ZUnionStore, args),
