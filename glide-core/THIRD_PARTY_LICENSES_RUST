@@ -17727,7 +17727,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: proc-macro2:1.0.84
+Package: proc-macro2:1.0.85
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24537,7 +24537,7 @@ the following restrictions:
 
 ----
 
-Package: tokio:1.37.0
+Package: tokio:1.38.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -24562,7 +24562,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: tokio-macros:2.2.0
+Package: tokio-macros:2.3.0
 
 The following copyrights and licenses were found in the source code of this package:
 
