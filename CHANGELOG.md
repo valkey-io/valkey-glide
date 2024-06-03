@@ -10,6 +10,7 @@
 * Node: Added SINTER command ([#1500](https://github.com/aws/glide-for-redis/pull/1500))
 * Python: Added XLEN command ([#1503](https://github.com/aws/glide-for-redis/pull/1503))
 * Python: Added LASTSAVE command ([#1509](https://github.com/aws/glide-for-redis/pull/1509))
+* Python: Added GETDEL command ([#1514](https://github.com/aws/glide-for-redis/pull/1514))
 
 ## 0.4.1 (2024-02-06)
 
