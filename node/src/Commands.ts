@@ -827,16 +827,47 @@ export function createZAdd(
     return createCommand(RequestType.ZAdd, args);
 }
 
+export type KeyWeight = [string, number];
+
+/**
+ * @internal
+ */
 export function createZInterstore(
     destination: string,
-    key: string,
+    keys: (string | KeyWeight)[],
+    aggregationType?: "SUM" | "MIN" | "MAX",
 ): redis_request.Command {
-    const args = createZInterstoreArgs();
+    const args = createZInterstoreArgs(destination, keys, aggregationType);
     return createCommand(RequestType.ZInterStore, args);
 }
 
-function createZInterstoreArgs();
+function createZInterstoreArgs(
+    destination: string,
+    keys: (string | KeyWeight)[],
+    aggregationType?: "SUM" | "MIN" | "MAX",
+): string[] {
+    const args: string[] = [destination, `${keys.length}`];
 
+    const keyWeightPairs = keys.map((key) =>
+        typeof key === "string" ? [key, 1] : key,
+    );
+    for (const [key, weight] of keyWeightPairs) {
+        args.push(`${key}`);
+    }
+    // keyWeightPairs.forEach((key, weight) => {
+    //      args.push(`${key}`);
+    // });
+    const weights = keyWeightPairs.map(([_, weight]) => weight);
+    if (weights.some((weight) => weight !== 1)) {
+        args.push("WEIGHTS", ...(weights as unknown as string));
+    }
+
+    if (aggregationType) {
+        args.push("AGGREGATE", aggregationType);
+    }
+
+    return args;
+}
 /**
  * @internal
  */
