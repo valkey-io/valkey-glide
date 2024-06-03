@@ -78,6 +78,20 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Get, [key])
 
+    def getdel(self: TTransaction, key: str) -> TTransaction:
+        """
+        Gets a string value associated with the given `key` and deletes the key.
+
+        See https://valkey.io/commands/getdel for more details.
+
+        Args:
+            key (str): The `key` to retrieve from the database.
+
+        Command response:
+            Optional[str]: If `key` exists, returns the `value` of `key`. Otherwise, returns `None`.
+        """
+        return self.append_command(RequestType.GetDel, [key])
+
     def set(
         self: TTransaction,
         key: str,
