@@ -668,8 +668,14 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> randomKey(@NonNull SingleNodeRoute route) {
+        return commandManager.submitNewCommand(
+            RandomKey, new String[0], route, this::handleStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<String> randomKey() {
         return commandManager.submitNewCommand(
-            RandomKey, new String[0], this::handleStringOrNullResponse);
+                RandomKey, new String[0], this::handleStringOrNullResponse);
     }
 }

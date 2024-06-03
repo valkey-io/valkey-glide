@@ -93,7 +93,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
-import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;

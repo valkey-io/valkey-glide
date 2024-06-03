@@ -40,7 +40,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-import glide.api.BaseClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
@@ -1562,7 +1561,7 @@ public class CommandTests {
         // no keys in database
         assertEquals(OK, clusterClient.flushall().get());
         ExecutionException executionException =
-            assertThrows(ExecutionException.class, () -> clusterClient.randomKey().get());
+                assertThrows(ExecutionException.class, () -> clusterClient.randomKey().get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }
