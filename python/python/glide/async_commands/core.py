@@ -1741,7 +1741,7 @@ class CoreCommands(Protocol):
         Gets the cardinality of the intersection of all the given sets.
         Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
 
-When in cluster mode, all keys in `keys` must map to the same hash slot.
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
         See https://valkey.io/commands/sintercard for more details.
 
         Args:
