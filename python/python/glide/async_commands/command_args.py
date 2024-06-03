@@ -15,7 +15,7 @@ class Limit:
     such as [ZRANGE](https://valkey.io/commands/zrange), [SORT](https://valkey.io/commands/sort/), and others.
 
     Args:
-        offset (int): The starting position of the range.
+        offset (int): The starting position of the range, zero based.
         count (int): The maximum number of elements to include in the range.
             A negative count returns all elements from the offset.
 
