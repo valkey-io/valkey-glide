@@ -7,6 +7,7 @@ use futures_intrusive::sync::ManualResetEvent;
 use logger_core::{log_debug, log_trace, log_warn};
 use redis::aio::MultiplexedConnection;
 use redis::{RedisConnectionInfo, RedisError, RedisResult};
+use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
@@ -44,6 +45,12 @@ struct InnerReconnectingConnection {
 #[derive(Clone)]
 pub(super) struct ReconnectingConnection {
     inner: Arc<InnerReconnectingConnection>,
+}
+
+impl fmt::Debug for ReconnectingConnection {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.node_address())
+    }
 }
 
 async fn get_multiplexed_connection(client: &redis::Client) -> RedisResult<MultiplexedConnection> {
@@ -147,6 +154,15 @@ impl ReconnectingConnection {
             client_dropped_flagged: AtomicBool::new(false),
         };
         create_connection(backend, connection_retry_strategy).await
+    }
+
+    fn node_address(&self) -> String {
+        self.inner
+            .backend
+            .connection_info
+            .get_connection_info()
+            .addr
+            .to_string()
     }
 
     pub(super) fn is_dropped(&self) -> bool {
