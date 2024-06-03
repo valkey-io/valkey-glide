@@ -3641,7 +3641,6 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.renamenx("abc", "def"),
             redis_client.pfcount(["def", "ghi"]),
             redis_client.pfmerge("abc", ["def", "ghi"]),
-            redis_client.sintercard(["def", "ghi"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
@@ -3650,6 +3649,7 @@ class TestMultiKeyCommandCrossSlot:
                     redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
                     redis_client.zintercard(["abc", "def"]),
                     redis_client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
+                    redis_client.sintercard(["def", "ghi"]),
                 ]
             )
 
