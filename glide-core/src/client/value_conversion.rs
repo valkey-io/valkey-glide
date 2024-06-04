@@ -414,18 +414,28 @@ pub(crate) fn convert_to_expected_type(
             Value::BulkString(_) | Value::SimpleString(_) | Value::VerbatimString { .. } => {
                 Ok(value)
             }
-            _ => Err((ErrorKind::TypeError, "Response couldn't be converted").into()),
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
         },
         // Not used for a command, but used as a helper for `FUNCTION LIST` to process the inner map.
         // It may contain a string (name, description) or set (flags), or nil (description).
         // The set is stored as array in RESP2. See example for `ArrayOfMaps` above.
         ExpectedReturnType::StringOrSet => match value {
-            Value::Nil => Ok(value),
             Value::Array(_) => convert_to_expected_type(value, Some(ExpectedReturnType::Set)),
-            Value::BulkString(_) | Value::SimpleString(_) | Value::VerbatimString { .. } => {
-                Ok(value)
-            }
-            _ => Err((ErrorKind::TypeError, "Response couldn't be converted").into()),
+            Value::Nil
+            | Value::BulkString(_)
+            | Value::SimpleString(_)
+            | Value::VerbatimString { .. } => Ok(value),
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
         },
     }
 }
@@ -434,15 +444,14 @@ pub(crate) fn convert_to_expected_type(
 /// The input data is [`Value::Map`] payload, the output is the new [`Value::Map`].
 fn convert_map_entries(
     map: Vec<(Value, Value)>,
-    key_expected_return_type: Option<ExpectedReturnType>,
-    value_expected_return_type: Option<ExpectedReturnType>,
+    key_type: Option<ExpectedReturnType>,
+    value_type: Option<ExpectedReturnType>,
 ) -> RedisResult<Value> {
     let result = map
         .into_iter()
         .map(|(key, inner_value)| {
-            let converted_key = convert_to_expected_type(key, key_expected_return_type)?;
-            let converted_value =
-                convert_to_expected_type(inner_value, value_expected_return_type)?;
+            let converted_key = convert_to_expected_type(key, key_type)?;
+            let converted_value = convert_to_expected_type(inner_value, value_type)?;
             Ok((converted_key, converted_value))
         })
         .collect::<RedisResult<_>>();
@@ -711,12 +720,12 @@ mod tests {
 
     #[test]
     fn convert_function_list() {
-        let expected_type = ExpectedReturnType::ArrayOfMaps(&ExpectedReturnType::ArrayOfMaps(
-            &ExpectedReturnType::StringOrSet,
-        ));
+        let command = &mut redis::cmd("FUNCTION");
+        command.arg("LIST");
+        let expected_type = expected_type_for_cmd(command);
 
         assert!(matches!(
-            expected_type_for_cmd(redis::cmd("FUNCTION").arg("LIST")),
+            expected_type,
             Some(ExpectedReturnType::ArrayOfMaps(_))
         ));
 
@@ -828,14 +837,40 @@ mod tests {
             ]),
         ]);
 
+        let resp2_cluster_response = Value::Map(vec![
+            (Value::BulkString("node1".into()), resp2_response.clone()),
+            (Value::BulkString("node2".into()), resp2_response.clone()),
+            (Value::BulkString("node3".into()), resp2_response.clone()),
+        ]);
+
+        let resp3_cluster_response = Value::Map(vec![
+            (Value::BulkString("node1".into()), resp3_response.clone()),
+            (Value::BulkString("node2".into()), resp3_response.clone()),
+            (Value::BulkString("node3".into()), resp3_response.clone()),
+        ]);
+
+        // convert RESP2 -> RESP3
         assert_eq!(
-            convert_to_expected_type(resp2_response.clone(), Some(expected_type)).unwrap(),
+            convert_to_expected_type(resp2_response.clone(), expected_type).unwrap(),
             resp3_response.clone()
         );
 
+        // convert RESP3 -> RESP3
         assert_eq!(
-            convert_to_expected_type(resp3_response.clone(), Some(expected_type)).unwrap(),
+            convert_to_expected_type(resp3_response.clone(), expected_type).unwrap(),
             resp3_response.clone()
+        );
+
+        // convert cluster RESP2 -> RESP3
+        assert_eq!(
+            convert_to_expected_type(resp2_cluster_response.clone(), expected_type).unwrap(),
+            resp3_cluster_response.clone()
+        );
+
+        // convert cluster RESP3 -> RESP3
+        assert_eq!(
+            convert_to_expected_type(resp3_cluster_response.clone(), expected_type).unwrap(),
+            resp3_cluster_response.clone()
         );
     }
 
