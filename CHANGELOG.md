@@ -19,7 +19,6 @@
 
 #### Fixes
 * Node: Fix set command bug with expiry option ([#1508](https://github.com/aws/glide-for-redis/pull/1508))
-* Python: Added SORT command ([#1439](https://github.com/aws/glide-for-redis/pull/1439))
 
 ## 0.4.0 (2024-05-26)
 
