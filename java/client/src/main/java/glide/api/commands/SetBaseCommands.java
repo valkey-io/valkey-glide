@@ -204,7 +204,7 @@ public interface SetBaseCommands {
      * assertEquals(2L, response);
      *
      * Long emptyResponse = client.sintercard(new String[] {"set1", "nonExistingSet"}).get();
-     * assert emptyResponse == 0;
+     * assertEquals(emptyResponse, 0L);
      * }</pre>
      */
     CompletableFuture<Long> sintercard(String[] keys);
@@ -226,7 +226,7 @@ public interface SetBaseCommands {
      * assertEquals(2L, response);
      *
      * Long emptyResponse = client.sintercard(new String[] {"set1", "nonExistingSet"}, 3).get();
-     * assert emptyResponse == 0;
+     * assertEquals(emptyResponse, 0L);
      *
      * // when intersection cardinality > limit, returns limit as cardinality
      * Long response2 = client.sintercard(new String[] {"set3", "set4"}, 3).get();
