@@ -1,10 +1,11 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 
 import lombok.AllArgsConstructor;
-import redis_request.RedisRequestOuterClass;
+import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 
 /**
  * Extends BaseTransaction class for Redis standalone commands. Transactions allow the execution of
@@ -41,9 +42,26 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @return Command Response - A simple <code>OK</code> response.
      */
     public Transaction select(long index) {
-        RedisRequestOuterClass.Command.ArgsArray commandArgs = buildArgs(Long.toString(index));
+        ArgsArray commandArgs = buildArgs(Long.toString(index));
 
         protobufTransaction.addCommands(buildCommand(Select, commandArgs));
+        return this;
+    }
+
+    /**
+     * Move <code>key</code> from the currently selected database to the database specified by <code>
+     * dbIndex</code>.
+     *
+     * @see <a href="https://redis.io/commands/move/">redis.io</a> for more details.
+     * @param key The key to move.
+     * @param dbIndex The index of the database to move <code>key</code> to.
+     * @return Command Response - <code>true</code> if <code>key</code> was moved, or <code>false
+     *     </code> if the <code>key</code> already exists in the destination database or does not
+     *     exist in the source database.
+     */
+    public Transaction move(String key, long dbIndex) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(dbIndex));
+        protobufTransaction.addCommands(buildCommand(Move, commandArgs));
         return this;
     }
 }
