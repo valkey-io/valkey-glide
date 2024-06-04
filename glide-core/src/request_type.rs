@@ -172,6 +172,7 @@ pub enum RequestType {
     BLMove = 169,
     GetDel = 170,
     SRandMember = 171,
+    SInterCard = 175,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -347,6 +348,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BLMove => RequestType::BLMove,
             ProtobufRequestType::GetDel => RequestType::GetDel,
             ProtobufRequestType::SRandMember => RequestType::SRandMember,
+            ProtobufRequestType::SInterCard => RequestType::SInterCard,
         }
     }
 }
@@ -518,6 +520,7 @@ impl RequestType {
             RequestType::BLMove => Some(cmd("BLMOVE")),
             RequestType::GetDel => Some(cmd("GETDEL")),
             RequestType::SRandMember => Some(cmd("SRANDMEMBER")),
+            RequestType::SInterCard => Some(cmd("SINTERCARD")),
         }
     }
 }

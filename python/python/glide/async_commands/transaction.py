@@ -1132,6 +1132,29 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SInterStore, [destination] + keys)
 
+    def sintercard(
+        self: TTransaction, keys: List[str], limit: Optional[int] = None
+    ) -> TTransaction:
+        """
+        Gets the cardinality of the intersection of all the given sets.
+        Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
+
+        See https://valkey.io/commands/sintercard for more details.
+
+        Args:
+            keys (List[str]): A list of keys representing the sets to intersect.
+            limit (Optional[int]): An optional limit to the maximum number of intersecting elements to count.
+                If specified, the computation stops as soon as the cardinality reaches this limit.
+
+        Command response:
+            int: The number of elements in the resulting set of the intersection.
+        """
+        args = [str(len(keys))]
+        args += keys
+        if limit is not None:
+            args += ["LIMIT", str(limit)]
+        return self.append_command(RequestType.SInterCard, args)
+
     def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
         """
         Computes the difference between the first set and all the successive sets in `keys`.
