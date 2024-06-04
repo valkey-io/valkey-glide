@@ -174,6 +174,7 @@ pub enum RequestType {
     SRandMember = 171,
     BitField = 172,
     BitFieldReadOnly = 173,
+    Move = 174,
     SInterCard = 175,
 }
 
@@ -352,6 +353,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SRandMember => RequestType::SRandMember,
             ProtobufRequestType::BitField => RequestType::BitField,
             ProtobufRequestType::BitFieldReadOnly => RequestType::BitFieldReadOnly,
+            ProtobufRequestType::Move => RequestType::Move,
             ProtobufRequestType::SInterCard => RequestType::SInterCard,
         }
     }
@@ -526,6 +528,7 @@ impl RequestType {
             RequestType::SRandMember => Some(cmd("SRANDMEMBER")),
             RequestType::BitField => Some(cmd("BITFIELD")),
             RequestType::BitFieldReadOnly => Some(cmd("BITFIELD_RO")),
+            RequestType::Move => Some(cmd("MOVE")),
             RequestType::SInterCard => Some(cmd("SINTERCARD")),
         }
     }

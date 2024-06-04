@@ -204,6 +204,7 @@ enum RequestType {
     SRandMember = 171;
     BitField = 172;
     BitFieldReadOnly = 173;
+    Move = 174;
     SInterCard = 175;
 }
 

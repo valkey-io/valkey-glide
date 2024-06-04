@@ -126,10 +126,23 @@ public class TransactionTests {
         String key = UUID.randomUUID().toString();
         String value = UUID.randomUUID().toString();
 
-        Transaction transaction =
-                new Transaction().select(1).set(key, value).get(key).select(0).get(key);
+        Transaction transaction = new Transaction();
+        transaction.set(key, value);
+        transaction.get(key);
+        transaction.move(key, 1L);
+        transaction.get(key);
+        transaction.select(1);
+        transaction.get(key);
 
-        Object[] expectedResult = new Object[] {OK, OK, value, OK, null};
+        Object[] expectedResult =
+                new Object[] {
+                    OK, // transaction.set(key, value);
+                    value, // transaction.get(key);
+                    true, // transaction.move(key, 1L);
+                    null, // transaction.get(key);
+                    OK, // transaction.select(1);
+                    value // transaction.get(key);
+                };
 
         Object[] result = client.exec(transaction).get();
         assertArrayEquals(expectedResult, result);
