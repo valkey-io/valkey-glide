@@ -369,10 +369,10 @@ export async function transactionTest(
     args.push("0-3");
     baseTransaction.xread({ [key9]: "0-1" });
     args.push({
-        [key9]: [
-            ["0-2", ["field", "value2"]],
-            ["0-3", ["field", "value3"]],
-        ],
+        [key9]: {
+            "0-2": [["field", "value2"]],
+            "0-3": [["field", "value3"]],
+        },
     });
     baseTransaction.xtrim(key9, {
         method: "minid",
