@@ -36,7 +36,6 @@
         "build-test-utils": "cd ../utils && npm i && npm run build",
         "lint": "eslint -f unix \"src/**/*.{ts,tsx}\"",
         "prepack": "npmignore --auto",
-        "test-modules": "jest --verbose --runInBand 'tests/RedisModules.test.ts'",
         "prettier:check:ci": "./node_modules/.bin/prettier --check . --ignore-unknown '!**/*.{js,d.ts}'",
         "prettier:format": "./node_modules/.bin/prettier --write . --ignore-unknown '!**/*.{js,d.ts}'"
     },
