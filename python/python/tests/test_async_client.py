@@ -1303,6 +1303,53 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sintercard(self, redis_client: TRedisClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = f"{{testKey}}:{get_random_string(10)}"
+        key2 = f"{{testKey}}:{get_random_string(10)}"
+        key3 = f"{{testKey}}:{get_random_string(10)}"
+        string_key = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:non_existing_key"
+        member1_list = ["a", "b", "c"]
+        member2_list = ["b", "c", "d", "e"]
+        member3_list = ["b", "c", "f", "g"]
+
+        assert await redis_client.sadd(key1, member1_list) == 3
+        assert await redis_client.sadd(key2, member2_list) == 4
+        assert await redis_client.sadd(key3, member3_list) == 4
+
+        # Basic intersection
+        assert (
+            await redis_client.sintercard([key1, key2]) == 2
+        )  # Intersection of key1 and key2 is {"b", "c"}
+
+        # Intersection with non-existing key
+        assert (
+            await redis_client.sintercard([key1, non_existing_key]) == 0
+        )  # No common elements
+
+        # Intersection with a single key
+        assert await redis_client.sintercard([key1]) == 3  # All elements in key1
+
+        # Intersection with limit
+        assert (
+            await redis_client.sintercard([key1, key2, key3], limit=1) == 1
+        )  # Stops early at limit
+
+        # Invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.sintercard([])
+
+        # Non-set key
+        assert await redis_client.set(string_key, "value") == "OK"
+        with pytest.raises(RequestError):
+            await redis_client.sintercard([string_key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sdiff(self, redis_client: TRedisClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
@@ -3752,6 +3799,7 @@ class TestMultiKeyCommandCrossSlot:
                     redis_client.bzmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX, 0.1),
                     redis_client.zintercard(["abc", "def"]),
                     redis_client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
+                    redis_client.sintercard(["def", "ghi"]),
                 ]
             )
 
