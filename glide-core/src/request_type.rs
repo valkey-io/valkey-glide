@@ -185,6 +185,7 @@ pub enum RequestType {
     XRevRange = 176,
     Copy = 178,
     MSetNX = 179,
+    LPos = 180,
     LCS = 181,
 }
 
@@ -374,6 +375,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Sort => RequestType::Sort,
             ProtobufRequestType::XRevRange => RequestType::XRevRange,
             ProtobufRequestType::MSetNX => RequestType::MSetNX,
+            ProtobufRequestType::LPos => RequestType::LPos,
             ProtobufRequestType::LCS => RequestType::LCS,
         }
     }
@@ -559,6 +561,7 @@ impl RequestType {
             RequestType::Sort => Some(cmd("SORT")),
             RequestType::XRevRange => Some(cmd("XREVRANGE")),
             RequestType::MSetNX => Some(cmd("MSETNX")),
+            RequestType::LPos => Some(cmd("LPOS")),
             RequestType::LCS => Some(cmd("LCS")),
         }
     }

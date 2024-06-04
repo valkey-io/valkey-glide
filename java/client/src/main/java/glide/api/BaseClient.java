@@ -67,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -699,6 +700,34 @@ public abstract class BaseClient
     public CompletableFuture<String> lpop(@NonNull String key) {
         return commandManager.submitNewCommand(
                 LPop, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element) {
+        return commandManager.submitNewCommand(
+            LPos, new String[] {key, element}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, long rank) {
+        return commandManager.submitNewCommand(
+            LPos, new String[] {key, element, Long.toString(rank)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, long rank, long count) {
+        return commandManager.submitNewCommand(
+            LPos,
+            new String[] {key, element, Long.toString(rank), Long.toString(count)},
+            this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, long rank, long count, long len) {
+        return commandManager.submitNewCommand(
+            LPos,
+            new String[] {key, element, Long.toString(rank), Long.toString(count), Long.toString(len)},
+            this::handleLongResponse);
     }
 
     @Override

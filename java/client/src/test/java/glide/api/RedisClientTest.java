@@ -122,6 +122,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -1747,6 +1748,59 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lpos() {
+        // setup
+        String[] set = {"a", "b", "c", "a", "c"};
+        String element = "b";
+        String[] args = new String[] {"set", "element"};
+        long index = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpos("set", "element");
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lpos_with_rank_maxlen() {
+        // setup
+        String[] set = {"a", "b", "c", "a", "b"};
+        String element = "b";
+        String[] args = new String[] {"set", "element"};
+        long index = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpos("set", "element", 1L);
+        Long payload = response.get();
+//        CompletableFuture<Long> response2 = service.lpos("set", "element", 2L);
+//        Long payload2 = response2.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(index, payload);
+//        assertEquals(payload2, response2);
     }
 
     @SneakyThrows

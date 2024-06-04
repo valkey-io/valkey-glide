@@ -89,6 +89,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -904,6 +905,83 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lpop(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
+     * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
+     * is returned. Otherwise, if no match is found, null is returned.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param element The value to search for within the list.
+     * @return Command Response - The index of <code>element</code>.
+     */
+    public T lpos(@NonNull String key, @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, element);
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
+     * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
+     * is returned. Otherwise, if no match is found, null is returned.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param element The value to search for within the list.
+     * @param rank The index of the first <code>element</code> to return. If there are multiple matches,
+     *             it will return the first matched <code>element</code>. If given a negative value, then it will search
+     *             the list from tail to head.
+     * @return Command Response - The index of <code>element</code>..
+     * */
+    public T lpos(@NonNull String key, @NonNull String element, long rank) {
+        ArgsArray commandArgs = buildArgs(key, element, Long.toString(rank));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
+     * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
+     * is returned. Otherwise, if no match is found, null is returned.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param element The value to search for within the list.
+     * @param rank The index of the first <code>element</code> to return. If there are multiple matches,
+     *             it will return the first matched <code>element</code>. If given a negative value, then it will search
+     *             the list from tail to head.
+     * @param count The maximum number of matches to retrieve.
+     * @return Command Response - The index of <code>element</code>.
+     * */
+    public T lpos(@NonNull String key, @NonNull String element, long rank, long count) {
+        ArgsArray commandArgs = buildArgs(key, element, Long.toString(rank), Long.toString(count));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
+     * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
+     * is returned. Otherwise, if no match is found, null is returned.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param element The value to search for within the list.
+     * @param rank The index of the first <code>element</code> to return. If there are multiple matches,
+     *             it will return the first matched <code>element</code>. If given a negative value, then it will search
+     *             the list from tail to head.
+     * @param count The maximum number of matches to retrieve.
+     * @param len The maximum number of comparisons between the provided <code>element</code> and the number of list items.
+     *            If the value of len is 0 then there will be unlimited comparisons.
+     * @return The index of <code>element</code>.
+     * */
+    public T lpos(@NonNull String key, @NonNull String element, long rank, long count, long len) {
+        ArgsArray commandArgs = buildArgs(key, element, Long.toString(rank), Long.toString(count), Long.toString(len));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
         return getThis();
     }
 
