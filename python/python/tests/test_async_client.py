@@ -6,7 +6,7 @@ import asyncio
 import math
 import time
 from collections.abc import Mapping
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, Union, cast
 
 import pytest
@@ -390,6 +390,26 @@ class TestCommands:
         delete_keys = keys + [get_random_string(10)]
         assert await redis_client.delete(delete_keys) == 3
         assert await redis_client.delete(keys) == 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_getdel(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        list_key = get_random_string(10)
+        assert await redis_client.set(key, value) == "OK"
+
+        # Retrieve and delete existing key
+        assert await redis_client.getdel(key) == value
+        assert await redis_client.get(key) is None
+
+        # Try to get and delete a non-existing key
+        assert await redis_client.getdel(non_existing_key) is None
+
+        assert await redis_client.lpush(list_key, [value]) == 1
+        with pytest.raises(RequestError) as e:
+            await redis_client.getdel(list_key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1459,6 +1479,30 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_renamenx(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        # Verify that attempting to rename a non-existing key throws an error
+        with pytest.raises(RequestError):
+            assert await redis_client.renamenx(non_existing_key, key1)
+
+        # Test RENAMENX with string values
+        assert await redis_client.set(key1, "key1") == OK
+        assert await redis_client.set(key3, "key3") == OK
+        # Test that RENAMENX can rename key1 to key2 (where key2 does not yet exist)
+        assert await redis_client.renamenx(key1, key2) is True
+        # Verify that key2 now holds the value that was in key1
+        assert await redis_client.get(key2) == "key1"
+        # Verify that RENAMENX doesn't rename key2 to key3, since key3 already exists
+        assert await redis_client.renamenx(key2, key3) is False
+        # Verify that key3 remains unchanged
+        assert await redis_client.get(key3) == "key3"
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_exists(self, redis_client: TRedisClient):
         keys = [get_random_string(10), get_random_string(10)]
 
@@ -2113,7 +2157,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zinterstore(self, redis_client: TRedisClient):
+    async def test_zinter_commands(self, redis_client: TRedisClient):
         key1 = "{testKey}:1-" + get_random_string(10)
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
@@ -2124,48 +2168,74 @@ class TestCommands:
         assert await redis_client.zadd(key1, members_scores1) == 2
         assert await redis_client.zadd(key2, members_scores2) == 3
 
+        # zinter tests
+        zinter_map = await redis_client.zinter([key1, key2])
+        expected_zinter_map = ["one", "two"]
+        assert zinter_map == expected_zinter_map
+
+        # zinterstore tests
         assert await redis_client.zinterstore(key3, [key1, key2]) == 2
         zinterstore_map = await redis_client.zrange_withscores(key3, range)
-        expected_map = {
+        expected_zinter_map_withscores = {
             "one": 2.5,
             "two": 4.5,
         }
-        assert compare_maps(zinterstore_map, expected_map) is True
+        assert compare_maps(zinterstore_map, expected_zinter_map_withscores) is True
 
-        # Intersection results are aggregated by the MAX score of elements
+        # zinter_withscores tests
+        zinter_withscores_map = await redis_client.zinter_withscores([key1, key2])
+        assert (
+            compare_maps(zinter_withscores_map, expected_zinter_map_withscores) is True
+        )
+
+        # MAX aggregation tests
         assert (
             await redis_client.zinterstore(key3, [key1, key2], AggregationType.MAX) == 2
         )
         zinterstore_map_max = await redis_client.zrange_withscores(key3, range)
-        expected_map_max = {
+        expected_zinter_map_max = {
             "one": 1.5,
             "two": 2.5,
         }
-        assert compare_maps(zinterstore_map_max, expected_map_max) is True
+        assert compare_maps(zinterstore_map_max, expected_zinter_map_max) is True
 
-        # Intersection results are aggregated by the MIN score of elements
+        zinter_withscores_map_max = await redis_client.zinter_withscores(
+            [key1, key2], AggregationType.MAX
+        )
+        assert compare_maps(zinter_withscores_map_max, expected_zinter_map_max) is True
+
+        # MIN aggregation tests
         assert (
             await redis_client.zinterstore(key3, [key1, key2], AggregationType.MIN) == 2
         )
         zinterstore_map_min = await redis_client.zrange_withscores(key3, range)
-        expected_map_min = {
+        expected_zinter_map_min = {
             "one": 1.0,
             "two": 2.0,
         }
-        assert compare_maps(zinterstore_map_min, expected_map_min) is True
+        assert compare_maps(zinterstore_map_min, expected_zinter_map_min) is True
 
-        # Intersection results are aggregated by the SUM score of elements
+        zinter_withscores_map_min = await redis_client.zinter_withscores(
+            [key1, key2], AggregationType.MIN
+        )
+        assert compare_maps(zinter_withscores_map_min, expected_zinter_map_min) is True
+
+        # SUM aggregation tests
         assert (
             await redis_client.zinterstore(key3, [key1, key2], AggregationType.SUM) == 2
         )
         zinterstore_map_sum = await redis_client.zrange_withscores(key3, range)
-        expected_map_sum = {
-            "one": 2.5,
-            "two": 4.5,
-        }
-        assert compare_maps(zinterstore_map_sum, expected_map_sum) is True
+        assert compare_maps(zinterstore_map_sum, expected_zinter_map_withscores) is True
 
-        # Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        zinter_withscores_map_sum = await redis_client.zinter_withscores(
+            [key1, key2], AggregationType.SUM
+        )
+        assert (
+            compare_maps(zinter_withscores_map_sum, expected_zinter_map_withscores)
+            is True
+        )
+
+        # Multiplying scores during aggregation tests
         assert (
             await redis_client.zinterstore(
                 key3, [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
@@ -2173,25 +2243,51 @@ class TestCommands:
             == 2
         )
         zinterstore_map_multiplied = await redis_client.zrange_withscores(key3, range)
-        expected_map_multiplied = {
+        expected_zinter_map_multiplied = {
             "one": 5.0,
             "two": 9.0,
         }
-        assert compare_maps(zinterstore_map_multiplied, expected_map_multiplied) is True
+        assert (
+            compare_maps(zinterstore_map_multiplied, expected_zinter_map_multiplied)
+            is True
+        )
 
+        zinter_withscores_map_multiplied = await redis_client.zinter_withscores(
+            [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
+        )
+        assert (
+            compare_maps(
+                zinter_withscores_map_multiplied, expected_zinter_map_multiplied
+            )
+            is True
+        )
+
+        # Non-existing key test
         assert (
             await redis_client.zinterstore(key3, [key1, "{testKey}-non_existing_key"])
             == 0
         )
+        zinter_withscores_non_existing = await redis_client.zinter_withscores(
+            [key1, "{testKey}-non_existing_key"]
+        )
+        assert zinter_withscores_non_existing == {}
 
         # Empty list check
         with pytest.raises(RequestError) as e:
             await redis_client.zinterstore("{xyz}", [])
         assert "wrong number of arguments" in str(e)
 
+        with pytest.raises(RequestError) as e:
+            await redis_client.zinter([])
+        assert "wrong number of arguments" in str(e)
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.zinter_withscores([])
+        assert "at least 1 input key is needed" in str(e)
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zunionstore(self, redis_client: TRedisClient):
+    async def test_zunion_commands(self, redis_client: TRedisClient):
         key1 = "{testKey}:1-" + get_random_string(10)
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
@@ -2202,75 +2298,145 @@ class TestCommands:
         assert await redis_client.zadd(key1, members_scores1) == 2
         assert await redis_client.zadd(key2, members_scores2) == 3
 
+        # zunion tests
+        zunion_map = await redis_client.zunion([key1, key2])
+        expected_zunion_map = ["one", "three", "two"]
+        assert zunion_map == expected_zunion_map
+
+        # zunionstore tests
         assert await redis_client.zunionstore(key3, [key1, key2]) == 3
         zunionstore_map = await redis_client.zrange_withscores(key3, range)
-        expected_map = {
+        expected_zunion_map_withscores = {
             "one": 2.5,
             "three": 3.5,
             "two": 4.5,
         }
-        assert compare_maps(zunionstore_map, expected_map) is True
+        assert compare_maps(zunionstore_map, expected_zunion_map_withscores) is True
 
-        # Intersection results are aggregated by the MAX score of elements
+        # zunion_withscores tests
+        zunion_withscores_map = await redis_client.zunion_withscores([key1, key2])
+        assert (
+            compare_maps(zunion_withscores_map, expected_zunion_map_withscores) is True
+        )
+
+        # MAX aggregation tests
         assert (
             await redis_client.zunionstore(key3, [key1, key2], AggregationType.MAX) == 3
         )
         zunionstore_map_max = await redis_client.zrange_withscores(key3, range)
-        expected_map_max = {
+        expected_zunion_map_max = {
             "one": 1.5,
             "two": 2.5,
             "three": 3.5,
         }
-        assert compare_maps(zunionstore_map_max, expected_map_max) is True
+        assert compare_maps(zunionstore_map_max, expected_zunion_map_max) is True
 
-        # Intersection results are aggregated by the MIN score of elements
+        zunion_withscores_map_max = await redis_client.zunion_withscores(
+            [key1, key2], AggregationType.MAX
+        )
+        assert compare_maps(zunion_withscores_map_max, expected_zunion_map_max) is True
+
+        # MIN aggregation tests
         assert (
             await redis_client.zunionstore(key3, [key1, key2], AggregationType.MIN) == 3
         )
         zunionstore_map_min = await redis_client.zrange_withscores(key3, range)
-        expected_map_min = {
+        expected_zunion_map_min = {
             "one": 1.0,
             "two": 2.0,
             "three": 3.5,
         }
-        assert compare_maps(zunionstore_map_min, expected_map_min) is True
+        assert compare_maps(zunionstore_map_min, expected_zunion_map_min) is True
 
-        # Intersection results are aggregated by the SUM score of elements
+        zunion_withscores_map_min = await redis_client.zunion_withscores(
+            [key1, key2], AggregationType.MIN
+        )
+        assert compare_maps(zunion_withscores_map_min, expected_zunion_map_min) is True
+
+        # SUM aggregation tests
         assert (
             await redis_client.zunionstore(key3, [key1, key2], AggregationType.SUM) == 3
         )
         zunionstore_map_sum = await redis_client.zrange_withscores(key3, range)
-        expected_map_sum = {
-            "one": 2.5,
-            "three": 3.5,
-            "two": 4.5,
-        }
-        assert compare_maps(zunionstore_map_sum, expected_map_sum) is True
+        assert compare_maps(zunionstore_map_sum, expected_zunion_map_withscores) is True
 
-        # Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        zunion_withscores_map_sum = await redis_client.zunion_withscores(
+            [key1, key2], AggregationType.SUM
+        )
+        assert (
+            compare_maps(zunion_withscores_map_sum, expected_zunion_map_withscores)
+            is True
+        )
+
+        # Multiplying scores during aggregation tests
         assert (
             await redis_client.zunionstore(
                 key3, [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
             )
             == 3
         )
-        zunionstore_map = await redis_client.zrange_withscores(key3, range)
-        expected_map = {
+        zunionstore_map_multiplied = await redis_client.zrange_withscores(key3, range)
+        expected_zunion_map_multiplied = {
             "one": 5.0,
             "three": 7.0,
             "two": 9.0,
         }
-        assert compare_maps(zunionstore_map, expected_map) is True
+        assert (
+            compare_maps(zunionstore_map_multiplied, expected_zunion_map_multiplied)
+            is True
+        )
 
+        zunion_withscores_map_multiplied = await redis_client.zunion_withscores(
+            [(key1, 2.0), (key2, 2.0)], AggregationType.SUM
+        )
+        assert (
+            compare_maps(
+                zunion_withscores_map_multiplied, expected_zunion_map_multiplied
+            )
+            is True
+        )
+
+        # Non-existing key test
         assert (
             await redis_client.zunionstore(key3, [key1, "{testKey}-non_existing_key"])
             == 2
+        )
+        zunionstore_map_nonexistingkey = await redis_client.zrange_withscores(
+            key3, range
+        )
+        expected_zunion_map_nonexistingkey = {
+            "one": 1.0,
+            "two": 2.0,
+        }
+        assert (
+            compare_maps(
+                zunionstore_map_nonexistingkey, expected_zunion_map_nonexistingkey
+            )
+            is True
+        )
+
+        zunion_withscores_non_existing = await redis_client.zunion_withscores(
+            [key1, "{testKey}-non_existing_key"]
+        )
+        assert (
+            compare_maps(
+                zunion_withscores_non_existing, expected_zunion_map_nonexistingkey
+            )
+            is True
         )
 
         # Empty list check
         with pytest.raises(RequestError) as e:
             await redis_client.zunionstore("{xyz}", [])
         assert "wrong number of arguments" in str(e)
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.zunion([])
+        assert "wrong number of arguments" in str(e)
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.zunion_withscores([])
+        assert "at least 1 input key is needed" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3249,6 +3415,28 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lastsave(self, redis_client: TRedisClient):
+        yesterday = date.today() - timedelta(1)
+        yesterday_unix_time = time.mktime(yesterday.timetuple())
+
+        result = await redis_client.lastsave()
+        assert isinstance(result, int)
+        assert result > yesterday_unix_time
+
+        if isinstance(redis_client, RedisClusterClient):
+            # test with single-node route
+            result = await redis_client.lastsave(RandomNode())
+            assert isinstance(result, int)
+            assert result > yesterday_unix_time
+
+            # test with multi-node route
+            result = await redis_client.lastsave(AllNodes())
+            assert isinstance(result, dict)
+            for lastsave_time in result.values():
+                assert lastsave_time > yesterday_unix_time
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_append(self, redis_client: TRedisClient):
         key, value = get_random_string(10), get_random_string(5)
         assert await redis_client.append(key, value) == 5
@@ -3258,8 +3446,10 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xadd_xtrim(self, redis_client: TRedisClient):
+    async def test_xadd_xtrim_xlen(self, redis_client: TRedisClient):
         key = get_random_string(10)
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
         field, field2 = get_random_string(10), get_random_string(10)
 
         assert (
@@ -3281,7 +3471,7 @@ class TestCommands:
         assert (
             await redis_client.xadd(key, [(field, "foo2"), (field2, "bar2")])
         ) is not None
-        assert await redis_client.custom_command(["XLEN", key]) == 2
+        assert await redis_client.xlen(key) == 2
 
         # This will trim the first entry.
         id = await redis_client.xadd(
@@ -3291,7 +3481,7 @@ class TestCommands:
         )
 
         assert id is not None
-        assert await redis_client.custom_command(["XLEN", key]) == 2
+        assert await redis_client.xlen(key) == 2
 
         # This will trim the 2nd entry.
         assert (
@@ -3302,10 +3492,30 @@ class TestCommands:
             )
             is not None
         )
-        assert await redis_client.custom_command(["XLEN", key]) == 2
+        assert await redis_client.xlen(key) == 2
 
         assert await redis_client.xtrim(key, TrimByMaxLen(threshold=1, exact=True)) == 1
-        assert await redis_client.custom_command(["XLEN", key]) == 1
+        assert await redis_client.xlen(key) == 1
+
+        assert await redis_client.xtrim(key, TrimByMaxLen(threshold=0, exact=True)) == 1
+        # Unlike other Redis collection types, stream keys still exist even after removing all entries
+        assert await redis_client.exists([key]) == 1
+        assert await redis_client.xlen(key) == 0
+
+        assert (
+            await redis_client.xtrim(
+                non_existing_key, TrimByMaxLen(threshold=1, exact=True)
+            )
+            == 0
+        )
+        assert await redis_client.xlen(non_existing_key) == 0
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo")
+        with pytest.raises(RequestError):
+            await redis_client.xtrim(string_key, TrimByMaxLen(threshold=1, exact=True))
+        with pytest.raises(RequestError):
+            await redis_client.xlen(string_key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3319,6 +3529,71 @@ class TestCommands:
         assert await redis_client.set("foo", "value") == OK
         with pytest.raises(RequestError):
             await redis_client.pfadd("foo", [])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pfcount(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        assert await redis_client.pfadd(key1, ["a", "b", "c"]) == 1
+        assert await redis_client.pfadd(key2, ["b", "c", "d"]) == 1
+        assert await redis_client.pfcount([key1]) == 3
+        assert await redis_client.pfcount([key2]) == 3
+        assert await redis_client.pfcount([key1, key2]) == 4
+        assert await redis_client.pfcount([key1, key2, non_existing_key]) == 4
+        # empty HyperLogLog data set
+        assert await redis_client.pfadd(key3, []) == 1
+        assert await redis_client.pfcount([key3]) == 0
+
+        # incorrect argument - key list cannot be empty
+        with pytest.raises(RequestError):
+            await redis_client.pfcount([])
+
+        # key exists, but it is not a HyperLogLog
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.pfcount([string_key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_pfmerge(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        key3 = f"{{testKey}}:3-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
+
+        assert await redis_client.pfadd(key1, ["a", "b", "c"]) == 1
+        assert await redis_client.pfadd(key2, ["b", "c", "d"]) == 1
+
+        # merge into new HyperLogLog data set
+        assert await redis_client.pfmerge(key3, [key1, key2]) == OK
+        assert await redis_client.pfcount([key3]) == 4
+
+        # merge into existing HyperLogLog data set
+        assert await redis_client.pfmerge(key1, [key2]) == OK
+        assert await redis_client.pfcount([key1]) == 4
+
+        # non-existing source key
+        assert await redis_client.pfmerge(key2, [key1, non_existing_key]) == OK
+        assert await redis_client.pfcount([key2]) == 4
+
+        # empty source key list
+        assert await redis_client.pfmerge(key1, []) == OK
+        assert await redis_client.pfcount([key1]) == 4
+
+        # source key exists, but it is not a HyperLogLog
+        assert await redis_client.set(string_key, "foo")
+        with pytest.raises(RequestError):
+            assert await redis_client.pfmerge(key3, [string_key])
+
+        # destination key exists, but it is not a HyperLogLog
+        with pytest.raises(RequestError):
+            assert await redis_client.pfmerge(string_key, [key3])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3426,6 +3701,17 @@ class TestCommands:
         idletime = await redis_client.object_idletime(string_key)
         assert idletime is not None and idletime > 0
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_object_refcount(self, redis_client: TRedisClient):
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+
+        assert await redis_client.object_refcount(non_existing_key) is None
+        assert await redis_client.set(string_key, "foo") == OK
+        refcount = await redis_client.object_refcount(string_key)
+        assert refcount is not None and refcount >= 0
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -3451,6 +3737,13 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.sinterstore("abc", ["zxy", "lkn"]),
             redis_client.sdiff(["abc", "zxy", "lkn"]),
             redis_client.sdiffstore("abc", ["def", "ghi"]),
+            redis_client.renamenx("abc", "def"),
+            redis_client.pfcount(["def", "ghi"]),
+            redis_client.pfmerge("abc", ["def", "ghi"]),
+            redis_client.zinter(["def", "ghi"]),
+            redis_client.zinter_withscores(["def", "ghi"]),
+            redis_client.zunion(["def", "ghi"]),
+            redis_client.zunion_withscores(["def", "ghi"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):

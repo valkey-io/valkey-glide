@@ -1,6 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
-from datetime import datetime, timezone
+import time
+from datetime import date, datetime, timedelta, timezone
 from typing import List, Union, cast
 
 import pytest
@@ -90,10 +91,20 @@ async def transaction_test(
     transaction.get(key2)
     args.append(None)
 
+    transaction.set(key, value)
+    args.append(OK)
+    transaction.getdel(key)
+    args.append(value)
+    transaction.getdel(key)
+    args.append(None)
+
     transaction.mset({key: value, key2: value2})
     args.append(OK)
     transaction.mget([key, key2])
     args.append([value, value2])
+
+    transaction.renamenx(key, key2)
+    args.append(False)
 
     transaction.incr(key3)
     args.append(1)
@@ -294,13 +305,25 @@ async def transaction_test(
     args.append(2)
     transaction.zadd(key15, {"one": 1.0, "two": 2.0, "three": 3.5})
     args.append(3)
+    transaction.zinter([key14, key15])
+    args.append(["one", "two"])
+    transaction.zinter_withscores([key14, key15])
+    args.append({"one": 2.0, "two": 4.0})
     transaction.zinterstore(key8, [key14, key15])
     args.append(2)
+    transaction.zunion([key14, key15])
+    args.append(["one", "three", "two"])
+    transaction.zunion_withscores([key14, key15])
+    args.append({"one": 2.0, "two": 4.0, "three": 3.5})
     transaction.zunionstore(key8, [key14, key15], AggregationType.MAX)
     args.append(3)
 
     transaction.pfadd(key10, ["a", "b", "c"])
     args.append(1)
+    transaction.pfmerge(key10, [])
+    args.append(OK)
+    transaction.pfcount([key10])
+    args.append(3)
 
     transaction.geoadd(
         key12,
@@ -329,6 +352,8 @@ async def transaction_test(
     args.append("0-1")
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-2"))
     args.append("0-2")
+    transaction.xlen(key11)
+    args.append(2)
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
 
@@ -518,6 +543,7 @@ class TestTransaction:
             transaction = ClusterTransaction() if cluster_mode else Transaction()
             transaction.set(string_key, "foo")
             transaction.object_encoding(string_key)
+            transaction.object_refcount(string_key)
             # OBJECT FREQ requires a LFU maxmemory-policy
             transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
             transaction.object_freq(string_key)
@@ -529,15 +555,29 @@ class TestTransaction:
             assert response is not None
             assert response[0] == OK  # transaction.set(string_key, "foo")
             assert response[1] == "embstr"  # transaction.object_encoding(string_key)
-            assert (
-                response[2] == OK
-            )  # transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
-            assert cast(int, response[3]) >= 0  # transaction.object_freq(string_key)
-            assert (
-                response[4] == OK
-            )  # transaction.config_set({maxmemory_policy_key: "allkeys-random"})
-            assert (
-                cast(int, response[5]) >= 0
-            )  # transaction.object_idletime(string_key)
+            # transaction.object_refcount(string_key)
+            assert cast(int, response[2]) >= 0
+            # transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
+            assert response[3] == OK
+            assert cast(int, response[4]) >= 0  # transaction.object_freq(string_key)
+            # transaction.config_set({maxmemory_policy_key: "allkeys-random"})
+            assert response[5] == OK
+            # transaction.object_idletime(string_key)
+            assert cast(int, response[6]) >= 0
         finally:
             await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_lastsave(
+        self, redis_client: TRedisClient, cluster_mode: bool
+    ):
+        yesterday = date.today() - timedelta(1)
+        yesterday_unix_time = time.mktime(yesterday.timetuple())
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.lastsave()
+        response = await redis_client.exec(transaction)
+        assert isinstance(response, list)
+        lastsave_time = response[0]
+        assert isinstance(lastsave_time, int)
+        assert lastsave_time > yesterday_unix_time

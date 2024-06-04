@@ -2,6 +2,21 @@
 * Python: Added OBJECT ENCODING command ([#1471](https://github.com/aws/glide-for-redis/pull/1471))
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
 * Python: Added OBJECT IDLETIME command ([#1474](https://github.com/aws/glide-for-redis/pull/1474))
+* Node: Added RENAMENX command ([#1483](https://github.com/aws/glide-for-redis/pull/1483))
+* Python: Added OBJECT REFCOUNT command ([#1485](https://github.com/aws/glide-for-redis/pull/1485))
+* Python: Added RENAMENX command ([#1492](https://github.com/aws/glide-for-redis/pull/1492))
+* Python: Added PFCOUNT command ([#1493](https://github.com/aws/glide-for-redis/pull/1493))
+* Python: Added PFMERGE command ([#1497](https://github.com/aws/glide-for-redis/pull/1497))
+* Node: Added SINTER command ([#1500](https://github.com/aws/glide-for-redis/pull/1500))
+* Python: Added XLEN command ([#1503](https://github.com/aws/glide-for-redis/pull/1503))
+* Python: Added LASTSAVE command ([#1509](https://github.com/aws/glide-for-redis/pull/1509))
+* Python: Added GETDEL command ([#1514](https://github.com/aws/glide-for-redis/pull/1514))
+* Python: Added ZINTER, ZUNION commands ([#1478](https://github.com/aws/glide-for-redis/pull/1478))
+
+## 0.4.1 (2024-02-06)
+
+#### Fixes
+* Node: Fix set command bug with expiry option ([#1508](https://github.com/aws/glide-for-redis/pull/1508))
 
 ## 0.4.0 (2024-05-26)
 

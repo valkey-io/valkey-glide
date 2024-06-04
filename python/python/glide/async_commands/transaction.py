@@ -24,7 +24,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
-    _create_z_cmd_store_args,
+    _create_zinter_zunion_cmd_args,
     _create_zrange_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -77,6 +77,20 @@ class BaseTransaction:
             Optional[str]: If the key exists, returns the value of the key as a string. Otherwise, return None.
         """
         return self.append_command(RequestType.Get, [key])
+
+    def getdel(self: TTransaction, key: str) -> TTransaction:
+        """
+        Gets a string value associated with the given `key` and deletes the key.
+
+        See https://valkey.io/commands/getdel for more details.
+
+        Args:
+            key (str): The `key` to retrieve from the database.
+
+        Command response:
+            Optional[str]: If `key` exists, returns the `value` of `key`. Otherwise, returns `None`.
+        """
+        return self.append_command(RequestType.GetDel, [key])
 
     def set(
         self: TTransaction,
@@ -153,6 +167,21 @@ class BaseTransaction:
             OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, the transaction fails with an error.
         """
         return self.append_command(RequestType.Rename, [key, new_key])
+
+    def renamenx(self: TTransaction, key: str, new_key: str) -> TTransaction:
+        """
+        Renames `key` to `new_key` if `new_key` does not yet exist.
+
+        See https://valkey.io/commands/renamenx for more details.
+
+        Args:
+            key (str): The key to rename.
+            new_key (str): The new key name.
+
+        Command response:
+            bool: True if `key` was renamed to `new_key`, or False if `new_key` already exists.
+        """
+        return self.append_command(RequestType.RenameNX, [key, new_key])
 
     def custom_command(self: TTransaction, command_args: List[str]) -> TTransaction:
         """
@@ -1417,6 +1446,17 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Echo, [message])
 
+    def lastsave(self: TTransaction) -> TTransaction:
+        """
+        Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
+
+        See https://valkey.io/commands/lastsave for more details.
+
+        Command response:
+            int: The Unix time of the last successful DB save.
+        """
+        return self.append_command(RequestType.LastSave, [])
+
     def type(self: TTransaction, key: str) -> TTransaction:
         """
          Returns the string representation of the type of the value stored at `key`.
@@ -1480,6 +1520,20 @@ class BaseTransaction:
             args.extend(options.to_args())
 
         return self.append_command(RequestType.XTrim, args)
+
+    def xlen(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the number of entries in the stream stored at `key`.
+
+        See https://valkey.io/commands/xlen for more details.
+
+        Args:
+            key (str): The key of the stream.
+
+        Command response:
+            int: The number of entries in the stream. If `key` does not exist, returns 0.
+        """
+        return self.append_command(RequestType.XLen, [key])
 
     def geoadd(
         self: TTransaction,
@@ -2218,6 +2272,47 @@ class BaseTransaction:
             RequestType.ZDiffStore, [destination, str(len(keys))] + keys
         )
 
+    def zinter(
+        self: TTransaction,
+        keys: List[str],
+    ) -> TTransaction:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            List[str]: The resulting array of intersecting elements.
+        """
+        return self.append_command(RequestType.ZInter, [str(len(keys))] + keys)
+
+    def zinter_withscores(
+        self: TTransaction,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> TTransaction:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Command response:
+            Mapping[str, float]: The resulting sorted set with scores.
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return self.append_command(RequestType.ZInter, args)
+
     def zinterstore(
         self: TTransaction,
         destination: str,
@@ -2243,8 +2338,49 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return self.append_command(RequestType.ZInterStore, args)
+
+    def zunion(
+        self: TTransaction,
+        keys: List[str],
+    ) -> TTransaction:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            List[str]: The resulting array of union elements.
+        """
+        return self.append_command(RequestType.ZUnion, [str(len(keys))] + keys)
+
+    def zunion_withscores(
+        self: TTransaction,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> TTransaction:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a sorted set of union elements with scores.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Command response:
+            Mapping[str, float]: The resulting sorted set with scores.
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return self.append_command(RequestType.ZUnion, args)
 
     def zunionstore(
         self: TTransaction,
@@ -2271,7 +2407,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return self.append_command(RequestType.ZUnionStore, args)
 
     def zrandmember(self: TTransaction, key: str) -> TTransaction:
@@ -2460,6 +2596,40 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.PfAdd, [key] + elements)
 
+    def pfcount(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+        calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+
+        See https://valkey.io/commands/pfcount for more details.
+
+        Args:
+            keys (List[str]): The keys of the HyperLogLog data structures to be analyzed.
+
+        Command response:
+            int: The approximated cardinality of given HyperLogLog data structures.
+                The cardinality of a key that does not exist is 0.
+        """
+        return self.append_command(RequestType.PfCount, keys)
+
+    def pfmerge(
+        self: TTransaction, destination: str, source_keys: List[str]
+    ) -> TTransaction:
+        """
+        Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
+        of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+
+        See https://valkey.io/commands/pfmerge for more details.
+
+        Args:
+            destination (str): The key of the destination HyperLogLog where the merged data sets will be stored.
+            source_keys (List[str]): The keys of the HyperLogLog structures to be merged.
+
+        Command response:
+            OK: A simple OK response.
+        """
+        return self.append_command(RequestType.PfMerge, [destination] + source_keys)
+
     def object_encoding(self: TTransaction, key: str) -> TTransaction:
         """
         Returns the internal encoding for the Redis object stored at `key`.
@@ -2503,6 +2673,21 @@ class BaseTransaction:
             Optional[int]: If `key` exists, returns the idle time in seconds. Otherwise, returns None.
         """
         return self.append_command(RequestType.ObjectIdleTime, [key])
+
+    def object_refcount(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the reference count of the object stored at `key`.
+
+        See https://valkey.io/commands/object-refcount for more details.
+
+        Args:
+            key (str): The key of the object to get the reference count of.
+
+        Command response:
+            Optional[int]: If `key` exists, returns the reference count of the object stored at `key` as an integer.
+                Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectRefCount, [key])
 
 
 class Transaction(BaseTransaction):

@@ -16,6 +16,9 @@ import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
+import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
+import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
+import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_LIMIT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MAXLEN_REDIS_API;
@@ -36,6 +39,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -67,6 +71,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
+import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -90,6 +95,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -129,6 +135,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
@@ -141,7 +148,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
+import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -175,7 +184,7 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -199,6 +208,9 @@ import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamRange.IdBound;
+import glide.api.models.commands.stream.StreamRange.InfRangeBound;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -426,6 +438,26 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String> response = service.get(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void getdel() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<String>submitNewCommand(eq(GetDel), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.getdel(key);
         String payload = response.get();
 
         // verify
@@ -3999,6 +4031,95 @@ public class RedisClientTest {
         assertEquals(completedResult, payload);
     }
 
+    @Test
+    @SneakyThrows
+    public void xdel_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] ids = {"one-1", "two-2", "three-3"};
+        Long completedResult = 69L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(XDel), eq(new String[] {key, "one-1", "two-2", "three-3"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xdel(key, ids);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @Test
+    @SneakyThrows
+    public void xrange_returns_success() {
+        // setup
+        String key = "testKey";
+        StreamRange start = IdBound.of(9999L);
+        StreamRange end = IdBound.ofExclusive("696969-10");
+        Map<String, String[]> completedResult =
+                Map.of(key, new String[] {"duration", "12345", "event-id", "2", "user-id", "42"});
+
+        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[]>>submitNewCommand(
+                        eq(XRange), eq(new String[] {key, "9999", "(696969-10"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[]>> response = service.xrange(key, start, end);
+        Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @Test
+    @SneakyThrows
+    public void xrange_withcount_returns_success() {
+        // setup
+        String key = "testKey";
+        StreamRange start = InfRangeBound.MIN;
+        StreamRange end = InfRangeBound.MAX;
+        long count = 99L;
+        Map<String, String[]> completedResult =
+                Map.of(key, new String[] {"duration", "12345", "event-id", "2", "user-id", "42"});
+
+        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[]>>submitNewCommand(
+                        eq(XRange),
+                        eq(
+                                new String[] {
+                                    key,
+                                    MINIMUM_RANGE_REDIS_API,
+                                    MAXIMUM_RANGE_REDIS_API,
+                                    RANGE_COUNT_REDIS_API,
+                                    Long.toString(count)
+                                }),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[]>> response = service.xrange(key, start, end, count);
+        Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
     @SneakyThrows
     @Test
     public void type_returns_success() {
@@ -4746,7 +4867,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoad(code);
+        CompletableFuture<String> response = service.functionLoad(code, false);
         String payload = response.get();
 
         // verify
@@ -4756,7 +4877,7 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadReplace_returns_success() {
+    public void functionLoad_with_replace_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -4769,7 +4890,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadReplace(code);
+        CompletableFuture<String> response = service.functionLoad(code, true);
         String payload = response.get();
 
         // verify
@@ -4875,10 +4996,10 @@ public class RedisClientTest {
         String key = "testKey";
         String key2 = "testKey2";
         String[] keys = {key, key2};
-        PopDirection popDirection = PopDirection.LEFT;
+        ListDirection listDirection = ListDirection.LEFT;
         double timeout = 0.1;
         String[] arguments =
-                new String[] {Double.toString(timeout), "2", key, key2, popDirection.toString()};
+                new String[] {Double.toString(timeout), "2", key, key2, listDirection.toString()};
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
 
         CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
@@ -4889,7 +5010,8 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.blmpop(keys, popDirection, timeout);
+        CompletableFuture<Map<String, String[]>> response =
+                service.blmpop(keys, listDirection, timeout);
         Map<String, String[]> payload = response.get();
 
         // verify
@@ -4904,7 +5026,7 @@ public class RedisClientTest {
         String key = "testKey";
         String key2 = "testKey2";
         String[] keys = {key, key2};
-        PopDirection popDirection = PopDirection.LEFT;
+        ListDirection listDirection = ListDirection.LEFT;
         long count = 1L;
         double timeout = 0.1;
         String[] arguments =
@@ -4913,7 +5035,7 @@ public class RedisClientTest {
                     "2",
                     key,
                     key2,
-                    popDirection.toString(),
+                    listDirection.toString(),
                     COUNT_FOR_LIST_REDIS_API,
                     Long.toString(count)
                 };
@@ -4928,7 +5050,7 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Map<String, String[]>> response =
-                service.blmpop(keys, popDirection, count, timeout);
+                service.blmpop(keys, listDirection, count, timeout);
         Map<String, String[]> payload = response.get();
 
         // verify
@@ -5099,8 +5221,8 @@ public class RedisClientTest {
         String key = "testKey";
         String key2 = "testKey2";
         String[] keys = {key, key2};
-        PopDirection popDirection = PopDirection.LEFT;
-        String[] arguments = new String[] {"2", key, key2, popDirection.toString()};
+        ListDirection listDirection = ListDirection.LEFT;
+        String[] arguments = new String[] {"2", key, key2, listDirection.toString()};
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
 
         CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
@@ -5111,7 +5233,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, popDirection);
+        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, listDirection);
         Map<String, String[]> payload = response.get();
 
         // verify
@@ -5126,11 +5248,11 @@ public class RedisClientTest {
         String key = "testKey";
         String key2 = "testKey2";
         String[] keys = {key, key2};
-        PopDirection popDirection = PopDirection.LEFT;
+        ListDirection listDirection = ListDirection.LEFT;
         long count = 1L;
         String[] arguments =
                 new String[] {
-                    "2", key, key2, popDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                    "2", key, key2, listDirection.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
                 };
         Map<String, String[]> value = Map.of(key, new String[] {"five"});
 
@@ -5142,8 +5264,35 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, popDirection, count);
+        CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, listDirection, count);
         Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lmove_returns_success() {
+        // setup
+        String key1 = "testKey";
+        String key2 = "testKey2";
+        ListDirection wherefrom = ListDirection.LEFT;
+        ListDirection whereto = ListDirection.RIGHT;
+        String[] arguments = new String[] {key1, key2, wherefrom.toString(), whereto.toString()};
+        String value = "one";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LMove), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lmove(key1, key2, wherefrom, whereto);
+        String payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -5173,5 +5322,81 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void blmove_returns_success() {
+        // setup
+        String key1 = "testKey";
+        String key2 = "testKey2";
+        ListDirection wherefrom = ListDirection.LEFT;
+        ListDirection whereto = ListDirection.RIGHT;
+        String[] arguments = new String[] {key1, key2, wherefrom.toString(), whereto.toString(), "0.1"};
+        String value = "one";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(BLMove), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.blmove(key1, key2, wherefrom, whereto, 0.1);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void srandmember_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] arguments = new String[] {key};
+        String value = "one";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(SRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.srandmember(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void srandmember_with_count_returns_success() {
+        // setup
+        String key = "testKey";
+        long count = 2;
+        String[] arguments = new String[] {key, Long.toString(count)};
+        String[] value = {"one", "two"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(SRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.srandmember(key, count);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
     }
 }

@@ -64,10 +64,13 @@ import {
     createRPop,
     createRPush,
     createRename,
+    createRenameNX,
     createSAdd,
     createSCard,
+    createSInter,
     createSIsMember,
     createSMembers,
+    createSMove,
     createSPop,
     createSRem,
     createSelect,
@@ -678,6 +681,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSMembers(key), true);
     }
 
+    /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
+     * Creates a new destination set if needed. The operation is atomic.
+     * See https://valkey.io/commands/smove for more details.
+     *
+     * @param source - The key of the set to remove the element from.
+     * @param destination - The key of the set to add the element to.
+     * @param member - The set element to move.
+     *
+     * Command Response - `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
+     */
+    public smove(source: string, destination: string, member: string): T {
+        return this.addAndReturn(createSMove(source, destination, member));
+    }
+
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
      * See https://redis.io/commands/scard/ for details.
      *
@@ -687,6 +704,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public scard(key: string): T {
         return this.addAndReturn(createSCard(key));
+    }
+
+    /** Gets the intersection of all the given sets.
+     * When in cluster mode, all `keys` must map to the same hash slot.
+     * See https://valkey.io/docs/latest/commands/sinter/ for more details.
+     *
+     * @param keys - The `keys` of the sets to get the intersection.
+     *
+     * Command Response - A set of members which are present in all given sets.
+     * If one or more sets do not exist, an empty set will be returned.
+     */
+    public sinter(keys: string[]): T {
+        return this.addAndReturn(createSInter(keys), true);
     }
 
     /** Returns if `member` is a member of the set stored at `key`.
@@ -1256,6 +1286,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public rename(key: string, newKey: string): T {
         return this.addAndReturn(createRename(key, newKey));
+    }
+
+    /**
+     * Renames `key` to `newkey` if `newkey` does not yet exist.
+     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+     * See https://redis.io/commands/renamenx/ for more details.
+     *
+     * @param key - The key to rename.
+     * @param newKey - The new name of the key.
+     * Command Response - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
+     * If `key` does not exist, an error is thrown.
+     */
+    public renamenx(key: string, newKey: string): T {
+        return this.addAndReturn(createRenameNX(key, newKey));
     }
 
     /** Blocking list pop primitive.

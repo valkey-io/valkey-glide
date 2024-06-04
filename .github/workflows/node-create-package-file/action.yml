@@ -69,11 +69,19 @@ runs:
               # set the registry scope
               export registry_scope=`if [ "${{ inputs.npm_scope }}" != ''  ]; then echo "${{ inputs.npm_scope }}:"; fi`
               # remove the current name section
-              SED_FOR_MACOS=`if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-              sed -i $SED_FOR_MACOS '/"name":/d' ./package.json
+              if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then
+                sed '/"name":/d' ./package.json > temp.json && mv temp.json package.json
+              else
+                sed -i '/"name":/d' ./package.json
+              fi
               # Remove all `///` occurrences to enable the commented out sections
-              sed -i -e 's|///||g' package.json
+              if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then
+                sed 's|///||g' package.json > temp.json && mv temp.json package.json
+              else
+                sed -i 's|///||g' package.json
+              fi
               # generate package.json from the template
               mv package.json package.json.tmpl
               envsubst < package.json.tmpl > "package.json"
               cat package.json
+              echo $(ls *json*) 

@@ -36,7 +36,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitwiseOperation;
@@ -698,7 +698,7 @@ public class CommandTests {
                 Arguments.of(
                         "lmpop",
                         "7.0.0",
-                        clusterClient.lmpop(new String[] {"abc", "def"}, PopDirection.LEFT, 1L)),
+                        clusterClient.lmpop(new String[] {"abc", "def"}, ListDirection.LEFT, 1L)),
                 Arguments.of(
                         "bitop",
                         null,
@@ -706,7 +706,15 @@ public class CommandTests {
                 Arguments.of(
                         "blmpop",
                         "7.0.0",
-                        clusterClient.blmpop(new String[] {"abc", "def"}, PopDirection.LEFT, 1L, 0.1)));
+                        clusterClient.blmpop(new String[] {"abc", "def"}, ListDirection.LEFT, 1L, 0.1)),
+                Arguments.of(
+                        "lmove",
+                        "6.2.0",
+                        clusterClient.lmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT)),
+                Arguments.of(
+                        "blmove",
+                        "6.2.0",
+                        clusterClient.blmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT, 1)));
     }
 
     @SneakyThrows
@@ -782,14 +790,18 @@ public class CommandTests {
         Route route = new SlotKeyRoute("1", PRIMARY);
 
         var promise =
-                withRoute ? clusterClient.functionLoad(code, route) : clusterClient.functionLoad(code);
+                withRoute
+                        ? clusterClient.functionLoad(code, false, route)
+                        : clusterClient.functionLoad(code, false);
         assertEquals(libName, promise.get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
         // TODO test with FUNCTION LIST
 
         // re-load library without overwriting
         promise =
-                withRoute ? clusterClient.functionLoad(code, route) : clusterClient.functionLoad(code);
+                withRoute
+                        ? clusterClient.functionLoad(code, false, route)
+                        : clusterClient.functionLoad(code, false);
         var executionException = assertThrows(ExecutionException.class, promise::get);
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
@@ -798,8 +810,8 @@ public class CommandTests {
         // re-load library with overwriting
         var promise2 =
                 withRoute
-                        ? clusterClient.functionLoadReplace(code, route)
-                        : clusterClient.functionLoadReplace(code);
+                        ? clusterClient.functionLoad(code, true, route)
+                        : clusterClient.functionLoad(code, true);
         assertEquals(libName, promise2.get());
         String newCode =
                 code
@@ -808,8 +820,8 @@ public class CommandTests {
                         + "', function(keys, args) return #args end)";
         promise2 =
                 withRoute
-                        ? clusterClient.functionLoadReplace(newCode, route)
-                        : clusterClient.functionLoadReplace(newCode);
+                        ? clusterClient.functionLoad(newCode, true, route)
+                        : clusterClient.functionLoad(newCode, true);
         assertEquals(libName, promise2.get());
         // TODO test with FCALL
     }

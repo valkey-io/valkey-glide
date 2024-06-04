@@ -23,6 +23,19 @@ beforeAll(() => {
     Logger.init("info");
 });
 
+/**
+ * Convert array of strings into array of `Uint8Array`
+ */
+export function convertStringArrayToBuffer(value: string[]): Uint8Array[] {
+    const bytesarr: Uint8Array[] = [];
+
+    for (const str of value) {
+        bytesarr.push(Buffer.from(str));
+    }
+
+    return bytesarr;
+}
+
 export type Client = {
     set: (key: string, value: string) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
@@ -288,6 +301,8 @@ export async function transactionTest(
     args.push([field + "2", field + "1"]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
     args.push(2);
+    baseTransaction.sinter([key7, key7]);
+    args.push(new Set(["bar", "foo"]));
     baseTransaction.srem(key7, ["foo"]);
     args.push(1);
     baseTransaction.scard(key7);
@@ -300,6 +315,8 @@ export async function transactionTest(
     args.push("bar");
     baseTransaction.spopCount(key7, 2);
     args.push(new Set());
+    baseTransaction.smove(key7, key7, "non_existing_member");
+    args.push(false);
     baseTransaction.scard(key7);
     args.push(0);
     baseTransaction.zadd(key8, {
@@ -366,6 +383,10 @@ export async function transactionTest(
     baseTransaction.rename(key9, key10);
     args.push("OK");
     baseTransaction.exists([key10]);
+    args.push(1);
+    baseTransaction.renamenx(key10, key9);
+    args.push(true);
+    baseTransaction.exists([key9, key10]);
     args.push(1);
     baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
     args.push(3);

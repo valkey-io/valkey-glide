@@ -11,6 +11,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -32,6 +33,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
+import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -54,6 +56,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -90,6 +93,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -101,7 +105,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
+import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -143,7 +149,7 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
@@ -161,6 +167,7 @@ import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
@@ -374,6 +381,12 @@ public abstract class BaseClient
     public CompletableFuture<String> get(@NonNull String key) {
         return commandManager.submitNewCommand(
                 Get, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> getdel(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                GetDel, new String[] {key}, this::handleStringOrNullResponse);
     }
 
     @Override
@@ -1237,6 +1250,28 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> xdel(@NonNull String key, @NonNull String[] ids) {
+        String[] arguments = ArrayUtils.addFirst(ids, key);
+        return commandManager.submitNewCommand(XDel, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[]>> xrange(
+            @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
+        String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end), key);
+        return commandManager.submitNewCommand(
+                XRange, arguments, response -> castMapOfArrays(handleMapResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[]>> xrange(
+            @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
+        String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key);
+        return commandManager.submitNewCommand(
+                XRange, arguments, response -> castMapOfArrays(handleMapResponse(response), String.class));
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
@@ -1506,7 +1541,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<String, String[]>> lmpop(
-            @NonNull String[] keys, @NonNull PopDirection direction, long count) {
+            @NonNull String[] keys, @NonNull ListDirection direction, long count) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Long.toString(keys.length)},
@@ -1520,7 +1555,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<String, String[]>> lmpop(
-            @NonNull String[] keys, @NonNull PopDirection direction) {
+            @NonNull String[] keys, @NonNull ListDirection direction) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Long.toString(keys.length)}, keys, new String[] {direction.toString()});
@@ -1532,7 +1567,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<String, String[]>> blmpop(
-            @NonNull String[] keys, @NonNull PopDirection direction, long count, double timeout) {
+            @NonNull String[] keys, @NonNull ListDirection direction, long count, double timeout) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Long.toString(keys.length)},
@@ -1546,7 +1581,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<String, String[]>> blmpop(
-            @NonNull String[] keys, @NonNull PopDirection direction, double timeout) {
+            @NonNull String[] keys, @NonNull ListDirection direction, double timeout) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Double.toString(timeout), Long.toString(keys.length)},
@@ -1562,5 +1597,44 @@ public abstract class BaseClient
     public CompletableFuture<String> lset(@NonNull String key, long index, @NonNull String element) {
         String[] arguments = new String[] {key, Long.toString(index), element};
         return commandManager.submitNewCommand(LSet, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lmove(
+            @NonNull String source,
+            @NonNull String destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto) {
+        String[] arguments =
+                new String[] {source, destination, wherefrom.toString(), whereto.toString()};
+        return commandManager.submitNewCommand(LMove, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> blmove(
+            @NonNull String source,
+            @NonNull String destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto,
+            double timeout) {
+        String[] arguments =
+                new String[] {
+                    source, destination, wherefrom.toString(), whereto.toString(), Double.toString(timeout)
+                };
+        return commandManager.submitNewCommand(BLMove, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> srandmember(@NonNull String key) {
+        String[] arguments = new String[] {key};
+        return commandManager.submitNewCommand(
+                SRandMember, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> srandmember(@NonNull String key, long count) {
+        String[] arguments = new String[] {key, Long.toString(count)};
+        return commandManager.submitNewCommand(
+                SRandMember, arguments, response -> castArray(handleArrayResponse(response), String.class));
     }
 }

@@ -166,6 +166,12 @@ pub enum RequestType {
     BLMPop = 158,
     XLen = 159,
     LSet = 165,
+    XDel = 166,
+    XRange = 167,
+    LMove = 168,
+    BLMove = 169,
+    GetDel = 170,
+    SRandMember = 171,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -335,6 +341,12 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::PExpireTime => RequestType::PExpireTime,
             ProtobufRequestType::XLen => RequestType::XLen,
             ProtobufRequestType::LSet => RequestType::LSet,
+            ProtobufRequestType::XDel => RequestType::XDel,
+            ProtobufRequestType::XRange => RequestType::XRange,
+            ProtobufRequestType::LMove => RequestType::LMove,
+            ProtobufRequestType::BLMove => RequestType::BLMove,
+            ProtobufRequestType::GetDel => RequestType::GetDel,
+            ProtobufRequestType::SRandMember => RequestType::SRandMember,
         }
     }
 }
@@ -500,6 +512,12 @@ impl RequestType {
             RequestType::PExpireTime => Some(cmd("PEXPIRETIME")),
             RequestType::XLen => Some(cmd("XLEN")),
             RequestType::LSet => Some(cmd("LSET")),
+            RequestType::XDel => Some(cmd("XDEL")),
+            RequestType::XRange => Some(cmd("XRANGE")),
+            RequestType::LMove => Some(cmd("LMOVE")),
+            RequestType::BLMove => Some(cmd("BLMOVE")),
+            RequestType::GetDel => Some(cmd("GETDEL")),
+            RequestType::SRandMember => Some(cmd("SRANDMEMBER")),
         }
     }
 }

@@ -9,12 +9,14 @@ import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
+import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
@@ -46,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
+import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -69,6 +72,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
@@ -108,6 +112,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -120,7 +125,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
+import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -149,12 +156,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
+import com.google.protobuf.ByteString;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -179,12 +187,12 @@ import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
-import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Arrays;
 import java.util.Map;
@@ -323,6 +331,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T get(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Get, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets a string value associated with the given <code>key</code> and deletes the key.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return Command Response - If <code>key</code> exists, returns the <code>value</code> of <code>
+     *     key</code>. Otherwise, return <code>null</code>.
+     */
+    public T getdel(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(GetDel, commandArgs));
         return getThis();
     }
 
@@ -2648,6 +2670,83 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * @see <a href="https://valkey.io/commands/xdel/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param ids An array of entry ids.
+     * @return Command Response - The number of entries removed from the stream. This number may be
+     *     less than the number of entries in <code>ids</code>, if the specified <code>ids</code>
+     *     don't exist in the stream.
+     */
+    public T xdel(@NonNull String key, @NonNull String[] ids) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(ids, key));
+        protobufTransaction.addCommands(buildCommand(XDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs.
+     *
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
+     *     an array of item pairings.
+     */
+    public T xrange(@NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end), key));
+        protobufTransaction.addCommands(buildCommand(XRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs.
+     *
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param count Maximum count of stream entries to return.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
+     *     an array of item pairings.
+     */
+    public T xrange(
+            @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key));
+        protobufTransaction.addCommands(buildCommand(XRange, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Returns the remaining time to live of <code>key</code> that has a timeout, in milliseconds.
      *
      * @see <a href="https://redis.io/commands/pttl/">redis.io</a> for details.
@@ -3474,30 +3573,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Loads a library to Redis unless a library with the same name exists. Use {@link
-     * #functionLoadReplace} to replace existing libraries.
+     * Loads a library to Redis.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
+     * @param replace Whether the given library should overwrite a library with the same name if it
+     *     already exists.
      * @return Command Response - The library name that was loaded.
      */
-    public T functionLoad(@NonNull String libraryCode) {
-        ArgsArray commandArgs = buildArgs(libraryCode);
-        protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Loads a library to Redis and overwrites a library with the same name if it exists.
-     *
-     * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
-     * @param libraryCode The source code that implements the library.
-     * @return Command Response - The library name that was loaded.
-     */
-    public T functionLoadReplace(@NonNull String libraryCode) {
-        ArgsArray commandArgs = buildArgs(FunctionLoadOptions.REPLACE.toString(), libraryCode);
+    public T functionLoad(@NonNull String libraryCode, boolean replace) {
+        ArgsArray commandArgs =
+                replace ? buildArgs(REPLACE.toString(), libraryCode) : buildArgs(libraryCode);
         protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
         return getThis();
     }
@@ -3542,7 +3629,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Blocks the connection until it pops one or more elements from the first non-empty list from the
      * provided <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link
-     * #lmpop(String[], PopDirection, Long)}.
+     * #lmpop(String[], ListDirection, Long)}.
      *
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
@@ -3551,7 +3638,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
      * @param keys The list of provided <code>key</code> names.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
@@ -3561,7 +3648,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T blmpop(
             @NonNull String[] keys,
-            @NonNull PopDirection direction,
+            @NonNull ListDirection direction,
             @NonNull Long count,
             double timeout) {
         ArgsArray commandArgs =
@@ -3579,7 +3666,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Blocks the connection until it pops one element from the first non-empty list from the provided
      * <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link #lmpop(String[],
-     * PopDirection)}.
+     * ListDirection)}.
      *
      * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
      *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
@@ -3588,14 +3675,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys The list of provided <code>key</code> names.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
      *     <code>0</code> will block indefinitely.
      * @return Command Response - A <code>Map</code> of <code>key</code> names arrays of popped
      *     elements.<br>
      *     If no member could be popped and the timeout expired, returns <code>null</code>.
      */
-    public T blmpop(@NonNull String[] keys, @NonNull PopDirection direction, double timeout) {
+    public T blmpop(@NonNull String[] keys, @NonNull ListDirection direction, double timeout) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
@@ -3731,12 +3818,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped arrays of popped
      *     elements.
      */
-    public T lmpop(@NonNull String[] keys, @NonNull PopDirection direction, @NonNull Long count) {
+    public T lmpop(@NonNull String[] keys, @NonNull ListDirection direction, @NonNull Long count) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
@@ -3756,11 +3843,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped array of the
      *     popped element.
      */
-    public T lmpop(@NonNull String[] keys, @NonNull PopDirection direction) {
+    public T lmpop(@NonNull String[] keys, @NonNull ListDirection direction) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
@@ -3789,6 +3876,101 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         return getThis();
     }
 
+    /**
+     * Atomically pops and removes the left/right-most element to the list stored at <code>source
+     * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
+     * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
+     * @param source The key to the source list.
+     * @param destination The key to the destination list.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
+     * @return Command Response - The popped element or <code>null</code> if <code>source</code> does
+     *     not exist.
+     */
+    public T lmove(
+            @NonNull String source,
+            @NonNull String destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto) {
+        ArgsArray commandArgs =
+                buildArgs(source, destination, wherefrom.toString(), whereto.toString());
+        protobufTransaction.addCommands(buildCommand(LMove, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Blocks the connection until it atomically pops and removes the left/right-most element to the
+     * list stored at <code>source</code> depending on <code>wherefrom</code>, and pushes the element
+     * at the first/last element of the list stored at <code>destination</code> depending on <code>
+     * wherefrom</code>.<br>
+     * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
+     * ListDirection)}.
+     *
+     * @since Redis 6.2.0 and above.
+     * @apiNote <code>BLMove</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @see <a href="https://valkey.io/commands/blmove/">valkey.io</a> for details.
+     * @param source The key to the source list.
+     * @param destination The key to the destination list.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - The popped element or <code>null</code> if <code>source</code> does
+     *     not exist or if the operation timed-out.
+     */
+    public T blmove(
+            @NonNull String source,
+            @NonNull String destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto,
+            double timeout) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        source,
+                        destination,
+                        wherefrom.toString(),
+                        whereto.toString(),
+                        Double.toString(timeout));
+        protobufTransaction.addCommands(buildCommand(BLMove, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns a random element from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set member.
+     * @return Command Response - A random element from the set, or <code>null</code> if <code>key
+     *     </code> does not exist.
+     */
+    public T srandmember(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns random elements from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set members.
+     * @param count The number of elements to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.<br>
+     * @return Command Response - An <code>array</code> of elements from the set, or an empty <code>
+     *     array</code> if <code>key</code> does not exist.
+     */
+    public T srandmember(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+        protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
+        return getThis();
+    }
+
     /** Build protobuf {@link Command} object for given command and arguments. */
     protected Command buildCommand(RequestType requestType) {
         return buildCommand(requestType, buildArgs());
@@ -3804,7 +3986,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
 
         for (String string : stringArgs) {
-            commandArgs.addArgs(string);
+            commandArgs.addArgs(ByteString.copyFromUtf8(string));
         }
 
         return commandArgs.build();

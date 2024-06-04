@@ -5,15 +5,21 @@ mod utilities;
 
 #[cfg(test)]
 mod standalone_client_tests {
+    use std::collections::HashMap;
+
     use crate::utilities::mocks::{Mock, ServerMock};
 
     use super::*;
-    use glide_core::{client::StandaloneClient, connection_request::ReadFrom};
+    use glide_core::{
+        client::{ConnectionError, StandaloneClient},
+        connection_request::ReadFrom,
+    };
     use redis::{FromRedisValue, Value};
     use rstest::rstest;
     use utilities::*;
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_report_disconnect_and_reconnect_after_temporary_disconnect(
         #[values(false, true)] use_tls: bool,
@@ -51,6 +57,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(LONG_STANDALONE_TEST_TIMEOUT)]
     #[cfg(standalone_heartbeat)]
     fn test_detect_disconnect_and_reconnect_using_heartbeat(#[values(false, true)] use_tls: bool) {
@@ -85,10 +92,11 @@ mod standalone_client_tests {
         });
     }
 
-    fn create_primary_mock_with_replicas(replica_count: usize) -> Vec<ServerMock> {
-        let mut listeners: Vec<std::net::TcpListener> = (0..replica_count + 1)
-            .map(|_| get_listener_on_available_port())
-            .collect();
+    fn get_mock_addresses(mocks: &[ServerMock]) -> Vec<redis::ConnectionAddr> {
+        mocks.iter().flat_map(|mock| mock.get_addresses()).collect()
+    }
+
+    fn create_primary_responses() -> HashMap<String, Value> {
         let mut primary_responses = std::collections::HashMap::new();
         primary_responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
@@ -98,8 +106,10 @@ mod standalone_client_tests {
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
             Value::BulkString(b"role:master\r\nconnected_slaves:3\r\n".to_vec()),
         );
-        let primary = ServerMock::new_with_listener(primary_responses, listeners.pop().unwrap());
-        let mut mocks = vec![primary];
+        primary_responses
+    }
+
+    fn create_replica_response() -> HashMap<String, Value> {
         let mut replica_responses = std::collections::HashMap::new();
         replica_responses.insert(
             "*1\r\n$4\r\nPING\r\n".to_string(),
@@ -109,10 +119,32 @@ mod standalone_client_tests {
             "*2\r\n$4\r\nINFO\r\n$11\r\nREPLICATION\r\n".to_string(),
             Value::BulkString(b"role:slave\r\n".to_vec()),
         );
+        replica_responses
+    }
+    fn create_primary_conflict_mock_two_primaries_one_replica() -> Vec<ServerMock> {
+        let mut listeners: Vec<std::net::TcpListener> =
+            (0..3).map(|_| get_listener_on_available_port()).collect();
+        let primary_1 =
+            ServerMock::new_with_listener(create_primary_responses(), listeners.pop().unwrap());
+        let primary_2 =
+            ServerMock::new_with_listener(create_primary_responses(), listeners.pop().unwrap());
+        let replica =
+            ServerMock::new_with_listener(create_replica_response(), listeners.pop().unwrap());
+        vec![primary_1, primary_2, replica]
+    }
+
+    fn create_primary_mock_with_replicas(replica_count: usize) -> Vec<ServerMock> {
+        let mut listeners: Vec<std::net::TcpListener> = (0..replica_count + 1)
+            .map(|_| get_listener_on_available_port())
+            .collect();
+        let primary =
+            ServerMock::new_with_listener(create_primary_responses(), listeners.pop().unwrap());
+        let mut mocks = vec![primary];
+
         mocks.extend(
             listeners
                 .into_iter()
-                .map(|listener| ServerMock::new_with_listener(replica_responses.clone(), listener)),
+                .map(|listener| ServerMock::new_with_listener(create_replica_response(), listener)),
         );
         mocks
     }
@@ -154,8 +186,7 @@ mod standalone_client_tests {
             }
         }
 
-        let mut addresses: Vec<redis::ConnectionAddr> =
-            mocks.iter().flat_map(|mock| mock.get_addresses()).collect();
+        let mut addresses = get_mock_addresses(&mocks);
 
         for i in 4 - config.number_of_missing_replicas..4 {
             addresses.push(redis::ConnectionAddr::Tcp(
@@ -193,12 +224,14 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_always_read_from_primary() {
         test_read_from_replica(ReadFromReplicaTestConfig::default());
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -210,6 +243,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_skip_disconnected_replicas() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -222,6 +256,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_read_from_primary_if_no_replica_is_connected() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -234,6 +269,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_do_not_read_from_disconnected_replica() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -247,6 +283,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_read_from_replica_round_robin_with_single_replica() {
         test_read_from_replica(ReadFromReplicaTestConfig {
@@ -256,6 +293,34 @@ mod standalone_client_tests {
             number_of_initial_replicas: 1,
             number_of_requests_sent: 3,
             ..Default::default()
+        });
+    }
+
+    #[rstest]
+    #[serial_test::serial]
+    #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
+    fn test_primary_conflict_raises_error() {
+        let mocks = create_primary_conflict_mock_two_primaries_one_replica();
+        let addresses = get_mock_addresses(&mocks);
+        let connection_request =
+            create_connection_request(addresses.as_slice(), &Default::default());
+        block_on_all(async {
+            let client_res = StandaloneClient::create_client(connection_request.into())
+                .await
+                .map_err(ConnectionError::Standalone);
+            assert!(client_res.is_err());
+            let error = client_res.unwrap_err();
+            assert!(matches!(error, ConnectionError::Standalone(_),));
+            let primary_1_addr = addresses.first().unwrap().to_string();
+            let primary_2_addr = addresses.get(1).unwrap().to_string();
+            let replica_addr = addresses.get(2).unwrap().to_string();
+            let err_msg = error.to_string().to_ascii_lowercase();
+            assert!(
+                err_msg.contains("conflict")
+                    && err_msg.contains(&primary_1_addr)
+                    && err_msg.contains(&primary_2_addr)
+                    && !err_msg.contains(&replica_addr)
+            );
         });
     }
 
@@ -293,6 +358,7 @@ mod standalone_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_STANDALONE_TEST_TIMEOUT)]
     fn test_set_database_id_after_reconnection() {
         let mut client_info_cmd = redis::Cmd::new();

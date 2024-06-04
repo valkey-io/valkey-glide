@@ -11,7 +11,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -25,6 +25,7 @@ import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.Map;
 import java.util.Set;
@@ -169,6 +170,7 @@ public class TransactionTestUtilities {
         transaction
                 .set(stringKey1, value1)
                 .get(stringKey1)
+                .getdel(stringKey1)
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
                 .strlen(stringKey2)
                 .append(stringKey2, value2)
@@ -185,6 +187,7 @@ public class TransactionTestUtilities {
         return new Object[] {
             OK, // set(stringKey1, value1)
             value1, // get(stringKey1)
+            value1, // getdel(stringKey1)
             null, // set(stringKey2, value2, returnOldValue(true))
             (long) value1.length(), // strlen(key2)
             Long.valueOf(value2.length() * 2), // append(key2, value2)
@@ -253,6 +256,8 @@ public class TransactionTestUtilities {
         String listKey3 = "{ListKey}-3-" + UUID.randomUUID();
         String listKey4 = "{ListKey}-4-" + UUID.randomUUID();
         String listKey5 = "{ListKey}-5-" + UUID.randomUUID();
+        String listKey6 = "{ListKey}-6-" + UUID.randomUUID();
+        String listKey7 = "{ListKey}-7-" + UUID.randomUUID();
 
         transaction
                 .lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
@@ -279,11 +284,25 @@ public class TransactionTestUtilities {
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .lpush(listKey4, new String[] {value1, value2, value3, value1, value2, value3})
-                    .lmpop(new String[] {listKey4}, PopDirection.LEFT)
-                    .lmpop(new String[] {listKey4}, PopDirection.LEFT, 2L)
-                    .blmpop(new String[] {listKey4}, PopDirection.LEFT, 0.1)
-                    .blmpop(new String[] {listKey4}, PopDirection.LEFT, 2L, 0.1);
+                    .lmpop(new String[] {listKey4}, ListDirection.LEFT)
+                    .lmpop(new String[] {listKey4}, ListDirection.LEFT, 2L)
+                    .blmpop(new String[] {listKey4}, ListDirection.LEFT, 0.1)
+                    .blmpop(new String[] {listKey4}, ListDirection.LEFT, 2L, 0.1);
         } // listKey4 is now empty
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            transaction
+                    .lpush(listKey6, new String[] {value3, value2, value1})
+                    .lpush(listKey7, new String[] {value1, value2, value3})
+                    .lmove(listKey7, listKey7, ListDirection.LEFT, ListDirection.LEFT)
+                    .lmove(listKey6, listKey7, ListDirection.LEFT, ListDirection.RIGHT)
+                    .lrange(listKey6, 0, -1)
+                    .lrange(listKey7, 0, -1)
+                    .blmove(listKey7, listKey7, ListDirection.LEFT, ListDirection.LEFT, 0.1)
+                    .blmove(listKey7, listKey6, ListDirection.RIGHT, ListDirection.LEFT, 0.1)
+                    .lrange(listKey6, 0, -1)
+                    .lrange(listKey7, 0, -1);
+        }
 
         var expectedResults =
                 new Object[] {
@@ -310,15 +329,34 @@ public class TransactionTestUtilities {
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            return concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        6L, // lpush(listKey4, {value1, value2, value3})
-                        Map.of(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
-                        Map.of(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
-                        Map.of(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
-                        Map.of(listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
-                    });
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                6L, // lpush(listKey4, {value1, value2, value3})
+                                Map.of(listKey4, new String[] {value3}), // lmpop({listKey4}, LEFT)
+                                Map.of(listKey4, new String[] {value2, value1}), // lmpop({listKey4}, LEFT, 1L)
+                                Map.of(listKey4, new String[] {value3}), // blmpop({listKey4}, LEFT, 0.1)
+                                Map.of(listKey4, new String[] {value2, value1}), // blmpop(listKey4}, LEFT, 1L, 0.1)
+                            });
+        }
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                3L, // lpush(listKey6, {value3, value2, value1})
+                                3L, // lpush(listKey7, {value1, value2, value3})
+                                value3, // lmove(listKey7, listKey5, LEFT, LEFT)
+                                value1, // lmove(listKey6, listKey5, RIGHT, LEFT)
+                                new String[] {value2, value3}, // lrange(listKey6, 0, -1)
+                                new String[] {value3, value2, value1, value1}, // lrange(listKey7, 0, -1);
+                                value3, // blmove(listKey7, listKey7, LEFT, LEFT, 0.1)
+                                value1, // blmove(listKey7, listKey6, RIGHT, LEFT, 0.1)
+                                new String[] {value1, value2, value3}, // lrange(listKey6, 0, -1)
+                                new String[] {value3, value2, value1}, // lrange(listKey7, 0, -1)
+                            });
         }
 
         return expectedResults;
@@ -328,6 +366,7 @@ public class TransactionTestUtilities {
         String setKey1 = "{setKey}-1-" + UUID.randomUUID();
         String setKey2 = "{setKey}-2-" + UUID.randomUUID();
         String setKey3 = "{setKey}-3-" + UUID.randomUUID();
+        String setKey4 = "{setKey}-4-" + UUID.randomUUID();
 
         transaction
                 .sadd(setKey1, new String[] {"baz", "foo"})
@@ -342,7 +381,11 @@ public class TransactionTestUtilities {
                 .sdiffstore(setKey3, new String[] {setKey2, setKey1})
                 .sinterstore(setKey3, new String[] {setKey2, setKey1})
                 .sdiff(new String[] {setKey2, setKey3})
-                .smove(setKey1, setKey2, "baz");
+                .smove(setKey1, setKey2, "baz")
+                .sadd(setKey4, new String[] {"foo"})
+                .srandmember(setKey4)
+                .srandmember(setKey4, 2)
+                .srandmember(setKey4, -2);
 
         return new Object[] {
             2L, // sadd(setKey1, new String[] {"baz", "foo"});
@@ -358,6 +401,10 @@ public class TransactionTestUtilities {
             0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
             Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
             true, // smove(setKey1, setKey2, "baz")
+            1L, // sadd(setKey4, {"foo})
+            "foo", // srandmember(setKey4)
+            new String[] {"foo"}, // srandmember(setKey4, 2)
+            new String[] {"foo", "foo"}, // srandmember(setKey4, -2)
         };
     }
 
@@ -540,14 +587,20 @@ public class TransactionTestUtilities {
                 .xadd(streamKey1, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
                 .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
                 .xlen(streamKey1)
-                .xtrim(streamKey1, new MinId(true, "0-2"));
+                .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
+                .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
+                .xtrim(streamKey1, new MinId(true, "0-2"))
+                .xdel(streamKey1, new String[] {"0-3", "0-5"});
 
         return new Object[] {
             "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
             "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
             "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
             3L, // xlen(streamKey1)
+            Map.of("0-1", new String[] {"field1", "value1"}), // .xrange(streamKey1, "0-1", "0-1")
+            Map.of("0-1", new String[] {"field1", "value1"}), // .xrange(streamKey1, "0-1", "0-1", 1l)
             1L, // xtrim(streamKey1, new MinId(true, "0-2"))
+            1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"});
         };
     }
 
@@ -590,11 +643,11 @@ public class TransactionTestUtilities {
                 "#!lua name=mylib1T \n"
                         + " redis.register_function('myfunc1T', function(keys, args) return args[1] end)";
 
-        transaction.functionLoad(code).functionLoadReplace(code);
+        transaction.functionLoad(code, false).functionLoad(code, true);
 
         return new Object[] {
-            "mylib1T", // functionLoad(code)
-            "mylib1T" // functionLoadReplace(code)
+            "mylib1T", // functionLoad(code, false)
+            "mylib1T", // functionLoad(code, true)
         };
     }
 

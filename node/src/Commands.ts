@@ -2,9 +2,11 @@
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 
-import { MAX_REQUEST_ARGS_LEN, createLeakedStringVec } from "glide-rs";
+import { createLeakedStringVec, MAX_REQUEST_ARGS_LEN } from "glide-rs";
 import Long from "long";
+
 import { redis_request } from "./ProtobufMessage";
+
 import RequestType = redis_request.RequestType;
 
 function isLargeCommand(args: string[]) {
@@ -19,6 +21,19 @@ function isLargeCommand(args: string[]) {
     }
 
     return false;
+}
+
+/**
+ * Convert a string array into Uint8Array[]
+ */
+function toBuffersArray(args: string[]) {
+    const argsBytes: Uint8Array[] = [];
+
+    for (const str of args) {
+        argsBytes.push(Buffer.from(str));
+    }
+
+    return argsBytes;
 }
 
 /**
@@ -47,14 +62,16 @@ function createCommand(
         requestType,
     });
 
+    const argsBytes = toBuffersArray(args);
+
     if (isLargeCommand(args)) {
         // pass as a pointer
-        const pointerArr = createLeakedStringVec(args);
+        const pointerArr = createLeakedStringVec(argsBytes);
         const pointer = new Long(pointerArr[0], pointerArr[1]);
         singleCommand.argsVecPointer = pointer;
     } else {
         singleCommand.argsArray = redis_request.Command.ArgsArray.create({
-            args: args,
+            args: argsBytes,
         });
     }
 
@@ -70,14 +87,16 @@ export function createGet(key: string): redis_request.Command {
 
 export type SetOptions = {
     /**
-     *  `onlyIfDoesNotExist` - Only set the key if it does not already exist. Equivalent to `NX` in the Redis API.
-     * `onlyIfExists` - Only set the key if it already exist. Equivalent to `EX` in the Redis API.
-     * if `conditional` is not set the value will be set regardless of prior value existence.
-     * If value isn't set because of the condition, return null.
+     *  `onlyIfDoesNotExist` - Only set the key if it does not already exist.
+     * Equivalent to `NX` in the Redis API. `onlyIfExists` - Only set the key if
+     * it already exist. Equivalent to `EX` in the Redis API. if `conditional` is
+     * not set the value will be set regardless of prior value existence. If value
+     * isn't set because of the condition, return null.
      */
     conditionalSet?: "onlyIfExists" | "onlyIfDoesNotExist";
     /**
-     * Return the old string stored at key, or nil if key did not exist. An error is returned and SET aborted if the value stored at key is not a string.
+     * Return the old string stored at key, or nil if key did not exist. An error
+     * is returned and SET aborted if the value stored at key is not a string.
      * Equivalent to `GET` in the Redis API.
      */
     returnOldValue?: boolean;
@@ -85,24 +104,29 @@ export type SetOptions = {
      * If not set, no expiry time will be set for the value.
      */
     expiry?: /**
-     * Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
+     * Retain the time to live associated with the key. Equivalent to
+     * `KEEPTTL` in the Redis API.
      */
     | "keepExisting"
         | {
               type: /**
-               * Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
+               * Set the specified expire time, in seconds. Equivalent to
+               * `EX` in the Redis API.
                */
               | "seconds"
                   /**
-                   * Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
+                   * Set the specified expire time, in milliseconds. Equivalent
+                   * to `PX` in the Redis API.
                    */
                   | "milliseconds"
                   /**
-                   * Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+                   * Set the specified Unix time at which the key will expire,
+                   * in seconds. Equivalent to `EXAT` in the Redis API.
                    */
                   | "unixSeconds"
                   /**
-                   * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the Redis API.
+                   * Set the specified Unix time at which the key will expire,
+                   * in milliseconds. Equivalent to `PXAT` in the Redis API.
                    */
                   | "unixMilliseconds";
               count: number;
@@ -145,13 +169,13 @@ export function createSet(
         if (options.expiry === "keepExisting") {
             args.push("KEEPTTL");
         } else if (options.expiry?.type === "seconds") {
-            args.push("EX " + options.expiry.count);
+            args.push("EX", options.expiry.count.toString());
         } else if (options.expiry?.type === "milliseconds") {
-            args.push("PX " + options.expiry.count);
+            args.push("PX", options.expiry.count.toString());
         } else if (options.expiry?.type === "unixSeconds") {
-            args.push("EXAT " + options.expiry.count);
+            args.push("EXAT", options.expiry.count.toString());
         } else if (options.expiry?.type === "unixMilliseconds") {
-            args.push("PXAT " + options.expiry.count);
+            args.push("PXAT", options.expiry.count.toString());
         }
     }
 
@@ -550,10 +574,29 @@ export function createSMembers(key: string): redis_request.Command {
 }
 
 /**
+ *
+ * @internal
+ */
+export function createSMove(
+    source: string,
+    destination: string,
+    member: string,
+): redis_request.Command {
+    return createCommand(RequestType.SMove, [source, destination, member]);
+}
+
+/**
  * @internal
  */
 export function createSCard(key: string): redis_request.Command {
     return createCommand(RequestType.SCard, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createSInter(keys: string[]): redis_request.Command {
+    return createCommand(RequestType.SInter, keys);
 }
 
 /**
@@ -645,11 +688,13 @@ export enum ExpireOptions {
      */
     HasExistingExpiry = "XX",
     /**
-     * `NewExpiryGreaterThanCurrent` - Sets expiry only when the new expiry is greater than current one.
+     * `NewExpiryGreaterThanCurrent` - Sets expiry only when the new expiry is
+     * greater than current one.
      */
     NewExpiryGreaterThanCurrent = "GT",
     /**
-     * `NewExpiryLessThanCurrent` - Sets expiry only when the new expiry is less than current one.
+     * `NewExpiryLessThanCurrent` - Sets expiry only when the new expiry is less
+     * than current one.
      */
     NewExpiryLessThanCurrent = "LT",
 }
@@ -723,15 +768,17 @@ export function createTTL(key: string): redis_request.Command {
 
 export type ZAddOptions = {
     /**
-     * `onlyIfDoesNotExist` - Only add new elements. Don't update already existing elements. Equivalent to `NX` in the Redis API.
-     * `onlyIfExists` - Only update elements that already exist. Don't add new elements. Equivalent to `XX` in the Redis API.
+     * `onlyIfDoesNotExist` - Only add new elements. Don't update already existing
+     * elements. Equivalent to `NX` in the Redis API. `onlyIfExists` - Only update
+     * elements that already exist. Don't add new elements. Equivalent to `XX` in
+     * the Redis API.
      */
     conditionalChange?: "onlyIfExists" | "onlyIfDoesNotExist";
     /**
-     * `scoreLessThanCurrent` - Only update existing elements if the new score is less than the current score.
-     *  Equivalent to `LT` in the Redis API.
-     * `scoreGreaterThanCurrent` - Only update existing elements if the new score is greater than the current score.
-     *  Equivalent to `GT` in the Redis API.
+     * `scoreLessThanCurrent` - Only update existing elements if the new score is
+     * less than the current score. Equivalent to `LT` in the Redis API.
+     * `scoreGreaterThanCurrent` - Only update existing elements if the new score
+     * is greater than the current score. Equivalent to `GT` in the Redis API.
      */
     updateOptions?: "scoreLessThanCurrent" | "scoreGreaterThanCurrent";
 };
@@ -863,8 +910,8 @@ type SortedSetRange<T> = {
      * Represents a limit argument for a range query in a sorted set to
      * be used in [ZRANGE](https://redis.io/commands/zrange) command.
      *
-     * The optional LIMIT argument can be used to obtain a sub-range from the matching elements
-     * (similar to SELECT LIMIT offset, count in SQL).
+     * The optional LIMIT argument can be used to obtain a sub-range from the
+     * matching elements (similar to SELECT LIMIT offset, count in SQL).
      */
     limit?: {
         /**
@@ -884,9 +931,12 @@ export type RangeByLex = SortedSetRange<string> & { type: "byLex" };
 
 /**
  * Returns a string representation of a score boundary in Redis protocol format.
- * @param score - The score boundary object containing value and inclusivity information.
- * @param isLex - Indicates whether to return lexical representation for positive/negative infinity.
- * @returns A string representation of the score boundary in Redis protocol format.
+ * @param score - The score boundary object containing value and inclusivity
+ *     information.
+ * @param isLex - Indicates whether to return lexical representation for
+ *     positive/negative infinity.
+ * @returns A string representation of the score boundary in Redis protocol
+ *     format.
  */
 function getScoreBoundaryArg(
     score: ScoreBoundary<number> | ScoreBoundary<string>,
@@ -1108,7 +1158,9 @@ export type StreamTrimOptions = (
       }
 ) & {
     /**
-     * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the Redis API. Otherwise the stream will be trimmed in a near-exact manner, which is more efficient, equivalent to `~` in the Redis API.
+     * If `true`, the stream will be trimmed exactly. Equivalent to `=` in the
+     * Redis API. Otherwise the stream will be trimmed in a near-exact manner,
+     * which is more efficient, equivalent to `~` in the Redis API.
      */
     exact: boolean;
     /**
@@ -1123,8 +1175,8 @@ export type StreamAddOptions = {
      */
     id?: string;
     /**
-     * If set to `false`, a new stream won't be created if no stream matches the given key.
-     * Equivalent to `NOMKSTREAM` in the Redis API.
+     * If set to `false`, a new stream won't be created if no stream matches the
+     * given key. Equivalent to `NOMKSTREAM` in the Redis API.
      */
     makeStream?: boolean;
     /**
@@ -1230,8 +1282,9 @@ export function createBLPop(
 
 export type StreamReadOptions = {
     /**
-     * If set, the read request will block for the set amount of milliseconds or until the server has the required number of entries.
-     * Equivalent to `BLOCK` in the Redis API.
+     * If set, the read request will block for the set amount of milliseconds or
+     * until the server has the required number of entries. Equivalent to `BLOCK`
+     * in the Redis API.
      */
     block?: number;
     /**
@@ -1293,6 +1346,16 @@ export function createRename(
     newKey: string,
 ): redis_request.Command {
     return createCommand(RequestType.Rename, [key, newKey]);
+}
+
+/**
+ * @internal
+ */
+export function createRenameNX(
+    key: string,
+    newKey: string,
+): redis_request.Command {
+    return createCommand(RequestType.RenameNX, [key, newKey]);
 }
 
 /**
