@@ -1560,16 +1560,12 @@ public class CommandTests {
 
         // no keys in database
         assertEquals(OK, clusterClient.flushall().get());
-        // BLOCKED TODO - SHOULD RETURN NULL INSTEAD OF RESPONSE ERROR.
-        // update redis.rs
-        ExecutionException executionException =
+        // TODO need to update redis-rs to return a OneSucceeded
+        // for randomkey, see:
+        // This isn't based on response_tips, but on the discussion here - https://github.com/redis/redis/issues/12410
+        // b"FUNCTION KILL" | b"SCRIPT KILL" | b"RANDOMKEY" => Some(OneSucceeded),
+          ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.randomKey().get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-//        Add tests for cluster with single node route and multi node route.
-//        assertEquals(OK, clusterClient.set(key1, "a").get());
-//        assertEquals(OK, clusterClient.set(key2, "b").get());
-
-//        Add tests for standalone including switching between DBs - empty and nonempty ones.
     }
 }
