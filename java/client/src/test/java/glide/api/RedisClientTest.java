@@ -5,6 +5,7 @@ import static glide.api.BaseClient.OK;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SetBaseCommands.SET_LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
@@ -137,6 +138,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
+import static redis_request.RedisRequestOuterClass.RequestType.SInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
@@ -5361,6 +5363,57 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String> response = service.blmove(key1, key2, wherefrom, whereto, 0.1);
         String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sintercard_returns_success() {
+        // setup
+        String key1 = "testKey";
+        String key2 = "testKey2";
+        String[] arguments = new String[] {"2", key1, key2};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sintercard(new String[] {key1, key2});
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sintercard_with_limit_returns_success() {
+        // setup
+        String key1 = "testKey";
+        String key2 = "testKey2";
+        long limit = 1L;
+        String[] arguments = new String[] {"2", key1, key2, SET_LIMIT_REDIS_API, "1"};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sintercard(new String[] {key1, key2}, limit);
+        Long payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

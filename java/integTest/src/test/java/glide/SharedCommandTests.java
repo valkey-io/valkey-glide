@@ -4862,4 +4862,42 @@ public class SharedCommandTests {
                                         .get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sintercard(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonSetKey = "{key}-4" + UUID.randomUUID();
+        String[] saddargs = {"one", "two", "three", "four"};
+        String[] saddargs2 = {"two", "three", "four", "five"};
+        long limit = 2;
+        long limit2 = 4;
+
+        // keys does not exist or is empty
+        String[] keys = {key1, key2};
+        assertEquals(0, client.sintercard(keys).get());
+        assertEquals(0, client.sintercard(keys, limit).get());
+
+        // one of the keys is empty, intersection is empty, cardinality equals to 0
+        assertEquals(4, client.sadd(key1, saddargs).get());
+        assertEquals(0, client.sintercard(keys).get());
+
+        // sets at both keys have value, get cardinality of the intersection
+        assertEquals(4, client.sadd(key2, saddargs2).get());
+        assertEquals(3, client.sintercard(keys).get());
+
+        // returns limit as cardinality when the limit is reached partway through the computation
+        assertEquals(limit, client.sintercard(keys, limit).get());
+
+        // non set keys are used
+        assertEquals(OK, client.set(nonSetKey, "NotASet").get());
+        String[] badArr = new String[] {key1, nonSetKey};
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sintercard(badArr).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
 }
