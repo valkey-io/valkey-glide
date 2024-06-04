@@ -121,6 +121,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
+import static redis_request.RedisRequestOuterClass.RequestType.SInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
@@ -920,6 +921,12 @@ public class TransactionTests {
                                 BitFieldOptions.UNSIGNED_ENCODING_PREFIX.concat("10"),
                                 BitFieldOptions.OFFSET_MULTIPLIER_PREFIX.concat("3"),
                                 "4")));
+
+        transaction.sintercard(new String[] {"key1", "key2"});
+        results.add(Pair.of(SInterCard, buildArgs("2", "key1", "key2")));
+
+        transaction.sintercard(new String[] {"key1", "key2"}, 1);
+        results.add(Pair.of(SInterCard, buildArgs("2", "key1", "key2", "LIMIT", "1")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

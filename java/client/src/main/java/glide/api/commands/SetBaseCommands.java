@@ -11,6 +11,9 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=set">Set Commands</a>
  */
 public interface SetBaseCommands {
+    /** Redis API keyword used to limit calculation of intersection of sorted sets. */
+    String SET_LIMIT_REDIS_API = "LIMIT";
+
     /**
      * Adds specified members to the set stored at <code>key</code>. Specified members that are
      * already a member of this set are ignored.
@@ -185,6 +188,52 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Set<String>> sinter(String[] keys);
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return The cardinality of the intersection result. If one or more sets do not exist, <code>0
+     *     </code> is returned.
+     * @example
+     *     <pre>{@code
+     * Long response = client.sintercard(new String[] {"set1", "set2"}).get();
+     * assertEquals(2L, response);
+     *
+     * Long emptyResponse = client.sintercard(new String[] {"set1", "nonExistingSet"}).get();
+     * assertEquals(emptyResponse, 0L);
+     * }</pre>
+     */
+    CompletableFuture<Long> sintercard(String[] keys);
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @param limit The limit for the intersection cardinality value.
+     * @return The cardinality of the intersection result. If one or more sets do not exist, <code>0
+     *     </code> is returned. If the intersection cardinality reaches <code>limit</code> partway
+     *     through the computation, returns <code>limit</code> as the cardinality.
+     * @example
+     *     <pre>{@code
+     * Long response = client.sintercard(new String[] {"set1", "set2"}, 3).get();
+     * assertEquals(2L, response);
+     *
+     * Long emptyResponse = client.sintercard(new String[] {"set1", "nonExistingSet"}, 3).get();
+     * assertEquals(emptyResponse, 0L);
+     *
+     * // when intersection cardinality > limit, returns limit as cardinality
+     * Long response2 = client.sintercard(new String[] {"set3", "set4"}, 3).get();
+     * assertEquals(3L, response2);
+     * }</pre>
+     */
+    CompletableFuture<Long> sintercard(String[] keys, long limit);
 
     /**
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a

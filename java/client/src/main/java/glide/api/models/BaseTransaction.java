@@ -4,6 +4,7 @@ package glide.api.models;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SetBaseCommands.SET_LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
@@ -110,6 +111,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
+import static redis_request.RedisRequestOuterClass.RequestType.SInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
@@ -1218,6 +1220,44 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T sinterstore(@NonNull String destination, @NonNull String[] keys) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(keys, destination));
         protobufTransaction.addCommands(buildCommand(SInterStore, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return Command Response - The cardinality of the intersection result. If one or more sets do
+     *     not exist, <code>0</code> is returned.
+     */
+    public T sintercard(@NonNull String[] keys) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {Long.toString(keys.length)}, keys));
+        protobufTransaction.addCommands(buildCommand(SInterCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @param limit The limit for the intersection cardinality value.
+     * @return Command Response - The cardinality of the intersection result. If one or more sets do
+     *     not exist, <code>0</code> is returned. If the intersection cardinality reaches <code>limit
+     *     </code> partway through the computation, returns <code>limit</code> as the cardinality.
+     */
+    public T sintercard(@NonNull String[] keys, long limit) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Long.toString(keys.length)},
+                                keys,
+                                new String[] {SET_LIMIT_REDIS_API, Long.toString(limit)}));
+        protobufTransaction.addCommands(buildCommand(SInterCard, commandArgs));
         return getThis();
     }
 
