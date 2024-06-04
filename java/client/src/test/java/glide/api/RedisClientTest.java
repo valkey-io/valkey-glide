@@ -115,6 +115,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
@@ -5556,5 +5557,30 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void move_returns_success() {
+        // setup
+        String key = "testKey";
+        long dbIndex = 2L;
+        String[] arguments = new String[] {key, Long.toString(dbIndex)};
+        Boolean value = true;
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(Move), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.move(key, dbIndex);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 }

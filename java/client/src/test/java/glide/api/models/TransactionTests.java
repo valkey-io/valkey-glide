@@ -940,7 +940,7 @@ public class TransactionTests {
         }
     }
 
-    private ArgsArray buildArgs(String... args) {
+    static ArgsArray buildArgs(String... args) {
         var builder = ArgsArray.newBuilder();
         for (var arg : args) {
             builder.addArgs(ByteString.copyFromUtf8(arg));
