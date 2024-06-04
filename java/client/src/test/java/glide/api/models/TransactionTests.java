@@ -36,6 +36,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitField;
+import static redis_request.RedisRequestOuterClass.RequestType.BitFieldReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
 import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -185,6 +187,15 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitFieldOptions;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
+import glide.api.models.commands.bitmap.BitFieldOptions.OffsetMultiplier;
+import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
+import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
@@ -883,6 +894,32 @@ public class TransactionTests {
 
         transaction.srandmember("key", 1);
         results.add(Pair.of(SRandMember, buildArgs("key", "1")));
+
+        transaction.bitfieldReadOnly(
+                "key",
+                new BitFieldReadOnlySubCommands[] {new BitFieldGet(new SignedEncoding(5), new Offset(3))});
+        results.add(
+                Pair.of(
+                        BitFieldReadOnly,
+                        buildArgs(
+                                "key",
+                                BitFieldOptions.GET_COMMAND_STRING,
+                                BitFieldOptions.SIGNED_ENCODING_PREFIX.concat("5"),
+                                "3")));
+        transaction.bitfield(
+                "key",
+                new BitFieldSubCommands[] {
+                    new BitFieldSet(new UnsignedEncoding(10), new OffsetMultiplier(3), 4)
+                });
+        results.add(
+                Pair.of(
+                        BitField,
+                        buildArgs(
+                                "key",
+                                BitFieldOptions.SET_COMMAND_STRING,
+                                BitFieldOptions.UNSIGNED_ENCODING_PREFIX.concat("10"),
+                                BitFieldOptions.OFFSET_MULTIPLIER_PREFIX.concat("3"),
+                                "4")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
