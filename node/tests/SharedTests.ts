@@ -2606,6 +2606,10 @@ export function runBaseTests<Context>(config: {
         const key = uuidv4();
         const value = uuidv4();
 
+        // set with multiple options:
+        // * only apply SET if the key already exists
+        // * expires after 1 second
+        // * returns the old value
         const setResWithAllOptions = await client.set(key, value, {
             expiry: {
                 type: "unixSeconds",
@@ -2616,9 +2620,8 @@ export function runBaseTests<Context>(config: {
         });
         // key does not exist, so old value should be null
         expect(setResWithAllOptions).toEqual(null);
-        // key should have been set
-        const getResWithAllOptions = await client.get(key);
-        expect(getResWithAllOptions).toEqual(null);
+        // key does not exist, so SET should not have applied
+        expect(await client.get(key)).toEqual(null);
     }
 
     async function testSetWithAllCombination(client: BaseClient) {
