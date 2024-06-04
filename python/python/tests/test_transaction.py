@@ -226,6 +226,11 @@ async def transaction_test(
     args.append({"foo", "bar"})
     transaction.sinterstore(key7, [key7, key7])
     args.append(2)
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.sintercard([key7, key7])
+        args.append(2)
+        transaction.sintercard([key7, key7], 1)
+        args.append(1)
     transaction.sdiff([key7, key7])
     args.append(set())
     transaction.spop_count(key7, 4)
