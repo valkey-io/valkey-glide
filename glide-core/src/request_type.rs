@@ -166,6 +166,7 @@ pub enum RequestType {
     PExpireTime = 157,
     BLMPop = 158,
     XLen = 159,
+    Sort = 160,
     LSet = 165,
     XDel = 166,
     XRange = 167,
@@ -357,6 +358,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BitFieldReadOnly => RequestType::BitFieldReadOnly,
             ProtobufRequestType::Move => RequestType::Move,
             ProtobufRequestType::SInterCard => RequestType::SInterCard,
+            ProtobufRequestType::Sort => RequestType::Sort,
         }
     }
 }
@@ -533,6 +535,7 @@ impl RequestType {
             RequestType::BitFieldReadOnly => Some(cmd("BITFIELD_RO")),
             RequestType::Move => Some(cmd("MOVE")),
             RequestType::SInterCard => Some(cmd("SINTERCARD")),
+            RequestType::Sort => Some(cmd("SORT")),
         }
     }
 }

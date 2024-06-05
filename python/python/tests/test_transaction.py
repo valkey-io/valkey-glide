@@ -6,6 +6,7 @@ from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
+from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
     GeospatialData,
     InsertPosition,
@@ -53,6 +54,8 @@ async def transaction_test(
     key14 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
     key15 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
     key16 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
+    key17 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
+    key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -362,6 +365,24 @@ async def transaction_test(
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
 
+    transaction.lpush(key17, ["2", "1", "4", "3", "a"])
+    args.append(5)
+    transaction.sort(
+        key17,
+        limit=Limit(1, 4),
+        order=OrderBy.ASC,
+        alpha=True,
+    )
+    args.append(["2", "3", "4", "a"])
+    transaction.sort_store(
+        key17,
+        key18,
+        limit=Limit(1, 4),
+        order=OrderBy.ASC,
+        alpha=True,
+    )
+    args.append(4)
+
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):
         transaction.zadd(key16, {"a": 1, "b": 2, "c": 3, "d": 4})
@@ -496,12 +517,31 @@ class TestTransaction:
         assert await redis_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
         value = get_random_string(5)
         transaction = Transaction()
         transaction.info()
         transaction.select(1)
         transaction.set(key, value)
         transaction.get(key)
+        transaction.hset("user:1", {"name": "Alice", "age": "30"})
+        transaction.hset("user:2", {"name": "Bob", "age": "25"})
+        transaction.lpush(key1, ["2", "1"])
+        transaction.sort(
+            key1,
+            by_pattern="user:*->age",
+            get_patterns=["user:*->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        transaction.sort_store(
+            key1,
+            "newSortedKey",
+            by_pattern="user:*->age",
+            get_patterns=["user:*->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
         transaction.select(0)
         transaction.get(key)
         expected = await transaction_test(transaction, keyslot, redis_client)
@@ -509,8 +549,9 @@ class TestTransaction:
         assert isinstance(result, list)
         assert isinstance(result[0], str)
         assert "# Memory" in result[0]
-        assert result[1:6] == [OK, OK, value, OK, None]
-        assert result[6:] == expected
+        assert result[1:4] == [OK, OK, value]
+        assert result[4:11] == [2, 2, 2, ["Bob", "Alice"], 2, OK, None]
+        assert result[11:] == expected
 
     def test_transaction_clear(self):
         transaction = Transaction()
