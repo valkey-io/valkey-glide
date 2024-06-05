@@ -2877,7 +2877,7 @@ class ClusterTransaction(BaseTransaction):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
         Command response:
-            List[Optional[str]]: A list of sorted elements.
+            List[str]: A list of sorted elements.
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         return self.append_command(RequestType.Sort, args)
