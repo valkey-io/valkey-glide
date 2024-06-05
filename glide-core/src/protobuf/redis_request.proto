@@ -195,11 +195,23 @@ enum RequestType {
     ExpireTime = 156;
     PExpireTime = 157;
     BLMPop = 158;
+    XLen = 159;
+    LSet = 165;
+    XDel = 166;
+    XRange = 167;
+    LMove = 168;
+    BLMove = 169;
+    GetDel = 170;
+    SRandMember = 171;
+    BitField = 172;
+    BitFieldReadOnly = 173;
+    Move = 174;
+    SInterCard = 175;
 }
 
 message Command {
     message ArgsArray {
-        repeated string args = 1;
+        repeated bytes args = 1;
     }
 
     RequestType request_type = 1;

@@ -37,7 +37,7 @@ import {
     redis_request,
     response,
 } from "../src/ProtobufMessage";
-
+import { convertStringArrayToBuffer } from "./TestUtilities";
 const { RequestType, RedisRequest } = redis_request;
 
 beforeAll(() => {
@@ -524,12 +524,13 @@ describe("SocketConnectionInternals", () => {
                     throw new Error("no args");
                 }
 
-                expect(args.length).toEqual(5);
-                expect(args[0]).toEqual("foo");
-                expect(args[1]).toEqual("bar");
-                expect(args[2]).toEqual("XX");
-                expect(args[3]).toEqual("GET");
-                expect(args[4]).toEqual("EX 10");
+                expect(args.length).toEqual(6);
+                expect(args[0]).toEqual(Buffer.from("foo"));
+                expect(args[1]).toEqual(Buffer.from("bar"));
+                expect(args[2]).toEqual(Buffer.from("XX"));
+                expect(args[3]).toEqual(Buffer.from("GET"));
+                expect(args[4]).toEqual(Buffer.from("EX"));
+                expect(args[5]).toEqual(Buffer.from("10"));
                 sendResponse(socket, ResponseType.OK, request.callbackIdx);
             });
             const request1 = connection.set("foo", "bar", {
@@ -538,7 +539,7 @@ describe("SocketConnectionInternals", () => {
                 expiry: { type: "seconds", count: 10 },
             });
 
-            await expect(await request1).toMatch("OK");
+            expect(await request1).toMatch("OK");
         });
     });
 
@@ -666,19 +667,29 @@ describe("SocketConnectionInternals", () => {
                     RequestType.CustomCommand,
                 );
 
-                if (request.singleCommand?.argsArray?.args?.at(0) === "SET") {
+                if (
+                    request
+                        .singleCommand!.argsArray!.args!.at(0)!
+                        .toString() === "SET"
+                ) {
                     expect(request.route?.simpleRoutes).toEqual(
                         redis_request.SimpleRoutes.AllPrimaries,
                     );
                 } else if (
-                    request.singleCommand?.argsArray?.args?.at(0) === "GET"
+                    request
+                        .singleCommand!.argsArray!.args!.at(0)!
+                        .toString() === "GET"
                 ) {
                     expect(request.route?.slotKeyRoute).toEqual({
                         slotType: redis_request.SlotTypes.Replica,
                         slotKey: "foo",
                     });
                 } else {
-                    throw new Error("unexpected command");
+                    throw new Error(
+                        "unexpected command: [" +
+                            request.singleCommand!.argsArray!.args!.at(0) +
+                            "]",
+                    );
                 }
 
                 sendResponse(socket, ResponseType.Null, request.callbackIdx);
@@ -705,7 +716,14 @@ describe("SocketConnectionInternals", () => {
                     ["b", "2"],
                 ]),
             expectedRequestType: RequestType.XAdd,
-            expectedValue: ["foo", "*", "a", "1", "b", "2"],
+            expectedValue: convertStringArrayToBuffer([
+                "foo",
+                "*",
+                "a",
+                "1",
+                "b",
+                "2",
+            ]),
         });
     });
 
@@ -717,7 +735,12 @@ describe("SocketConnectionInternals", () => {
                     makeStream: true,
                 }),
             expectedRequestType: RequestType.XAdd,
-            expectedValue: ["bar", "YOLO", "a", "1"],
+            expectedValue: convertStringArrayToBuffer([
+                "bar",
+                "YOLO",
+                "a",
+                "1",
+            ]),
         });
     });
 
@@ -732,7 +755,15 @@ describe("SocketConnectionInternals", () => {
                     },
                 }),
             expectedRequestType: RequestType.XAdd,
-            expectedValue: ["baz", "MAXLEN", "=", "1000", "*", "c", "3"],
+            expectedValue: convertStringArrayToBuffer([
+                "baz",
+                "MAXLEN",
+                "=",
+                "1000",
+                "*",
+                "c",
+                "3",
+            ]),
         });
     });
 
@@ -749,7 +780,7 @@ describe("SocketConnectionInternals", () => {
                     },
                 }),
             expectedRequestType: RequestType.XAdd,
-            expectedValue: [
+            expectedValue: convertStringArrayToBuffer([
                 "foobar",
                 "NOMKSTREAM",
                 "MINID",
@@ -760,7 +791,7 @@ describe("SocketConnectionInternals", () => {
                 "*",
                 "d",
                 "4",
-            ],
+            ]),
         });
     });
 
@@ -773,7 +804,12 @@ describe("SocketConnectionInternals", () => {
                     exact: true,
                 }),
             expectedRequestType: RequestType.XTrim,
-            expectedValue: ["foo", "MAXLEN", "=", "1000"],
+            expectedValue: convertStringArrayToBuffer([
+                "foo",
+                "MAXLEN",
+                "=",
+                "1000",
+            ]),
         });
     });
 
@@ -787,7 +823,14 @@ describe("SocketConnectionInternals", () => {
                     limit: 1000,
                 }),
             expectedRequestType: RequestType.XTrim,
-            expectedValue: ["bar", "MINID", "~", "foo", "LIMIT", "1000"],
+            expectedValue: convertStringArrayToBuffer([
+                "bar",
+                "MINID",
+                "~",
+                "foo",
+                "LIMIT",
+                "1000",
+            ]),
         });
     });
 
@@ -799,7 +842,13 @@ describe("SocketConnectionInternals", () => {
                     foobar: "baz",
                 }),
             expectedRequestType: RequestType.XRead,
-            expectedValue: ["STREAMS", "foo", "foobar", "bar", "baz"],
+            expectedValue: convertStringArrayToBuffer([
+                "STREAMS",
+                "foo",
+                "foobar",
+                "bar",
+                "baz",
+            ]),
         });
     });
 
@@ -813,7 +862,13 @@ describe("SocketConnectionInternals", () => {
                     },
                 ),
             expectedRequestType: RequestType.XRead,
-            expectedValue: ["BLOCK", "100", "STREAMS", "foo", "bar"],
+            expectedValue: convertStringArrayToBuffer([
+                "BLOCK",
+                "100",
+                "STREAMS",
+                "foo",
+                "bar",
+            ]),
         });
     });
 
@@ -827,7 +882,13 @@ describe("SocketConnectionInternals", () => {
                     },
                 ),
             expectedRequestType: RequestType.XRead,
-            expectedValue: ["COUNT", "2", "STREAMS", "bar", "baz"],
+            expectedValue: convertStringArrayToBuffer([
+                "COUNT",
+                "2",
+                "STREAMS",
+                "bar",
+                "baz",
+            ]),
         });
     });
 });

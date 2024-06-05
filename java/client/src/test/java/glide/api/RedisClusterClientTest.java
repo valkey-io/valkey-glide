@@ -1096,7 +1096,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoad(code);
+        CompletableFuture<String> response = service.functionLoad(code, false);
         String payload = response.get();
 
         // verify
@@ -1106,7 +1106,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadReplace_returns_success() {
+    public void functionLoad_with_replace_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -1119,7 +1119,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadReplace(code);
+        CompletableFuture<String> response = service.functionLoad(code, true);
         String payload = response.get();
 
         // verify
@@ -1129,7 +1129,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadWithRoute_returns_success() {
+    public void functionLoad_with_route_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {code};
@@ -1142,7 +1142,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoad(code, RANDOM);
+        CompletableFuture<String> response = service.functionLoad(code, false, RANDOM);
         String payload = response.get();
 
         // verify
@@ -1152,7 +1152,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadReplaceRoute_returns_success() {
+    public void functionLoad_with_replace_with_route_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -1165,7 +1165,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadReplace(code, RANDOM);
+        CompletableFuture<String> response = service.functionLoad(code, true, RANDOM);
         String payload = response.get();
 
         // verify

@@ -160,6 +160,36 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void move() {
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String value1 = UUID.randomUUID().toString();
+        String value2 = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
+        assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
+
+        assertEquals(OK, regularClient.select(0).get());
+        assertEquals(OK, regularClient.set(key1, value1).get());
+        assertEquals(OK, regularClient.set(key2, value2).get());
+        assertEquals(true, regularClient.move(key1, 1L).get());
+        assertNull(regularClient.get(key1).get());
+
+        assertEquals(OK, regularClient.select(1).get());
+        assertEquals(value1, regularClient.get(key1).get());
+
+        assertEquals(OK, regularClient.set(key2, value2).get());
+        // Move does not occur because key2 already exists in DB 0
+        assertEquals(false, regularClient.move(key2, 0).get());
+        assertEquals(value2, regularClient.get(key2).get());
+
+        // Incorrect argument - DB index must be non-negative
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> regularClient.move(key1, -1L).get());
+        assertTrue(e.getCause() instanceof RequestException);
+    }
+
+    @Test
+    @SneakyThrows
     public void clientId() {
         var id = regularClient.clientId().get();
         assertTrue(id > 0);
@@ -357,7 +387,7 @@ public class CommandTests {
                         + " \n redis.register_function('"
                         + funcName
                         + "', function(keys, args) return args[1] end)"; // function returns first argument
-        assertEquals(libName, regularClient.functionLoad(code).get());
+        assertEquals(libName, regularClient.functionLoad(code, false).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
 
         var flist = regularClient.functionList(false).get();
@@ -381,20 +411,20 @@ public class CommandTests {
 
         // re-load library without overwriting
         var executionException =
-                assertThrows(ExecutionException.class, () -> regularClient.functionLoad(code).get());
+                assertThrows(ExecutionException.class, () -> regularClient.functionLoad(code, false).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("Library '" + libName + "' already exists"));
 
         // re-load library with overwriting
-        assertEquals(libName, regularClient.functionLoadReplace(code).get());
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
         String newFuncName = "myfunc2c";
         String newCode =
                 code
                         + "\n redis.register_function('"
                         + newFuncName
                         + "', function(keys, args) return #args end)"; // function returns argument count
-        assertEquals(libName, regularClient.functionLoadReplace(newCode).get());
+        assertEquals(libName, regularClient.functionLoad(newCode, true).get());
 
         flist = regularClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);

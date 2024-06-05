@@ -11,6 +11,9 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=set">Set Commands</a>
  */
 public interface SetBaseCommands {
+    /** Redis API keyword used to limit calculation of intersection of sorted sets. */
+    String SET_LIMIT_REDIS_API = "LIMIT";
+
     /**
      * Adds specified members to the set stored at <code>key</code>. Specified members that are
      * already a member of this set are ignored.
@@ -187,6 +190,52 @@ public interface SetBaseCommands {
     CompletableFuture<Set<String>> sinter(String[] keys);
 
     /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return The cardinality of the intersection result. If one or more sets do not exist, <code>0
+     *     </code> is returned.
+     * @example
+     *     <pre>{@code
+     * Long response = client.sintercard(new String[] {"set1", "set2"}).get();
+     * assertEquals(2L, response);
+     *
+     * Long emptyResponse = client.sintercard(new String[] {"set1", "nonExistingSet"}).get();
+     * assertEquals(emptyResponse, 0L);
+     * }</pre>
+     */
+    CompletableFuture<Long> sintercard(String[] keys);
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @param limit The limit for the intersection cardinality value.
+     * @return The cardinality of the intersection result. If one or more sets do not exist, <code>0
+     *     </code> is returned. If the intersection cardinality reaches <code>limit</code> partway
+     *     through the computation, returns <code>limit</code> as the cardinality.
+     * @example
+     *     <pre>{@code
+     * Long response = client.sintercard(new String[] {"set1", "set2"}, 3).get();
+     * assertEquals(2L, response);
+     *
+     * Long emptyResponse = client.sintercard(new String[] {"set1", "nonExistingSet"}, 3).get();
+     * assertEquals(emptyResponse, 0L);
+     *
+     * // when intersection cardinality > limit, returns limit as cardinality
+     * Long response2 = client.sintercard(new String[] {"set3", "set4"}, 3).get();
+     * assertEquals(3L, response2);
+     * }</pre>
+     */
+    CompletableFuture<Long> sintercard(String[] keys, long limit);
+
+    /**
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
      * new set at <code>destination</code>.
      *
@@ -221,4 +270,38 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> sunionstore(String destination, String[] keys);
+
+    /**
+     * Returns a random element from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set member.
+     * @return A random element from the set, or <code>null</code> if <code>key</code> does not exist.
+     * @example
+     *     <pre>{@code
+     * client.sadd("test", new String[] {"one"}).get();
+     * String response = client.srandmember("test").get();
+     * assertEquals("one", response);
+     * }</pre>
+     */
+    CompletableFuture<String> srandmember(String key);
+
+    /**
+     * Returns one or more random elements from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set members.
+     * @param count The number of elements to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.<br>
+     * @return An <code>array</code> of elements from the set, or an empty <code>array</code> if
+     *     <code>key</code> does not exist.
+     * @example
+     *     <pre>{@code
+     * client.sadd("test", new String[] {"one"}).get();
+     * String[] response = client.srandmember("test", -2).get();
+     * assertArrayEquals(new String[] {"one", "one"}, response);
+     * }</pre>
+     */
+    CompletableFuture<String[]> srandmember(String key, long count);
 }

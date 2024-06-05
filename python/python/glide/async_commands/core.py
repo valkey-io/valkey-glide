@@ -25,7 +25,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
-    _create_z_cmd_store_args,
+    _create_zinter_zunion_cmd_args,
     _create_zrange_args,
 )
 from glide.constants import TOK, TResult
@@ -448,6 +448,29 @@ class CoreCommands(Protocol):
         """
         return cast(Optional[str], await self._execute_command(RequestType.Get, [key]))
 
+    async def getdel(self, key: str) -> Optional[str]:
+        """
+        Gets a string value associated with the given `key` and deletes the key.
+
+        See https://valkey.io/commands/getdel for more details.
+
+        Args:
+            key (str): The `key` to retrieve from the database.
+
+        Returns:
+            Optional[str]: If `key` exists, returns the `value` of `key`. Otherwise, returns `None`.
+
+        Examples:
+            >>> await client.set("key", "value")
+            >>> await client.getdel("key")
+               'value'
+            >>> await client.getdel("key")
+                None
+        """
+        return cast(
+            Optional[str], await self._execute_command(RequestType.GetDel, [key])
+        )
+
     async def append(self, key: str, value: str) -> int:
         """
         Appends a value to a key.
@@ -509,6 +532,31 @@ class CoreCommands(Protocol):
         """
         return cast(
             TOK, await self._execute_command(RequestType.Rename, [key, new_key])
+        )
+
+    async def renamenx(self, key: str, new_key: str) -> bool:
+        """
+        Renames `key` to `new_key` if `new_key` does not yet exist.
+
+        See https://valkey.io/commands/renamenx for more details.
+
+        Note:
+            When in cluster mode, both `key` and `new_key` must map to the same hash slot.
+
+        Args:
+            key (str): The key to rename.
+            new_key (str): The new key name.
+
+        Returns:
+            bool: True if `key` was renamed to `new_key`, or False if `new_key` already exists.
+
+        Examples:
+            >>> await client.renamenx("old_key", "new_key")
+                True  # "old_key" was renamed to "new_key"
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.RenameNX, [key, new_key]),
         )
 
     async def delete(self, keys: List[str]) -> int:
@@ -1711,6 +1759,41 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SInterStore, [destination] + keys),
         )
 
+    async def sintercard(self, keys: List[str], limit: Optional[int] = None) -> int:
+        """
+        Gets the cardinality of the intersection of all the given sets.
+        Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/sintercard for more details.
+
+        Args:
+            keys (List[str]): A list of keys representing the sets to intersect.
+            limit (Optional[int]): An optional limit to the maximum number of intersecting elements to count.
+                If specified, the computation stops as soon as the cardinality reaches this limit.
+
+        Returns:
+            int: The number of elements in the resulting set of the intersection.
+
+        Examples:
+            >>> await client.sadd("set1", {"a", "b", "c"})
+            >>> await client.sadd("set2", {"b", "c", "d"})
+            >>> await client.sintercard(["set1", "set2"])
+            2  # The intersection of "set1" and "set2" contains 2 elements: "b" and "c".
+
+            >>> await client.sintercard(["set1", "set2"], limit=1)
+            1  # The computation stops early as the intersection cardinality reaches the limit of 1.
+        """
+        args = [str(len(keys))]
+        args += keys
+        if limit is not None:
+            args += ["LIMIT", str(limit)]
+        return cast(
+            int,
+            await self._execute_command(RequestType.SInterCard, args),
+        )
+
     async def sdiff(self, keys: List[str]) -> Set[str]:
         """
         Computes the difference between the first set and all the successive sets in `keys`.
@@ -2159,6 +2242,29 @@ class CoreCommands(Protocol):
             args.extend(options.to_args())
 
         return cast(int, await self._execute_command(RequestType.XTrim, args))
+
+    async def xlen(self, key: str) -> int:
+        """
+        Returns the number of entries in the stream stored at `key`.
+
+        See https://valkey.io/commands/xlen for more details.
+
+        Args:
+            key (str): The key of the stream.
+
+        Returns:
+            int: The number of entries in the stream. If `key` does not exist, returns 0.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field", "value")])
+            >>> await client.xadd("mystream", [("field2", "value2")])
+            >>> await client.xlen("mystream")
+                2  # There are 2 entries in "mystream".
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.XLen, [key]),
+        )
 
     async def geoadd(
         self,
@@ -3157,6 +3263,75 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def zinter(
+        self,
+        keys: List[str],
+    ) -> List[str]:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+        To get the scores as well, see `zinter_withscores`.
+        To store the result in a key as a sorted set, see `zinterstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Returns:
+            List[str]: The resulting array of intersecting elements.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zinter(["key1", "key2"])
+                ['member1']
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.ZInter, [str(len(keys))] + keys),
+        )
+
+    async def zinter_withscores(
+        self,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> Mapping[str, float]:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
+        To get the elements only, see `zinter`.
+        To store the result in a key as a sorted set, see `zinterstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Returns:
+            Mapping[str, float]: The resulting sorted set with scores.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zinter_withscores(["key1", "key2"])
+                {'member1': 20}  # "member1" with score of 20 is the result
+            >>> await client.zinter_withscores(["key1", "key2"], AggregationType.MAX)
+                {'member1': 10.5}  # "member1" with score of 10.5 is the result.
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return cast(
+            Mapping[str, float],
+            await self._execute_command(RequestType.ZInter, args),
+        )
+
     async def zinterstore(
         self,
         destination: str,
@@ -3166,6 +3341,7 @@ class CoreCommands(Protocol):
         """
         Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+        To get the result directly, see `zinter_withscores`.
 
         When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
@@ -3175,7 +3351,7 @@ class CoreCommands(Protocol):
             destination (str): The key of the destination sorted set.
             keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
-                List[Tuple[str, float]]] - for weighted keys with score multipliers.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
@@ -3188,16 +3364,85 @@ class CoreCommands(Protocol):
             >>> await client.zinterstore("my_sorted_set", ["key1", "key2"])
                 1 # Indicates that the sorted set "my_sorted_set" contains one element.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 20}  # "member1"  is now stored in "my_sorted_set" with score of 20.
-            >>> await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX )
-                1 # Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+                {'member1': 20}  # "member1" is now stored in "my_sorted_set" with score of 20.
+            >>> await client.zinterstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
+                1 # Indicates that the sorted set "my_sorted_set" contains one element, and its score is the maximum score between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 10.5}  # "member1"  is now stored in "my_sorted_set" with score of 10.5.
+                {'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
             int,
             await self._execute_command(RequestType.ZInterStore, args),
+        )
+
+    async def zunion(
+        self,
+        keys: List[str],
+    ) -> List[str]:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+        To get the scores as well, see `zunion_withscores`.
+        To store the result in a key as a sorted set, see `zunionstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Returns:
+            List[str]: The resulting array of union elements.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zunion(["key1", "key2"])
+                ['member1', 'member2']
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.ZUnion, [str(len(keys))] + keys),
+        )
+
+    async def zunion_withscores(
+        self,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> Mapping[str, float]:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a sorted set of union elements with scores.
+        To get the elements only, see `zunion`.
+        To store the result in a key as a sorted set, see `zunionstore`.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Returns:
+            Mapping[str, float]: The resulting sorted set with scores.
+
+        Examples:
+            >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+            >>> await client.zadd("key2", {"member1": 9.5})
+            >>> await client.zunion_withscores(["key1", "key2"])
+                {'member1': 20, 'member2': 8.2}
+            >>> await client.zunion_withscores(["key1", "key2"], AggregationType.MAX)
+                {'member1': 10.5, 'member2': 8.2}
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return cast(
+            Mapping[str, float],
+            await self._execute_command(RequestType.ZUnion, args),
         )
 
     async def zunionstore(
@@ -3209,16 +3454,17 @@ class CoreCommands(Protocol):
         """
         Computes the union of sorted sets given by the specified `keys` and stores the result in `destination`.
         If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+        To get the result directly, see `zunion_withscores`.
 
         When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
 
-        see https://valkey.io/commands/zunionstore/ for more details.
+        See https://valkey.io/commands/zunionstore/ for more details.
 
         Args:
             destination (str): The key of the destination sorted set.
             keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
                 List[str] - for keys only.
-                List[Tuple[str, float]]] - for weighted keys with score multipliers.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
@@ -3229,15 +3475,15 @@ class CoreCommands(Protocol):
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
             >>> await client.zadd("key2", {"member1": 9.5})
             >>> await client.zunionstore("my_sorted_set", ["key1", "key2"])
-                2 # Indicates that the sorted set "my_sorted_set" contains two element.
+                2 # Indicates that the sorted set "my_sorted_set" contains two elements.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 20, 'member2': 8.2}
-            >>> await client.zunionstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX )
-                2 # Indicates that the sorted set "my_sorted_set" contains two element, and each score is the maximum score between the sets.
+            >>> await client.zunionstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
+                2 # Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
                 {'member1': 10.5, 'member2': 8.2}
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
             int,
             await self._execute_command(RequestType.ZUnionStore, args),
@@ -3523,6 +3769,64 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.PfAdd, [key] + elements),
         )
 
+    async def pfcount(self, keys: List[str]) -> int:
+        """
+        Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+        calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+
+        See https://valkey.io/commands/pfcount for more details.
+
+        Note:
+            When in Cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the HyperLogLog data structures to be analyzed.
+
+        Returns:
+            int: The approximated cardinality of given HyperLogLog data structures.
+                The cardinality of a key that does not exist is 0.
+
+        Examples:
+            >>> await client.pfcount(["hll_1", "hll_2"])
+                4  # The approximated cardinality of the union of "hll_1" and "hll_2" is 4.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.PfCount, keys),
+        )
+
+    async def pfmerge(self, destination: str, source_keys: List[str]) -> TOK:
+        """
+        Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
+        of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+
+        See https://valkey.io/commands/pfmerge for more details.
+
+        Note:
+            When in Cluster mode, all keys in `source_keys` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key of the destination HyperLogLog where the merged data sets will be stored.
+            source_keys (List[str]): The keys of the HyperLogLog structures to be merged.
+
+        Returns:
+            OK: A simple OK response.
+
+        Examples:
+            >>> await client.pfadd("hll1", ["a", "b"])
+            >>> await client.pfadd("hll2", ["b", "c"])
+            >>> await client.pfmerge("new_hll", ["hll1", "hll2"])
+                OK  # The value of "hll1" merged with "hll2" was stored in "new_hll".
+            >>> await client.pfcount(["new_hll"])
+                3  # The approximated cardinality of "new_hll" is 3.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.PfMerge, [destination] + source_keys
+            ),
+        )
+
     async def object_encoding(self, key: str) -> Optional[str]:
         """
         Returns the internal encoding for the Redis object stored at `key`.
@@ -3545,7 +3849,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ObjectEncoding, [key]),
         )
 
-    async def object_freq(self, key: str) -> int:
+    async def object_freq(self, key: str) -> Optional[int]:
         """
         Returns the logarithmic access frequency counter of a Redis object stored at `key`.
 
@@ -3555,7 +3859,7 @@ class CoreCommands(Protocol):
             key (str): The key of the object to get the logarithmic access frequency counter of.
 
         Returns:
-            int: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
+            Optional[int]: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
                 integer. Otherwise, returns None.
 
         Examples:
@@ -3563,6 +3867,49 @@ class CoreCommands(Protocol):
                 2  # The logarithmic access frequency counter of "my_hash" has a value of 2.
         """
         return cast(
-            int,
+            Optional[int],
             await self._execute_command(RequestType.ObjectFreq, [key]),
+        )
+
+    async def object_idletime(self, key: str) -> Optional[int]:
+        """
+        Returns the time in seconds since the last access to the value stored at `key`.
+
+        See https://valkey.io/commands/object-idletime for more details.
+
+        Args:
+            key (str): The key of the object to get the idle time of.
+
+        Returns:
+            Optional[int]: If `key` exists, returns the idle time in seconds. Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_idletime("my_hash")
+                13  # "my_hash" was last accessed 13 seconds ago.
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ObjectIdleTime, [key]),
+        )
+
+    async def object_refcount(self, key: str) -> Optional[int]:
+        """
+        Returns the reference count of the object stored at `key`.
+
+        See https://valkey.io/commands/object-refcount for more details.
+
+        Args:
+            key (str): The key of the object to get the reference count of.
+
+        Returns:
+            Optional[int]: If `key` exists, returns the reference count of the object stored at `key` as an integer.
+                Otherwise, returns None.
+
+        Examples:
+            >>> await client.object_refcount("my_hash")
+                2  # "my_hash" has a reference count of 2.
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ObjectRefCount, [key]),
         )

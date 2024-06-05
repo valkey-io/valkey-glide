@@ -1,7 +1,9 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.models.TransactionTests.buildArgs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 
 import java.util.LinkedList;
@@ -9,7 +11,6 @@ import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
 import redis_request.RedisRequestOuterClass;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 
 public class StandaloneTransactionTests {
     @Test
@@ -19,7 +20,9 @@ public class StandaloneTransactionTests {
         Transaction transaction = new Transaction();
 
         transaction.select(5L);
-        results.add(Pair.of(Select, ArgsArray.newBuilder().addArgs("5").build()));
+        results.add(Pair.of(Select, buildArgs("5")));
+        transaction.move("testKey", 2L);
+        results.add(Pair.of(Move, buildArgs("testKey", "2")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

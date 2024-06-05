@@ -3,6 +3,7 @@ package glide.api;
 
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
@@ -20,6 +21,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
+import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -31,7 +33,6 @@ import glide.api.commands.ServerManagementCommands;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -194,17 +195,16 @@ public class RedisClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> functionLoad(@NonNull String libraryCode) {
-        return commandManager.submitNewCommand(
-                FunctionLoad, new String[] {libraryCode}, this::handleStringResponse);
+    public CompletableFuture<String> functionLoad(@NonNull String libraryCode, boolean replace) {
+        String[] arguments =
+                replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
+        return commandManager.submitNewCommand(FunctionLoad, arguments, this::handleStringResponse);
     }
 
     @Override
-    public CompletableFuture<String> functionLoadReplace(@NonNull String libraryCode) {
+    public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
         return commandManager.submitNewCommand(
-                FunctionLoad,
-                new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
-                this::handleStringResponse);
+                Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
     }
 
     @Override

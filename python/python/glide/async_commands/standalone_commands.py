@@ -246,3 +246,21 @@ class StandaloneCommands(CoreCommands):
             List[str],
             await self._execute_command(RequestType.Time, []),
         )
+
+    async def lastsave(self) -> int:
+        """
+        Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
+
+        See https://valkey.io/commands/lastsave for more details.
+
+        Returns:
+            int: The Unix time of the last successful DB save.
+
+        Examples:
+            >>> await client.lastsave()
+            1710925775  # Unix time of the last DB save
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.LastSave, []),
+        )

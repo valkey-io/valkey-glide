@@ -37,7 +37,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitwiseOperation;
@@ -656,6 +656,7 @@ public class CommandTests {
     public static Stream<Arguments> callCrossSlotCommandsWhichShouldFail() {
         return Stream.of(
                 Arguments.of("smove", null, clusterClient.smove("abc", "zxy", "lkn")),
+                Arguments.of("rename", null, clusterClient.rename("abc", "xyz")),
                 Arguments.of("renamenx", null, clusterClient.renamenx("abc", "zxy")),
                 Arguments.of(
                         "sinterstore", null, clusterClient.sinterstore("abc", new String[] {"zxy", "lkn"})),
@@ -701,7 +702,7 @@ public class CommandTests {
                 Arguments.of(
                         "lmpop",
                         "7.0.0",
-                        clusterClient.lmpop(new String[] {"abc", "def"}, PopDirection.LEFT, 1L)),
+                        clusterClient.lmpop(new String[] {"abc", "def"}, ListDirection.LEFT, 1L)),
                 Arguments.of(
                         "bitop",
                         null,
@@ -709,7 +710,18 @@ public class CommandTests {
                 Arguments.of(
                         "blmpop",
                         "7.0.0",
-                        clusterClient.blmpop(new String[] {"abc", "def"}, PopDirection.LEFT, 1L, 0.1)));
+                        clusterClient.blmpop(new String[] {"abc", "def"}, ListDirection.LEFT, 1L, 0.1)),
+                Arguments.of(
+                        "lmove",
+                        "6.2.0",
+                        clusterClient.lmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT)),
+                Arguments.of(
+                        "blmove",
+                        "6.2.0",
+                        clusterClient.blmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT, 1)),
+                Arguments.of("sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"})),
+                Arguments.of(
+                        "sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"}, 1)));
     }
 
     @SneakyThrows
@@ -794,7 +806,7 @@ public class CommandTests {
                         + "', function(keys, args) return args[1] end)"; // function returns first argument
         Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
 
-        assertEquals(libName, clusterClient.functionLoad(code, route).get());
+        assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
 
         var expectedDescription =
@@ -836,13 +848,14 @@ public class CommandTests {
 
         // re-load library without overwriting
         var executionException =
-                assertThrows(ExecutionException.class, () -> clusterClient.functionLoad(code, route).get());
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionLoad(code, false, route).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("Library '" + libName + "' already exists"));
 
         // re-load library with overwriting
-        assertEquals(libName, clusterClient.functionLoadReplace(code, route).get());
+        assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
         String newFuncName = "myfunc2c_" + singleNodeRoute;
         String newCode =
                 code
@@ -850,7 +863,7 @@ public class CommandTests {
                         + newFuncName
                         + "', function(keys, args) return #args end)"; // function returns argument count
 
-        assertEquals(libName, clusterClient.functionLoadReplace(newCode, route).get());
+        assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
 
         expectedDescription.put(newFuncName, null);
         expectedFlags.put(newFuncName, Set.of());
@@ -906,7 +919,7 @@ public class CommandTests {
                         + funcName
                         + "', function(keys, args) return args[1] end)"; // function returns first argument
 
-        assertEquals(libName, clusterClient.functionLoad(code).get());
+        assertEquals(libName, clusterClient.functionLoad(code, false).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
 
         var flist = clusterClient.functionList(false).get();
@@ -930,20 +943,20 @@ public class CommandTests {
 
         // re-load library without overwriting
         var executionException =
-                assertThrows(ExecutionException.class, () -> clusterClient.functionLoad(code).get());
+                assertThrows(ExecutionException.class, () -> clusterClient.functionLoad(code, false).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("Library '" + libName + "' already exists"));
 
         // re-load library with overwriting
-        assertEquals(libName, clusterClient.functionLoadReplace(code).get());
+        assertEquals(libName, clusterClient.functionLoad(code, true).get());
         String newFuncName = "myfunc2c";
         String newCode =
                 code
                         + "\n redis.register_function('"
                         + newFuncName
                         + "', function(keys, args) return #args end)"; // function returns argument count
-        assertEquals(libName, clusterClient.functionLoadReplace(newCode).get());
+        assertEquals(libName, clusterClient.functionLoad(newCode, true).get());
 
         flist = clusterClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
