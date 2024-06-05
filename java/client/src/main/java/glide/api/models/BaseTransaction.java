@@ -120,6 +120,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
@@ -4054,6 +4055,37 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T srandmember(@NonNull String key, long count) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count));
         protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns one random member from the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @return Command Response - The value of the popped member.<br>
+     *     If <code>key</code> does not exist, <code>null</code> will be returned.
+     */
+    public T spop(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(SPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns up to <code>count</code> random members from the set stored at <code>key
+     * </code>, depending on the set's length.
+     *
+     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @param count The count of the elements to pop from the set.
+     * @return Command Response - A set of popped elements will be returned depending on the set's
+     *     length.<br>
+     *     If <code>key</code> does not exist, an empty <code>Set</code> will be returned.
+     */
+    public T spopCount(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+        protobufTransaction.addCommands(buildCommand(SPop, commandArgs));
         return getThis();
     }
 

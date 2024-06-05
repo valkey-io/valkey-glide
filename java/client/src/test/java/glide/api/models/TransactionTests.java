@@ -130,6 +130,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
@@ -902,6 +903,12 @@ public class TransactionTests {
 
         transaction.srandmember("key", 1);
         results.add(Pair.of(SRandMember, buildArgs("key", "1")));
+
+        transaction.spop("key");
+        results.add(Pair.of(SPop, buildArgs("key")));
+
+        transaction.spopCount("key", 1);
+        results.add(Pair.of(SPop, buildArgs("key", "1")));
 
         transaction.bitfieldReadOnly(
                 "key",
