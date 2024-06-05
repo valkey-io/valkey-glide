@@ -16,7 +16,11 @@ mod ffi_test;
 pub use ffi_test::*;
 
 // TODO: Consider caching method IDs here in a static variable (might need RwLock to mutate)
-fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<'local> {
+fn redis_value_to_java<'local>(
+    env: &mut JNIEnv<'local>,
+    val: Value,
+    encoding_utf8: bool,
+) -> JObject<'local> {
     match val {
         Value::Nil => JObject::null(),
         Value::SimpleString(str) => JObject::from(env.new_string(str).unwrap()),
@@ -24,20 +28,37 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
         Value::Int(num) => env
             .new_object("java/lang/Long", "(J)V", &[num.into()])
             .unwrap(),
-        Value::BulkString(data) => match std::str::from_utf8(data.as_ref()) {
-            Ok(val) => JObject::from(env.new_string(val).unwrap()),
-            Err(_err) => {
-                let _ = env.throw("Error decoding Unicode data");
-                JObject::null()
+        Value::BulkString(data) => {
+            if encoding_utf8 {
+                let Ok(utf8_str) = String::from_utf8(data) else {
+                    let _ = env.throw("Failed to construct UTF-8 string");
+                    return JObject::null();
+                };
+                match env.new_string(utf8_str) {
+                    Ok(string) => JObject::from(string),
+                    Err(e) => {
+                        let _ = env.throw(format!(
+                            "Failed to construct Java UTF-8 string from Rust UTF-8 string. {:?}",
+                            e
+                        ));
+                        JObject::null()
+                    }
+                }
+            } else {
+                let Ok(bytearr) = env.byte_array_from_slice(data.as_ref()) else {
+                    let _ = env.throw("Failed to allocate byte array");
+                    return JObject::null();
+                };
+                bytearr.into()
             }
-        },
+        }
         Value::Array(array) => {
             let items: JObjectArray = env
                 .new_object_array(array.len() as i32, "java/lang/Object", JObject::null())
                 .unwrap();
 
             for (i, item) in array.into_iter().enumerate() {
-                let java_value = redis_value_to_java(env, item);
+                let java_value = redis_value_to_java(env, item, encoding_utf8);
                 env.set_object_array_element(&items, i as i32, java_value)
                     .unwrap();
             }
@@ -50,8 +71,8 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
                 .unwrap();
 
             for (key, value) in map {
-                let java_key = redis_value_to_java(env, key);
-                let java_value = redis_value_to_java(env, value);
+                let java_key = redis_value_to_java(env, key, encoding_utf8);
+                let java_value = redis_value_to_java(env, value, encoding_utf8);
                 env.call_method(
                     &linked_hash_map,
                     "put",
@@ -75,7 +96,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             let set = env.new_object("java/util/HashSet", "()V", &[]).unwrap();
 
             for elem in array {
-                let java_value = redis_value_to_java(env, elem);
+                let java_value = redis_value_to_java(env, elem, encoding_utf8);
                 env.call_method(
                     &set,
                     "add",
@@ -102,7 +123,19 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
     pointer: jlong,
 ) -> JObject<'local> {
     let value = unsafe { Box::from_raw(pointer as *mut Value) };
-    redis_value_to_java(&mut env, *value)
+    redis_value_to_java(&mut env, *value, true)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPointerBinary<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    pointer: jlong,
+) -> JObject<'local> {
+    let value = unsafe { Box::from_raw(pointer as *mut Value) };
+    redis_value_to_java(&mut env, *value, false)
 }
 
 #[no_mangle]

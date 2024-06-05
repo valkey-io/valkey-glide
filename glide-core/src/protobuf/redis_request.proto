@@ -190,11 +190,13 @@ enum RequestType {
     BitOp = 148;
     HStrlen = 149;
     FunctionLoad = 150;
+    FunctionList = 151;
     LMPop = 155;
     ExpireTime = 156;
     PExpireTime = 157;
     BLMPop = 158;
     XLen = 159;
+    Sort = 160;
     LSet = 165;
     XDel = 166;
     XRange = 167;

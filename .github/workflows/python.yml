@@ -99,17 +99,12 @@ jobs:
                   pip install -r ../benchmarks/python/requirements.txt
                   python -m mypy ..
 
-            - name: Install Redis Modules
-              uses: ./.github/workflows/install-redis-modules
-              with:
-                  redis-version: ${{ matrix.redis }} 
-
             - name: Test with pytest
               working-directory: ./python
               run: |
                   source .env/bin/activate
                   cd python/tests/
-                  pytest --asyncio-mode=auto --override-ini=addopts= --load-module=$GITHUB_WORKSPACE/redisjson.so
+                  pytest --asyncio-mode=auto
 
             - uses: ./.github/workflows/test-benchmark
               with:
