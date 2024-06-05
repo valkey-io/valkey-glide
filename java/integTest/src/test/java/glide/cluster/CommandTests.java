@@ -877,6 +877,14 @@ public class CommandTests {
         assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true, route).get());
         assertEquals(OK, clusterClient.functionDelete("anotherLib", route).get());
 
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.functionDelete("anotherLib", route).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
+
         response = clusterClient.functionList(true, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
@@ -951,6 +959,13 @@ public class CommandTests {
         String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
         assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true).get());
         assertEquals(OK, clusterClient.functionDelete("anotherLib").get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionDelete("anotherLib").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
 
         flist = clusterClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);

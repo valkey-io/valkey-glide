@@ -424,6 +424,13 @@ public class CommandTests {
         assertEquals("anotherLib", regularClient.functionLoad(anotherLib, true).get());
         assertEquals(OK, regularClient.functionDelete("anotherLib").get());
 
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionDelete("anotherLib").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
+
         flist = regularClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
         expectedFlags.put(newFuncName, Set.of());

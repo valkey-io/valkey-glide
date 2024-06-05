@@ -170,8 +170,8 @@ public class TestUtilities {
         for (var funcName : funcNames) {
             code.append("redis.register_function('")
                     .append(funcName)
-                    .append(
-                            "', function(keys, args) return args[1] end)\n"); // function returns first argument
+                    // function returns first argument
+                    .append("', function(keys, args) return args[1] end)\n");
         }
         return code.toString();
     }
