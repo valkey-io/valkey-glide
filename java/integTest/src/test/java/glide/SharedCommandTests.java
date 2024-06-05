@@ -4365,8 +4365,8 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void lset(BaseClient client) {
         // setup
-        String key = "testKey";
-        String nonExistingKey = "nonExisting";
+        String key = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
         long index = 0;
         long oobIndex = 10;
         long negativeIndex = -1;

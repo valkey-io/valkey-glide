@@ -705,7 +705,7 @@ public class TransactionTestUtilities {
                 .functionLoad(code, true)
                 .functionList("otherLib", false)
                 .functionList("mylib1T", true)
-                .customCommand(new String[] {"function", "flush", "sync"});
+                .functionDelete("mylib1T");
 
         return new Object[] {
             OK, // customCommand("function", "flush", "sync")
@@ -715,7 +715,7 @@ public class TransactionTestUtilities {
             "mylib1T", // functionLoad(code, true)
             new Map[0], // functionList("otherLib", false)
             expectedLibData, // functionList("mylib1T", true)
-            OK, // customCommand("function", "flush", "sync")
+            OK, // functionDelete("mylib1T")
         };
     }
 
