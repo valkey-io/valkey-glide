@@ -15,6 +15,7 @@ import java.security.SecureRandom;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.experimental.UtilityClass;
@@ -122,5 +123,44 @@ public class TestUtilities {
         } else {
             assertEquals(expected, actual);
         }
+    }
+
+    /**
+     * Validate whether `FUNCTION LIST` response contains required info.
+     *
+     * @param response The response from redis.
+     * @param libName Expected library name.
+     * @param functionDescriptions Expected function descriptions. Key - function name, value -
+     *     description.
+     * @param functionFlags Expected function flags. Key - function name, value - flags set.
+     * @param libCode Expected library to check if given.
+     */
+    @SuppressWarnings("unchecked")
+    public static void checkFunctionListResponse(
+            Map<String, Object>[] response,
+            String libName,
+            Map<String, String> functionDescriptions,
+            Map<String, Set<String>> functionFlags,
+            Optional<String> libCode) {
+        assertTrue(response.length > 0);
+        boolean hasLib = false;
+        for (var lib : response) {
+            hasLib = lib.containsValue(libName);
+            if (hasLib) {
+                var functions = (Object[]) lib.get("functions");
+                assertEquals(functionDescriptions.size(), functions.length);
+                for (var functionInfo : functions) {
+                    var function = (Map<String, Object>) functionInfo;
+                    var functionName = (String) function.get("name");
+                    assertEquals(functionDescriptions.get(functionName), function.get("description"));
+                    assertEquals(functionFlags.get(functionName), function.get("flags"));
+                }
+                if (libCode.isPresent()) {
+                    assertEquals(libCode.get(), lib.get("library_code"));
+                }
+                break;
+            }
+        }
+        assertTrue(hasLib);
     }
 }

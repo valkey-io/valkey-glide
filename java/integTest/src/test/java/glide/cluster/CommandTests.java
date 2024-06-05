@@ -3,6 +3,7 @@ package glide.cluster;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
@@ -49,8 +50,11 @@ import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -779,53 +783,192 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(name = "functionLoad: singleNodeRoute = {0}")
     @ValueSource(booleans = {true, false})
-    public void functionLoad(boolean withRoute) {
+    public void functionLoad_and_functionList(boolean singleNodeRoute) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        String libName = "mylib1C" + withRoute;
+
+        // TODO use FUNCTION FLUSH
+        assertEquals(
+                OK,
+                clusterClient
+                        .customCommand(new String[] {"FUNCTION", "FLUSH", "SYNC"})
+                        .get()
+                        .getSingleValue());
+
+        String libName = "mylib1c_" + singleNodeRoute;
+        String funcName = "myfunc1c_" + singleNodeRoute;
         String code =
                 "#!lua name="
                         + libName
-                        + " \n redis.register_function('myfunc1c"
-                        + withRoute
-                        + "', function(keys, args) return args[1] end)";
-        Route route = new SlotKeyRoute("1", PRIMARY);
+                        + " \n redis.register_function('"
+                        + funcName
+                        + "', function(keys, args) return args[1] end)"; // function returns first argument
+        Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
 
-        var promise =
-                withRoute
-                        ? clusterClient.functionLoad(code, false, route)
-                        : clusterClient.functionLoad(code, false);
-        assertEquals(libName, promise.get());
+        assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
-        // TODO test with FUNCTION LIST
+
+        var expectedDescription =
+                new HashMap<String, String>() {
+                    {
+                        put(funcName, null);
+                    }
+                };
+        var expectedFlags =
+                new HashMap<String, Set<String>>() {
+                    {
+                        put(funcName, Set.of());
+                    }
+                };
+
+        var response = clusterClient.functionList(false, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName, expectedDescription, expectedFlags, Optional.empty());
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName, expectedDescription, expectedFlags, Optional.empty());
+            }
+        }
+
+        response = clusterClient.functionList(true, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName, expectedDescription, expectedFlags, Optional.of(code));
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName, expectedDescription, expectedFlags, Optional.of(code));
+            }
+        }
 
         // re-load library without overwriting
-        promise =
-                withRoute
-                        ? clusterClient.functionLoad(code, false, route)
-                        : clusterClient.functionLoad(code, false);
-        var executionException = assertThrows(ExecutionException.class, promise::get);
+        var executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionLoad(code, false, route).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("Library '" + libName + "' already exists"));
 
         // re-load library with overwriting
-        var promise2 =
-                withRoute
-                        ? clusterClient.functionLoad(code, true, route)
-                        : clusterClient.functionLoad(code, true);
-        assertEquals(libName, promise2.get());
+        assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
+        String newFuncName = "myfunc2c_" + singleNodeRoute;
         String newCode =
                 code
-                        + "\n redis.register_function('myfunc2c"
-                        + withRoute
-                        + "', function(keys, args) return #args end)";
-        promise2 =
-                withRoute
-                        ? clusterClient.functionLoad(newCode, true, route)
-                        : clusterClient.functionLoad(newCode, true);
-        assertEquals(libName, promise2.get());
+                        + "\n redis.register_function('"
+                        + newFuncName
+                        + "', function(keys, args) return #args end)"; // function returns argument count
+
+        assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
+
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of());
+
+        response = clusterClient.functionList(false, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName, expectedDescription, expectedFlags, Optional.empty());
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName, expectedDescription, expectedFlags, Optional.empty());
+            }
+        }
+
+        response = clusterClient.functionList(true, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
+            }
+        }
+
         // TODO test with FCALL
+
+        // TODO FUNCTION FLUSH at the end
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionLoad_and_functionList_without_route() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        // TODO use FUNCTION FLUSH
+        assertEquals(
+                OK,
+                clusterClient
+                        .customCommand(new String[] {"FUNCTION", "FLUSH", "SYNC"})
+                        .get()
+                        .getSingleValue());
+
+        String libName = "mylib1c";
+        String funcName = "myfunc1c";
+        String code =
+                "#!lua name="
+                        + libName
+                        + " \n redis.register_function('"
+                        + funcName
+                        + "', function(keys, args) return args[1] end)"; // function returns first argument
+
+        assertEquals(libName, clusterClient.functionLoad(code, false).get());
+        // TODO test function with FCALL when fixed in redis-rs and implemented
+
+        var flist = clusterClient.functionList(false).get();
+        var expectedDescription =
+                new HashMap<String, String>() {
+                    {
+                        put(funcName, null);
+                    }
+                };
+        var expectedFlags =
+                new HashMap<String, Set<String>>() {
+                    {
+                        put(funcName, Set.of());
+                    }
+                };
+        checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
+
+        flist = clusterClient.functionList(true).get();
+        checkFunctionListResponse(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(code));
+
+        // re-load library without overwriting
+        var executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionLoad(code, false).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("Library '" + libName + "' already exists"));
+
+        // re-load library with overwriting
+        assertEquals(libName, clusterClient.functionLoad(code, true).get());
+        String newFuncName = "myfunc2c";
+        String newCode =
+                code
+                        + "\n redis.register_function('"
+                        + newFuncName
+                        + "', function(keys, args) return #args end)"; // function returns argument count
+        assertEquals(libName, clusterClient.functionLoad(newCode, true).get());
+
+        flist = clusterClient.functionList(libName, false).get();
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of());
+        checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
+
+        flist = clusterClient.functionList(libName, true).get();
+        checkFunctionListResponse(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
+
+        // TODO test with FCALL
+
+        // TODO FUNCTION FLUSH at the end
     }
 }

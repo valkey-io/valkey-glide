@@ -378,6 +378,18 @@ public abstract class BaseClient
         return handleRedisResponse(Set.class, false, response);
     }
 
+    /** Process a <code>FUNCTION LIST</code> standalone response. */
+    @SuppressWarnings("unchecked")
+    protected Map<String, Object>[] handleFunctionListResponse(Object[] response) {
+        Map<String, Object>[] data = castArray(response, Map.class);
+        for (Map<String, Object> libraryInfo : data) {
+            Object[] functions = (Object[]) libraryInfo.get("functions");
+            var functionInfo = castArray(functions, Map.class);
+            libraryInfo.put("functions", functionInfo);
+        }
+        return data;
+    }
+
     @Override
     public CompletableFuture<Long> del(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);

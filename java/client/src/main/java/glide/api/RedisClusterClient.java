@@ -2,6 +2,8 @@
 package glide.api;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
@@ -16,6 +18,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
@@ -37,6 +40,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -431,5 +435,63 @@ public class RedisClusterClient extends BaseClient
                 replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
         return commandManager.submitNewCommand(
                 FunctionLoad, arguments, route, this::handleStringResponse);
+    }
+
+    /** Process a <code>FUNCTION LIST</code> cluster response. */
+    protected ClusterValue<Map<String, Object>[]> handleFunctionListResponse(
+            Response response, Route route) {
+        if (route instanceof SingleNodeRoute) {
+            Map<String, Object>[] data = handleFunctionListResponse(handleArrayResponse(response));
+            return ClusterValue.ofSingleValue(data);
+        } else {
+            // each `Object` is a `Map<String, Object>[]` actually
+            Map<String, Object> info = handleMapResponse(response);
+            Map<String, Map<String, Object>[]> data = new HashMap<>();
+            for (var nodeInfo : info.entrySet()) {
+                data.put(nodeInfo.getKey(), handleFunctionListResponse((Object[]) nodeInfo.getValue()));
+            }
+            return ClusterValue.ofMultiValue(data);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>[]> functionList(
+            @NonNull String libNamePattern, boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode
+                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
+                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
+            boolean withCode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                route,
+                response -> handleFunctionListResponse(response, route));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
+            @NonNull String libNamePattern, boolean withCode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode
+                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
+                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                route,
+                response -> handleFunctionListResponse(response, route));
     }
 }
