@@ -35,6 +35,7 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -674,12 +675,47 @@ public class TransactionTestUtilities {
         final String code =
                 "#!lua name=mylib1T \n"
                         + " redis.register_function('myfunc1T', function(keys, args) return args[1] end)";
+        var expectedFuncData =
+                new HashMap<String, Object>() {
+                    {
+                        put("name", "myfunc1T");
+                        put("description", null);
+                        put("flags", Set.of());
+                    }
+                };
 
-        transaction.functionLoad(code, false).functionLoad(code, true);
+        var expectedLibData =
+                new Map[] {
+                    Map.<String, Object>of(
+                            "library_name",
+                            "mylib1T",
+                            "engine",
+                            "LUA",
+                            "functions",
+                            new Object[] {expectedFuncData},
+                            "library_code",
+                            code)
+                };
+
+        transaction
+                .customCommand(new String[] {"function", "flush", "sync"})
+                .functionList(false)
+                .functionList(true)
+                .functionLoad(code, false)
+                .functionLoad(code, true)
+                .functionList("otherLib", false)
+                .functionList("mylib1T", true)
+                .customCommand(new String[] {"function", "flush", "sync"});
 
         return new Object[] {
+            OK, // customCommand("function", "flush", "sync")
+            new Map[0], // functionList(false)
+            new Map[0], // functionList(true)
             "mylib1T", // functionLoad(code, false)
             "mylib1T", // functionLoad(code, true)
+            new Map[0], // functionList("otherLib", false)
+            expectedLibData, // functionList("mylib1T", true)
+            OK, // customCommand("function", "flush", "sync")
         };
     }
 

@@ -3,6 +3,7 @@ package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
@@ -30,7 +31,10 @@ import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -369,16 +373,41 @@ public class CommandTests {
 
     @SneakyThrows
     @Test
-    public void functionLoad() {
+    public void functionLoad_and_functionList() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        String libName = "mylib1C";
+
+        // TODO use FUNCTION FLUSH
+        assertEquals(OK, regularClient.customCommand(new String[] {"FUNCTION", "FLUSH", "SYNC"}).get());
+
+        String libName = "mylib1c";
+        String funcName = "myfunc1c";
         String code =
                 "#!lua name="
                         + libName
-                        + " \n redis.register_function('myfunc1c', function(keys, args) return args[1] end)";
+                        + " \n redis.register_function('"
+                        + funcName
+                        + "', function(keys, args) return args[1] end)"; // function returns first argument
         assertEquals(libName, regularClient.functionLoad(code, false).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
-        // TODO test with FUNCTION LIST
+
+        var flist = regularClient.functionList(false).get();
+        var expectedDescription =
+                new HashMap<String, String>() {
+                    {
+                        put(funcName, null);
+                    }
+                };
+        var expectedFlags =
+                new HashMap<String, Set<String>>() {
+                    {
+                        put(funcName, Set.of());
+                    }
+                };
+        checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
+
+        flist = regularClient.functionList(true).get();
+        checkFunctionListResponse(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
         // re-load library without overwriting
         var executionException =
@@ -389,9 +418,24 @@ public class CommandTests {
 
         // re-load library with overwriting
         assertEquals(libName, regularClient.functionLoad(code, true).get());
+        String newFuncName = "myfunc2c";
         String newCode =
-                code + "\n redis.register_function('myfunc2c', function(keys, args) return #args end)";
+                code
+                        + "\n redis.register_function('"
+                        + newFuncName
+                        + "', function(keys, args) return #args end)"; // function returns argument count
         assertEquals(libName, regularClient.functionLoad(newCode, true).get());
+
+        flist = regularClient.functionList(libName, false).get();
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of());
+        checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
+
+        flist = regularClient.functionList(libName, true).get();
+        checkFunctionListResponse(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
+
         // TODO test with FCALL
+        // TODO FUNCTION FLUSH at the end
     }
 }
