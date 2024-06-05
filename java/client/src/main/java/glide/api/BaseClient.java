@@ -99,6 +99,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
@@ -1685,6 +1686,18 @@ public abstract class BaseClient
         String[] arguments = new String[] {key, Long.toString(count)};
         return commandManager.submitNewCommand(
                 SRandMember, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String> spop(@NonNull String key) {
+        String[] arguments = new String[] {key};
+        return commandManager.submitNewCommand(SPop, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<String>> spopCount(@NonNull String key, long count) {
+        String[] arguments = new String[] {key, Long.toString(count)};
+        return commandManager.submitNewCommand(SPop, arguments, this::handleSetResponse);
     }
 
     @Override

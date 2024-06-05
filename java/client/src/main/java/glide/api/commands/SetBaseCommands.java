@@ -304,4 +304,42 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<String[]> srandmember(String key, long count);
+
+    /**
+     * Removes and returns one random member from the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @return The value of the popped member.<br>
+     *     If <code>key</code> does not exist, <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * String value1 = client.spop("mySet").get();
+     * assert value1.equals("value1");
+     *
+     * String value2 = client.spop("nonExistingSet").get();
+     * assert value2.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<String> spop(String key);
+
+    /**
+     * Removes and returns up to <code>count</code> random members from the set stored at <code>key
+     * </code>, depending on the set's length.
+     *
+     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @param count The count of the elements to pop from the set.
+     * @return A set of popped elements will be returned depending on the set's length.<br>
+     *     If <code>key</code> does not exist, an empty <code>Set</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Set<String> values1 = client.spopCount("mySet", 2).get();
+     * assert values1.equals(new String[] {"value1", "value2"});
+     *
+     * Set<String> values2 = client.spopCount("nonExistingSet", 2).get();
+     * assert values2.size() == 0;
+     * }</pre>
+     */
+    CompletableFuture<Set<String>> spopCount(String key, long count);
 }

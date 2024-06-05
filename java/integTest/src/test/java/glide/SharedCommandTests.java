@@ -4600,6 +4600,45 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void spop_spopCount(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String stringKey = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
+        String member1 = UUID.randomUUID().toString();
+        String member2 = UUID.randomUUID().toString();
+        String member3 = UUID.randomUUID().toString();
+
+        assertEquals(1, client.sadd(key, new String[] {member1}).get());
+        assertEquals(member1, client.spop(key).get());
+
+        assertEquals(3, client.sadd(key, new String[] {member1, member2, member3}).get());
+        // Pop with count value greater than the size of the set
+        assertEquals(Set.of(member1, member2, member3), client.spopCount(key, 4).get());
+        assertEquals(0, client.scard(key).get());
+
+        assertEquals(3, client.sadd(key, new String[] {member1, member2, member3}).get());
+        assertEquals(Set.of(), client.spopCount(key, 0).get());
+
+        assertNull(client.spop(nonExistingKey).get());
+        assertEquals(Set.of(), client.spopCount(nonExistingKey, 3).get());
+
+        // invalid argument - count must be positive
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.spopCount(key, -1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // key exists but is not a set
+        assertEquals(OK, client.set(stringKey, "foo").get());
+        executionException = assertThrows(ExecutionException.class, () -> client.spop(stringKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.spopCount(stringKey, 3).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void bitfieldReadOnly(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
