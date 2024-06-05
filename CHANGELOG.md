@@ -12,7 +12,11 @@
 * Python: Added LASTSAVE command ([#1509](https://github.com/aws/glide-for-redis/pull/1509))
 * Python: Added GETDEL command ([#1514](https://github.com/aws/glide-for-redis/pull/1514))
 * Python: Added ZINTER, ZUNION commands ([#1478](https://github.com/aws/glide-for-redis/pull/1478))
+* Python: Added SINTERCARD command ([#1511](https://github.com/aws/glide-for-redis/pull/1511))
 * Node: Added OBJECT ENCODING command ([#1518](https://github.com/aws/glide-for-redis/pull/1518))
+
+### Breaking Changes
+* Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
 
 ## 0.4.1 (2024-02-06)
 

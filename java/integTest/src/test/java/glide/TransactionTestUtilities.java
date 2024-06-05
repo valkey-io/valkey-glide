@@ -20,6 +20,14 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
+import glide.api.models.commands.bitmap.BitFieldOptions.OffsetMultiplier;
+import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
+import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoUnit;
@@ -367,6 +375,8 @@ public class TransactionTestUtilities {
         String setKey2 = "{setKey}-2-" + UUID.randomUUID();
         String setKey3 = "{setKey}-3-" + UUID.randomUUID();
         String setKey4 = "{setKey}-4-" + UUID.randomUUID();
+        String setKey5 = "{setKey}-5-" + UUID.randomUUID();
+        String setKey6 = "{setKey}-6-" + UUID.randomUUID();
 
         transaction
                 .sadd(setKey1, new String[] {"baz", "foo"})
@@ -387,25 +397,47 @@ public class TransactionTestUtilities {
                 .srandmember(setKey4, 2)
                 .srandmember(setKey4, -2);
 
-        return new Object[] {
-            2L, // sadd(setKey1, new String[] {"baz", "foo"});
-            1L, // srem(setKey1, new String[] {"foo"});
-            1L, // scard(setKey1);
-            true, // sismember(setKey1, "baz")
-            Set.of("baz"), // smembers(setKey1);
-            new Boolean[] {true, false}, // smismembmer(setKey1, new String[] {"baz", "foo"})
-            Set.of("baz"), // sinter(new String[] { setKey1, setKey1 })
-            2L, // sadd(setKey2, new String[] { "a", "b" })
-            3L, // sunionstore(setKey3, new String[] { setKey2, setKey1 })
-            2L, // sdiffstore(setKey3, new String[] { setKey2, setKey1 })
-            0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
-            Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
-            true, // smove(setKey1, setKey2, "baz")
-            1L, // sadd(setKey4, {"foo})
-            "foo", // srandmember(setKey4)
-            new String[] {"foo"}, // srandmember(setKey4, 2)
-            new String[] {"foo", "foo"}, // srandmember(setKey4, -2)
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .sadd(setKey5, new String[] {"one", "two", "three", "four"})
+                    .sadd(setKey6, new String[] {"two", "three", "four", "five"})
+                    .sintercard(new String[] {setKey5, setKey6})
+                    .sintercard(new String[] {setKey5, setKey6}, 2);
+        }
+
+        var expectedResults =
+                new Object[] {
+                    2L, // sadd(setKey1, new String[] {"baz", "foo"});
+                    1L, // srem(setKey1, new String[] {"foo"});
+                    1L, // scard(setKey1);
+                    true, // sismember(setKey1, "baz")
+                    Set.of("baz"), // smembers(setKey1);
+                    new Boolean[] {true, false}, // smismembmer(setKey1, new String[] {"baz", "foo"})
+                    Set.of("baz"), // sinter(new String[] { setKey1, setKey1 })
+                    2L, // sadd(setKey2, new String[] { "a", "b" })
+                    3L, // sunionstore(setKey3, new String[] { setKey2, setKey1 })
+                    2L, // sdiffstore(setKey3, new String[] { setKey2, setKey1 })
+                    0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
+                    Set.of("a", "b"), // sdiff(new String[] {setKey2, setKey3})
+                    true, // smove(setKey1, setKey2, "baz")
+                    1L, // sadd(setKey4, {"foo})
+                    "foo", // srandmember(setKey4)
+                    new String[] {"foo"}, // srandmember(setKey4, 2)
+                    new String[] {"foo", "foo"}, // srandmember(setKey4, -2)};
+                };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                4L, // sadd(setKey5, {"one", "two", "three", "four"})
+                                4L, // sadd(setKey6, {"two", "three", "four", "five"})
+                                3L, // sintercard({setKey5, setKey6})
+                                2L, // sintercard({setKey5, setKey6}, 2)
+                            });
+        }
+
+        return expectedResults;
     }
 
     private static Object[] sortedSetCommands(BaseTransaction<?> transaction) {
@@ -656,6 +688,8 @@ public class TransactionTestUtilities {
         String key2 = "{bitmapKey}-2" + UUID.randomUUID();
         String key3 = "{bitmapKey}-3" + UUID.randomUUID();
         String key4 = "{bitmapKey}-4" + UUID.randomUUID();
+        BitFieldGet bitFieldGet = new BitFieldGet(new SignedEncoding(5), new Offset(3));
+        BitFieldSet bitFieldSet = new BitFieldSet(new UnsignedEncoding(10), new OffsetMultiplier(3), 4);
 
         transaction
                 .set(key1, "foobar")
@@ -669,12 +703,15 @@ public class TransactionTestUtilities {
                 .bitpos(key1, 1, 3, 5)
                 .set(key3, "abcdef")
                 .bitop(BitwiseOperation.AND, key4, new String[] {key1, key3})
-                .get(key4);
+                .get(key4)
+                .bitfieldReadOnly(key1, new BitFieldReadOnlySubCommands[] {bitFieldGet})
+                .bitfield(key1, new BitFieldSubCommands[] {bitFieldSet});
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
-                    .bitcount(key1, 5, 30, BitmapIndexType.BIT)
-                    .bitpos(key1, 1, 44, 50, BitmapIndexType.BIT);
+                    .set(key3, "foobar")
+                    .bitcount(key3, 5, 30, BitmapIndexType.BIT)
+                    .bitpos(key3, 1, 44, 50, BitmapIndexType.BIT);
         }
 
         var expectedResults =
@@ -691,12 +728,15 @@ public class TransactionTestUtilities {
                     OK, // set(key3, "abcdef")
                     6L, // bitop(BitwiseOperation.AND, key4, new String[] {key1, key3})
                     "`bc`ab", // get(key4)
+                    new Long[] {6L}, // bitfieldReadOnly(key1, BitFieldReadOnlySubCommands)
+                    new Long[] {609L}, // bitfield(key1, BitFieldSubCommands)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             return concatenateArrays(
                     expectedResults,
                     new Object[] {
+                        OK, // set(key1, "foobar")
                         17L, // bitcount(key, 5, 30, BitmapIndexType.BIT)
                         46L, // bitpos(key, 1, 44, 50, BitmapIndexType.BIT)
                     });

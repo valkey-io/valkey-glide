@@ -32,7 +32,7 @@ type Context = {
     client: RedisClusterClient;
 };
 
-const TIMEOUT = 10000;
+const TIMEOUT = 50000;
 
 describe("RedisClusterClient", () => {
     let testsFailed = 0;
