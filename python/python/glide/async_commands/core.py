@@ -1759,6 +1759,41 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SInterStore, [destination] + keys),
         )
 
+    async def sintercard(self, keys: List[str], limit: Optional[int] = None) -> int:
+        """
+        Gets the cardinality of the intersection of all the given sets.
+        Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
+
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/sintercard for more details.
+
+        Args:
+            keys (List[str]): A list of keys representing the sets to intersect.
+            limit (Optional[int]): An optional limit to the maximum number of intersecting elements to count.
+                If specified, the computation stops as soon as the cardinality reaches this limit.
+
+        Returns:
+            int: The number of elements in the resulting set of the intersection.
+
+        Examples:
+            >>> await client.sadd("set1", {"a", "b", "c"})
+            >>> await client.sadd("set2", {"b", "c", "d"})
+            >>> await client.sintercard(["set1", "set2"])
+            2  # The intersection of "set1" and "set2" contains 2 elements: "b" and "c".
+
+            >>> await client.sintercard(["set1", "set2"], limit=1)
+            1  # The computation stops early as the intersection cardinality reaches the limit of 1.
+        """
+        args = [str(len(keys))]
+        args += keys
+        if limit is not None:
+            args += ["LIMIT", str(limit)]
+        return cast(
+            int,
+            await self._execute_command(RequestType.SInterCard, args),
+        )
+
     async def sdiff(self, keys: List[str]) -> Set[str]:
         """
         Computes the difference between the first set and all the successive sets in `keys`.

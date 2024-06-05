@@ -202,6 +202,9 @@ enum RequestType {
     BLMove = 169;
     GetDel = 170;
     SRandMember = 171;
+    BitField = 172;
+    BitFieldReadOnly = 173;
+    SInterCard = 175;
 }
 
 message Command {

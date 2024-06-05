@@ -9,6 +9,7 @@ import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
+import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
@@ -23,6 +24,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitField;
+import static redis_request.RedisRequestOuterClass.RequestType.BitFieldReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
 import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -185,6 +188,14 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
+import glide.api.models.commands.bitmap.BitFieldOptions.OffsetMultiplier;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
@@ -3968,6 +3979,56 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T srandmember(@NonNull String key, long count) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(count));
         protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Reads or modifies the array of bits representing the string that is held at <code>key</code>
+     * based on the specified <code>subCommands</code>.
+     *
+     * @see <a href="https://redis.io/commands/bitfield/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param subCommands The subCommands to be performed on the binary value of the string at <code>
+     *     key</code>, which could be any of the following:
+     *     <ul>
+     *       <li>{@link BitFieldGet}.
+     *       <li>{@link BitFieldSet}.
+     *       <li>{@link BitFieldIncrby}.
+     *       <li>{@link BitFieldOverflow}.
+     *     </ul>
+     *
+     * @return Command Response - An <code>array</code> of results from the executed subcommands.
+     *     <ul>
+     *       <li>{@link BitFieldGet} returns the value in {@link Offset} or {@link OffsetMultiplier}.
+     *       <li>{@link BitFieldSet} returns the old value in {@link Offset} or {@link
+     *           OffsetMultiplier}.
+     *       <li>{@link BitFieldIncrby} returns the new value in {@link Offset} or {@link
+     *           OffsetMultiplier}.
+     *       <li>{@link BitFieldOverflow} determines the behaviour of <code>SET</code> and <code>
+     *           INCRBY</code> when an overflow occurs. <code>OVERFLOW</code> does not return a value
+     *           and does not contribute a value to the array response.
+     *     </ul>
+     */
+    public T bitfield(@NonNull String key, @NonNull BitFieldSubCommands[] subCommands) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(createBitFieldArgs(subCommands), key));
+        protobufTransaction.addCommands(buildCommand(BitField, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Reads the array of bits representing the string that is held at <code>key</code> based on the
+     * specified <code>subCommands</code>.
+     *
+     * @since Redis 6.0 and above
+     * @see <a href="https://redis.io/docs/latest/commands/bitfield_ro/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param subCommands The <code>GET</code> subCommands to be performed.
+     * @return Command Response - An array of results from the <code>GET</code> subcommands.
+     */
+    public T bitfieldReadOnly(
+            @NonNull String key, @NonNull BitFieldReadOnlySubCommands[] subCommands) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(createBitFieldArgs(subCommands), key));
+        protobufTransaction.addCommands(buildCommand(BitFieldReadOnly, commandArgs));
         return getThis();
     }
 
