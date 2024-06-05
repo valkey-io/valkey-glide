@@ -525,21 +525,6 @@ fn convert_array_of_flat_maps(
         let Value::Array(entry_as_array) = entry else {
             return Err((ErrorKind::TypeError, "Incorrect value type received").into());
         };
-        let map = convert_array_to_map(entry_as_array, value_expected_return_type)?;
-        result.push(map);
-    }
-    Ok(Value::Array(result))
-}
-
-fn convert_array_to_map(
-    array: Vec<Value>,
-    value_expected_return_type: Option<ExpectedReturnType>,
-) -> RedisResult<Value> {
-    let mut result: Vec<Value> = Vec::with_capacity(array.len());
-    for entry in array {
-        let Value::Array(entry_as_array) = entry else {
-            return Err((ErrorKind::TypeError, "Incorrect value type received").into());
-        };
         let map = convert_array_to_map_by_type(
             entry_as_array,
             Some(ExpectedReturnType::BulkString),
