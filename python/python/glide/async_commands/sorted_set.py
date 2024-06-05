@@ -3,6 +3,8 @@
 from enum import Enum
 from typing import List, Optional, Tuple, Union
 
+from glide.async_commands.command_args import Limit
+
 
 class InfBound(Enum):
     """
@@ -86,23 +88,6 @@ class LexBoundary:
     def __init__(self, value: str, is_inclusive: bool = True):
         # Convert the lexicographic boundary to the Redis protocol format
         self.value = f"[{value}" if is_inclusive else f"({value}"
-
-
-class Limit:
-    """
-    Represents a limit argument for a range query in a sorted set to be used in [ZRANGE](https://redis.io/commands/zrange) command.
-
-    The optional LIMIT argument can be used to obtain a sub-range from the matching elements
-        (similar to SELECT LIMIT offset, count in SQL).
-    Args:
-        offset (int): The offset from the start of the range.
-        count (int): The number of elements to include in the range.
-            A negative count returns all elements from the offset.
-    """
-
-    def __init__(self, offset: int, count: int):
-        self.offset = offset
-        self.count = count
 
 
 class RangeByIndex:

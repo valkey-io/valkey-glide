@@ -11,6 +11,7 @@ from typing import Any, Dict, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
+from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -3416,6 +3417,146 @@ class TestCommands:
 
         assert (await redis_client.type(key)).lower() == "none"
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sort_and_sort_store_with_get_or_by_args(
+        self, redis_client: RedisClient
+    ):
+        key = "{SameSlotKey}" + get_random_string(10)
+        store = "{SameSlotKey}" + get_random_string(10)
+        user_key1, user_key2, user_key3, user_key4, user_key5 = (
+            "user:1",
+            "user:2",
+            "user:3",
+            "user:4",
+            "user:5",
+        )
+
+        # Prepare some data
+        assert await redis_client.hset(user_key1, {"name": "Alice", "age": "30"}) == 2
+        assert await redis_client.hset(user_key2, {"name": "Bob", "age": "25"}) == 2
+        assert await redis_client.hset(user_key3, {"name": "Charlie", "age": "35"}) == 2
+        assert await redis_client.hset(user_key4, {"name": "Dave", "age": "20"}) == 2
+        assert await redis_client.hset(user_key5, {"name": "Eve", "age": "40"}) == 2
+        assert await redis_client.lpush("user_ids", ["5", "4", "3", "2", "1"]) == 5
+
+        # Test sort with all arguments
+        assert await redis_client.lpush(key, ["3", "1", "2"]) == 3
+        result = await redis_client.sort(
+            key,
+            limit=Limit(0, 2),
+            get_patterns=["user:*->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        assert result == ["Alice", "Bob"]
+
+        # Test sort_store with all arguments
+        sort_store_result = await redis_client.sort_store(
+            key,
+            store,
+            limit=Limit(0, 2),
+            get_patterns=["user:*->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        assert sort_store_result == 2
+        sorted_list = await redis_client.lrange(store, 0, -1)
+        assert sorted_list == ["Alice", "Bob"]
+
+        # Test sort with `by` argument
+        result = await redis_client.sort(
+            "user_ids",
+            by_pattern="user:*->age",
+            get_patterns=["user:*->name"],
+            alpha=True,
+        )
+        assert result == ["Dave", "Bob", "Alice", "Charlie", "Eve"]
+
+        # Test sort with `by` argument with missing keys to sort by
+        assert await redis_client.lpush("user_ids", ["a"]) == 6
+        result = await redis_client.sort(
+            "user_ids",
+            by_pattern="user:*->age",
+            get_patterns=["user:*->name"],
+            alpha=True,
+        )
+        assert result == [None, "Dave", "Bob", "Alice", "Charlie", "Eve"]
+
+        # Test sort with `by` argument with missing keys to sort by
+        result = await redis_client.sort(
+            "user_ids",
+            by_pattern="user:*->name",
+            get_patterns=["user:*->age"],
+            alpha=True,
+        )
+        assert result == [None, "30", "25", "35", "20", "40"]
+
+        # Test Limit with count 0
+        result = await redis_client.sort(
+            "user_ids",
+            limit=Limit(0, 0),
+            alpha=True,
+        )
+        assert result == []
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sort_and_sort_store_without_get_or_by_args(
+        self, redis_client: TRedisClient
+    ):
+        key = "{SameSlotKey}" + get_random_string(10)
+        store = "{SameSlotKey}" + get_random_string(10)
+
+        # Test sort with non-existing key
+        result = await redis_client.sort("non_existing_key")
+        assert result == []
+
+        # Test sort_store with non-existing key
+        sort_store_result = await redis_client.sort_store(
+            "{SameSlotKey}:non_existing_key", store
+        )
+        assert sort_store_result == 0
+
+        # Test each argument separately
+        assert await redis_client.lpush(key, ["5", "2", "4", "1", "3"]) == 5
+
+        # Test w/o flags
+        result = await redis_client.sort(key)
+        assert result == ["1", "2", "3", "4", "5"]
+
+        # limit argument
+        result = await redis_client.sort(key, limit=Limit(1, 3))
+        assert result == ["2", "3", "4"]
+
+        # order argument
+        result = await redis_client.sort(key, order=OrderBy.DESC)
+        assert result == ["5", "4", "3", "2", "1"]
+
+        assert await redis_client.lpush(key, ["a"]) == 6
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.sort(key)
+        assert "can't be converted into double" in str(e).lower()
+
+        # alpha argument
+        result = await redis_client.sort(key, alpha=True)
+        assert result == ["1", "2", "3", "4", "5", "a"]
+
+        # Combining multiple arguments
+        result = await redis_client.sort(
+            key, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
+        )
+        assert result == ["5", "4", "3"]
+
+        # Test sort_store with combined arguments
+        sort_store_result = await redis_client.sort_store(
+            key, store, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
+        )
+        assert sort_store_result == 3
+        sorted_list = await redis_client.lrange(store, 0, -1)
+        assert sorted_list == ["5", "4", "3"]
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_echo(self, redis_client: TRedisClient):
@@ -3791,6 +3932,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zinter_withscores(["def", "ghi"]),
             redis_client.zunion(["def", "ghi"]),
             redis_client.zunion_withscores(["def", "ghi"]),
+            redis_client.sort_store("abc", "zxy"),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
