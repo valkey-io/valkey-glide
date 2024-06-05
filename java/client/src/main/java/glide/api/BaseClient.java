@@ -114,6 +114,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
+import static redis_request.RedisRequestOuterClass.RequestType.XRead;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -174,6 +175,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
@@ -192,6 +194,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -1242,6 +1245,40 @@ public abstract class BaseClient
                 ArrayUtils.addAll(
                         ArrayUtils.addFirst(options.toArgs(), key), convertMapToKeyValueStringArray(values));
         return commandManager.submitNewCommand(XAdd, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
+            @NonNull Map<String, String> keysAndIds) {
+        return xread(keysAndIds, StreamReadOptions.builder().build());
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
+            @NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
+        String[] arguments = options.toArgs(keysAndIds);
+        return commandManager.submitNewCommand(
+                XRead,
+                arguments,
+                response -> {
+                    Map<String, Object> mapResponse = handleMapOrNullResponse(response);
+                    if (mapResponse == null) {
+                        return null;
+                    }
+                    return mapResponse.entrySet().stream()
+                            .collect(
+                                    Collectors.toMap(
+                                            Map.Entry::getKey,
+                                            e -> {
+                                                Map<String, Object> innerMap = (Map<String, Object>) e.getValue();
+                                                return innerMap.entrySet().stream()
+                                                        .collect(
+                                                                Collectors.toMap(
+                                                                        Map.Entry::getKey,
+                                                                        k -> castArrayofArrays((Object[]) k.getValue(), String.class)));
+                                            }));
+                });
     }
 
     @Override
