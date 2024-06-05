@@ -260,7 +260,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void get_requires_a_key(BaseClient client) {
-        assertThrows(NullPointerException.class, () -> client.get(null));
+        assertThrows(NullPointerException.class, () -> client.get((String) null));
     }
 
     @SneakyThrows
@@ -317,6 +317,17 @@ public class SharedCommandTests {
         client.set(key, ANOTHER_VALUE, options).get();
         String data = client.get(key).get();
         assertEquals(ANOTHER_VALUE, data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void set_get_binary_data(BaseClient client) {
+        byte[] key = "set_get_binary_data_key".getBytes();
+        byte[] value = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        assert client.set(key, value).get().equals("OK");
+        byte[] data = client.get(key).get();
+        assert Arrays.equals(data, value);
     }
 
     @SneakyThrows

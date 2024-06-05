@@ -42,6 +42,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -141,7 +142,8 @@ public class RedisClusterClientTest {
         }
 
         @Override
-        protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response) {
+        protected <T> T handleRedisResponse(
+                Class<T> classType, EnumSet<ResponseFlags> flags, Response response) {
             @SuppressWarnings("unchecked")
             T returnValue = (T) object;
             return returnValue;

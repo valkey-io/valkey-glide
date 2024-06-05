@@ -186,6 +186,8 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -244,7 +246,8 @@ public abstract class BaseClient
                     .connectToRedis(config)
                     .thenApply(ignore -> constructor.apply(connectionManager, commandManager));
         } catch (InterruptedException e) {
-            // Something bad happened while we were establishing netty connection to UDS
+            // Something bad happened while we were establishing netty connection to
+            // UDS
             var future = new CompletableFuture<T>();
             future.completeExceptionally(e);
             return future;
@@ -263,7 +266,8 @@ public abstract class BaseClient
         try {
             connectionManager.closeConnection().get();
         } catch (InterruptedException e) {
-            // suppressing the interrupted exception - it is already suppressed in the future
+            // suppressing the interrupted exception - it is already suppressed in the
+            // future
             throw new RuntimeException(e);
         }
     }
@@ -295,10 +299,15 @@ public abstract class BaseClient
      * @throws RedisException On a type mismatch.
      */
     @SuppressWarnings("unchecked")
-    protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response)
-            throws RedisException {
+    protected <T> T handleRedisResponse(
+            Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws RedisException {
+        boolean encodingUtf8 = flags.contains(ResponseFlags.ENCODING_UTF8);
+        boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
         Object value =
-                new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
+                encodingUtf8
+                        ? new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response)
+                        : new BaseCommandResponseResolver(RedisValueResolver::valueFromPointerBinary)
+                                .apply(response);
         if (isNullable && (value == null)) {
             return null;
         }
@@ -314,43 +323,52 @@ public abstract class BaseClient
     }
 
     protected Object handleObjectOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object.class, true, response);
+        return handleRedisResponse(
+                Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected String handleStringResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, false, response);
+        return handleRedisResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected String handleStringOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, true, response);
+        return handleRedisResponse(
+                String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    protected byte[] handleBytesOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(byte[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Boolean handleBooleanResponse(Response response) throws RedisException {
-        return handleRedisResponse(Boolean.class, false, response);
+        return handleRedisResponse(Boolean.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Long handleLongResponse(Response response) throws RedisException {
-        return handleRedisResponse(Long.class, false, response);
+        return handleRedisResponse(Long.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Long handleLongOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Long.class, true, response);
+        return handleRedisResponse(Long.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Double handleDoubleResponse(Response response) throws RedisException {
-        return handleRedisResponse(Double.class, false, response);
+        return handleRedisResponse(Double.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Double handleDoubleOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Double.class, true, response);
+        return handleRedisResponse(Double.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Object[] handleArrayResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object[].class, false, response);
+        return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected Object[] handleArrayOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object[].class, true, response);
+        return handleRedisResponse(
+                Object[].class,
+                EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8),
+                response);
     }
 
     /**
@@ -360,7 +378,7 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, false, response);
+        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     /**
@@ -370,12 +388,13 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, true, response);
+        return handleRedisResponse(
+                Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
-        return handleRedisResponse(Set.class, false, response);
+        return handleRedisResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     /** Process a <code>FUNCTION LIST</code> standalone response. */
@@ -402,9 +421,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<byte[]> get(@NonNull byte[] key) {
+        return commandManager.submitNewCommand(
+                Get, Arrays.asList(key), this::handleBytesOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<String> getdel(@NonNull String key) {
         return commandManager.submitNewCommand(
                 GetDel, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> set(@NonNull byte[] key, @NonNull byte[] value) {
+        return commandManager.submitNewCommand(
+                Set, Arrays.asList(key, value), this::handleStringResponse);
     }
 
     @Override
