@@ -16,6 +16,7 @@ from typing import (
     get_args,
 )
 
+from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
     InfBound,
@@ -359,6 +360,39 @@ class ExpirySet:
 class InsertPosition(Enum):
     BEFORE = "BEFORE"
     AFTER = "AFTER"
+
+
+def _build_sort_args(
+    key: str,
+    by_pattern: Optional[str] = None,
+    limit: Optional[Limit] = None,
+    get_patterns: Optional[List[str]] = None,
+    order: Optional[OrderBy] = None,
+    alpha: Optional[bool] = None,
+    store: Optional[str] = None,
+) -> List[str]:
+    args = [key]
+
+    if by_pattern:
+        args.extend(["BY", by_pattern])
+
+    if limit:
+        args.extend(["LIMIT", str(limit.offset), str(limit.count)])
+
+    if get_patterns:
+        for pattern in get_patterns:
+            args.extend(["GET", pattern])
+
+    if order:
+        args.append(order.value)
+
+    if alpha:
+        args.append("ALPHA")
+
+    if store:
+        args.extend(["STORE", store])
+
+    return args
 
 
 class CoreCommands(Protocol):
