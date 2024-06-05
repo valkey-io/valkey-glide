@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -14,6 +16,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
@@ -202,5 +205,24 @@ public class RedisClient extends BaseClient
     public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
         return commandManager.submitNewCommand(
                 Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>[]> functionList(
+            @NonNull String libNamePattern, boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode
+                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
+                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
     }
 }
