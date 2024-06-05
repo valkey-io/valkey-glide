@@ -114,7 +114,7 @@ public interface GenericClusterCommands {
     CompletableFuture<Object[]> exec(ClusterTransaction transaction, SingleNodeRoute route);
 
     /**
-     * Return a random key.
+     * Returns a random key.
      *
      * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
      * @param route
@@ -131,7 +131,7 @@ public interface GenericClusterCommands {
     CompletableFuture<String> randomKey(SingleNodeRoute route);
 
     /**
-     * Return a random key.
+     * Returns a random key.
      *
      * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
      * @return A random <code>key</code> from the database.
