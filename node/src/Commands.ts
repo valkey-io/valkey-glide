@@ -827,7 +827,13 @@ export function createZAdd(
     return createCommand(RequestType.ZAdd, args);
 }
 
+/**
+ * `KeyWeight` - pair of variables represents a weighted key for the `ZINTERSTORE` and `ZUNIONSTORE` sorted sets commands.
+ */
 export type KeyWeight = [string, number];
+/**
+ * `AggregationType` - representing aggregation types for `ZINTERSTORE` and `ZUNIONSTORE` sorted set commands.
+ */
 export type AggregationType = "SUM" | "MIN" | "MAX";
 
 /**
@@ -835,16 +841,16 @@ export type AggregationType = "SUM" | "MIN" | "MAX";
  */
 export function createZInterstore(
     destination: string,
-    keys: (string | KeyWeight)[],
+    keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): redis_request.Command {
-    const args = createZInterstoreArgs(destination, keys, aggregationType);
+    const args = createZCmdStoreArgs(destination, keys, aggregationType);
     return createCommand(RequestType.ZInterStore, args);
 }
 
-function createZInterstoreArgs(
+function createZCmdStoreArgs(
     destination: string,
-    keys: (string | KeyWeight)[],
+    keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,
 ): string[] {
     const args: string[] = [destination, keys.length.toString()];
@@ -853,9 +859,10 @@ function createZInterstoreArgs(
         typeof key === "string" ? [key, 1] : key,
     );
 
-    for (const [key, weight] of keyWeightPairs) {
+    for (const [key] of keyWeightPairs) {
         args.push(key.toString());
     }
+
     const weights = keyWeightPairs.map(([, weight]) => weight.toString());
 
     if (weights.some((weight) => weight !== "1")) {
@@ -868,6 +875,7 @@ function createZInterstoreArgs(
 
     return args;
 }
+
 /**
  * @internal
  */

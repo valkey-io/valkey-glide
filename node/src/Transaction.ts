@@ -1053,7 +1053,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zinterstore(
         destination: string,
-        keys: (string | KeyWeight)[],
+        keys: string[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): T {
         return this.addAndReturn(
