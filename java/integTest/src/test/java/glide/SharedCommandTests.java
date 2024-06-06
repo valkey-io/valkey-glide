@@ -432,6 +432,25 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void mset_with_binary_data(BaseClient client) {
+        // keys are from different slots
+        byte[] key1 = "mset_with_binary_data_k1".getBytes();
+        byte[] key2 = "mset_with_binary_data_k2".getBytes();
+        byte[] value1 = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x01};
+        byte[] value2 = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        Map<byte[], byte[]> keyValueMap = Map.of(key1, value1, key2, value2);
+
+        assertEquals(OK, client.mset(keyValueMap).get());
+
+        byte[] valueRead1 = client.get(key1).get();
+        byte[] valueRead2 = client.get(key2).get();
+        assert Arrays.equals(valueRead1, value1);
+        assert Arrays.equals(valueRead2, value2);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void incr_commands_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
 

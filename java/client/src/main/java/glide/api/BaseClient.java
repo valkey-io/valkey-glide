@@ -9,6 +9,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueByteArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
@@ -178,6 +179,7 @@ import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.resources.Platform;
@@ -465,9 +467,21 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToKeyValueStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    public <K, V> CompletableFuture<String> mset(@NonNull Map<K, V> keyValueMap) {
+        if (keyValueMap.isEmpty()) {
+            throw new RequestException("MSet Invalid arguments. Empty arguments");
+        }
+
+        Map.Entry entry = (Map.Entry) keyValueMap.entrySet().iterator().next();
+        if (entry.getKey() instanceof String) {
+            String[] args = convertMapToKeyValueStringArray((Map<String, ?>) keyValueMap);
+            return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+        } else if (entry.getKey() instanceof byte[] && entry.getValue() instanceof byte[]) {
+            List<byte[]> args = convertMapToKeyValueByteArray((Map<byte[], byte[]>) keyValueMap);
+            return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+        }
+        throw new RequestException(
+                "MSet Invalid arguments. Expected Map<String, ?> or Map<byte[], byte[]>");
     }
 
     @Override

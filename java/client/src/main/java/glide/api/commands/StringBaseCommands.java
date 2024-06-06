@@ -154,7 +154,7 @@ public interface StringBaseCommands {
      * assert result.equals("OK"));
      * }</pre>
      */
-    CompletableFuture<String> mset(Map<String, String> keyValueMap);
+    <K, V> CompletableFuture<String> mset(Map<K, V> keyValueMap);
 
     /**
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it

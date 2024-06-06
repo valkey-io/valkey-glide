@@ -5,6 +5,7 @@ import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -126,5 +127,18 @@ public class ArrayTransformUtils {
     @SafeVarargs
     public static <T> T[] concatenateArrays(T[]... arrays) {
         return Stream.of(arrays).flatMap(Stream::of).toArray(size -> Arrays.copyOf(arrays[0], size));
+    }
+
+    /**
+     * Converts a map of byte[] keys and values into a List of byte[] with alternating keys and
+     * values.
+     *
+     * @param args Map of byte[] keys and byte[] values to convert.
+     * @return Array of byte[] [key1, value1, key2, value2, ...].
+     */
+    public static List<byte[]> convertMapToKeyValueByteArray(Map<byte[], byte[]> args) {
+        return args.entrySet().stream()
+                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+                .collect(Collectors.toList());
     }
 }
