@@ -4,7 +4,7 @@ package glide.api.commands;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands for the "Transactions Commands" group for a standalone and cluster clients.
+ * Supports commands for the "Transactions Commands" group for standalone and cluster clients.
  *
  * @see <a href="https://redis.io/commands/?group=transactions">Transactions Commands</a>
  */
@@ -20,7 +20,7 @@ public interface TransactionsBaseCommands {
      * @return The string <code>OK</code>.
      * @example
      *     <pre>{@code
-     * client.watch("sampleKey");
+     * client.watch(new String[] {"sampleKey"});
      * transaction.set("sampleKey", "foobar");
      * client.exec(transaction).get(); // Executes successfully and keys are unwatched.
      * }</pre>
@@ -35,7 +35,7 @@ public interface TransactionsBaseCommands {
      * @return The string <code>OK</code>.
      * @example
      *     <pre>{@code
-     * client.watch("sampleKey");
+     * client.watch(new String[] {"sampleKey"});
      * client.unwatch(); // Flushes "sampleKey" from watched keys.
      * }</pre>
      */
