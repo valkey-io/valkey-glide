@@ -2,7 +2,10 @@
 package glide.api.commands;
 
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
+import lombok.NonNull;
+
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -59,7 +62,7 @@ public interface ListBaseCommands {
     /**
      * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
      * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
-     * is returned. Otherwise, if no match is found, null is returned.
+     * is returned. If no match is found, null is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The key of the list.
@@ -68,7 +71,7 @@ public interface ListBaseCommands {
      * @example
      *      <pre>{@code
      * assertEquals(6L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e"}).get());
-     * assertEquals(4L, client.lpos("my_list", "e");
+     * assertEquals(4L, client.lpos("my_list", "e").get());
      * }</pre>
      * */
     CompletableFuture<Long> lpos(String key, String element);
@@ -76,68 +79,70 @@ public interface ListBaseCommands {
     /**
      * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
      * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
-     * is returned. Otherwise, if no match is found, null is returned.
+     * is returned. If no match is found, null is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The key of the list.
      * @param element The value to search for within the list.
-     * @param rank The index of the first <code>element</code> to return. If there are multiple matches,
-     *             it will return the first matched <code>element</code>. If given a negative value, then it will search
-     *             the list from tail to head.
+     * @param options The LPos options.
      * @return The index of <code>element</code>.
      * @example
      *      <pre>{@code
      * assertEquals(6L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e"}).get());
-     * assertEquals(4L, client.lpos("my_list" "e" RANK 1);
-     * assertEquals(5L, client.lpos("my_list" "e" RANK -1);
+     * // Returns the second occurrence of the element "e".
+     * LPosOptions options = LPosOptions.builder().rank(2L).build();
+     * assertEquals(5L, client.lpos("my_list", "e", Arrays.toString(options.toArgs());
+     *
+     * // maxlength with 1000 comparisons.
+     * LPosOptions options = LPosOptions.builder().maxLength(1000L).build();
+     * assertEquals(4L, client.lpos("my_list", "e", Arrays.toString(options.toArgs()).get());
+     *
+     * // rank and maxLength
+     * LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+     * assertEquals(4L, client.lpos("my_list", "e", Arrays.toString(options.toArgs()).get());
      * }</pre>
      * */
-    CompletableFuture<Long> lpos(String key, String element, long rank);
+    CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options);
 
     /**
-     * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
-     * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
-     * is returned. Otherwise, if no match is found, null is returned.
-     *
+     * Returns an array of indices of matching elements inside a list. If no match is found, null is returned.
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The key of the list.
      * @param element The value to search for within the list.
-     * @param rank The index of the first <code>element</code> to return. If there are multiple matches,
-     *             it will return the first matched <code>element</code>. If given a negative value, then it will search
-     *             the list from tail to head.
-     * @param count The maximum number of matches to retrieve.
-     * @return The index of <code>element</code>.
+     * @param count The number of matches wanted.
+     * @return An array that holds the indices of the matching elements inside the list.
      * @example
      *      <pre>{@code
-     * assertEquals(6L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e"}).get());
-     * assertEquals(4L, client.lpos("my_list" "e" RANK 1 COUNT 1).get());
-     * assertEquals(4L, client.lpos("my_list" "e" RANK -1 COUNT 1).get());
+     * assertEquals(7L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e", "e"}).get());
+     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", COUNT 3L).get());
      * }</pre>
      * */
-    CompletableFuture<Long> lpos(String key, String element, long rank, long count);
+    CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count);
 
     /**
-     * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
-     * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
-     * is returned. Otherwise, if no match is found, null is returned.
-     *
+     * Returns an array of indices of matching elements inside a list. If no match is found, null is returned.
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The key of the list.
      * @param element The value to search for within the list.
-     * @param rank The index of the first <code>element</code> to return. If there are multiple matches,
-     *             it will return the first matched <code>element</code>. If given a negative value, then it will search
-     *             the list from tail to head.
-     * @param count The maximum number of matches to retrieve.
-     * @param len The maximum number of comparisons between the provided <code>element</code> and the number of list items.
-     *            If the value of len is 0 then there will be unlimited comparisons.
-     * @return The index of <code>element</code>.
+     * @param count The number of matches wanted.
+     * @param options The LPos options.
+     * @return An array that holds the indices of the matching elements inside the list.
      * @example
      *      <pre>{@code
-     * assertEquals(6L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e"}).get());
-     * assertEquals(4L, client.lpos("my_list", "e", 1, 1, 0).get());
+     * assertEquals(6L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e", "e"}).get());
+     *
+     * // Rank
+     * LPosOptions options = LPosOptions.builder().rank(2L).build();
+     * assertEquals([5], client.lposCount("my_list", "e", COUNT 1L, Arrays.toString(options.toArgs()).get());
+     * // Maxlen
+     * LPosOptions options = LPosOptions.builder.maxLength(1000L).build();
+     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", COUNT 3, Arrays.toString(options.toArgs()).get());
+     * // Rank and Maxlen
+     * LPosOptions options = LPosOptions.builder.rank(2L).maxLength(1000L).build();
+     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", COUNT 3, Arrays.toString(options.toArgs()).get());
      * }</pre>
      * */
-    CompletableFuture<Long> lpos(String key, String element, long rank, long count, long len);
+    CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options);
 
     /**
      * Removes and returns up to <code>count</code> elements of the list stored at <code>key</code>,

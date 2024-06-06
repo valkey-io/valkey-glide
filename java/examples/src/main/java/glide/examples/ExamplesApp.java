@@ -2,6 +2,7 @@
 package glide.examples;
 
 import glide.api.RedisClient;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import java.util.concurrent.ExecutionException;
@@ -32,6 +33,11 @@ public class ExamplesApp {
 
             System.out.println("SET(apples, oranges): " + client.set("apples", "oranges").get());
             System.out.println("GET(apples): " + client.get("apples").get());
+
+            //Long temp = client.lpos("ya", "ysss").get();
+
+            client.lpos("key", "element", LPosOptions.builder().rank(2L).maxLength(1L).build());
+            // "key element RANK 2 MAXLEN 1"
 
         } catch (ExecutionException | InterruptedException e) {
             System.out.println("Glide example failed with an exception: ");

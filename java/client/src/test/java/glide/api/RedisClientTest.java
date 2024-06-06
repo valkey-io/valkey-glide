@@ -39,6 +39,7 @@ import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_LIMIT_REDI
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MAXLEN_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_NOT_EXACT_REDIS_API;
+import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -217,6 +218,7 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -260,12 +262,15 @@ import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
+
+import glide.utils.ArrayTransformUtils;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
@@ -1777,11 +1782,12 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void lpos_with_rank_maxlen() {
+    public void lpos_withOptions() {
         // setup
-        String[] set = {"a", "b", "c", "a", "b"};
+        String[] set = {"a", "b", "c", "a", "c"};
         String element = "b";
-        String[] args = new String[] {"set", "element"};
+        LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+        String[] args = new String[] {"set", "element", Arrays.toString(options.toArgs())};
         long index = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -1792,16 +1798,69 @@ public class RedisClientTest {
             .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.lpos("set", "element", 1L);
+        CompletableFuture<Long> response = service.lpos("set", "element", options);
         Long payload = response.get();
-//        CompletableFuture<Long> response2 = service.lpos("set", "element", 2L);
-//        Long payload2 = response2.get();
 
-        // verify
+        //verify
         assertEquals(testResponse, response);
         assertEquals(index, payload);
-//        assertEquals(payload2, response2);
     }
+
+    @SneakyThrows
+    @Test
+    public void lposCount() {
+        // setup
+        String[] set = {"a", "b", "c", "a", "c"};
+        String element = "a";
+        String[] args = new String[] {"set", "element", Long.toString(1L)};
+        Long[] index = new Long[] {1L};
+
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(LPos), eq(args), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response = service.lposCount("set", "element", 1L);
+        Long[] payload = response.get();
+        Long[] temp = castArray(payload, Long.class);
+
+        //verify
+        assertEquals(testResponse, response);
+        Long[] expected = new Long[] {1L};
+        assertArrayEquals(expected, temp);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lposCount_withOptions() {
+        // setup
+        String[] set = {"a", "b", "c", "a", "c"};
+        String element = "a";
+        LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+        String[] args = new String[] {"set", "element", Long.toString(1L), Arrays.toString(options.toArgs())};
+        Long[] index = new Long[] {1L};
+
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(LPos), eq(args), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response = service.lposCount("set", "element", 1L, options);
+        Long[] payload = response.get();
+        Long[] temp = castArray(payload, Long.class);
+
+        //verify
+        assertEquals(testResponse, response);
+        Long[] expected = new Long[] {1L};
+        assertArrayEquals(expected, temp);
+    }
+
 
     @SneakyThrows
     @Test

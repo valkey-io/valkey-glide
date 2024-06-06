@@ -165,6 +165,7 @@ import glide.api.commands.StringBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
@@ -198,6 +199,7 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
@@ -703,39 +705,39 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String[]> lpopCount(@NonNull String key, long count) {
+        return commandManager.submitNewCommand(
+                LPop,
+                new String[] {key, Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
     public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element) {
         return commandManager.submitNewCommand(
             LPos, new String[] {key, element}, this::handleLongResponse);
     }
 
     @Override
-    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, long rank) {
+    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
         return commandManager.submitNewCommand(
-            LPos, new String[] {key, element, Long.toString(rank)}, this::handleLongResponse);
+            LPos, new String[] {key, element, Arrays.toString(options.toArgs())}, this::handleLongResponse);
     }
 
     @Override
-    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, long rank, long count) {
+    public CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count) {
         return commandManager.submitNewCommand(
             LPos,
-            new String[] {key, element, Long.toString(rank), Long.toString(count)},
-            this::handleLongResponse);
+            new String[] {key, element, Long.toString(count)},
+            response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     @Override
-    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, long rank, long count, long len) {
+    public CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
         return commandManager.submitNewCommand(
             LPos,
-            new String[] {key, element, Long.toString(rank), Long.toString(count), Long.toString(len)},
-            this::handleLongResponse);
-    }
-
-    @Override
-    public CompletableFuture<String[]> lpopCount(@NonNull String key, long count) {
-        return commandManager.submitNewCommand(
-                LPop,
-                new String[] {key, Long.toString(count)},
-                response -> castArray(handleArrayResponse(response), String.class));
+            new String[] {key, element, Long.toString(count), Arrays.toString((options.toArgs()))},
+            response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     @Override
