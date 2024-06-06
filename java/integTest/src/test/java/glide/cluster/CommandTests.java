@@ -4,6 +4,7 @@ package glide.cluster;
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
@@ -785,7 +786,7 @@ public class CommandTests {
     @SneakyThrows
     @ParameterizedTest(name = "functionLoad: singleNodeRoute = {0}")
     @ValueSource(booleans = {true, false})
-    public void functionLoad_and_functionList(boolean singleNodeRoute) {
+    public void function_commands(boolean singleNodeRoute) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
         // TODO use FUNCTION FLUSH
@@ -798,12 +799,7 @@ public class CommandTests {
 
         String libName = "mylib1c_" + singleNodeRoute;
         String funcName = "myfunc1c_" + singleNodeRoute;
-        String code =
-                "#!lua name="
-                        + libName
-                        + " \n redis.register_function('"
-                        + funcName
-                        + "', function(keys, args) return args[1] end)"; // function returns first argument
+        String code = generateLuaLibCode(libName, List.of(funcName));
         Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
 
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
@@ -857,11 +853,7 @@ public class CommandTests {
         // re-load library with overwriting
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
         String newFuncName = "myfunc2c_" + singleNodeRoute;
-        String newCode =
-                code
-                        + "\n redis.register_function('"
-                        + newFuncName
-                        + "', function(keys, args) return #args end)"; // function returns argument count
+        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
 
         assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
 
@@ -879,6 +871,19 @@ public class CommandTests {
                         flist, libName, expectedDescription, expectedFlags, Optional.empty());
             }
         }
+
+        // load new lib and delete it - first lib remains loaded
+        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true, route).get());
+        assertEquals(OK, clusterClient.functionDelete("anotherLib", route).get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.functionDelete("anotherLib", route).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
 
         response = clusterClient.functionList(true, route).get();
         if (singleNodeRoute) {
@@ -899,7 +904,7 @@ public class CommandTests {
 
     @SneakyThrows
     @Test
-    public void functionLoad_and_functionList_without_route() {
+    public void function_commands() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
         // TODO use FUNCTION FLUSH
@@ -912,12 +917,7 @@ public class CommandTests {
 
         String libName = "mylib1c";
         String funcName = "myfunc1c";
-        String code =
-                "#!lua name="
-                        + libName
-                        + " \n redis.register_function('"
-                        + funcName
-                        + "', function(keys, args) return args[1] end)"; // function returns first argument
+        String code = generateLuaLibCode(libName, List.of(funcName));
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
@@ -951,12 +951,21 @@ public class CommandTests {
         // re-load library with overwriting
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
         String newFuncName = "myfunc2c";
-        String newCode =
-                code
-                        + "\n redis.register_function('"
-                        + newFuncName
-                        + "', function(keys, args) return #args end)"; // function returns argument count
+        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
+
         assertEquals(libName, clusterClient.functionLoad(newCode, true).get());
+
+        // load new lib and delete it - first lib remains loaded
+        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true).get());
+        assertEquals(OK, clusterClient.functionDelete("anotherLib").get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionDelete("anotherLib").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
 
         flist = clusterClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
