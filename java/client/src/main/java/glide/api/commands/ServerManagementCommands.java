@@ -261,7 +261,7 @@ public interface ServerManagementCommands {
     /**
      * Returns the number of keys in the currently selected database.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/dbsize/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
      * @return The number of keys in the currently selected database.
      * @example
      *     <pre>{@code

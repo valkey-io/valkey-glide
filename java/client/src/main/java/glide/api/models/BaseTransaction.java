@@ -2958,7 +2958,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the number of keys in the currently selected database.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/dbsize/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
      * @return Command Response - The number of keys in the currently selected database.
      */
     public T dbsize() {
