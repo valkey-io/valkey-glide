@@ -4,6 +4,7 @@ package glide.standalone;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
@@ -32,6 +33,7 @@ import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -373,7 +375,7 @@ public class CommandTests {
 
     @SneakyThrows
     @Test
-    public void functionLoad_and_functionList() {
+    public void function_commands() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
         // TODO use FUNCTION FLUSH
@@ -381,12 +383,7 @@ public class CommandTests {
 
         String libName = "mylib1c";
         String funcName = "myfunc1c";
-        String code =
-                "#!lua name="
-                        + libName
-                        + " \n redis.register_function('"
-                        + funcName
-                        + "', function(keys, args) return args[1] end)"; // function returns first argument
+        String code = generateLuaLibCode(libName, List.of(funcName));
         assertEquals(libName, regularClient.functionLoad(code, false).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
 
@@ -419,12 +416,20 @@ public class CommandTests {
         // re-load library with overwriting
         assertEquals(libName, regularClient.functionLoad(code, true).get());
         String newFuncName = "myfunc2c";
-        String newCode =
-                code
-                        + "\n redis.register_function('"
-                        + newFuncName
-                        + "', function(keys, args) return #args end)"; // function returns argument count
+        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
         assertEquals(libName, regularClient.functionLoad(newCode, true).get());
+
+        // load new lib and delete it - first lib remains loaded
+        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        assertEquals("anotherLib", regularClient.functionLoad(anotherLib, true).get());
+        assertEquals(OK, regularClient.functionDelete("anotherLib").get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionDelete("anotherLib").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
 
         flist = regularClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);

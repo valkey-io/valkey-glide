@@ -191,6 +191,7 @@ enum RequestType {
     HStrlen = 149;
     FunctionLoad = 150;
     FunctionList = 151;
+    FunctionDelete = 152;
     LMPop = 155;
     ExpireTime = 156;
     PExpireTime = 157;
