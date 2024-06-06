@@ -222,10 +222,10 @@ public interface ScriptingAndFunctionsClusterCommands {
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
-     * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
