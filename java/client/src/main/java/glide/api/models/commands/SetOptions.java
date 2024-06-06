@@ -9,7 +9,9 @@ import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_SECONDS;
 
 import glide.api.commands.StringBaseCommands;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -167,5 +169,14 @@ public final class SetOptions {
         }
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Converts SetOptions into a List<byte[]> to add to a {@link Command} arguments.
+     *
+     * @return List<byte[]>
+     */
+    public List<byte[]> toArgsBytes() {
+        return Arrays.asList(this.toArgs()).stream().map(String::getBytes).collect(Collectors.toList());
     }
 }

@@ -187,6 +187,7 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;
@@ -449,6 +450,15 @@ public abstract class BaseClient
     public CompletableFuture<String> set(
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
+        return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> set(
+            @NonNull byte[] key, @NonNull byte[] value, @NonNull SetOptions options) {
+        ArrayList<byte[]> arguments = new ArrayList<>();
+        arguments.addAll(Arrays.asList(key, value));
+        arguments.addAll(options.toArgsBytes());
         return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
     }
 

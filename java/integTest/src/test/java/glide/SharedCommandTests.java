@@ -322,6 +322,40 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void set_only_if_exists_overwrite_bytes(BaseClient client) {
+        String key = "set_only_if_exists_overwrite_bytes";
+        SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).build();
+        client.set(key.getBytes(), INITIAL_VALUE.getBytes()).get();
+        client.set(key.getBytes(), ANOTHER_VALUE.getBytes(), options).get();
+        String data = client.get(key).get();
+        assertEquals(ANOTHER_VALUE, data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void set_only_if_exists_missing_key_bytes(BaseClient client) {
+        String key = "set_only_if_exists_missing_key_bytes";
+        SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).build();
+        client.set(key.getBytes(), ANOTHER_VALUE.getBytes(), options).get();
+        String data = client.get(key).get();
+        assertNull(data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void set_only_if_does_not_exists_missing_key_bytes(BaseClient client) {
+        String key = "set_only_if_does_not_exists_missing_key_bytes";
+        SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_DOES_NOT_EXIST).build();
+        client.set(key.getBytes(), ANOTHER_VALUE.getBytes(), options).get();
+        String data = client.get(key).get();
+        assertEquals(ANOTHER_VALUE, data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void set_get_binary_data(BaseClient client) {
         byte[] key = "set_get_binary_data_key".getBytes();
         byte[] value = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};

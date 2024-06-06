@@ -123,6 +123,27 @@ public interface StringBaseCommands {
     CompletableFuture<String> set(String key, String value, SetOptions options);
 
     /**
+     * Sets the given key with the given value. Return value is dependent on the passed options.
+     *
+     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @param key The key to store.
+     * @param value The value to store with the given key.
+     * @param options The Set options.
+     * @return Response from Redis containing a <code>String</code> or <code>null</code> response. If
+     *     the value is successfully set, return <code>"OK"</code>. If value isn't set because of
+     *     {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
+     *     conditions, return <code>null</code>. If {@link SetOptionsBuilder#returnOldValue(boolean)}
+     *     is set, return the old value as a <code>String</code>.
+     * @example
+     *     <pre>{@code
+     * SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).expiry(Seconds(5L)).build();
+     * String value = client.set("key".getBytes(), "value".getBytes(), options).get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> set(byte[] key, byte[] value, SetOptions options);
+
+    /**
      * Retrieves the values of multiple <code>keys</code>.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
