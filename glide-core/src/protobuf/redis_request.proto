@@ -209,6 +209,7 @@ enum RequestType {
     BitFieldReadOnly = 173;
     Move = 174;
     SInterCard = 175;
+    Copy = 178;
 }
 
 message Command {
