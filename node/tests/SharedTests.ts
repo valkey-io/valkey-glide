@@ -2117,6 +2117,164 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    // Zinterstore command tests
+    async function zunionstoreWithAggregation(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:3-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+
+        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
+        expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+        // Union results are aggregated by the MAX score of elements
+        expect(await client.zunionstore(key3, [key1, key2], "MAX")).toEqual(3);
+        const zunionstoreMapMax = await client.zrangeWithScores(key3, range);
+        const expectedMapMax = {
+            one: 1.5,
+            two: 2.5,
+            three: 3.5,
+        };
+        expect(compareMaps(zunionstoreMapMax, expectedMapMax)).toBe(true);
+
+        // Union results are aggregated by the MIN score of elements
+        expect(await client.zunionstore(key3, [key1, key2], "MIN")).toEqual(3);
+        const zunionstoreMapMin = await client.zrangeWithScores(key3, range);
+        const expectedMapMin = {
+            one: 1.0,
+            two: 2.0,
+            three: 3.5,
+        };
+        expect(compareMaps(zunionstoreMapMin, expectedMapMin)).toBe(true);
+
+        // Union results are aggregated by the SUM score of elements
+        expect(await client.zunionstore(key3, [key1, key2], "SUM")).toEqual(3);
+        const zunionstoreMapSum = await client.zrangeWithScores(key3, range);
+        const expectedMapSum = {
+            one: 2.5,
+            two: 4.5,
+            three: 3.5,
+        };
+        expect(compareMaps(zunionstoreMapSum, expectedMapSum)).toBe(true);
+    }
+
+    async function zunionstoreBasicTest(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:3-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+
+        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
+        expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+        expect(await client.zunionstore(key3, [key1, key2])).toEqual(3);
+        const zunionstoreMap = await client.zrangeWithScores(key3, range);
+        const expectedMap = {
+            one: 2.5,
+            two: 4.5,
+            three: 3.5,
+        };
+        expect(compareMaps(zunionstoreMap, expectedMap)).toBe(true);
+    }
+
+    async function zunionstoreWithWeightsAndAggregation(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:3-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores2 = { one: 1.5, two: 2.5, three: 3.5 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
+        expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        expect(
+            await client.zunionstore(
+                key3,
+                [
+                    [key1, 2.0],
+                    [key2, 2.0],
+                ],
+                "SUM",
+            ),
+        ).toEqual(3);
+        const zunionstoreMapMultiplied = await client.zrangeWithScores(
+            key3,
+            range,
+        );
+        const expectedMapMultiplied = {
+            one: 5.0,
+            three: 7.0,
+            two: 9.0,
+        };
+        expect(
+            compareMaps(zunionstoreMapMultiplied, expectedMapMultiplied),
+        ).toBe(true);
+    }
+
+    async function zunionstoreEmptyCases(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:2-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+
+        // Non existing key
+        expect(
+            await client.zunionstore(key2, [
+                key1,
+                "{testKey}-non_existing_key",
+            ]),
+        ).toEqual(2);
+
+        const zunionstore_map_nonexistingkey = await client.zrangeWithScores(
+            key3,
+            range,
+        );
+
+        const expectedMapMultiplied = {
+            one: 1.0,
+            two: 2.0,
+        };
+        expect(
+            compareMaps(zunionstore_map_nonexistingkey, expectedMapMultiplied),
+        ).toBe(true);
+
+        // Empty list check
+        await expect(client.zunionstore("{xyz}", [])).rejects.toThrow();
+    }
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zunionstore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await zunionstoreBasicTest;
+                await zunionstoreWithAggregation;
+                await zunionstoreWithWeightsAndAggregation;
+                await zunionstoreEmptyCases;
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `type test_%p`,
         async (protocol) => {
