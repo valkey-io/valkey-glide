@@ -668,13 +668,14 @@ async def transaction_test(
         alpha=True,
     )
     args.append([b"2", b"3", b"4", b"a"])
-    transaction.sort_ro(
-        key17,
-        limit=Limit(1, 4),
-        order=OrderBy.ASC,
-        alpha=True,
-    )
-    args.append([b"2", b"3", b"4", b"a"])
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.sort_ro(
+            key17,
+            limit=Limit(1, 4),
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"2", b"3", b"4", b"a"])
     transaction.sort_store(
         key17,
         key18,
@@ -911,13 +912,6 @@ class TestTransaction:
         transaction.hset("user:2", {"name": "Bob", "age": "25"})
         transaction.lpush(key1, ["2", "1"])
         transaction.sort(
-            key1,
-            by_pattern="user:*->age",
-            get_patterns=["user:*->name"],
-            order=OrderBy.ASC,
-            alpha=True,
-        )
-        transaction.sort_ro(
             key1,
             by_pattern="user:*->age",
             get_patterns=["user:*->name"],
