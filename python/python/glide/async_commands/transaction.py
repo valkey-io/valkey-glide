@@ -3,7 +3,7 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
-from glide.async_commands.command_args import Limit, OrderBy
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -947,6 +947,67 @@ class BaseTransaction:
         """
         return self.append_command(
             RequestType.LInsert, [key, position.value, pivot, element]
+        )
+
+    def lmove(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        wherefrom: ListDirection,
+        whereto: ListDirection,
+    ) -> TTransaction:
+        """
+        Atomically pops and removes the left/right-most element to the list stored at `source`
+        depending on `wherefrom`, and pushes the element at the first/last element of the list
+        stored at `destination` depending on `whereto`.
+
+        Notes:
+            When in cluster mode, both `source` and `destination` must map to the same hash slot.
+
+        See https://redis.io/commands/lmove/ for details.
+
+        Args:
+            source (str): The key to the source list.
+            destination (str): The key to the destination list.
+            wherefrom (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            whereto (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+
+        Command response:
+            Optional[str]: The popped element, or `None` if `source` does not exist.
+        """
+        return self.append_command(
+            RequestType.LMove, [source, destination, wherefrom.value, whereto.value]
+        )
+
+    def blmove(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        wherefrom: ListDirection,
+        whereto: ListDirection,
+        timeout: float,
+    ) -> TTransaction:
+        """
+        Blocks the connection until it pops atomically and removes the left/right-most element to the
+        list stored at `source` depending on `wherefrom`, and pushes the element at the first/last element
+        of the list stored at `destination` depending on `whereto`.
+        `blmove` is the blocking variant of `lmove`.
+
+        See https://redis.io/commands/blmove/ for details.
+
+        Args:
+            source (str): The key to the source list.
+            destination (str): The key to the destination list.
+            wherefrom (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            whereto (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+
+        Command response:
+            Optional[str]: The popped element, or `None` if `source` does not exist or if the operation timed-out.
+        """
+        return self.append_command(
+            RequestType.BLMove,
+            [source, destination, wherefrom.value, whereto.value, str(timeout)],
         )
 
     def sadd(self: TTransaction, key: str, members: List[str]) -> TTransaction:
