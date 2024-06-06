@@ -1044,7 +1044,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
      *
-     * See https://redis.io/commands/zinterstore for more details.
+     * See https://valkey.io/commands/zinterstore/ for more details.
      *
      * @param destination - The key of the destination sorted set.
      * @param keys - The keys of the sorted sets with possible formats:
