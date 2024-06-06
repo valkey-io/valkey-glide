@@ -48,6 +48,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
+import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -731,6 +732,9 @@ public class TransactionTests {
         results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "5")));
         results.add(Pair.of(Lolwut, buildArgs("1", "2")));
         results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "6", "42")));
+
+        transaction.dbsize();
+        results.add(Pair.of(DBSize, buildArgs()));
 
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));

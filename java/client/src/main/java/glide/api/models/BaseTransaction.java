@@ -38,6 +38,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -2951,6 +2952,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         new String[] {VERSION_REDIS_API, Integer.toString(version)},
                         Arrays.stream(parameters).mapToObj(Integer::toString).toArray(String[]::new));
         protobufTransaction.addCommands(buildCommand(Lolwut, buildArgs(arguments)));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/dbsize/">redis.io</a> for details.
+     * @return Command Response - The number of keys in the currently selected database.
+     */
+    public T dbsize() {
+        protobufTransaction.addCommands(buildCommand(DBSize));
         return getThis();
     }
 
