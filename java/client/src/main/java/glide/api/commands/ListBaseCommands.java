@@ -91,15 +91,15 @@ public interface ListBaseCommands {
      * assertEquals(6L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e"}).get());
      * // Returns the second occurrence of the element "e".
      * LPosOptions options = LPosOptions.builder().rank(2L).build();
-     * assertEquals(5L, client.lpos("my_list", "e", Arrays.toString(options.toArgs());
+     * assertEquals(5L, client.lpos("my_list", "e", options);
      *
      * // maxlength with 1000 comparisons.
      * LPosOptions options = LPosOptions.builder().maxLength(1000L).build();
-     * assertEquals(4L, client.lpos("my_list", "e", Arrays.toString(options.toArgs()).get());
+     * assertEquals(4L, client.lpos("my_list", "e", options);
      *
      * // rank and maxLength
      * LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
-     * assertEquals(4L, client.lpos("my_list", "e", Arrays.toString(options.toArgs()).get());
+     * assertEquals(4L, client.lpos("my_list", "e", options);
      * }</pre>
      * */
     CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options);
@@ -114,7 +114,7 @@ public interface ListBaseCommands {
      * @example
      *      <pre>{@code
      * assertEquals(7L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e", "e"}).get());
-     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", COUNT 3L).get());
+     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", 3L).get());
      * }</pre>
      * */
     CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count);
@@ -133,13 +133,13 @@ public interface ListBaseCommands {
      *
      * // Rank
      * LPosOptions options = LPosOptions.builder().rank(2L).build();
-     * assertEquals([5], client.lposCount("my_list", "e", COUNT 1L, Arrays.toString(options.toArgs()).get());
+     * assertEquals([5], client.lposCount("my_list", "e", 1L, options).get());
      * // Maxlen
      * LPosOptions options = LPosOptions.builder.maxLength(1000L).build();
-     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", COUNT 3, Arrays.toString(options.toArgs()).get());
+     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", 3L, options).get());
      * // Rank and Maxlen
      * LPosOptions options = LPosOptions.builder.rank(2L).maxLength(1000L).build();
-     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", COUNT 3, Arrays.toString(options.toArgs()).get());
+     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", 3L, options).get());
      * }</pre>
      * */
     CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options);
