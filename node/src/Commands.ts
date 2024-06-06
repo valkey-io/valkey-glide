@@ -855,24 +855,18 @@ function createZCmdStoreArgs(
 ): string[] {
     const args: string[] = [destination, keys.length.toString()];
 
-    const keyWeightPairs = keys.map((key) =>
-        typeof key === "string" ? [key, 1] : key,
-    );
-
-    for (const [key] of keyWeightPairs) {
-        args.push(key.toString());
-    }
-
-    const weights = keyWeightPairs.map(([, weight]) => weight.toString());
-
-    if (weights.some((weight) => weight !== "1")) {
+    if (typeof keys[0] === "string") {
+        args.push(...(keys as string[]));
+    } else {
+        const weightsKeys = keys.map(([key, _]) => key);
+        args.push(...(weightsKeys as string[]));
+        const weights = keys.map(([, weight]) => weight.toString());
         args.push("WEIGHTS", ...weights);
     }
 
     if (aggregationType) {
         args.push("AGGREGATE", aggregationType);
     }
-
     return args;
 }
 
