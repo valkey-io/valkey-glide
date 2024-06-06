@@ -47,6 +47,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
@@ -4163,6 +4164,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T functionFlush(@NonNull FlushMode mode) {
         protobufTransaction.addCommands(buildCommand(FunctionFlush, buildArgs(mode.toString())));
+        return getThis();
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @param libName The library name to delete.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionDelete(@NonNull String libName) {
+        protobufTransaction.addCommands(buildCommand(FunctionDelete, buildArgs(libName)));
         return getThis();
     }
 

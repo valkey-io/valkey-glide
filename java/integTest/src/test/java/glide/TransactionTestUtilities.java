@@ -705,22 +705,22 @@ public class TransactionTestUtilities {
         transaction
                 .functionFlush(SYNC)
                 .functionList(false)
-                .functionList(true)
                 .functionLoad(code, false)
                 .functionLoad(code, true)
                 .functionList("otherLib", false)
                 .functionList("mylib1T", true)
-                .functionFlush();
+                .functionDelete("mylib1T")
+                .functionList(true);
 
         return new Object[] {
             OK, // functionFlush(SYNC)
             new Map[0], // functionList(false)
-            new Map[0], // functionList(true)
             "mylib1T", // functionLoad(code, false)
             "mylib1T", // functionLoad(code, true)
             new Map[0], // functionList("otherLib", false)
             expectedLibData, // functionList("mylib1T", true)
-            OK, // functionFlush()
+            OK, // functionDelete("mylib1T")
+            new Map[0], // functionList(true)
         };
     }
 

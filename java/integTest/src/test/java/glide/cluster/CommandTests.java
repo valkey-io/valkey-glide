@@ -788,7 +788,7 @@ public class CommandTests {
     @SneakyThrows
     @ParameterizedTest(name = "functionLoad: singleNodeRoute = {0}")
     @ValueSource(booleans = {true, false})
-    public void functionLoad_and_functionList(boolean singleNodeRoute) {
+    public void function_commands(boolean singleNodeRoute) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
         String libName = "mylib1c_" + singleNodeRoute;
@@ -868,6 +868,19 @@ public class CommandTests {
             }
         }
 
+        // load new lib and delete it - first lib remains loaded
+        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true, route).get());
+        assertEquals(OK, clusterClient.functionDelete("anotherLib", route).get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.functionDelete("anotherLib", route).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
+
         response = clusterClient.functionList(true, route).get();
         if (singleNodeRoute) {
             var flist = response.getSingleValue();
@@ -887,7 +900,7 @@ public class CommandTests {
 
     @SneakyThrows
     @Test
-    public void functionLoad_and_functionList_without_route() {
+    public void function_commands() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
@@ -929,7 +942,20 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
         String newFuncName = "myfunc2c";
         String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
+
         assertEquals(libName, clusterClient.functionLoad(newCode, true).get());
+
+        // load new lib and delete it - first lib remains loaded
+        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true).get());
+        assertEquals(OK, clusterClient.functionDelete("anotherLib").get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionDelete("anotherLib").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
 
         flist = clusterClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);

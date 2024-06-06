@@ -16,6 +16,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
@@ -237,5 +238,11 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String> functionFlush(@NonNull FlushMode mode) {
         return commandManager.submitNewCommand(
                 FunctionFlush, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionDelete(@NonNull String libName) {
+        return commandManager.submitNewCommand(
+                FunctionDelete, new String[] {libName}, this::handleStringResponse);
     }
 }

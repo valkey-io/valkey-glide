@@ -75,6 +75,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
@@ -5016,6 +5017,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void functionDelete_returns_success() {
+        // setup
+        String libName = "GLIDE";
+        String[] args = new String[] {libName};
+        String value = OK;
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionDelete), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionDelete(libName);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bitcount_returns_success() {
         // setup
         String key = "testKey";
@@ -5398,7 +5422,6 @@ public class RedisClientTest {
         ListDirection whereto = ListDirection.RIGHT;
         String[] arguments = new String[] {key1, key2, wherefrom.toString(), whereto.toString()};
         String value = "one";
-
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
