@@ -572,7 +572,8 @@ public class TransactionTestUtilities {
                 .configResetStat()
                 .lolwut(1)
                 .flushall()
-                .flushall(ASYNC);
+                .flushall(ASYNC)
+                .dbsize();
 
         return new Object[] {
             OK, // configSet(Map.of("timeout", "1000"))
@@ -581,6 +582,7 @@ public class TransactionTestUtilities {
             "Redis ver. " + REDIS_VERSION + '\n', // lolwut(1)
             OK, // flushall()
             OK, // flushall(ASYNC)
+            0L, // dbsize()
         };
     }
 
