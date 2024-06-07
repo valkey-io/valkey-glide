@@ -2474,6 +2474,37 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "pfcount test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+                const string_key = `{key}-4-${uuidv4()}`;
+                const non_existing_key = `{key}-5-${uuidv4()}`;
+
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfcount([key1])).toEqual(3);
+                expect(await client.pfcount([key2])).toEqual(3);
+                expect(await client.pfcount([key1, key2])).toEqual(4);
+                expect(
+                    await client.pfcount([key1, key2, non_existing_key]),
+                ).toEqual(4);
+
+                // empty HyperLogLog data set
+                expect(await client.pfadd(key3, [])).toEqual(1);
+                expect(await client.pfcount([key3])).toEqual(0);
+
+                // incorrect argument - key list cannot be empty
+                expect(await client.set(string_key, "value")).toEqual("OK");
+                await expect(client.pfcount([string_key])).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     // Set command tests
 
     async function setWithExpiryOptions(client: BaseClient) {
