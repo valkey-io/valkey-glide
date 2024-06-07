@@ -746,7 +746,8 @@ public class CommandTests {
                         clusterClient.blmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT, 1)),
                 Arguments.of("sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"})),
                 Arguments.of(
-                        "sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"}, 1)));
+                        "sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"}, 1)),
+                Arguments.of("copy", "6.2.0", clusterClient.copy("abc", "def", true)));
     }
 
     @SneakyThrows
