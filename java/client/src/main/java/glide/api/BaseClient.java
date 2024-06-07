@@ -212,6 +212,7 @@ import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
+import redis_request.RedisRequestOuterClass;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -720,8 +721,9 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
+        String[] arguments = concatenateArrays(new String[] {key, element}, options.toArgs());
         return commandManager.submitNewCommand(
-            LPos, new String[] {key, element, Arrays.toString(options.toArgs())}, this::handleLongResponse);
+            LPos, arguments, this::handleLongResponse);
     }
 
     @Override
