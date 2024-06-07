@@ -55,6 +55,7 @@ import {
     createLTrim,
     createMGet,
     createMSet,
+    createObjectEncoding,
     createPExpire,
     createPExpireAt,
     createPTTL,
@@ -1350,6 +1351,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public pfadd(key: string, elements: string[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
+    }
+
+    /** Returns the internal encoding for the Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-encoding for more details.
+     *
+     * @param key - The `key` of the object to get the internal encoding of.
+     * Command Response - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
+     *     Otherwise, returns None.
+     */
+    public object_encoding(key: string): T {
+        return this.addAndReturn(createObjectEncoding(key));
     }
 }
 
