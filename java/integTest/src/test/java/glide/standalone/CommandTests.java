@@ -168,9 +168,9 @@ public class CommandTests {
         String value1 = UUID.randomUUID().toString();
         String value2 = UUID.randomUUID().toString();
         String nonExistingKey = UUID.randomUUID().toString();
-        assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
-
         assertEquals(OK, regularClient.select(0).get());
+
+        assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
         assertEquals(OK, regularClient.set(key1, value1).get());
         assertEquals(OK, regularClient.set(key2, value2).get());
         assertEquals(true, regularClient.move(key1, 1L).get());
@@ -342,6 +342,22 @@ public class CommandTests {
         System.out.printf(
                 "%nLOLWUT standalone client ver 6 response with params 50 20%n%s%n", response);
         assertTrue(response.contains("Redis ver. " + REDIS_VERSION));
+    }
+
+    @Test
+    @SneakyThrows
+    public void dbsize() {
+        assertEquals(OK, regularClient.flushall().get());
+        assertEquals(OK, regularClient.select(0).get());
+
+        int numKeys = 10;
+        for (int i = 0; i < numKeys; i++) {
+            assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
+        }
+        assertEquals(10L, regularClient.dbsize().get());
+
+        assertEquals(OK, regularClient.select(1).get());
+        assertEquals(0L, regularClient.dbsize().get());
     }
 
     @Test
