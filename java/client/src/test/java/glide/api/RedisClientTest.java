@@ -4082,8 +4082,8 @@ public class RedisClientTest {
         Map<String, String> keysAndIds = new LinkedHashMap<>();
         keysAndIds.put(keyOne, streamIdOne);
         keysAndIds.put(keyTwo, streamIdTwo);
-        CompletableFuture<Map<String, Map<String, Object[][]>>> response = service.xread(keysAndIds);
-        Map<String, Map<String, Object[][]>> payload = response.get();
+        CompletableFuture<Map<String, Map<String, String[][]>>> response = service.xread(keysAndIds);
+        Map<String, Map<String, String[][]>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -4121,11 +4121,11 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, Map<String, Object[][]>>> response =
+        CompletableFuture<Map<String, Map<String, String[][]>>> response =
                 service.xread(
                         Map.of(keyOne, streamIdOne),
                         StreamReadOptions.builder().block(block).count(count).build());
-        Map<String, Map<String, Object[][]>> payload = response.get();
+        Map<String, Map<String, String[][]>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

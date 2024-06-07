@@ -67,12 +67,12 @@ public interface StreamBaseCommands {
      * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
-     * @return A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     * @return A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * Map<String, String> xreadKeys = Map.of("streamKey", "0-0");
-     * Map<String, Map<String, Object[][]>> streamReadResponse = client.xread(xreadKeys).get();
+     * Map<String, Map<String, String[][]>> streamReadResponse = client.xread(xreadKeys).get();
      * for (var keyEntry : streamReadResponse.entrySet()) {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
@@ -82,7 +82,7 @@ public interface StreamBaseCommands {
      *     }
      * }</pre>
      */
-    CompletableFuture<Map<String, Map<String, Object[][]>>> xread(Map<String, String> keysAndIds);
+    CompletableFuture<Map<String, Map<String, String[][]>>> xread(Map<String, String> keysAndIds);
 
     /**
      * Reads entries from the given streams.
@@ -94,14 +94,14 @@ public interface StreamBaseCommands {
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
      * @param options Options detailing how to read the stream {@link StreamReadOptions}.
-     * @return A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     * @return A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
      *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * // retrieve streamKey entries and block for 1 second if is no stream data
      * Map<String, String> xreadKeys = Map.of("streamKey", "0-0");
      * StreamReadOptions options = StreamReadOptions.builder().block(1L).build();
-     * Map<String, Map<String, Object[][]>> streamReadResponse = client.xread(xreadKeys, options).get();
+     * Map<String, Map<String, String[][]>> streamReadResponse = client.xread(xreadKeys, options).get();
      * for (var keyEntry : streamReadResponse.entrySet()) {
      *     System.out.printf("Key: %s", keyEntry.getKey());
      *     for (var streamEntry : keyEntry.getValue().entrySet()) {
@@ -111,7 +111,7 @@ public interface StreamBaseCommands {
      *     }
      * }</pre>
      */
-    CompletableFuture<Map<String, Map<String, Object[][]>>> xread(
+    CompletableFuture<Map<String, Map<String, String[][]>>> xread(
             Map<String, String> keysAndIds, StreamReadOptions options);
 
     /**

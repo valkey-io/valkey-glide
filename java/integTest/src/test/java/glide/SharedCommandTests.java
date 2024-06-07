@@ -3034,7 +3034,6 @@ public class SharedCommandTests {
     public void xread(BaseClient client) {
         String key1 = "{key}:1" + UUID.randomUUID();
         String key2 = "{key}:2" + UUID.randomUUID();
-        String nonStreamKey = "{key}:3" + UUID.randomUUID();
         String field1 = "f1_";
         String field2 = "f2_";
         String field3 = "f3_";
@@ -3080,7 +3079,7 @@ public class SharedCommandTests {
                         .get();
         assertNotNull(timestamp_2_3);
 
-        Map<String, Map<String, Object[][]>> result =
+        Map<String, Map<String, String[][]>> result =
                 client.xread(Map.of(key1, timestamp_1_1, key2, timestamp_2_1)).get();
 
         // check key1
@@ -3099,30 +3098,60 @@ public class SharedCommandTests {
         expected_key2.put(timestamp_2_2, new String[][] {{field2, field2 + "2"}});
         expected_key2.put(timestamp_2_3, new String[][] {{field2, field2 + "3"}});
         assertDeepEquals(expected_key2, result.get(key2));
+    }
 
-        // Block on the final stream for 10 milliseconds
-        // and expect a null response because there is no incoming data
-        Map<String, Map<String, Object[][]>> blockedResult =
-                client
-                        .xread(
-                                Map.of(key1, timestamp_1_3, key2, timestamp_2_3),
-                                StreamReadOptions.builder().block(10L).build())
-                        .get();
-        assertNull(blockedResult);
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xread_return_failures(BaseClient client) {
+        String key1 = "{key}:1" + UUID.randomUUID();
+        String nonStreamKey = "{key}:3" + UUID.randomUUID();
+        String field1 = "f1_";
+
+        // setup first entries in streams key1 and key2
+        Map<String, String> timestamp_1_1_map = new LinkedHashMap<>();
+        timestamp_1_1_map.put(field1, field1 + "1");
+        String timestamp_1_1 =
+                client.xadd(key1, timestamp_1_1_map, StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
 
         // Key exists, but it is not a stream
         assertEquals(OK, client.set(nonStreamKey, "bar").get());
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> client.xread(Map.of(nonStreamKey, timestamp_1_3, key1, timestamp_2_3)).get());
+                        () -> client.xread(Map.of(nonStreamKey, timestamp_1_1, key1, timestamp_1_1)).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> client.xread(Map.of(key1, timestamp_1_3, nonStreamKey, timestamp_2_3)).get());
+                        () -> client.xread(Map.of(key1, timestamp_1_1, nonStreamKey, timestamp_1_1)).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            long oneSecondInMS = 1000L;
+            assertNull(
+                    testClient
+                            .xread(
+                                    Map.of(key1, timestamp_1_1),
+                                    StreamReadOptions.builder().block(oneSecondInMS).build())
+                            .get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .xread(Map.of(key1, timestamp_1_1), StreamReadOptions.builder().block(0L).build())
+                                    .get(3, TimeUnit.SECONDS));
+        }
     }
 
     @SneakyThrows

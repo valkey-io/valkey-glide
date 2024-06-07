@@ -7,6 +7,7 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArg
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
+import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
@@ -194,6 +195,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -1247,18 +1249,33 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, Map<String, Object[][]>>> xread(
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
             @NonNull Map<String, String> keysAndIds) {
         return xread(keysAndIds, StreamReadOptions.builder().build());
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<Map<String, Map<String, Object[][]>>> xread(
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
             @NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
         String[] arguments = options.toArgs(keysAndIds);
         return commandManager.submitNewCommand(
-                XRead, arguments, response -> handleMapOrNullResponse(response));
+                XRead,
+                arguments,
+                response -> {
+                    Map<String, Object> mapResponse = handleMapOrNullResponse(response);
+                    if (mapResponse == null) {
+                        return null;
+                    }
+                    return mapResponse.entrySet().stream()
+                            .collect(
+                                    Collectors.toMap(
+                                            Map.Entry::getKey,
+                                            e -> {
+                                                return castMapOf2DArray(
+                                                        (Map<String, Object[][]>) e.getValue(), String.class);
+                                            }));
+                });
     }
 
     @Override
