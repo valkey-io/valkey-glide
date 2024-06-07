@@ -1,10 +1,15 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
+import static glide.api.commands.GenericCommands.DB_REDIS_API;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 
 import lombok.AllArgsConstructor;
+import lombok.NonNull;
+import org.apache.commons.lang3.ArrayUtils;
 import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 
 /**
@@ -62,6 +67,48 @@ public class Transaction extends BaseTransaction<Transaction> {
     public Transaction move(String key, long dbIndex) {
         ArgsArray commandArgs = buildArgs(key, Long.toString(dbIndex));
         protobufTransaction.addCommands(buildCommand(Move, commandArgs));
+        return this;
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public Transaction copy(@NonNull String source, @NonNull String destination, long destinationDB) {
+        return copy(source, destination, destinationDB, false);
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public Transaction copy(
+            @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
+        String[] args = new String[] {source, destination, DB_REDIS_API, Long.toString(destinationDB)};
+        if (replace) {
+            args = ArrayUtils.add(args, REPLACE_REDIS_API);
+        }
+        ArgsArray commandArgs = buildArgs(args);
+        protobufTransaction.addCommands(buildCommand(Copy, commandArgs));
         return this;
     }
 }

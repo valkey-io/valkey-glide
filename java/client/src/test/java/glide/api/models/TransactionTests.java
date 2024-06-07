@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
@@ -48,6 +49,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
@@ -954,6 +956,9 @@ public class TransactionTests {
 
         transaction.functionDelete("LIB");
         results.add(Pair.of(FunctionDelete, buildArgs("LIB")));
+
+        transaction.copy("key1", "key2", true);
+        results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_REDIS_API)));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

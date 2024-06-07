@@ -227,4 +227,41 @@ public class TransactionTests {
         assertEquals(OK, client.set("key", "foo").get());
         assertNull(client.exec(transaction).get());
     }
+
+    @Test
+    @SneakyThrows
+    public void copy() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"));
+        // setup
+        String copyKey1 = "{CopyKey}-1-" + UUID.randomUUID();
+        String copyKey2 = "{CopyKey}-2-" + UUID.randomUUID();
+        Transaction transaction =
+                new Transaction()
+                        .copy(copyKey1, copyKey2, 1, false)
+                        .set(copyKey1, "one")
+                        .set(copyKey2, "two")
+                        .copy(copyKey1, copyKey2, 1, false)
+                        .copy(copyKey1, copyKey2, 1, true)
+                        .copy(copyKey1, copyKey2, 2, true)
+                        .select(1)
+                        .get(copyKey2)
+                        .select(2)
+                        .get(copyKey2);
+        Object[] expectedResult =
+                new Object[] {
+                    false, // copy(copyKey1, copyKey2, 1, false)
+                    OK, // set(copyKey1, "one")
+                    OK, // set(copyKey2, "two")
+                    true, // copy(copyKey1, copyKey2, 1, false)
+                    true, // copy(copyKey1, copyKey2, 1, true)
+                    true, // copy(copyKey1, copyKey2, 2, true)
+                    OK, // select(1)
+                    "one", // get(copyKey2)
+                    OK, // select(2)
+                    "one", // get(copyKey2)
+                };
+
+        Object[] result = client.exec(transaction).get();
+        assertArrayEquals(expectedResult, result);
+    }
 }

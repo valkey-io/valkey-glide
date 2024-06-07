@@ -20,6 +20,7 @@ import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -458,5 +459,53 @@ public class CommandTests {
 
         // TODO test with FCALL
         assertEquals(OK, regularClient.functionFlush(ASYNC).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void copy() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        String source = "{key}-1" + UUID.randomUUID();
+        String destination = "{key}-2" + UUID.randomUUID();
+        long index1 = 1;
+        long index2 = 2;
+
+        try {
+            // neither key exists, returns false
+            assertFalse(regularClient.copy(source, destination, index1, false).get());
+
+            // source exists, destination does not
+            regularClient.set(source, "one").get();
+            assertTrue(regularClient.copy(source, destination, index1, false).get());
+            regularClient.select(1).get();
+            assertEquals("one", regularClient.get(destination).get());
+
+            // new value for source key
+            regularClient.select(0).get();
+            regularClient.set(source, "two").get();
+
+            // no REPLACE, copying to existing key on DB 0&1, non-existing key on DB 2
+            assertFalse(regularClient.copy(source, destination, index1, false).get());
+            assertTrue(regularClient.copy(source, destination, index2, false).get());
+
+            // new value only gets copied to DB 2
+            regularClient.select(1).get();
+            assertEquals("one", regularClient.get(destination).get());
+            regularClient.select(2).get();
+            assertEquals("two", regularClient.get(destination).get());
+
+            // both exists, with REPLACE, when value isn't the same, source always get copied to
+            // destination
+            regularClient.select(0).get();
+            assertTrue(regularClient.copy(source, destination, index1, true).get());
+            regularClient.select(1).get();
+            assertEquals("two", regularClient.get(destination).get());
+        }
+
+        // switching back to db 0
+        finally {
+            regularClient.select(0).get();
+        }
     }
 }
