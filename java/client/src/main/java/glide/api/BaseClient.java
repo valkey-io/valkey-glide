@@ -194,7 +194,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -1248,37 +1247,18 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
+    public CompletableFuture<Map<String, Map<String, Object[][]>>> xread(
             @NonNull Map<String, String> keysAndIds) {
         return xread(keysAndIds, StreamReadOptions.builder().build());
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
+    public CompletableFuture<Map<String, Map<String, Object[][]>>> xread(
             @NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
         String[] arguments = options.toArgs(keysAndIds);
         return commandManager.submitNewCommand(
-                XRead,
-                arguments,
-                response -> {
-                    Map<String, Object> mapResponse = handleMapOrNullResponse(response);
-                    if (mapResponse == null) {
-                        return null;
-                    }
-                    return mapResponse.entrySet().stream()
-                            .collect(
-                                    Collectors.toMap(
-                                            Map.Entry::getKey,
-                                            e -> {
-                                                Map<String, Object> innerMap = (Map<String, Object>) e.getValue();
-                                                return innerMap.entrySet().stream()
-                                                        .collect(
-                                                                Collectors.toMap(
-                                                                        Map.Entry::getKey,
-                                                                        k -> castArrayofArrays((Object[]) k.getValue(), String.class)));
-                                            }));
-                });
+                XRead, arguments, response -> handleMapOrNullResponse(response));
     }
 
     @Override

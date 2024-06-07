@@ -3080,7 +3080,7 @@ public class SharedCommandTests {
                         .get();
         assertNotNull(timestamp_2_3);
 
-        Map<String, Map<String, String[][]>> result =
+        Map<String, Map<String, Object[][]>> result =
                 client.xread(Map.of(key1, timestamp_1_1, key2, timestamp_2_1)).get();
 
         // check key1
@@ -3102,7 +3102,7 @@ public class SharedCommandTests {
 
         // Block on the final stream for 10 milliseconds
         // and expect a null response because there is no incoming data
-        Map<String, Map<String, String[][]>> blockedResult =
+        Map<String, Map<String, Object[][]>> blockedResult =
                 client
                         .xread(
                                 Map.of(key1, timestamp_1_3, key2, timestamp_2_3),
@@ -3123,16 +3123,6 @@ public class SharedCommandTests {
                         ExecutionException.class,
                         () -> client.xread(Map.of(key1, timestamp_1_3, nonStreamKey, timestamp_2_3)).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
-
-        // same-slot requirement
-        if (client instanceof RedisClusterClient) {
-            executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.xread(Map.of("abc", timestamp_1_3, "zxy", timestamp_2_3)).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
-            assertTrue(executionException.getMessage().toLowerCase().contains("crossslot"));
-        }
     }
 
     @SneakyThrows

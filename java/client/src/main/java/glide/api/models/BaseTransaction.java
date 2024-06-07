@@ -2702,9 +2702,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
      *     pair</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
-     * @return Command Response - A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
-     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format [field,
-     *     entries].
+     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xread(@NonNull Map<String, String> keysAndIds) {
         return xread(keysAndIds, StreamReadOptions.builder().build());
@@ -2718,9 +2717,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     pair</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
      * @param options options detailing how to read the stream {@link StreamReadOptions}.
-     * @return Command Response - A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
-     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format [field,
-     *     entries].
+     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xread(@NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
         protobufTransaction.addCommands(buildCommand(XRead, buildArgs(options.toArgs(keysAndIds))));
