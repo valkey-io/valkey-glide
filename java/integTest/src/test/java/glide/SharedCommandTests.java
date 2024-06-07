@@ -2031,6 +2031,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiff(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
         String key3 = "{testKey}:3-" + UUID.randomUUID();
@@ -2100,6 +2102,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiffstore(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
         String key3 = "{testKey}:3-" + UUID.randomUUID();
@@ -2577,6 +2581,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zunion(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
         String key3 = "{testKey}:3-" + UUID.randomUUID();
@@ -2595,33 +2601,21 @@ public class SharedCommandTests {
                 client.zunionWithScores(new KeyArray(new String[] {key1, key2})).get());
 
         // Union results are aggregated by the max score of elements
-        assertArrayEquals(
-                new String[] {"one", "three", "two"},
-                client.zunion(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
         assertEquals(
                 Map.of("one", 1.0, "three", 3.0, "two", 3.5),
                 client.zunionWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
 
         // Union results are aggregated by the min score of elements
-        assertArrayEquals(
-                new String[] {"one", "two", "three"},
-                client.zunion(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
         assertEquals(
                 Map.of("one", 1.0, "two", 2.0, "three", 3.0),
                 client.zunionWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
 
         // Union results are aggregated by the sum of the scores of elements
-        assertArrayEquals(
-                new String[] {"one", "three", "two"},
-                client.zunion(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
         assertEquals(
                 Map.of("one", 1.0, "three", 3.0, "two", 5.5),
                 client.zunionWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
 
         // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
-        assertArrayEquals(
-                new String[] {"one", "three", "two"},
-                client.zunion(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0)))).get());
         assertEquals(
                 Map.of("one", 2.0, "three", 6.0, "two", 11.0),
                 client
@@ -2630,12 +2624,6 @@ public class SharedCommandTests {
 
         // Union results are aggregated by the minimum score, with scores for key1 multiplied by 1.0 and
         // for key2 by -2.0.
-        assertArrayEquals(
-                new String[] {"two", "three", "one"},
-                client
-                        .zunion(
-                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
-                        .get());
         assertEquals(
                 Map.of("two", -7.0, "three", -6.0, "one", 1.0),
                 client
@@ -2663,6 +2651,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zinter(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
         String key3 = "{testKey}:3-" + UUID.randomUUID();
@@ -2679,33 +2669,21 @@ public class SharedCommandTests {
                 Map.of("two", 5.5), client.zinterWithScores(new KeyArray(new String[] {key1, key2})).get());
 
         // Intersection results are aggregated by the max score of elements
-        assertArrayEquals(
-                new String[] {"two"},
-                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
         assertEquals(
                 Map.of("two", 3.5),
                 client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
 
         // Intersection results are aggregated by the min score of elements
-        assertArrayEquals(
-                new String[] {"two"},
-                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
         assertEquals(
                 Map.of("two", 2.0),
                 client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
 
         // Intersection results are aggregated by the sum of the scores of elements
-        assertArrayEquals(
-                new String[] {"two"},
-                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
         assertEquals(
                 Map.of("two", 5.5),
                 client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
 
         // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
-        assertArrayEquals(
-                new String[] {"two"},
-                client.zinter(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0)))).get());
         assertEquals(
                 Map.of("two", 11.0),
                 client
@@ -2714,12 +2692,6 @@ public class SharedCommandTests {
 
         // Intersection results are aggregated by the minimum score,
         // with scores for key1 multiplied by 1.0 and for key2 by -2.0.
-        assertArrayEquals(
-                new String[] {"two"},
-                client
-                        .zinter(
-                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
-                        .get());
         assertEquals(
                 Map.of("two", -7.0),
                 client
@@ -2738,7 +2710,8 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         executionException =
                 assertThrows(
-                        ExecutionException.class, () -> client.zinter(new WeightedKeys(List.of())).get());
+                        ExecutionException.class,
+                        () -> client.zinterWithScores(new WeightedKeys(List.of())).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Key exists, but it is not a set
