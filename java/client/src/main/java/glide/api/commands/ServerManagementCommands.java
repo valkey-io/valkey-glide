@@ -257,4 +257,17 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> lolwut(int version, int[] parameters);
+
+    /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @return The number of keys in the currently selected database.
+     * @example
+     *     <pre>{@code
+     * Long numKeys = client.dbsize().get();
+     * System.out.printf("Number of keys in the current database: %d%n", numKeys);
+     * }</pre>
+     */
+    CompletableFuture<Long> dbsize();
 }
