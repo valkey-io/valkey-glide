@@ -5021,9 +5021,8 @@ public class RedisClientTest {
         // setup
         String libName = "GLIDE";
         String[] args = new String[] {libName};
-        String value = OK;
         CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        testResponse.complete(OK);
 
         // match on protobuf request
         when(commandManager.<String>submitNewCommand(eq(FunctionDelete), eq(args), any()))
