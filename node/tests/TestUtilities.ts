@@ -10,6 +10,7 @@ import {
     BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
+    InsertPosition,
     Logger,
     ProtocolVersion,
     RedisClient,
@@ -295,6 +296,13 @@ export async function transactionTest(
     args.push([field + "3", field + "2"]);
     baseTransaction.lpopCount(key5, 2);
     args.push([field + "3", field + "2"]);
+    baseTransaction.linsert(
+        key5,
+        InsertPosition.Before,
+        "nonExistingPivot",
+        "element",
+    );
+    args.push(0);
     baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
     args.push(3);
     baseTransaction.lindex(key6, 0);
