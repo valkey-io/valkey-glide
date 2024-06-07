@@ -4,6 +4,7 @@ package glide;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.FlushMode.ASYNC;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
@@ -704,24 +705,24 @@ public class TransactionTestUtilities {
                 };
 
         transaction
-                .customCommand(new String[] {"function", "flush", "sync"})
+                .functionFlush(SYNC)
                 .functionList(false)
-                .functionList(true)
                 .functionLoad(code, false)
                 .functionLoad(code, true)
                 .functionList("otherLib", false)
                 .functionList("mylib1T", true)
-                .functionDelete("mylib1T");
+                .functionDelete("mylib1T")
+                .functionList(true);
 
         return new Object[] {
-            OK, // customCommand("function", "flush", "sync")
+            OK, // functionFlush(SYNC)
             new Map[0], // functionList(false)
-            new Map[0], // functionList(true)
             "mylib1T", // functionLoad(code, false)
             "mylib1T", // functionLoad(code, true)
             new Map[0], // functionList("otherLib", false)
             expectedLibData, // functionList("mylib1T", true)
             OK, // functionDelete("mylib1T")
+            new Map[0], // functionList(true)
         };
     }
 
