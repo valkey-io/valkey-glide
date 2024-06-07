@@ -212,7 +212,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @example
      *     <pre>{@code
      * Object response = client.fcall("Deep_Thought").get();
-     * assert Object == 42L;
+     * assert response == 42L;
      * }</pre>
      */
     CompletableFuture<Object> fcall(String function);
@@ -225,11 +225,13 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @param function The function name.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return The invoked function's return value.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
      * @example
      *     <pre>{@code
-     * Object response = client.fcall("Deep_Thought", ALL_NODES).get();
-     * assert Object == 42L;
+     * ClusterValue<Object> response = client.fcall("Deep_Thought", ALL_NODES).get();
+     * for (Object nodeResponse : response.getMultiValue().values()) {
+     *   assert nodeResponse == 42L;
+     * }
      * }</pre>
      */
     CompletableFuture<ClusterValue<Object>> fcall(String function, Route route);
@@ -247,7 +249,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      *     <pre>{@code
      * String[] args = new String[] { "Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything" };
      * Object response = client.fcall("Deep_Thought", args).get();
-     * assert Object == 42L;
+     * assert response == 42L;
      * }</pre>
      */
     CompletableFuture<Object> fcall(String function, String[] arguments);
@@ -261,12 +263,12 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @param arguments An <code>array</code> of <code>function</code> arguments.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return The invoked function's return value.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
      * @example
      *     <pre>{@code
      * String[] args = new String[] { "Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything" };
-     * Object response = client.fcall("Deep_Thought", args, ALL_NODES).get();
-     * assert Object == 42L;
+     * ClusterValue<Object> response = client.fcall("Deep_Thought", args, RANDOM).get();
+     * assert response.getSingleValue() == 42L;
      * }</pre>
      */
     CompletableFuture<ClusterValue<Object>> fcall(String function, String[] arguments, Route route);

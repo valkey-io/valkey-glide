@@ -31,7 +31,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *     <pre>{@code
      * String[] args = new String[] { "Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"};
      * Object response = client.fcall("Deep_Thought", new String[0], args).get();
-     * assert Object == 42L;
+     * assert response == 42L;
      * }</pre>
      */
     CompletableFuture<Object> fcall(String function, String[] keys, String[] arguments);

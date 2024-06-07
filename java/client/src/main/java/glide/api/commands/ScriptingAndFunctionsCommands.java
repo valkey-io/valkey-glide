@@ -107,7 +107,7 @@ public interface ScriptingAndFunctionsCommands {
      * @example
      *     <pre>{@code
      * Object response = client.fcall("Deep_Thought").get();
-     * assert Object == 42L;
+     * assert response == 42L;
      * }</pre>
      */
     CompletableFuture<Object> fcall(String function);
