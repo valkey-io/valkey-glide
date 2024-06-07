@@ -9,6 +9,8 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.FlushMode.ASYNC;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.COMMANDSTATS;
@@ -790,8 +792,8 @@ public class CommandTests {
         var route = new SlotKeyRoute("key", PRIMARY);
         assertEquals(OK, clusterClient.flushall().get());
         assertEquals(OK, clusterClient.flushall(route).get());
-        assertEquals(OK, clusterClient.flushall(FlushMode.ASYNC).get());
-        assertEquals(OK, clusterClient.flushall(FlushMode.ASYNC, route).get());
+        assertEquals(OK, clusterClient.flushall(ASYNC).get());
+        assertEquals(OK, clusterClient.flushall(ASYNC, route).get());
 
         var replicaRoute = new SlotKeyRoute("key", REPLICA);
         // command should fail on a replica, because it is read-only
@@ -811,19 +813,13 @@ public class CommandTests {
     public void function_commands(boolean singleNodeRoute) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        // TODO use FUNCTION FLUSH
-        assertEquals(
-                OK,
-                clusterClient
-                        .customCommand(new String[] {"FUNCTION", "FLUSH", "SYNC"})
-                        .get()
-                        .getSingleValue());
-
         String libName = "mylib1c_" + singleNodeRoute;
         String funcName = "myfunc1c_" + singleNodeRoute;
+
         String code = generateLuaLibCode(libName, List.of(funcName));
         Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
 
+        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
 
@@ -921,7 +917,7 @@ public class CommandTests {
 
         // TODO test with FCALL
 
-        // TODO FUNCTION FLUSH at the end
+        assertEquals(OK, clusterClient.functionFlush(route).get());
     }
 
     @SneakyThrows
@@ -929,13 +925,7 @@ public class CommandTests {
     public void function_commands() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        // TODO use FUNCTION FLUSH
-        assertEquals(
-                OK,
-                clusterClient
-                        .customCommand(new String[] {"FUNCTION", "FLUSH", "SYNC"})
-                        .get()
-                        .getSingleValue());
+        assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
         String libName = "mylib1c";
         String funcName = "myfunc1c";
@@ -1000,6 +990,6 @@ public class CommandTests {
 
         // TODO test with FCALL
 
-        // TODO FUNCTION FLUSH at the end
+        assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
     }
 }

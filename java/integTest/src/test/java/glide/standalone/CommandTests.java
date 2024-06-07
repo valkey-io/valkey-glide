@@ -8,6 +8,8 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.FlushMode.ASYNC;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
@@ -25,7 +27,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
-import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
@@ -379,14 +380,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, regularClient.flushall(FlushMode.SYNC).get());
+        assertEquals(OK, regularClient.flushall(SYNC).get());
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter = (Object[]) regularClient.customCommand(new String[] {"keys", "*"}).get();
         assertEquals(0, keysAfter.length);
 
         assertEquals(OK, regularClient.flushall().get());
-        assertEquals(OK, regularClient.flushall(FlushMode.ASYNC).get());
+        assertEquals(OK, regularClient.flushall(ASYNC).get());
     }
 
     @SneakyThrows
@@ -394,8 +395,7 @@ public class CommandTests {
     public void function_commands() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        // TODO use FUNCTION FLUSH
-        assertEquals(OK, regularClient.customCommand(new String[] {"FUNCTION", "FLUSH", "SYNC"}).get());
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         String libName = "mylib1c";
         String funcName = "myfunc1c";
@@ -457,6 +457,6 @@ public class CommandTests {
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
         // TODO test with FCALL
-        // TODO FUNCTION FLUSH at the end
+        assertEquals(OK, regularClient.functionFlush(ASYNC).get());
     }
 }

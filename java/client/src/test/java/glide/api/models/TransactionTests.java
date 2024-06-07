@@ -59,6 +59,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
@@ -946,6 +947,10 @@ public class TransactionTests {
 
         transaction.sintercard(new String[] {"key1", "key2"}, 1);
         results.add(Pair.of(SInterCard, buildArgs("2", "key1", "key2", "LIMIT", "1")));
+
+        transaction.functionFlush().functionFlush(ASYNC);
+        results.add(Pair.of(FunctionFlush, buildArgs()));
+        results.add(Pair.of(FunctionFlush, buildArgs("ASYNC")));
 
         transaction.functionDelete("LIB");
         results.add(Pair.of(FunctionDelete, buildArgs("LIB")));

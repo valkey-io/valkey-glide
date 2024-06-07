@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -169,6 +170,72 @@ public interface ScriptingAndFunctionsClusterCommands {
             String libNamePattern, boolean withCode, Route route);
 
     /**
+     * Deletes all function libraries.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionFlush().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionFlush();
+
+    /**
+     * Deletes all function libraries.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionFlush(SYNC).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionFlush(FlushMode mode);
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionFlush(RANDOM).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionFlush(Route route);
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionFlush(SYNC, RANDOM).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionFlush(FlushMode mode, Route route);
+
+    /**
      * Deletes a library and all its functions.<br>
      * The command will be routed to all primary nodes.
      *
@@ -190,8 +257,6 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
      * @param libName The library name to delete.
-     * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
