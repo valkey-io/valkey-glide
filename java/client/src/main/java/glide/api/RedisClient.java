@@ -18,6 +18,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
@@ -231,6 +232,18 @@ public class RedisClient extends BaseClient
                         ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
                         : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
                 response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush() {
+        return commandManager.submitNewCommand(
+                FunctionFlush, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush(@NonNull FlushMode mode) {
+        return commandManager.submitNewCommand(
+                FunctionFlush, new String[] {mode.toString()}, this::handleStringResponse);
     }
 
     @Override

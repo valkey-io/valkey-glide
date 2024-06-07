@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.FlushMode;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -81,6 +82,36 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Object>[]> functionList(String libNamePattern, boolean withCode);
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionFlush().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionFlush();
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionFlush(SYNC).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionFlush(FlushMode mode);
 
     /**
      * Deletes a library and all its functions.
