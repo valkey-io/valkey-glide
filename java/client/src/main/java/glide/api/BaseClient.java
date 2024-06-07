@@ -25,6 +25,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BitField;
 import static redis_request.RedisRequestOuterClass.RequestType.BitFieldReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
 import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -1743,5 +1744,21 @@ public abstract class BaseClient
         String[] args =
                 concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
         return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, boolean replace) {
+        String[] arguments = new String[] {source, destination};
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, REPLACE_REDIS_API);
+        }
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(@NonNull String source, @NonNull String destination) {
+        String[] arguments = new String[] {source, destination};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 }
