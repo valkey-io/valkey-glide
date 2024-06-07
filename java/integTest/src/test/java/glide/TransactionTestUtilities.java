@@ -12,6 +12,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -345,6 +346,10 @@ public class TransactionTestUtilities {
                 .lrange(listKey1, 0, -2)
                 .lpop(listKey1)
                 .lpopCount(listKey1, 2)
+                .lpos(listKey1, value1)
+                .lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())
+                .lposCount(listKey1, value1, 1L)
+                .lposCount(listKey1, value1, 2L, LPosOptions.builder().rank(2L).build())
                 .rpush(listKey2, new String[] {value1, value2, value2})
                 .rpop(listKey2)
                 .rpopCount(listKey2, 2)
@@ -391,6 +396,10 @@ public class TransactionTestUtilities {
                     new String[] {value3, value2}, // lrange(listKey1, 0, -2)
                     value3, // lpop(listKey1)
                     new String[] {value2, value1}, // lpopCount(listKey1, 2)
+                    0L, // lpos(listKey1, value1)
+                    1L, // lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())
+                    new Long[] {0L}, // lposCount(listKey1, value1, 1L)
+                    new Long[] {0L, 1L}, // lposCount(listKey1, value1, 2L, LPosOptions.builder().rank(2L).build())
                     3L, // rpush(listKey2, new String[] {value1, value2, value2})
                     value2, // rpop(listKey2)
                     new String[] {value2, value1}, // rpopCount(listKey2, 2)

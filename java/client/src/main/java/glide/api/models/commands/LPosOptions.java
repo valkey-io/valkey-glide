@@ -22,6 +22,7 @@ public final class LPosOptions {
 
     private Long rank;
     private Long maxLength;
+    private final String COUNT_REDIS_API = "COUNT";
 
     /**
      * Converts LPosOptions into a String[].
@@ -31,11 +32,11 @@ public final class LPosOptions {
     public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>();
         if (rank != null) {
-            optionArgs.add(Long.toString(rank));
+            optionArgs.add("RANK" + Long.toString(rank));
         }
 
         if (maxLength != null) {
-            optionArgs.add(Long.toString(maxLength));
+            optionArgs.add("MAXLEN" + Long.toString(maxLength));
         }
 
         return optionArgs.toArray(new String[0]);
