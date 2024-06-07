@@ -238,4 +238,9 @@ public class RedisClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionDelete, new String[] {libName}, this::handleStringResponse);
     }
+
+    @Override
+    public CompletableFuture<Object> fcall(@NonNull String function) {
+        return fcall(function, new String[0], new String[0]);
+    }
 }
