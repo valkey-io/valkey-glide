@@ -308,7 +308,8 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
      * @param function The function name.
-     * @param arguments An <code>array</code> of <code>function</code> arguments.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     *     </code> should not represent names of keys.
      * @return The invoked function's return value.
      * @example
      *     <pre>{@code
@@ -325,7 +326,8 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
      * @param function The function name.
-     * @param arguments An <code>array</code> of <code>function</code> arguments.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     *     </code> should not represent names of keys.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return The invoked function's return value wrapped by a {@link ClusterValue}.

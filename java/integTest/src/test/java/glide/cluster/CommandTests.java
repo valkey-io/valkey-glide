@@ -750,7 +750,11 @@ public class CommandTests {
                         clusterClient.blmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT, 1)),
                 Arguments.of("sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"})),
                 Arguments.of(
-                        "sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"}, 1)));
+                        "sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"}, 1)),
+                Arguments.of(
+                        "fcall",
+                        "7.0.0",
+                        clusterClient.fcall("func", new String[] {"abc", "zxy", "lkn"}, new String[0])));
     }
 
     @SneakyThrows
@@ -1087,6 +1091,6 @@ public class CommandTests {
         // fcall should succeed now
         assertEquals(42L, clusterClient.fcall(funcName, route).get().getSingleValue());
 
-        assertEquals(OK, clusterClient.functionDelete(libName, route).get());
+        assertEquals(OK, clusterClient.functionDelete(libName).get());
     }
 }
