@@ -14,6 +14,7 @@
 * Python: Added ZINTER, ZUNION commands ([#1478](https://github.com/aws/glide-for-redis/pull/1478))
 * Python: Added SINTERCARD command ([#1511](https://github.com/aws/glide-for-redis/pull/1511))
 * Python: Added SORT command ([#1439](https://github.com/aws/glide-for-redis/pull/1439))
+* Node: Added OBJECT ENCODING command ([#1518](https://github.com/aws/glide-for-redis/pull/1518))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

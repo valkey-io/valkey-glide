@@ -2701,6 +2701,149 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object encoding test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const string_key = uuidv4();
+                const list_key = uuidv4();
+                const hashtable_key = uuidv4();
+                const intset_key = uuidv4();
+                const set_listpack_key = uuidv4();
+                const hash_hashtable_key = uuidv4();
+                const hash_listpack_key = uuidv4();
+                const skiplist_key = uuidv4();
+                const zset_listpack_key = uuidv4();
+                const stream_key = uuidv4();
+                const non_existing_key = uuidv4();
+                const versionLessThan7 =
+                    await checkIfServerVersionLessThan("7.0.0");
+                const versionLessThan72 =
+                    await checkIfServerVersionLessThan("7.2.0");
+
+                expect(await client.object_encoding(non_existing_key)).toEqual(
+                    null,
+                );
+
+                expect(
+                    await client.set(
+                        string_key,
+                        "a really loooooooooooooooooooooooooooooooooooooooong value",
+                    ),
+                ).toEqual("OK");
+                expect(await client.object_encoding(string_key)).toEqual("raw");
+
+                expect(await client.set(string_key, "2")).toEqual("OK");
+                expect(await client.object_encoding(string_key)).toEqual("int");
+
+                expect(await client.set(string_key, "value")).toEqual("OK");
+                expect(await client.object_encoding(string_key)).toEqual(
+                    "embstr",
+                );
+
+                expect(await client.lpush(list_key, ["1"])).toEqual(1);
+
+                if (versionLessThan7) {
+                    expect(await client.object_encoding(list_key)).toEqual(
+                        "quicklist",
+                    );
+                } else {
+                    expect(await client.object_encoding(list_key)).toEqual(
+                        "listpack",
+                    );
+                }
+
+                // The default value of set-max-intset-entries is 512
+                for (let i = 0; i < 513; i++) {
+                    expect(
+                        await client.sadd(hashtable_key, [String(i)]),
+                    ).toEqual(1);
+                }
+
+                expect(await client.object_encoding(hashtable_key)).toEqual(
+                    "hashtable",
+                );
+
+                expect(await client.sadd(intset_key, ["1"])).toEqual(1);
+                expect(await client.object_encoding(intset_key)).toEqual(
+                    "intset",
+                );
+
+                expect(await client.sadd(set_listpack_key, ["foo"])).toEqual(1);
+
+                if (versionLessThan72) {
+                    expect(
+                        await client.object_encoding(set_listpack_key),
+                    ).toEqual("hashtable");
+                } else {
+                    expect(
+                        await client.object_encoding(set_listpack_key),
+                    ).toEqual("listpack");
+                }
+
+                // The default value of hash-max-listpack-entries is 512
+                for (let i = 0; i < 513; i++) {
+                    expect(
+                        await client.hset(hash_hashtable_key, {
+                            [String(i)]: "2",
+                        }),
+                    ).toEqual(1);
+                }
+
+                expect(
+                    await client.object_encoding(hash_hashtable_key),
+                ).toEqual("hashtable");
+
+                expect(
+                    await client.hset(hash_listpack_key, { "1": "2" }),
+                ).toEqual(1);
+
+                if (versionLessThan7) {
+                    expect(
+                        await client.object_encoding(hash_listpack_key),
+                    ).toEqual("ziplist");
+                } else {
+                    expect(
+                        await client.object_encoding(hash_listpack_key),
+                    ).toEqual("listpack");
+                }
+
+                // The default value of zset-max-listpack-entries is 128
+                for (let i = 0; i < 129; i++) {
+                    expect(
+                        await client.zadd(skiplist_key, { [String(i)]: 2.0 }),
+                    ).toEqual(1);
+                }
+
+                expect(await client.object_encoding(skiplist_key)).toEqual(
+                    "skiplist",
+                );
+
+                expect(
+                    await client.zadd(zset_listpack_key, { "1": 2.0 }),
+                ).toEqual(1);
+
+                if (versionLessThan7) {
+                    expect(
+                        await client.object_encoding(zset_listpack_key),
+                    ).toEqual("ziplist");
+                } else {
+                    expect(
+                        await client.object_encoding(zset_listpack_key),
+                    ).toEqual("listpack");
+                }
+
+                expect(
+                    await client.xadd(stream_key, [["field", "value"]]),
+                ).not.toBeNull();
+                expect(await client.object_encoding(stream_key)).toEqual(
+                    "stream",
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {
