@@ -35,6 +35,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -75,7 +76,7 @@ public class RedisClusterClientTest {
     public void custom_command_returns_single_value() {
         var commandManager = new TestCommandManager(null);
 
-        try (var client = new TestClient(commandManager, "TEST")) {
+        try (var client = new TestClient(commandManager, GlideString.of("TEST"))) {
             var value = client.customCommand(TEST_ARGS).get();
             assertEquals("TEST", value.getSingleValue());
         }
@@ -125,7 +126,7 @@ public class RedisClusterClientTest {
                 new TestCommandManager(
                         Response.newBuilder().setConstantResponse(ConstantResponse.OK).build());
 
-        try (var client = new TestClient(commandManager, "OK")) {
+        try (var client = new TestClient(commandManager, GlideString.of("OK"))) {
             var value = client.customCommand(TEST_ARGS, ALL_NODES).get();
             assertEquals("OK", value.getSingleValue());
         }
@@ -141,10 +142,9 @@ public class RedisClusterClientTest {
         }
 
         @Override
+        @SuppressWarnings("unchecked")
         protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response) {
-            @SuppressWarnings("unchecked")
-            T returnValue = (T) object;
-            return returnValue;
+            return (T) object;
         }
 
         @Override
@@ -432,7 +432,7 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = "info string";
-        try (var client = new TestClient(commandManager, data)) {
+        try (var client = new TestClient(commandManager, GlideString.of(data))) {
             var value = client.info(RANDOM).get();
             assertAll(
                     () -> assertTrue(value.hasSingleData()),
@@ -459,7 +459,7 @@ public class RedisClusterClientTest {
         var commandManager = new TestCommandManager(null);
 
         var data = "info string";
-        try (var client = new TestClient(commandManager, data)) {
+        try (var client = new TestClient(commandManager, GlideString.of(data))) {
             var value = client.info(InfoOptions.builder().build(), RANDOM).get();
             assertAll(
                     () -> assertTrue(value.hasSingleData()),
@@ -547,7 +547,7 @@ public class RedisClusterClientTest {
     public void clientGetName_with_single_node_route_returns_success() {
         var commandManager = new TestCommandManager(null);
 
-        try (var client = new TestClient(commandManager, "TEST")) {
+        try (var client = new TestClient(commandManager, GlideString.of("TEST"))) {
             var value = client.clientGetName(RANDOM).get();
             assertEquals("TEST", value.getSingleValue());
         }

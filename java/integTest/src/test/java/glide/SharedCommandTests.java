@@ -4211,7 +4211,8 @@ public class SharedCommandTests {
         // TODO: update once fix is implemented for https://github.com/aws/glide-for-redis/issues/1447
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.get(destination).get());
-        assertTrue(executionException.getCause() instanceof RuntimeException);
+        assertTrue(executionException.getCause() instanceof AssertionError);
+
         assertEquals(0, client.setbit(key1, 0, 1).get());
         assertEquals(1L, client.bitop(BitwiseOperation.NOT, destination, new String[] {key1}).get());
         assertEquals("\u001e", client.get(destination).get());
@@ -4233,6 +4234,7 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.bitop(BitwiseOperation.AND, destination, new String[] {emptyKey1}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
 
         // Source keys is an empty list
         executionException =

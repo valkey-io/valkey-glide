@@ -2,6 +2,7 @@
 package glide.utils;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
@@ -23,6 +24,13 @@ public class ArrayTransformUtils {
         return args.entrySet().stream()
                 .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue().toString()))
                 .toArray(String[]::new);
+    }
+
+    public static GlideString[] convertMapToKeyValueBinaryStringArray(
+            Map<GlideString, GlideString> args) {
+        return args.entrySet().stream()
+                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
+                .toArray(GlideString[]::new);
     }
 
     /**

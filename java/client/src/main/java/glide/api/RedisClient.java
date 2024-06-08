@@ -30,6 +30,7 @@ import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
+import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -69,6 +70,11 @@ public class RedisClient extends BaseClient
     @Override
     public CompletableFuture<Object> customCommand(@NonNull String[] args) {
         return commandManager.submitNewCommand(CustomCommand, args, this::handleObjectOrNullResponse);
+    }
+
+    public CompletableFuture<Object> customCommandBinary(@NonNull GlideString[] args) {
+        return commandManager.submitNewCommand(
+                CustomCommand, args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Override

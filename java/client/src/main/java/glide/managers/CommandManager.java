@@ -3,6 +3,7 @@ package glide.managers;
 
 import com.google.protobuf.ByteString;
 import glide.api.models.ClusterTransaction;
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
@@ -15,6 +16,7 @@ import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -53,6 +55,15 @@ public class CommandManager {
             String[] arguments,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
+        var args = Arrays.stream(arguments).map(GlideString::of).toArray(GlideString[]::new);
+        return submitNewCommand(requestType, args, responseHandler);
+    }
+
+    public <T> CompletableFuture<T> submitNewCommand(
+            RequestType requestType,
+            GlideString[] arguments,
+            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+
         RedisRequest.Builder command = prepareRedisRequest(requestType, arguments);
         return submitCommandToChannel(command, responseHandler);
     }
@@ -72,7 +83,8 @@ public class CommandManager {
             Route route,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments, route);
+        var args = Arrays.stream(arguments).map(GlideString::of).toArray(GlideString[]::new);
+        RedisRequest.Builder command = prepareRedisRequest(requestType, args, route);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -160,10 +172,10 @@ public class CommandManager {
      *     adding a callback id.
      */
     protected RedisRequest.Builder prepareRedisRequest(
-            RequestType requestType, String[] arguments, Route route) {
+            RequestType requestType, GlideString[] arguments, Route route) {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
         for (var arg : arguments) {
-            commandArgs.addArgs(ByteString.copyFromUtf8(arg));
+            commandArgs.addArgs(ByteString.copyFrom(arg.getBytes()));
         }
 
         var builder =
@@ -233,10 +245,11 @@ public class CommandManager {
      * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
      *     adding a callback id.
      */
-    protected RedisRequest.Builder prepareRedisRequest(RequestType requestType, String[] arguments) {
+    protected RedisRequest.Builder prepareRedisRequest(
+            RequestType requestType, GlideString[] arguments) {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
         for (var arg : arguments) {
-            commandArgs.addArgs(ByteString.copyFromUtf8(arg));
+            commandArgs.addArgs(ByteString.copyFrom(arg.getBytes()));
         }
 
         return RedisRequest.newBuilder()

@@ -3,6 +3,7 @@
  */
 use glide_core::start_socket_listener;
 
+use jni::descriptors::Desc;
 use jni::objects::{JClass, JObject, JObjectArray, JString, JThrowable};
 use jni::sys::jlong;
 use jni::JNIEnv;
@@ -19,18 +20,50 @@ pub use ffi_test::*;
 fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<'local> {
     match val {
         Value::Nil => JObject::null(),
-        Value::SimpleString(str) => JObject::from(env.new_string(str).unwrap()),
+        Value::SimpleString(str) => {
+            let jstr = JObject::from(env.new_string(str).unwrap());
+
+            // TODO cache class
+            let class = Desc::<JClass>::lookup("glide/api/models/GlideString", env).unwrap();
+
+            JObject::try_from(
+                env.call_static_method(
+                    class,
+                    "of",
+                    "(Ljava/lang/String;)Lglide/api/models/GlideString;",
+                    &[(&jstr).into()],
+                )
+                .unwrap(),
+            )
+            .unwrap()
+
+            // TODO drop(class)
+        }
         Value::Okay => JObject::from(env.new_string("OK").unwrap()),
         Value::Int(num) => env
             .new_object("java/lang/Long", "(J)V", &[num.into()])
             .unwrap(),
-        Value::BulkString(data) => match std::str::from_utf8(data.as_ref()) {
-            Ok(val) => JObject::from(env.new_string(val).unwrap()),
-            Err(_err) => {
-                let _ = env.throw("Error decoding Unicode data");
-                JObject::null()
-            }
-        },
+        Value::BulkString(data) => {
+            let array = env.new_byte_array(data.len() as i32).unwrap();
+            let i8vec: Vec<i8> = data.into_iter().map(|b| b as i8).collect();
+            env.set_byte_array_region(&array, 0, &i8vec[..]).unwrap();
+
+            // TODO cache class
+            let class = Desc::<JClass>::lookup("glide/api/models/GlideString", env).unwrap();
+
+            JObject::try_from(
+                env.call_static_method(
+                    class,
+                    "of",
+                    "([B)Lglide/api/models/GlideString;",
+                    &[(&array).into()],
+                )
+                .unwrap(),
+            )
+            .unwrap()
+
+            // TODO drop(class)
+        }
         Value::Array(array) => {
             let items: JObjectArray = env
                 .new_object_array(array.len() as i32, "java/lang/Object", JObject::null())
@@ -69,7 +102,25 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
         Value::Boolean(bool) => env
             .new_object("java/lang/Boolean", "(Z)V", &[bool.into()])
             .unwrap(),
-        Value::VerbatimString { format: _, text } => JObject::from(env.new_string(text).unwrap()),
+        Value::VerbatimString { format: _, text } => {
+            let jstr = env.new_string(text).unwrap();
+
+            // TODO cache class
+            let class = Desc::<JClass>::lookup("glide/api/models/GlideString", env).unwrap();
+
+            JObject::try_from(
+                env.call_static_method(
+                    class,
+                    "of",
+                    "(Ljava/lang/String;)Lglide/api/models/GlideString;",
+                    &[(&jstr).into()],
+                )
+                .unwrap(),
+            )
+            .unwrap()
+
+            // TODO drop(class)
+        }
         Value::BigNumber(_num) => todo!(),
         Value::Set(array) => {
             let set = env.new_object("java/util/HashSet", "()V", &[]).unwrap();

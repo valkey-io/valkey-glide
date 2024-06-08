@@ -9,6 +9,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueBinaryStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
@@ -152,6 +153,7 @@ import glide.api.commands.SetBaseCommands;
 import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -186,12 +188,15 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -314,15 +319,29 @@ public abstract class BaseClient
     }
 
     protected Object handleObjectOrNullResponse(Response response) throws RedisException {
+        var res = handleRedisResponse(Object.class, true, response);
+        return convertGlideStringsToStrings(res);
+    }
+
+    protected Object handleBinaryObjectOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(Object.class, true, response);
     }
 
     protected String handleStringResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, false, response);
+        return handleRedisResponse(GlideString.class, false, response).getString();
     }
 
     protected String handleStringOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, true, response);
+        var res = handleRedisResponse(GlideString.class, true, response);
+        return res == null ? null : res.getString();
+    }
+
+    protected GlideString handleBinaryStringResponse(Response response) throws RedisException {
+        return handleRedisResponse(GlideString.class, false, response);
+    }
+
+    protected GlideString handleBinaryStringOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(GlideString.class, true, response);
     }
 
     protected Boolean handleBooleanResponse(Response response) throws RedisException {
@@ -346,10 +365,16 @@ public abstract class BaseClient
     }
 
     protected Object[] handleArrayResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object[].class, false, response);
+        var array = handleRedisResponse(Object[].class, false, response);
+        return (Object[]) convertGlideStringsToStrings(array);
     }
 
     protected Object[] handleArrayOrNullResponse(Response response) throws RedisException {
+        var array = handleRedisResponse(Object[].class, true, response);
+        return (Object[]) convertGlideStringsToStrings(array);
+    }
+
+    protected Object[] handleBinaryArrayOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, true, response);
     }
 
@@ -360,7 +385,8 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, false, response);
+        var map = handleRedisResponse(Map.class, false, response);
+        return (Map<String, V>) convertGlideStringsToStrings(map);
     }
 
     /**
@@ -370,12 +396,14 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, true, response);
+        var map = handleRedisResponse(Map.class, true, response);
+        return (Map<String, V>) convertGlideStringsToStrings(map);
     }
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
-        return handleRedisResponse(Set.class, false, response);
+        var set = handleRedisResponse(Set.class, false, response);
+        return (Set<String>) convertGlideStringsToStrings(set);
     }
 
     /** Process a <code>FUNCTION LIST</code> standalone response. */
@@ -388,6 +416,65 @@ public abstract class BaseClient
             libraryInfo.put("functions", functionInfo);
         }
         return data;
+    }
+
+    // Hacky hack © Max
+    // Downcasts all `GlideString`s to `String`s and recursively traverses all collections
+    // A stub to let tests pass, because they don't expect `GlideString`s in collections
+    private Object convertGlideStringsToStrings(Object o) {
+        if (o == null) return o;
+
+        if (o.getClass().isArray()) {
+            var array = (Object[]) o;
+            for (var i = 0; i < array.length; i++) {
+                array[i] = convertGlideStringsToStrings(array[i]);
+            }
+        } else if (o instanceof Set) {
+            var set = (Set<?>) o;
+            o = set.stream().map(this::convertGlideStringsToStrings).collect(Collectors.toSet());
+        } else if (o instanceof Map) {
+            var map = (Map<?, ?>) o;
+            o =
+                    map.entrySet().stream()
+                            .collect(
+                                    HashMap::new,
+                                    (m, e) ->
+                                            m.put(e.getKey().toString(), convertGlideStringsToStrings(e.getValue())),
+                                    HashMap::putAll);
+        } else if (o instanceof GlideString) {
+            o = o.toString();
+        }
+        return o;
+    }
+
+    public CompletableFuture<String> setBinary(@NonNull GlideString key, @NonNull GlideString value) {
+        return commandManager.submitNewCommand(
+                Set, new GlideString[] {key, value}, this::handleStringResponse);
+    }
+
+    public CompletableFuture<GlideString> setBinary(
+            @NonNull GlideString key, @NonNull GlideString value, @NonNull SetOptions options) {
+        GlideString[] arguments =
+                Arrays.stream(options.toArgs()).map(GlideString::of).toArray(GlideString[]::new);
+        arguments = ArrayUtils.addAll(new GlideString[] {key, value}, arguments);
+        return commandManager.submitNewCommand(Set, arguments, this::handleBinaryStringOrNullResponse);
+    }
+
+    public CompletableFuture<GlideString> getBinary(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                Get, new GlideString[] {key}, this::handleBinaryStringOrNullResponse);
+    }
+
+    public CompletableFuture<GlideString[]> mgetBinary(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(
+                MGet,
+                keys,
+                response -> castArray(handleBinaryArrayOrNullResponse(response), GlideString.class));
+    }
+
+    public CompletableFuture<String> msetBinary(@NonNull Map<GlideString, GlideString> keyValueMap) {
+        GlideString[] args = convertMapToKeyValueBinaryStringArray(keyValueMap);
+        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
     }
 
     @Override
