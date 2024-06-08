@@ -243,11 +243,32 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local
     )
 }
 
+enum ExceptionType {
+    Exception,
+    RuntimeException,
+}
+
+impl std::fmt::Display for ExceptionType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ExceptionType::Exception => write!(f, "{}", "java/lang/Exception"),
+            ExceptionType::RuntimeException => write!(f, "{}", "java/lang/RuntimeException"),
+        }
+    }
+}
+
 fn handle_errors<T>(env: &mut JNIEnv, result: Result<T, FFIError>) -> Option<T> {
     match result {
         Ok(value) => Some(value),
         Err(err) => {
-            throw_java_exception(env, err.to_string());
+            match err {
+                FFIError::Utf8Error(utf8_error) => throw_java_exception(
+                    env,
+                    ExceptionType::RuntimeException,
+                    utf8_error.to_string(),
+                ),
+                error => throw_java_exception(env, ExceptionType::Exception, error.to_string()),
+            };
             None
         }
     }
@@ -262,29 +283,19 @@ fn handle_panics<T, F: std::panic::UnwindSafe + FnOnce() -> Option<T>>(
         Ok(Some(value)) => value,
         Ok(None) => default_value,
         Err(_err) => {
-            /*
-            env.throw_new(
-                "java/lang/RuntimeException",
-                format!("Native function {} panicked", ffi_func_name),
-            )
-            .unwrap_or_else(|err| {
-                error!(
-                    "Native function {} panicked. Failed to create runtime exception: {}",
-                    ffi_func_name,
-                    err.to_string()
-                );
-            });
-            */
+            // Following https://github.com/jni-rs/jni-rs/issues/76#issuecomment-363523906
+            // and throwing a runtime exception is not feasible here because of https://github.com/jni-rs/jni-rs/issues/432
+            error!("Native function {} panicked.", ffi_func_name);
             default_value
         }
     }
 }
 
-fn throw_java_exception(env: &mut JNIEnv, message: String) {
+fn throw_java_exception(env: &mut JNIEnv, exception_type: ExceptionType, message: String) {
     match env.exception_check() {
         Ok(true) => (),
         Ok(false) => {
-            env.throw_new("java/lang/Exception", &message)
+            env.throw_new(exception_type.to_string(), &message)
                 .unwrap_or_else(|err| {
                     error!(
                         "Failed to create exception with string {}: {}",
