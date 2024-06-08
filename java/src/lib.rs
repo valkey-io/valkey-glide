@@ -18,29 +18,29 @@ mod ffi_test;
 pub use ffi_test::*;
 
 enum FFIError {
-    JniError(JNIError),
-    UDSError(String),
-    Utf8Error(FromUtf8Error),
+    Jni(JNIError),
+    Uds(String),
+    Utf8(FromUtf8Error),
 }
 
 impl From<jni::errors::Error> for FFIError {
     fn from(value: jni::errors::Error) -> Self {
-        FFIError::JniError(value)
+        FFIError::Jni(value)
     }
 }
 
 impl From<FromUtf8Error> for FFIError {
     fn from(value: FromUtf8Error) -> Self {
-        FFIError::Utf8Error(value)
+        FFIError::Utf8(value)
     }
 }
 
 impl std::fmt::Display for FFIError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FFIError::JniError(err) => write!(f, "{}", err.to_string()),
-            FFIError::UDSError(err) => write!(f, "{}", err),
-            FFIError::Utf8Error(err) => write!(f, "{}", err.to_string()),
+            FFIError::Jni(err) => write!(f, "{}", err),
+            FFIError::Uds(err) => write!(f, "{}", err),
+            FFIError::Utf8(err) => write!(f, "{}", err),
         }
     }
 }
@@ -55,11 +55,7 @@ fn redis_value_to_java<'local>(
         Value::Nil => Ok(JObject::null()),
         Value::SimpleString(str) => Ok(JObject::from(env.new_string(str)?)),
         Value::Okay => Ok(JObject::from(env.new_string("OK")?)),
-        Value::Int(num) => Ok(JObject::from(env.new_object(
-            "java/lang/Long",
-            "(J)V",
-            &[num.into()],
-        )?)),
+        Value::Int(num) => Ok(env.new_object("java/lang/Long", "(J)V", &[num.into()])?),
         Value::BulkString(data) => {
             if encoding_utf8 {
                 let utf8_str = String::from_utf8(data)?;
@@ -188,9 +184,9 @@ pub extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSock
                     Ok(Ok(path)) => env
                         .new_string(path)
                         .map(|p| p.into())
-                        .map_err(|err| FFIError::UDSError(err.to_string())),
-                    Ok(Err(error_message)) => Err(FFIError::UDSError(error_message)),
-                    Err(error) => Err(FFIError::UDSError(error.to_string())),
+                        .map_err(|err| FFIError::Uds(err.to_string())),
+                    Ok(Err(error_message)) => Err(FFIError::Uds(error_message)),
+                    Err(error) => Err(FFIError::Uds(error.to_string())),
                 }
             }
             let result = f(&mut env);
@@ -230,7 +226,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local
 ) {
     handle_panics(
         move || {
-            fn f<'a>(env: &mut JNIEnv<'a>, hash: JString) -> Result<(), FFIError> {
+            fn f(env: &mut JNIEnv<'_>, hash: JString) -> Result<(), FFIError> {
                 let hash_str: String = env.get_string(&hash)?.into();
                 glide_core::scripts_container::remove_script(&hash_str);
                 Ok(())
@@ -251,8 +247,8 @@ enum ExceptionType {
 impl std::fmt::Display for ExceptionType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ExceptionType::Exception => write!(f, "{}", "java/lang/Exception"),
-            ExceptionType::RuntimeException => write!(f, "{}", "java/lang/RuntimeException"),
+            ExceptionType::Exception => write!(f, "java/lang/Exception"),
+            ExceptionType::RuntimeException => write!(f, "java/lang/RuntimeException"),
         }
     }
 }
@@ -262,7 +258,7 @@ fn handle_errors<T>(env: &mut JNIEnv, result: Result<T, FFIError>) -> Option<T> 
         Ok(value) => Some(value),
         Err(err) => {
             match err {
-                FFIError::Utf8Error(utf8_error) => throw_java_exception(
+                FFIError::Utf8(utf8_error) => throw_java_exception(
                     env,
                     ExceptionType::RuntimeException,
                     utf8_error.to_string(),
