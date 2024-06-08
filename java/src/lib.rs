@@ -7,6 +7,7 @@ use jni::objects::{JClass, JObject, JObjectArray, JString};
 use jni::sys::jlong;
 use jni::JNIEnv;
 use redis::Value;
+use std::string::FromUtf8Error;
 use std::sync::mpsc;
 
 mod errors;
@@ -17,6 +18,34 @@ use errors::{handle_errors, handle_panics, FFIError};
 mod ffi_test;
 #[cfg(ffi_test)]
 pub use ffi_test::*;
+
+enum FFIError {
+    JniError(JNIError),
+    UDSError(String),
+    Utf8Error(FromUtf8Error),
+}
+
+impl From<jni::errors::Error> for FFIError {
+    fn from(value: jni::errors::Error) -> Self {
+        FFIError::JniError(value)
+    }
+}
+
+impl From<FromUtf8Error> for FFIError {
+    fn from(value: FromUtf8Error) -> Self {
+        FFIError::Utf8Error(value)
+    }
+}
+
+impl std::fmt::Display for FFIError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            FFIError::JniError(err) => write!(f, "{}", err.to_string()),
+            FFIError::UDSError(err) => write!(f, "{}", err),
+            FFIError::Utf8Error(err) => write!(f, "{}", err.to_string()),
+        }
+    }
+}
 
 // TODO: Consider caching method IDs here in a static variable (might need RwLock to mutate)
 fn redis_value_to_java<'local>(
