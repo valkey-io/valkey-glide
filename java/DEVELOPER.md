@@ -47,7 +47,7 @@ sudo yum update -y
 sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-devel unzip
 # Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-
+```
 **Dependencies installation for MacOS**
 
 ```bash
@@ -87,7 +87,7 @@ Before starting this step, make sure you've installed all software requirments.
 
 ### Test
 
-To run tests, use the following command:
+To run all tests, use the following command:
 
 ```bash
 ./gradlew test
@@ -115,13 +115,14 @@ Development on the Java wrapper may involve changes in either the Java or Rust c
 
 -   clippy
 -   rustfmt
+-   doc
 
 #### Running the linters
 
 1. Spotless
     ```bash
     # Run from the `java` folder
-    ./gradlew :spotlessCheck
+    ./gradlew :spotlessApply
     ```
 2. Rust
     ```bash
