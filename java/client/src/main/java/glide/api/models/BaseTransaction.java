@@ -953,7 +953,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - An array that holds the indices of the matching elements inside the list.
      * */
     public T lposCount(@NonNull String key, @NonNull String element, long count) {
-        ArgsArray commandArgs = buildArgs(key, element, Long.toString(count));
+        ArgsArray commandArgs = buildArgs(key, element, COUNT_REDIS_API, Long.toString(count));
         protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
         return getThis();
     }
@@ -968,7 +968,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - An array that holds the indices of the matching elements inside the list.
      * */
     public T lposCount(@NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
-        ArgsArray commandArgs = buildArgs(key, element, Long.toString(count), Arrays.toString(options.toArgs()));
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addAll(new String[] {key, element, COUNT_REDIS_API, Long.toString(count)}, options.toArgs()));
         protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
         return getThis();
     }
