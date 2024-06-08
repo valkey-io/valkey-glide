@@ -2004,10 +2004,10 @@ export function runBaseTests<Context>(config: {
         `zinterstore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                await zinterstoreBasicTest;
-                await zinterstoreWithAggregation;
-                await zinterstoreWithWeightsAndAggregation;
-                await zinterstoreEmptyCases;
+                await zinterstoreBasicTest(client);
+                await zinterstoreWithAggregation(client);
+                await zinterstoreWithWeightsAndAggregation(client);
+                await zinterstoreEmptyCases(client);
             }, protocol);
         },
         config.timeout,

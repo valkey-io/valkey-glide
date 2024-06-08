@@ -858,7 +858,7 @@ function createZCmdStoreArgs(
     if (typeof keys[0] === "string") {
         args.push(...(keys as string[]));
     } else {
-        const weightsKeys = keys.map(([key, _]) => key);
+        const weightsKeys = keys.map(([key]) => key);
         args.push(...(weightsKeys as string[]));
         const weights = keys.map(([, weight]) => weight.toString());
         args.push("WEIGHTS", ...weights);
@@ -867,6 +867,7 @@ function createZCmdStoreArgs(
     if (aggregationType) {
         args.push("AGGREGATE", aggregationType);
     }
+
     return args;
 }
 
