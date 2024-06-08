@@ -20,29 +20,29 @@ mod ffi_test;
 pub use ffi_test::*;
 
 enum FFIError {
-    JniError(JNIError),
-    UDSError(String),
-    Utf8Error(FromUtf8Error),
+    Jni(JNIError),
+    Uds(String),
+    Utf8(FromUtf8Error),
 }
 
 impl From<jni::errors::Error> for FFIError {
     fn from(value: jni::errors::Error) -> Self {
-        FFIError::JniError(value)
+        FFIError::Jni(value)
     }
 }
 
 impl From<FromUtf8Error> for FFIError {
     fn from(value: FromUtf8Error) -> Self {
-        FFIError::Utf8Error(value)
+        FFIError::Utf8(value)
     }
 }
 
 impl std::fmt::Display for FFIError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            FFIError::JniError(err) => write!(f, "{}", err.to_string()),
-            FFIError::UDSError(err) => write!(f, "{}", err),
-            FFIError::Utf8Error(err) => write!(f, "{}", err.to_string()),
+            FFIError::Jni(err) => write!(f, "{}", err),
+            FFIError::Uds(err) => write!(f, "{}", err),
+            FFIError::Utf8(err) => write!(f, "{}", err),
         }
     }
 }
