@@ -11,7 +11,9 @@ import {
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
+    AggregationType,
     ExpireOptions,
+    KeyWeight,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -82,6 +84,7 @@ import {
     createZAdd,
     createZCard,
     createZCount,
+    createZInterstore,
     createZPopMax,
     createZPopMin,
     createZRange,
@@ -1879,6 +1882,43 @@ export class BaseClient {
     ): Promise<Record<string, number>> {
         return this.createWritePromise(
             createZRangeWithScores(key, rangeQuery, reverse),
+        );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     * To get the result directly, see `zinter_withscores`.
+     *
+     * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/zinterstore/ for more details.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  string[] - for keys only.
+     *  KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * @returns The number of elements in the resulting sorted set stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zinterstore command with an existing key
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+     * await client.zadd("key2", {"member1": 9.5})
+     * await client.zinterstore("my_sorted_set", ["key1", "key2"]) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
+     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
+     * await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
+     * ```
+     */
+    public zinterstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZInterstore(destination, keys, aggregationType),
         );
     }
 
