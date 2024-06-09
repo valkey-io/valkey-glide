@@ -1114,7 +1114,10 @@ class TestCommands:
         # Non-existing source key
         assert (
             await redis_client.lmove(
-                "{SameSlot}non_existing_key", key1, ListDirection.LEFT, ListDirection.LEFT
+                "{SameSlot}non_existing_key",
+                key1,
+                ListDirection.LEFT,
+                ListDirection.LEFT,
             )
             is None
         )
@@ -1182,7 +1185,11 @@ class TestCommands:
         # Non-existing source key with blocking
         assert (
             await redis_client.blmove(
-                "{SameSlot}non_existing_key", key1, ListDirection.LEFT, ListDirection.LEFT, 0.1
+                "{SameSlot}non_existing_key",
+                key1,
+                ListDirection.LEFT,
+                ListDirection.LEFT,
+                0.1,
             )
             is None
         )
@@ -1200,6 +1207,20 @@ class TestCommands:
             await redis_client.blmove(
                 key1, key3, ListDirection.LEFT, ListDirection.LEFT, 0.1
             )
+
+        # BLMOVE is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        async def endless_blmove_call():
+            await redis_client.blmove(
+                "{SameSlot}non_existing_key",
+                key2,
+                ListDirection.LEFT,
+                ListDirection.RIGHT,
+                0,
+            )
+
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_blmove_call(), timeout=3)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4072,7 +4093,9 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zunion_withscores(["def", "ghi"]),
             redis_client.sort_store("abc", "zxy"),
             redis_client.lmove("abc", "zxy", ListDirection.LEFT, ListDirection.LEFT),
-            redis_client.blmove("abc", "zxy", ListDirection.LEFT, ListDirection.LEFT, 1),
+            redis_client.blmove(
+                "abc", "zxy", ListDirection.LEFT, ListDirection.LEFT, 1
+            ),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
