@@ -1,6 +1,6 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
-from glide.async_commands.command_args import Limit, OrderBy
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -98,6 +98,7 @@ __all__ = [
     "json",
     "LexBoundary",
     "Limit",
+    "ListDirection",
     "RangeByIndex",
     "RangeByLex",
     "RangeByScore",

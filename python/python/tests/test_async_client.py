@@ -11,7 +11,7 @@ from typing import Any, Dict, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
-from glide.async_commands.command_args import Limit, OrderBy
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -1062,6 +1062,165 @@ class TestCommands:
         assert await redis_client.set(key2, "value") == OK
         with pytest.raises(RequestError):
             await redis_client.linsert(key2, InsertPosition.AFTER, "p", "e")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lmove(self, redis_client: TRedisClient):
+        key1 = "{SameSlot}" + get_random_string(10)
+        key2 = "{SameSlot}" + get_random_string(10)
+
+        # Initialize the lists
+        assert await redis_client.lpush(key1, ["2", "1"]) == 2
+        assert await redis_client.lpush(key2, ["4", "3"]) == 2
+
+        # Move from LEFT to LEFT
+        assert (
+            await redis_client.lmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT)
+            == "1"
+        )
+        assert await redis_client.lrange(key1, 0, -1) == ["2"]
+        assert await redis_client.lrange(key2, 0, -1) == ["1", "3", "4"]
+
+        # Move from LEFT to RIGHT
+        assert (
+            await redis_client.lmove(
+                key1, key2, ListDirection.LEFT, ListDirection.RIGHT
+            )
+            == "2"
+        )
+        assert await redis_client.lrange(key1, 0, -1) == []
+        assert await redis_client.lrange(key2, 0, -1) == ["1", "3", "4", "2"]
+
+        # Move from RIGHT to LEFT - non-existing destination key
+        assert (
+            await redis_client.lmove(
+                key2, key1, ListDirection.RIGHT, ListDirection.LEFT
+            )
+            == "2"
+        )
+        assert await redis_client.lrange(key2, 0, -1) == ["1", "3", "4"]
+        assert await redis_client.lrange(key1, 0, -1) == ["2"]
+
+        # Move from RIGHT to RIGHT
+        assert (
+            await redis_client.lmove(
+                key2, key1, ListDirection.RIGHT, ListDirection.RIGHT
+            )
+            == "4"
+        )
+        assert await redis_client.lrange(key2, 0, -1) == ["1", "3"]
+        assert await redis_client.lrange(key1, 0, -1) == ["2", "4"]
+
+        # Non-existing source key
+        assert (
+            await redis_client.lmove(
+                "{SameSlot}non_existing_key",
+                key1,
+                ListDirection.LEFT,
+                ListDirection.LEFT,
+            )
+            is None
+        )
+
+        # Non-list source key
+        key3 = get_random_string(10)
+        assert await redis_client.set(key3, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.lmove(key3, key1, ListDirection.LEFT, ListDirection.LEFT)
+
+        # Non-list destination key
+        with pytest.raises(RequestError):
+            await redis_client.lmove(key1, key3, ListDirection.LEFT, ListDirection.LEFT)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_blmove(self, redis_client: TRedisClient):
+        key1 = "{SameSlot}" + get_random_string(10)
+        key2 = "{SameSlot}" + get_random_string(10)
+
+        # Initialize the lists
+        assert await redis_client.lpush(key1, ["2", "1"]) == 2
+        assert await redis_client.lpush(key2, ["4", "3"]) == 2
+
+        # Move from LEFT to LEFT with blocking
+        assert (
+            await redis_client.blmove(
+                key1, key2, ListDirection.LEFT, ListDirection.LEFT, 0.1
+            )
+            == "1"
+        )
+        assert await redis_client.lrange(key1, 0, -1) == ["2"]
+        assert await redis_client.lrange(key2, 0, -1) == ["1", "3", "4"]
+
+        # Move from LEFT to RIGHT with blocking
+        assert (
+            await redis_client.blmove(
+                key1, key2, ListDirection.LEFT, ListDirection.RIGHT, 0.1
+            )
+            == "2"
+        )
+        assert await redis_client.lrange(key1, 0, -1) == []
+        assert await redis_client.lrange(key2, 0, -1) == ["1", "3", "4", "2"]
+
+        # Move from RIGHT to LEFT non-existing destination with blocking
+        assert (
+            await redis_client.blmove(
+                key2, key1, ListDirection.RIGHT, ListDirection.LEFT, 0.1
+            )
+            == "2"
+        )
+        assert await redis_client.lrange(key2, 0, -1) == ["1", "3", "4"]
+        assert await redis_client.lrange(key1, 0, -1) == ["2"]
+
+        # Move from RIGHT to RIGHT with blocking
+        assert (
+            await redis_client.blmove(
+                key2, key1, ListDirection.RIGHT, ListDirection.RIGHT, 0.1
+            )
+            == "4"
+        )
+        assert await redis_client.lrange(key2, 0, -1) == ["1", "3"]
+        assert await redis_client.lrange(key1, 0, -1) == ["2", "4"]
+
+        # Non-existing source key with blocking
+        assert (
+            await redis_client.blmove(
+                "{SameSlot}non_existing_key",
+                key1,
+                ListDirection.LEFT,
+                ListDirection.LEFT,
+                0.1,
+            )
+            is None
+        )
+
+        # Non-list source key with blocking
+        key3 = get_random_string(10)
+        assert await redis_client.set(key3, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.blmove(
+                key3, key1, ListDirection.LEFT, ListDirection.LEFT, 0.1
+            )
+
+        # Non-list destination key with blocking
+        with pytest.raises(RequestError):
+            await redis_client.blmove(
+                key1, key3, ListDirection.LEFT, ListDirection.LEFT, 0.1
+            )
+
+        # BLMOVE is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        async def endless_blmove_call():
+            await redis_client.blmove(
+                "{SameSlot}non_existing_key",
+                key2,
+                ListDirection.LEFT,
+                ListDirection.RIGHT,
+                0,
+            )
+
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_blmove_call(), timeout=3)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -3933,6 +4092,10 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zunion(["def", "ghi"]),
             redis_client.zunion_withscores(["def", "ghi"]),
             redis_client.sort_store("abc", "zxy"),
+            redis_client.lmove("abc", "zxy", ListDirection.LEFT, ListDirection.LEFT),
+            redis_client.blmove(
+                "abc", "zxy", ListDirection.LEFT, ListDirection.LEFT, 1
+            ),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):

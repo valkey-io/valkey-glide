@@ -3,7 +3,7 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
-from glide.async_commands.command_args import Limit, OrderBy
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -931,7 +931,7 @@ class BaseTransaction:
         """
         Inserts `element` in the list at `key` either before or after the `pivot`.
 
-        See https://redis.io/commands/linsert/ for details.
+        See https://valkey.io/commands/linsert/ for details.
 
         Args:
             key (str): The key of the list.
@@ -947,6 +947,68 @@ class BaseTransaction:
         """
         return self.append_command(
             RequestType.LInsert, [key, position.value, pivot, element]
+        )
+
+    def lmove(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        where_from: ListDirection,
+        where_to: ListDirection,
+    ) -> TTransaction:
+        """
+        Atomically pops and removes the left/right-most element to the list stored at `source`
+        depending on `where_from`, and pushes the element at the first/last element of the list
+        stored at `destination` depending on `where_to`.
+
+        See https://valkey.io/commands/lmove/ for details.
+
+        Args:
+            source (str): The key to the source list.
+            destination (str): The key to the destination list.
+            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+
+        Command response:
+            Optional[str]: The popped element, or `None` if `source` does not exist.
+
+        Since: Redis version 6.2.0.
+        """
+        return self.append_command(
+            RequestType.LMove, [source, destination, where_from.value, where_to.value]
+        )
+
+    def blmove(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        where_from: ListDirection,
+        where_to: ListDirection,
+        timeout: float,
+    ) -> TTransaction:
+        """
+        Blocks the connection until it pops atomically and removes the left/right-most element to the
+        list stored at `source` depending on `where_from`, and pushes the element at the first/last element
+        of the list stored at `destination` depending on `where_to`.
+        `blmove` is the blocking variant of `lmove`.
+
+        See https://valkey.io/commands/blmove/ for details.
+
+        Args:
+            source (str): The key to the source list.
+            destination (str): The key to the destination list.
+            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+
+        Command response:
+            Optional[str]: The popped element, or `None` if `source` does not exist or if the operation timed-out.
+
+        Since: Redis version 6.2.0.
+        """
+        return self.append_command(
+            RequestType.BLMove,
+            [source, destination, where_from.value, where_to.value, str(timeout)],
         )
 
     def sadd(self: TTransaction, key: str, members: List[str]) -> TTransaction:

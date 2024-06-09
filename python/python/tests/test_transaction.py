@@ -6,7 +6,7 @@ from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
-from glide.async_commands.command_args import Limit, OrderBy
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     GeospatialData,
     InsertPosition,
@@ -182,6 +182,10 @@ async def transaction_test(
     args.append(OK)
     transaction.lrange(key5, 0, -1)
     args.append([value2, value])
+    transaction.lmove(key5, key6, ListDirection.LEFT, ListDirection.LEFT)
+    args.append(value2)
+    transaction.blmove(key6, key5, ListDirection.LEFT, ListDirection.LEFT, 1)
+    args.append(value2)
     transaction.lpop_count(key5, 2)
     args.append([value2, value])
     transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
