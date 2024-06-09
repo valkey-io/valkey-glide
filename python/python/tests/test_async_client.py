@@ -1091,7 +1091,7 @@ class TestCommands:
         assert await redis_client.lrange(key1, 0, -1) == []
         assert await redis_client.lrange(key2, 0, -1) == ["1", "3", "4", "2"]
 
-        # Move from RIGHT to LEFT
+        # Move from RIGHT to LEFT - non-existing destination key
         assert (
             await redis_client.lmove(
                 key2, key1, ListDirection.RIGHT, ListDirection.LEFT
@@ -1162,7 +1162,7 @@ class TestCommands:
         assert await redis_client.lrange(key1, 0, -1) == []
         assert await redis_client.lrange(key2, 0, -1) == ["1", "3", "4", "2"]
 
-        # Move from RIGHT to LEFT with blocking
+        # Move from RIGHT to LEFT non-existing destination with blocking
         assert (
             await redis_client.blmove(
                 key2, key1, ListDirection.RIGHT, ListDirection.LEFT, 0.1
