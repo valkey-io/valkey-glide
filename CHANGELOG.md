@@ -1,4 +1,5 @@
 #### Changes
+* Node: Added ZINTERSTORE command ([#1513](https://github.com/aws/glide-for-redis/pull/1513))
 * Python: Added OBJECT ENCODING command ([#1471](https://github.com/aws/glide-for-redis/pull/1471))
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
 * Python: Added OBJECT IDLETIME command ([#1474](https://github.com/aws/glide-for-redis/pull/1474))
@@ -14,6 +15,7 @@
 * Python: Added ZINTER, ZUNION commands ([#1478](https://github.com/aws/glide-for-redis/pull/1478))
 * Python: Added SINTERCARD command ([#1511](https://github.com/aws/glide-for-redis/pull/1511))
 * Python: Added SORT command ([#1439](https://github.com/aws/glide-for-redis/pull/1439))
+* Node: Added OBJECT ENCODING command ([#1518](https://github.com/aws/glide-for-redis/pull/1518))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

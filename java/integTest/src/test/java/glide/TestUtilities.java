@@ -163,4 +163,16 @@ public class TestUtilities {
         }
         assertTrue(hasLib);
     }
+
+    /** Generate a dummy LUA library code. */
+    public static String generateLuaLibCode(String libName, List<String> funcNames) {
+        StringBuilder code = new StringBuilder("#!lua name=" + libName + "\n");
+        for (var funcName : funcNames) {
+            code.append("redis.register_function('")
+                    .append(funcName)
+                    // function returns first argument
+                    .append("', function(keys, args) return args[1] end)\n");
+        }
+        return code.toString();
+    }
 }

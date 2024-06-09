@@ -3,8 +3,10 @@
  */
 
 import {
+    AggregationType,
     ExpireOptions,
     InfoOptions,
+    KeyWeight,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -55,6 +57,7 @@ import {
     createLTrim,
     createMGet,
     createMSet,
+    createObjectEncoding,
     createPExpire,
     createPExpireAt,
     createPTTL,
@@ -86,6 +89,7 @@ import {
     createZAdd,
     createZCard,
     createZCount,
+    createZInterstore,
     createZPopMax,
     createZPopMin,
     createZRange,
@@ -1035,6 +1039,31 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         );
     }
 
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/zinterstore/ for more details.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  string[] - for keys only.
+     *  KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * Command Response - The number of elements in the resulting sorted set stored at `destination`.
+     */
+    public zinterstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(
+            createZInterstore(destination, keys, aggregationType),
+        );
+    }
+
     /** Returns the string representation of the type of the value stored at `key`.
      * See https://redis.io/commands/type/ for more details.
      *
@@ -1350,6 +1379,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public pfadd(key: string, elements: string[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
+    }
+
+    /** Returns the internal encoding for the Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-encoding for more details.
+     *
+     * @param key - The `key` of the object to get the internal encoding of.
+     * Command Response - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
+     *     Otherwise, returns None.
+     */
+    public object_encoding(key: string): T {
+        return this.addAndReturn(createObjectEncoding(key));
     }
 }
 
