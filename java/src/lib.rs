@@ -1,49 +1,22 @@
 /**
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
-use glide_core::start_socket_listener;
+use glide_core::start_socket_listener as start_socket_listener_core;
 
-use jni::errors::Error as JNIError;
 use jni::objects::{JClass, JObject, JObjectArray, JString};
 use jni::sys::jlong;
 use jni::JNIEnv;
-use log::error;
 use redis::Value;
-use std::string::FromUtf8Error;
 use std::sync::mpsc;
+
+mod errors;
+
+use errors::{handle_errors, handle_panics, FFIError};
 
 #[cfg(ffi_test)]
 mod ffi_test;
 #[cfg(ffi_test)]
 pub use ffi_test::*;
-
-enum FFIError {
-    Jni(JNIError),
-    Uds(String),
-    Utf8(FromUtf8Error),
-}
-
-impl From<jni::errors::Error> for FFIError {
-    fn from(value: jni::errors::Error) -> Self {
-        FFIError::Jni(value)
-    }
-}
-
-impl From<FromUtf8Error> for FFIError {
-    fn from(value: FromUtf8Error) -> Self {
-        FFIError::Utf8(value)
-    }
-}
-
-impl std::fmt::Display for FFIError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            FFIError::Jni(err) => write!(f, "{}", err),
-            FFIError::Uds(err) => write!(f, "{}", err),
-            FFIError::Utf8(err) => write!(f, "{}", err),
-        }
-    }
-}
 
 // TODO: Consider caching method IDs here in a static variable (might need RwLock to mutate)
 fn redis_value_to_java<'local>(
@@ -126,11 +99,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
 ) -> JObject<'local> {
     handle_panics(
         move || {
-            fn f<'a>(env: &mut JNIEnv<'a>, pointer: jlong) -> Result<JObject<'a>, FFIError> {
+            fn value_from_pointer<'a>(
+                env: &mut JNIEnv<'a>,
+                pointer: jlong,
+            ) -> Result<JObject<'a>, FFIError> {
                 let value = unsafe { Box::from_raw(pointer as *mut Value) };
                 redis_value_to_java(env, *value, true)
             }
-            let result = f(&mut env, pointer);
+            let result = value_from_pointer(&mut env, pointer);
             handle_errors(&mut env, result)
         },
         "valueFromPointer",
@@ -148,11 +124,14 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
 ) -> JObject<'local> {
     handle_panics(
         move || {
-            fn f<'a>(env: &mut JNIEnv<'a>, pointer: jlong) -> Result<JObject<'a>, FFIError> {
+            fn value_from_pointer_binary<'a>(
+                env: &mut JNIEnv<'a>,
+                pointer: jlong,
+            ) -> Result<JObject<'a>, FFIError> {
                 let value = unsafe { Box::from_raw(pointer as *mut Value) };
                 redis_value_to_java(env, *value, false)
             }
-            let result = f(&mut env, pointer);
+            let result = value_from_pointer_binary(&mut env, pointer);
             handle_errors(&mut env, result)
         },
         "valueFromPointerBinary",
@@ -169,10 +148,10 @@ pub extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSock
 ) -> JObject<'local> {
     handle_panics(
         move || {
-            fn f<'a>(env: &mut JNIEnv<'a>) -> Result<JObject<'a>, FFIError> {
+            fn start_socket_listener<'a>(env: &mut JNIEnv<'a>) -> Result<JObject<'a>, FFIError> {
                 let (tx, rx) = mpsc::channel::<Result<String, String>>();
 
-                start_socket_listener(move |socket_path: Result<String, String>| {
+                start_socket_listener_core(move |socket_path: Result<String, String>| {
                     // Signals that thread has started
                     let _ = tx.send(socket_path);
                 });
@@ -189,7 +168,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSock
                     Err(error) => Err(FFIError::Uds(error.to_string())),
                 }
             }
-            let result = f(&mut env);
+            let result = start_socket_listener(&mut env);
             handle_errors(&mut env, result)
         },
         "startSocketListener",
@@ -205,12 +184,15 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'loca
 ) -> JObject<'local> {
     handle_panics(
         move || {
-            fn f<'a>(env: &mut JNIEnv<'a>, code: JString) -> Result<JObject<'a>, FFIError> {
+            fn store_script<'a>(
+                env: &mut JNIEnv<'a>,
+                code: JString,
+            ) -> Result<JObject<'a>, FFIError> {
                 let code_str: String = env.get_string(&code)?.into();
                 let hash = glide_core::scripts_container::add_script(&code_str);
                 Ok(JObject::from(env.new_string(hash)?))
             }
-            let result = f(&mut env, code);
+            let result = store_script(&mut env, code);
             handle_errors(&mut env, result)
         },
         "storeScript",
@@ -226,85 +208,15 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local
 ) {
     handle_panics(
         move || {
-            fn f(env: &mut JNIEnv<'_>, hash: JString) -> Result<(), FFIError> {
+            fn drop_script(env: &mut JNIEnv<'_>, hash: JString) -> Result<(), FFIError> {
                 let hash_str: String = env.get_string(&hash)?.into();
                 glide_core::scripts_container::remove_script(&hash_str);
                 Ok(())
             }
-            let result = f(&mut env, hash);
+            let result = drop_script(&mut env, hash);
             handle_errors(&mut env, result)
         },
         "dropScript",
         (),
     )
-}
-
-enum ExceptionType {
-    Exception,
-    RuntimeException,
-}
-
-impl std::fmt::Display for ExceptionType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ExceptionType::Exception => write!(f, "java/lang/Exception"),
-            ExceptionType::RuntimeException => write!(f, "java/lang/RuntimeException"),
-        }
-    }
-}
-
-fn handle_errors<T>(env: &mut JNIEnv, result: Result<T, FFIError>) -> Option<T> {
-    match result {
-        Ok(value) => Some(value),
-        Err(err) => {
-            match err {
-                FFIError::Utf8(utf8_error) => throw_java_exception(
-                    env,
-                    ExceptionType::RuntimeException,
-                    utf8_error.to_string(),
-                ),
-                error => throw_java_exception(env, ExceptionType::Exception, error.to_string()),
-            };
-            None
-        }
-    }
-}
-
-fn handle_panics<T, F: std::panic::UnwindSafe + FnOnce() -> Option<T>>(
-    func: F,
-    ffi_func_name: &str,
-    default_value: T,
-) -> T {
-    match std::panic::catch_unwind(func) {
-        Ok(Some(value)) => value,
-        Ok(None) => default_value,
-        Err(_err) => {
-            // Following https://github.com/jni-rs/jni-rs/issues/76#issuecomment-363523906
-            // and throwing a runtime exception is not feasible here because of https://github.com/jni-rs/jni-rs/issues/432
-            error!("Native function {} panicked.", ffi_func_name);
-            default_value
-        }
-    }
-}
-
-fn throw_java_exception(env: &mut JNIEnv, exception_type: ExceptionType, message: String) {
-    match env.exception_check() {
-        Ok(true) => (),
-        Ok(false) => {
-            env.throw_new(exception_type.to_string(), &message)
-                .unwrap_or_else(|err| {
-                    error!(
-                        "Failed to create exception with string {}: {}",
-                        message,
-                        err.to_string()
-                    );
-                });
-        }
-        Err(err) => {
-            error!(
-                "Failed to check if an exception is currently being thrown: {}",
-                err.to_string()
-            );
-        }
-    }
 }
