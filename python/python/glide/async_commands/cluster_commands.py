@@ -691,7 +691,7 @@ class ClusterCommands(CoreCommands):
     ) -> List[bytes]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
-        This command is routed to primary only.
+        This command is routed to primary nodes only.
         To store the result into a new key, see `sort_store`.
 
         By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
@@ -739,7 +739,6 @@ class ClusterCommands(CoreCommands):
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         This command is routed depending on the client's `ReadFrom` strategy.
-        To store the result into a new key, see `sort_store`.
 
         By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
 
