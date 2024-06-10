@@ -2312,8 +2312,8 @@ export class BaseClient {
      * See https://valkey.io/commands/linsert/ for more details.
      *
      * @param key - The key of the list.
-     * @param position - The relative position to insert into - either {@link InsertPosition.Before} or
-     *     {@link InsertPosition.After} the `pivot`.
+     * @param position - The relative position to insert into - either `InsertPosition.Before` or
+     *     `InsertPosition.After` the `pivot`.
      * @param pivot - An element of the list.
      * @param element - The new element to insert.
      * @returns The list length after a successful insert operation.
