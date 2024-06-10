@@ -43,3 +43,19 @@ class OrderBy(Enum):
     """
     DESC: Sort in descending order.
     """
+
+
+class ListDirection(Enum):
+    """
+    Enumeration representing element popping or adding direction for List commands.
+    """
+
+    LEFT = "LEFT"
+    """
+    LEFT: Represents the option that elements should be popped from or added to the left side of a list.
+    """
+
+    RIGHT = "RIGHT"
+    """
+    RIGHT: Represents the option that elements should be popped from or added to the right side of a list.
+    """
