@@ -1110,8 +1110,17 @@ export function createLIndex(
     return createCommand(RequestType.LIndex, [key, index.toString()]);
 }
 
+/**
+ * Defines where to insert new elements into a list.
+ */
 export enum InsertPosition {
+    /**
+     * Insert new element before the pivot.
+     */
     Before = "before",
+    /**
+     * Insert new element after the pivot.
+     */
     After = "after",
 }
 
