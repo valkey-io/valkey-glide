@@ -94,6 +94,7 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
+    createSUnionStore,
 } from "./Commands";
 import {
     ClosingError,
@@ -1301,6 +1302,27 @@ export class BaseClient {
         return this.createWritePromise<string[]>(createSInter(keys)).then(
             (sinter) => new Set<string>(sinter),
         );
+    }
+
+    /**
+     * Stores the members of the union of all given sets specified by `keys` into a new set
+     * at `destination`.
+     *
+     * See https://valkey.io/commands/sunionstore/ for details.
+     *
+     * @remarks When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     * @returns The number of elements in the resulting set.
+     *
+     * @example
+     * ```typescript
+     * const length = await client.sunionstore("mySet", ["set1", "set2"]);
+     * console.log(length); // Output: 2 - Two elements were stored in "mySet", and those two members are the union of "set1" and "set2".
+     * ```
+     */
+    public sunionstore(destination: string, keys: string[]): Promise<number> {
+        return this.createWritePromise(createSUnionStore(destination, keys));
     }
 
     /** Returns if `member` is a member of the set stored at `key`.
