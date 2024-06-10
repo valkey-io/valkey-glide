@@ -2110,6 +2110,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the difference between the first sorted set and all the successive sorted sets.<br>
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - An <code>array</code> of elements representing the difference
@@ -2126,6 +2127,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - A <code>Map</code> of elements and their scores representing the
@@ -2146,6 +2148,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
      * overwriting it if it already exists. Non-existent keys are treated as empty sets.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
@@ -2478,46 +2481,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
-     * </code>.<br>
+     * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
-     *     elements.
+     * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the union.
      */
-    public T zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        ArgsArray commandArgs =
-                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
-        protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
-     * </code>.<br>
-     * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
-     * #zunion(KeysOrWeightedKeys, Aggregate)}.<br>
-     * To get the elements with their scores, see {@link #zunionWithScores}.
-     *
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @return Command Response - The resulting sorted set from the union.
-     */
-    public T zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
+    public T zunion(@NonNull KeyArray keys) {
+        ArgsArray commandArgs = buildArgs(keys.toArgs());
         protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
         return getThis();
     }
@@ -2526,6 +2499,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      * keysOrWeightedKeys</code>.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2555,6 +2529,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
      * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2573,48 +2548,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the intersection of members from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>.<br>
-     * To perform a <code>zinter</code> operation while specifying aggregation settings, use {@link
-     * #zinter(KeysOrWeightedKeys, Aggregate)}.<br>
+     * Returns the intersection of members from sorted sets specified by the given <code>keys</code>.
+     * <br>
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
      * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
+     * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the intersection.
      */
-    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
-        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Returns the intersection of members from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
-     * #zinterWithScores}.
-     *
-     * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys intersection.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
-     *     elements.
-     * @return Command Response - The resulting sorted set from the intersection.
-     */
-    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        ArgsArray commandArgs =
-                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
+    public T zinter(@NonNull KeyArray keys) {
+        ArgsArray commandArgs = buildArgs(keys.toArgs());
         protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
         return getThis();
     }
