@@ -64,6 +64,7 @@ import {
     createPTTL,
     createPersist,
     createPfAdd,
+    createPfCount,
     createPing,
     createRPop,
     createRPush,
@@ -100,6 +101,7 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
+    createSUnionStore,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -722,6 +724,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public sinter(keys: string[]): T {
         return this.addAndReturn(createSInter(keys), true);
+    }
+
+    /**
+     * Stores the members of the union of all given sets specified by `keys` into a new set
+     * at `destination`.
+     *
+     * See https://valkey.io/commands/sunionstore/ for details.
+     *
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     *
+     * Command Response - The number of elements in the resulting set.
+     */
+    public sunionstore(destination: string, keys: string[]): T {
+        return this.addAndReturn(createSUnionStore(destination, keys));
     }
 
     /** Returns if `member` is a member of the set stored at `key`.
@@ -1380,6 +1397,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public pfadd(key: string, elements: string[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
+    }
+
+    /** Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+     * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+     *
+     * See https://valkey.io/commands/pfcount/ for more details.
+     *
+     * @param keys - The keys of the HyperLogLog data structures to be analyzed.
+     * Command Response - The approximated cardinality of given HyperLogLog data structures.
+     *     The cardinality of a key that does not exist is `0`.
+     */
+    public pfcount(keys: string[]): T {
+        return this.addAndReturn(createPfCount(keys));
     }
 
     /** Returns the internal encoding for the Redis object stored at `key`.

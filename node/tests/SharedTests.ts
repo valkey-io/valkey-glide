@@ -1161,6 +1161,66 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sunionstore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}:${uuidv4()}`;
+                const key2 = `{key}:${uuidv4()}`;
+                const key3 = `{key}:${uuidv4()}`;
+                const key4 = `{key}:${uuidv4()}`;
+                const stringKey = `{key}:${uuidv4()}`;
+                const nonExistingKey = `{key}:${uuidv4()}`;
+
+                expect(await client.sadd(key1, ["a", "b", "c"])).toEqual(3);
+                expect(await client.sadd(key2, ["c", "d", "e"])).toEqual(3);
+                expect(await client.sadd(key3, ["e", "f", "g"])).toEqual(3);
+
+                // store union in new key
+                expect(await client.sunionstore(key4, [key1, key2])).toEqual(5);
+                expect(await client.smembers(key4)).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // overwrite existing set
+                expect(await client.sunionstore(key1, [key4, key2])).toEqual(5);
+                expect(await client.smembers(key1)).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // overwrite one of the source keys
+                expect(await client.sunionstore(key2, [key4, key2])).toEqual(5);
+                expect(await client.smembers(key2)).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // union with a non-existing key
+                expect(
+                    await client.sunionstore(key2, [nonExistingKey]),
+                ).toEqual(0);
+                expect(await client.smembers(key2)).toEqual(new Set());
+
+                // invalid argument - key list must not be empty
+                await expect(client.sunionstore(key4, [])).rejects.toThrow();
+
+                // key exists, but it is not a set
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.sunionstore(key4, [stringKey, key1]),
+                ).rejects.toThrow();
+
+                // overwrite destination when destination is not a set
+                expect(
+                    await client.sunionstore(stringKey, [key1, key3]),
+                ).toEqual(7);
+                expect(await client.smembers(stringKey)).toEqual(
+                    new Set(["a", "b", "c", "d", "e", "f", "g"]),
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sismember test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -2604,6 +2664,46 @@ export function runBaseTests<Context>(config: {
                 // key exists, but it is not a HyperLogLog
                 expect(await client.set("foo", "value")).toEqual("OK");
                 await expect(client.pfadd("foo", [])).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "pfcount test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+                const stringKey = `{key}-4-${uuidv4()}`;
+                const nonExistingKey = `{key}-5-${uuidv4()}`;
+
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfcount([key1])).toEqual(3);
+                expect(await client.pfcount([key2])).toEqual(3);
+                expect(await client.pfcount([key1, key2])).toEqual(4);
+                expect(
+                    await client.pfcount([key1, key2, nonExistingKey]),
+                ).toEqual(4);
+
+                // empty HyperLogLog data set
+                expect(await client.pfadd(key3, [])).toEqual(1);
+                expect(await client.pfcount([key3])).toEqual(0);
+
+                // invalid argument - key list must not be empty
+                try {
+                    expect(await client.pfcount([])).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "ResponseError: wrong number of arguments",
+                    );
+                }
+
+                // key exists, but it is not a HyperLogLog
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(client.pfcount([stringKey])).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
