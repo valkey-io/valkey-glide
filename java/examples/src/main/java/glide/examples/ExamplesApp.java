@@ -2,7 +2,6 @@
 package glide.examples;
 
 import glide.api.RedisClient;
-import glide.api.models.commands.LPosOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import java.util.concurrent.ExecutionException;

@@ -1,19 +1,19 @@
+/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
-
-import glide.api.commands.SortedSetBaseCommands;
-import lombok.Builder;
 
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Builder;
 
 /**
  * Optional arguments to {@link ListBaseCommands#lpos()},
  *
  * @see <a href="https://redis.io/commands/lpos/">redis.io</a>
- *//** need to fix this part.
-// * Optional arguments to {@link ListBaseCommands#lpos(String, Map, LPosOptions)},
-// * {@link ListBaseCommands#lpos(String, LPosOptions)} and {@link
-// * ListBaseCommands#zaddIncr(String, LPosOptions)}
+ */
+/**
+ * need to fix this part. // * Optional arguments to {@link ListBaseCommands#lpos(String, Map,
+ * LPosOptions)}, // * {@link ListBaseCommands#lpos(String, LPosOptions)} and {@link // *
+ * ListBaseCommands#zaddIncr(String, LPosOptions)}
  *
  * @see <a href="https://redis.io/commands/lpos/">redis.io</a>
  */
@@ -45,5 +45,4 @@ public final class LPosOptions {
 
         return optionArgs.toArray(new String[0]);
     }
-
 }

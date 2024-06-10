@@ -401,7 +401,9 @@ public class TransactionTestUtilities {
                     0L, // lpos(listKey1, value1)
                     1L, // lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())
                     new Long[] {0L}, // lposCount(listKey1, value1, 1L)
-                    new Long[] {0L, 1L}, // lposCount(listKey1, value1, 0L, LPosOptions.builder().rank(2L).build())
+                    new Long[] {
+                        0L, 1L
+                    }, // lposCount(listKey1, value1, 0L, LPosOptions.builder().rank(2L).build())
                     3L, // rpush(listKey2, new String[] {value1, value2, value2})
                     value2, // rpop(listKey2)
                     new String[] {value2, value1}, // rpopCount(listKey2, 2)

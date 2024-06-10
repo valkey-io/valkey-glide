@@ -228,8 +228,6 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.ReadFrom;
 import java.util.Arrays;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
-
 import lombok.Getter;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -912,15 +910,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
-     * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
-     * is returned. If no match is found, null is returned.
+     * Returns the index of matching elements inside a list. By default, it will scan the list from
+     * head to tail, looking for the first match of <code>element</code>. If the <code>element</code>
+     * is found, its index is returned. If no match is found, null is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The key of the list.
      * @param element The value to search for within the list.
      * @return Command Response - The index of <code>element</code>.
-     * */
+     */
     public T lpos(@NonNull String key, @NonNull String element) {
         ArgsArray commandArgs = buildArgs(key, element);
         protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
@@ -928,30 +926,34 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the index of matching elements inside a list.  By default, it will scan the list from head to tail,
-     * looking for the first match of <code>element</code>. If the <code>element</code> is found, its index
-     * is returned. If no match is found, null is returned.
+     * Returns the index of matching elements inside a list. By default, it will scan the list from
+     * head to tail, looking for the first match of <code>element</code>. If the <code>element</code>
+     * is found, its index is returned. If no match is found, null is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The key of the list.
      * @param element The value to search for within the list.
      * @param options The LPos options.
      * @return Command Response - The index of <code>element</code>.
-     * */
+     */
     public T lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addAll(new String[] {key, element}, options.toArgs()));
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addAll(new String[] {key, element}, options.toArgs()));
         protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
         return getThis();
     }
 
     /**
-     * Returns an array of indices of matching elements inside a list. If no match is found, null is returned.
+     * Returns an array of indices of matching elements inside a list. If no match is found, null is
+     * returned.
+     *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The key of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
-     * @return Command Response - An array that holds the indices of the matching elements inside the list.
-     * */
+     * @return Command Response - An array that holds the indices of the matching elements inside the
+     *     list.
+     */
     public T lposCount(@NonNull String key, @NonNull String element, long count) {
         ArgsArray commandArgs = buildArgs(key, element, COUNT_REDIS_API, Long.toString(count));
         protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
@@ -959,16 +961,24 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns an array of indices of matching elements inside a list. If no match is found, null is returned.
+     * Returns an array of indices of matching elements inside a list. If no match is found, null is
+     * returned.
+     *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The key of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
      * @param options The LPos options.
-     * @return Command Response - An array that holds the indices of the matching elements inside the list.
-     * */
-    public T lposCount(@NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addAll(new String[] {key, element, COUNT_REDIS_API, Long.toString(count)}, options.toArgs()));
+     * @return Command Response - An array that holds the indices of the matching elements inside the
+     *     list.
+     */
+    public T lposCount(
+            @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, element, COUNT_REDIS_API, Long.toString(count)},
+                                options.toArgs()));
         protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
         return getThis();
     }
