@@ -99,6 +99,7 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
+    createSUnionStore,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -721,6 +722,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public sinter(keys: string[]): T {
         return this.addAndReturn(createSInter(keys), true);
+    }
+
+    /**
+     * Stores the members of the union of all given sets specified by `keys` into a new set
+     * at `destination`.
+     *
+     * See https://valkey.io/commands/sunionstore/ for details.
+     *
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     *
+     * Command Response - The number of elements in the resulting set.
+     */
+    public sunionstore(destination: string, keys: string[]): T {
+        return this.addAndReturn(createSUnionStore(destination, keys));
     }
 
     /** Returns if `member` is a member of the set stored at `key`.
