@@ -602,6 +602,16 @@ export function createSInter(keys: string[]): redis_request.Command {
 /**
  * @internal
  */
+export function createSUnionStore(
+    destination: string,
+    keys: string[],
+): redis_request.Command {
+    return createCommand(RequestType.SUnionStore, [destination].concat(keys));
+}
+
+/**
+ * @internal
+ */
 export function createSIsMember(
     key: string,
     member: string,
