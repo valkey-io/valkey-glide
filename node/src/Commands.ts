@@ -1426,6 +1426,13 @@ export function createPfAdd(
 /**
  * @internal
  */
+export function createPfCount(keys: string[]): redis_request.Command {
+    return createCommand(RequestType.PfCount, keys);
+}
+
+/**
+ * @internal
+ */
 export function createObjectEncoding(key: string): redis_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
 }
