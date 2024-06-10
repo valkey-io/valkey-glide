@@ -58,6 +58,7 @@ import {
     createMGet,
     createMSet,
     createObjectEncoding,
+    createObjectFreq,
     createPExpire,
     createPExpireAt,
     createPTTL,
@@ -1421,6 +1422,18 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public object_encoding(key: string): T {
         return this.addAndReturn(createObjectEncoding(key));
+    }
+
+    /** Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-freq for more details.
+     *
+     * @param key - The `key` of the object to get the logarithmic access frequency counter of.
+     * Command Response - If `key` exists, returns the logarithmic access frequency counter of
+     *     the object stored at `key` as a `number`. Otherwise, returns `null`.
+     */
+    public object_freq(key: string): T {
+        return this.addAndReturn(createObjectFreq(key));
     }
 }
 
