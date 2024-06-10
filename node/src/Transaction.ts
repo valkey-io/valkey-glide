@@ -63,6 +63,7 @@ import {
     createPTTL,
     createPersist,
     createPfAdd,
+    createPfCount,
     createPing,
     createRPop,
     createRPush,
@@ -1395,6 +1396,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public pfadd(key: string, elements: string[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
+    }
+
+    /** Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+     * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+     *
+     * See https://valkey.io/commands/pfcount/ for more details.
+     *
+     * @param keys - The keys of the HyperLogLog data structures to be analyzed.
+     * Command Response - The approximated cardinality of given HyperLogLog data structures.
+     *     The cardinality of a key that does not exist is `0`.
+     */
+    public pfcount(keys: string[]): T {
+        return this.addAndReturn(createPfCount(keys));
     }
 
     /** Returns the internal encoding for the Redis object stored at `key`.

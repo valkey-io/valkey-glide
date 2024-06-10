@@ -408,5 +408,7 @@ export async function transactionTest(
     args.push([key6, field + "1"]);
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
+    baseTransaction.pfcount([key11]);
+    args.push(3);
     return args;
 }
