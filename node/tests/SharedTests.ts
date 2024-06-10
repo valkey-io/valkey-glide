@@ -2864,7 +2864,7 @@ export function runBaseTests<Context>(config: {
                     expect(await client.object_freq(nonExistingKey)).toEqual(
                         null,
                     );
-                    expect(await client.set(key, "")).toEqual("OK");
+                    expect(await client.set(key, "foobar")).toEqual("OK");
                     expect(
                         await client.object_freq(key),
                     ).toBeGreaterThanOrEqual(0);
