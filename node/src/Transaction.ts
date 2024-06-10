@@ -1372,7 +1372,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param key - The `key` of the object to get the logarithmic access frequency counter of.
      * Command Response - If `key` exists, returns the logarithmic access frequency counter of
-     *     the object stored at `key` as an integer. Otherwise, returns `null`.
+     *     the object stored at `key` as a `number`. Otherwise, returns `null`.
      */
     public object_freq(key: string): T {
         return this.addAndReturn(createObjectFreq(key));

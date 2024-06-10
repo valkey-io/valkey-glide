@@ -2405,7 +2405,7 @@ export class BaseClient {
      *
      * @param key - The `key` of the object to get the logarithmic access frequency counter of.
      * @returns - If `key` exists, returns the logarithmic access frequency counter of the object
-     *            stored at `key` as an integer. Otherwise, returns `null`.
+     *            stored at `key` as a `number`. Otherwise, returns `null`.
      * @example
      * ```typescript
      * const result = await client.object_freq("my_hash");

@@ -330,14 +330,14 @@ describe("RedisClusterClient", () => {
             );
 
             const key = uuidv4();
-            const maxmemory_policy_key = "maxmemory-policy";
-            const config = await client.configGet([maxmemory_policy_key]);
-            const maxmemory_policy = String(config[maxmemory_policy_key]);
+            const maxmemoryPolicyKey = "maxmemory-policy";
+            const config = await client.configGet([maxmemoryPolicyKey]);
+            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
 
             try {
                 const transaction = new ClusterTransaction();
                 transaction.configSet({
-                    [maxmemory_policy_key]: "allkeys-lfu",
+                    [maxmemoryPolicyKey]: "allkeys-lfu",
                 });
                 transaction.set(key, "foo");
                 transaction.object_freq(key);
@@ -354,7 +354,7 @@ describe("RedisClusterClient", () => {
             } finally {
                 expect(
                     await client.configSet({
-                        [maxmemory_policy_key]: maxmemory_policy,
+                        [maxmemoryPolicyKey]: maxmemoryPolicy,
                     }),
                 ).toEqual("OK");
             }

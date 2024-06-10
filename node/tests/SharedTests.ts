@@ -2850,18 +2850,18 @@ export function runBaseTests<Context>(config: {
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
-                const non_existing_key = uuidv4();
-                const maxmemory_policy_key = "maxmemory-policy";
-                const config = await client.configGet([maxmemory_policy_key]);
-                const maxmemory_policy = String(config[maxmemory_policy_key]);
+                const nonExistingKey = uuidv4();
+                const maxmemoryPolicyKey = "maxmemory-policy";
+                const config = await client.configGet([maxmemoryPolicyKey]);
+                const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
 
                 try {
                     expect(
                         await client.configSet({
-                            [maxmemory_policy_key]: "allkeys-lfu",
+                            [maxmemoryPolicyKey]: "allkeys-lfu",
                         }),
                     ).toEqual("OK");
-                    expect(await client.object_freq(non_existing_key)).toEqual(
+                    expect(await client.object_freq(nonExistingKey)).toEqual(
                         null,
                     );
                     expect(await client.set(key, "")).toEqual("OK");
@@ -2871,7 +2871,7 @@ export function runBaseTests<Context>(config: {
                 } finally {
                     expect(
                         await client.configSet({
-                            [maxmemory_policy_key]: maxmemory_policy,
+                            [maxmemoryPolicyKey]: maxmemoryPolicy,
                         }),
                     ).toEqual("OK");
                 }
