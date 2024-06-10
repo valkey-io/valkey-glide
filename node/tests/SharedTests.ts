@@ -2117,7 +2117,7 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
-    // Zinterstore command tests
+    // Zunionstore command tests
     async function zunionstoreWithAggregation(client: BaseClient) {
         const key1 = "{testKey}:1-" + uuidv4();
         const key2 = "{testKey}:2-" + uuidv4();
