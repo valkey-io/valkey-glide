@@ -6,6 +6,7 @@ import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -41,7 +42,7 @@ public interface StreamBaseCommands {
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
-     * @param options Stream add options.
+     * @param options Stream add options {@link StreamAddOptions}.
      * @return The id of the added entry, or <code>null</code> if {@link
      *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
      *     with the matching <code>key</code> exists.
@@ -58,11 +59,67 @@ public interface StreamBaseCommands {
     CompletableFuture<String> xadd(String key, Map<String, String> values, StreamAddOptions options);
 
     /**
+     * Reads entries from the given streams.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @return A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * Map<String, String> xreadKeys = Map.of("streamKey", "0-0");
+     * Map<String, Map<String, String[][]>> streamReadResponse = client.xread(xreadKeys).get();
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Map<String, String[][]>>> xread(Map<String, String> keysAndIds);
+
+    /**
+     * Reads entries from the given streams.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @param options Options detailing how to read the stream {@link StreamReadOptions}.
+     * @return A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * // retrieve streamKey entries and block for 1 second if is no stream data
+     * Map<String, String> xreadKeys = Map.of("streamKey", "0-0");
+     * StreamReadOptions options = StreamReadOptions.builder().block(1L).build();
+     * Map<String, Map<String, String[][]>> streamReadResponse = client.xread(xreadKeys, options).get();
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Map<String, String[][]>>> xread(
+            Map<String, String> keysAndIds, StreamReadOptions options);
+
+    /**
      * Trims the stream by evicting older entries.
      *
      * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
      * @param key The key of the stream.
-     * @param options Stream trim options.
+     * @param options Stream trim options {@link StreamTrimOptions}.
      * @return The number of entries deleted from the stream.
      * @example
      *     <pre>{@code
