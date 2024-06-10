@@ -61,6 +61,7 @@ import {
     createPTTL,
     createPersist,
     createPfAdd,
+    createPfCount,
     createRPop,
     createRPush,
     createRename,
@@ -2441,6 +2442,25 @@ export class BaseClient {
      */
     public pfadd(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createPfAdd(key, elements));
+    }
+
+    /** Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+     * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+     *
+     * See https://valkey.io/commands/pfcount/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the HyperLogLog data structures to be analyzed.
+     * @returns - The approximated cardinality of given HyperLogLog data structures.
+     *     The cardinality of a key that does not exist is `0`.
+     * @example
+     * ```typescript
+     * const result = await client.pfcount(["hll_1", "hll_2"]);
+     * console.log(result); // Output: 4 - The approximated cardinality of the union of "hll_1" and "hll_2"
+     * ```
+     */
+    public pfcount(keys: string[]): Promise<number> {
+        return this.createWritePromise(createPfCount(keys));
     }
 
     /** Returns the internal encoding for the Redis object stored at `key`.
