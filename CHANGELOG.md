@@ -17,6 +17,7 @@
 * Python: Added SORT command ([#1439](https://github.com/aws/glide-for-redis/pull/1439))
 * Node: Added OBJECT ENCODING command ([#1518](https://github.com/aws/glide-for-redis/pull/1518))
 * Python: Added LMOVE and BLMOVE commands ([#1536](https://github.com/aws/glide-for-redis/pull/1536))
+* Node: Added SUNIONSTORE command ([#1549](https://github.com/aws/glide-for-redis/pull/1549))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
