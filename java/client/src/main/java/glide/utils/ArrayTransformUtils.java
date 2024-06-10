@@ -103,10 +103,10 @@ public class ArrayTransformUtils {
      * @param mapOfArrays Map of Array values to cast.
      * @param clazz The class of the array values to cast to.
      * @return A Map of arrays of type U[], containing the key/values from the input Map.
-     * @param <U> The subtype of T to which the elements are cast.
+     * @param <T> The target type which the elements are cast.
      */
-    public static <U> Map<String, U[]> castMapOfArrays(
-            Map<String, Object[]> mapOfArrays, Class<U> clazz) {
+    public static <T> Map<String, T[]> castMapOfArrays(
+            Map<String, Object[]> mapOfArrays, Class<T> clazz) {
         if (mapOfArrays == null) {
             return null;
         }
@@ -120,10 +120,10 @@ public class ArrayTransformUtils {
      * @param mapOfArrays Map of 2D Array values to cast.
      * @param clazz The class of the array values to cast to.
      * @return A Map of arrays of type U[][], containing the key/values from the input Map.
-     * @param <U> The subtype of T to which the elements are cast.
+     * @param <T> The target type which the elements are cast.
      */
-    public static <U> Map<String, U[][]> castMapOf2DArray(
-            Map<String, Object[][]> mapOfArrays, Class<U> clazz) {
+    public static <T> Map<String, T[][]> castMapOf2DArray(
+            Map<String, Object[][]> mapOfArrays, Class<T> clazz) {
         if (mapOfArrays == null) {
             return null;
         }

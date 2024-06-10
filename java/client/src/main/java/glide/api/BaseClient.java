@@ -398,6 +398,10 @@ public abstract class BaseClient
                 Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
+    /**
+     * @param response A Protobuf response
+     * @return A map of a map of <code>String[][]</code>
+     */
     protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
             throws RedisException {
         Map<String, Object> mapResponse = handleMapOrNullResponse(response);
