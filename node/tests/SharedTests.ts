@@ -3079,6 +3079,41 @@ export function runBaseTests<Context>(config: {
         },
         config.timeout,
     );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object freq test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const maxmemoryPolicyKey = "maxmemory-policy";
+                const config = await client.configGet([maxmemoryPolicyKey]);
+                const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+
+                try {
+                    expect(
+                        await client.configSet({
+                            [maxmemoryPolicyKey]: "allkeys-lfu",
+                        }),
+                    ).toEqual("OK");
+                    expect(await client.object_freq(nonExistingKey)).toEqual(
+                        null,
+                    );
+                    expect(await client.set(key, "foobar")).toEqual("OK");
+                    expect(
+                        await client.object_freq(key),
+                    ).toBeGreaterThanOrEqual(0);
+                } finally {
+                    expect(
+                        await client.configSet({
+                            [maxmemoryPolicyKey]: maxmemoryPolicy,
+                        }),
+                    ).toEqual("OK");
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {

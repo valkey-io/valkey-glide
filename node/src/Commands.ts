@@ -1436,3 +1436,10 @@ export function createPfCount(keys: string[]): redis_request.Command {
 export function createObjectEncoding(key: string): redis_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
 }
+
+/**
+ * @internal
+ */
+export function createObjectFreq(key: string): redis_request.Command {
+    return createCommand(RequestType.ObjectFreq, [key]);
+}

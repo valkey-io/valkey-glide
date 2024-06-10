@@ -56,6 +56,7 @@ import {
     createMGet,
     createMSet,
     createObjectEncoding,
+    createObjectFreq,
     createPExpire,
     createPExpireAt,
     createPTTL,
@@ -2478,6 +2479,23 @@ export class BaseClient {
      */
     public object_encoding(key: string): Promise<string | null> {
         return this.createWritePromise(createObjectEncoding(key));
+    }
+
+    /** Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-freq for more details.
+     *
+     * @param key - The `key` of the object to get the logarithmic access frequency counter of.
+     * @returns - If `key` exists, returns the logarithmic access frequency counter of the object
+     *            stored at `key` as a `number`. Otherwise, returns `null`.
+     * @example
+     * ```typescript
+     * const result = await client.object_freq("my_hash");
+     * console.log(result); // Output: 2 - The logarithmic access frequency counter of "my_hash".
+     * ```
+     */
+    public object_freq(key: string): Promise<number | null> {
+        return this.createWritePromise(createObjectFreq(key));
     }
 
     /**
