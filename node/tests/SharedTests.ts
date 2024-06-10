@@ -2117,7 +2117,7 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
-    // Zunionstore command tests
+    // ZUnionstore command tests
     async function zunionstoreWithAggregation(client: BaseClient) {
         const key1 = "{testKey}:1-" + uuidv4();
         const key2 = "{testKey}:2-" + uuidv4();
@@ -2141,7 +2141,7 @@ export function runBaseTests<Context>(config: {
             two: 2.5,
             three: 3.5,
         };
-        expect(compareMaps(zunionstoreMapMax, expectedMapMax)).toBe(true);
+        expect(zunionstoreMapMax).toEqual(expectedMapMax);
 
         // Union results are aggregated by the MIN score of elements
         expect(await client.zunionstore(key3, [key1, key2], "MIN")).toEqual(3);
@@ -2151,7 +2151,7 @@ export function runBaseTests<Context>(config: {
             two: 2.0,
             three: 3.5,
         };
-        expect(compareMaps(zunionstoreMapMin, expectedMapMin)).toBe(true);
+        expect(zunionstoreMapMin).toEqual(expectedMapMin);
 
         // Union results are aggregated by the SUM score of elements
         expect(await client.zunionstore(key3, [key1, key2], "SUM")).toEqual(3);
@@ -2161,7 +2161,7 @@ export function runBaseTests<Context>(config: {
             two: 4.5,
             three: 3.5,
         };
-        expect(compareMaps(zunionstoreMapSum, expectedMapSum)).toBe(true);
+        expect(zunionstoreMapSum).toEqual(expectedMapSum);
     }
 
     async function zunionstoreBasicTest(client: BaseClient) {
@@ -2182,11 +2182,11 @@ export function runBaseTests<Context>(config: {
         expect(await client.zunionstore(key3, [key1, key2])).toEqual(3);
         const zunionstoreMap = await client.zrangeWithScores(key3, range);
         const expectedMap = {
-            one: 2.5,
-            two: 4.5,
-            three: 3.5,
+            one: 3.0,
+            three: 4.0,
+            two: 5.0,
         };
-        expect(compareMaps(zunionstoreMap, expectedMap)).toBe(true);
+        expect(zunionstoreMap).toEqual(expectedMap);
     }
 
     async function zunionstoreWithWeightsAndAggregation(client: BaseClient) {
@@ -2223,19 +2223,19 @@ export function runBaseTests<Context>(config: {
             three: 7.0,
             two: 9.0,
         };
-        expect(
-            compareMaps(zunionstoreMapMultiplied, expectedMapMultiplied),
-        ).toBe(true);
+        expect(zunionstoreMapMultiplied).toEqual(expectedMapMultiplied);
     }
 
     async function zunionstoreEmptyCases(client: BaseClient) {
         const key1 = "{testKey}:1-" + uuidv4();
         const key2 = "{testKey}:2-" + uuidv4();
-        const key3 = "{testKey}:2-" + uuidv4();
         const range = {
             start: 0,
             stop: -1,
         };
+        const membersScores1 = { one: 1.0, two: 2.0 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
 
         // Non existing key
         expect(
@@ -2246,7 +2246,7 @@ export function runBaseTests<Context>(config: {
         ).toEqual(2);
 
         const zunionstore_map_nonexistingkey = await client.zrangeWithScores(
-            key3,
+            key2,
             range,
         );
 
@@ -2254,9 +2254,7 @@ export function runBaseTests<Context>(config: {
             one: 1.0,
             two: 2.0,
         };
-        expect(
-            compareMaps(zunionstore_map_nonexistingkey, expectedMapMultiplied),
-        ).toBe(true);
+        expect(zunionstore_map_nonexistingkey).toEqual(expectedMapMultiplied);
 
         // Empty list check
         await expect(client.zunionstore("{xyz}", [])).rejects.toThrow();
@@ -2266,10 +2264,10 @@ export function runBaseTests<Context>(config: {
         `zunionstore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
-                await zunionstoreBasicTest;
-                await zunionstoreWithAggregation;
-                await zunionstoreWithWeightsAndAggregation;
-                await zunionstoreEmptyCases;
+                await zunionstoreBasicTest(client);
+                await zunionstoreWithAggregation(client);
+                await zunionstoreWithWeightsAndAggregation(client);
+                await zunionstoreEmptyCases(client);
             }, protocol);
         },
         config.timeout,
