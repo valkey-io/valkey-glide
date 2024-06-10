@@ -2390,7 +2390,7 @@ export class BaseClient {
      * @remarks When in cluster mode, all `keys` must map to the same hash slot.
      * @param keys - The keys of the HyperLogLog data structures to be analyzed.
      * @returns - The approximated cardinality of given HyperLogLog data structures.
-     *     The cardinality of a key that does not exist is 0.
+     *     The cardinality of a key that does not exist is `0`.
      * @example
      * ```typescript
      * const result = await client.pfcount(["hll_1", "hll_2"]);

@@ -1361,7 +1361,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @param keys - The keys of the HyperLogLog data structures to be analyzed.
      * Command Response - The approximated cardinality of given HyperLogLog data structures.
-     *     The cardinality of a key that does not exist is 0.
+     *     The cardinality of a key that does not exist is `0`.
      */
     public pfcount(keys: string[]): T {
         return this.addAndReturn(createPfCount(keys));
