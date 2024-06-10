@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
@@ -20,6 +21,8 @@ import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
 import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
 import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
 import static glide.api.models.commands.ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
@@ -49,6 +52,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
+import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -58,6 +63,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
@@ -130,6 +138,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
@@ -750,6 +759,9 @@ public class TransactionTests {
         results.add(Pair.of(Lolwut, buildArgs("1", "2")));
         results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "6", "42")));
 
+        transaction.dbsize();
+        results.add(Pair.of(DBSize, buildArgs()));
+
         transaction.persist("key");
         results.add(Pair.of(Persist, buildArgs("key")));
 
@@ -860,6 +872,10 @@ public class TransactionTests {
         results.add(Pair.of(FunctionLoad, buildArgs("pewpew")));
         results.add(Pair.of(FunctionLoad, buildArgs("REPLACE", "ololo")));
 
+        transaction.functionList(true).functionList("*", false);
+        results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_REDIS_API)));
+        results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*")));
+
         transaction.geodist("key", "Place", "Place2");
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2")));
         transaction.geodist("key", "Place", "Place2", GeoUnit.KILOMETERS);
@@ -917,6 +933,12 @@ public class TransactionTests {
         transaction.srandmember("key", 1);
         results.add(Pair.of(SRandMember, buildArgs("key", "1")));
 
+        transaction.spop("key");
+        results.add(Pair.of(SPop, buildArgs("key")));
+
+        transaction.spopCount("key", 1);
+        results.add(Pair.of(SPop, buildArgs("key", "1")));
+
         transaction.bitfieldReadOnly(
                 "key",
                 new BitFieldReadOnlySubCommands[] {new BitFieldGet(new SignedEncoding(5), new Offset(3))});
@@ -948,6 +970,16 @@ public class TransactionTests {
 
         transaction.sintercard(new String[] {"key1", "key2"}, 1);
         results.add(Pair.of(SInterCard, buildArgs("2", "key1", "key2", "LIMIT", "1")));
+
+        transaction.functionFlush().functionFlush(ASYNC);
+        results.add(Pair.of(FunctionFlush, buildArgs()));
+        results.add(Pair.of(FunctionFlush, buildArgs("ASYNC")));
+
+        transaction.functionDelete("LIB");
+        results.add(Pair.of(FunctionDelete, buildArgs("LIB")));
+
+        transaction.copy("key1", "key2", true);
+        results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_REDIS_API)));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

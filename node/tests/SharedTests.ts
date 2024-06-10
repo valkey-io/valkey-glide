@@ -1878,6 +1878,141 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    // Zinterstore command tests
+    async function zinterstoreWithAggregation(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:3-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+
+        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
+        expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+        // Intersection results are aggregated by the MAX score of elements
+        expect(await client.zinterstore(key3, [key1, key2], "MAX")).toEqual(2);
+        const zinterstoreMapMax = await client.zrangeWithScores(key3, range);
+        const expectedMapMax = {
+            one: 2,
+            two: 3,
+        };
+        expect(compareMaps(zinterstoreMapMax, expectedMapMax)).toBe(true);
+
+        // Intersection results are aggregated by the MIN score of elements
+        expect(await client.zinterstore(key3, [key1, key2], "MIN")).toEqual(2);
+        const zinterstoreMapMin = await client.zrangeWithScores(key3, range);
+        const expectedMapMin = {
+            one: 1,
+            two: 2,
+        };
+        expect(compareMaps(zinterstoreMapMin, expectedMapMin)).toBe(true);
+
+        // Intersection results are aggregated by the SUM score of elements
+        expect(await client.zinterstore(key3, [key1, key2], "SUM")).toEqual(2);
+        const zinterstoreMapSum = await client.zrangeWithScores(key3, range);
+        const expectedMapSum = {
+            one: 3,
+            two: 5,
+        };
+        expect(compareMaps(zinterstoreMapSum, expectedMapSum)).toBe(true);
+    }
+
+    async function zinterstoreBasicTest(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:3-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+
+        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
+        expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+        expect(await client.zinterstore(key3, [key1, key2])).toEqual(2);
+        const zinterstoreMap = await client.zrangeWithScores(key3, range);
+        const expectedMap = {
+            one: 3,
+            two: 5,
+        };
+        expect(compareMaps(zinterstoreMap, expectedMap)).toBe(true);
+    }
+
+    async function zinterstoreWithWeightsAndAggregation(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:3-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
+        expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        expect(
+            await client.zinterstore(
+                key3,
+                [
+                    [key1, 2.0],
+                    [key2, 2.0],
+                ],
+                "SUM",
+            ),
+        ).toEqual(2);
+        const zinterstoreMapMultiplied = await client.zrangeWithScores(
+            key3,
+            range,
+        );
+        const expectedMapMultiplied = {
+            one: 6,
+            two: 10,
+        };
+        expect(
+            compareMaps(zinterstoreMapMultiplied, expectedMapMultiplied),
+        ).toBe(true);
+    }
+
+    async function zinterstoreEmptyCases(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+
+        // Non existing key
+        expect(
+            await client.zinterstore(key2, [
+                key1,
+                "{testKey}-non_existing_key",
+            ]),
+        ).toEqual(0);
+
+        // Empty list check
+        await expect(client.zinterstore("{xyz}", [])).rejects.toThrow();
+    }
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zinterstore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await zinterstoreBasicTest(client);
+                await zinterstoreWithAggregation(client);
+                await zinterstoreWithWeightsAndAggregation(client);
+                await zinterstoreEmptyCases(client);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `type test_%p`,
         async (protocol) => {
@@ -2697,6 +2832,149 @@ export function runBaseTests<Context>(config: {
                 await setWithGetOldOptions(client);
                 await setWithAllOptions(client);
                 await testSetWithAllCombination(client);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object encoding test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const string_key = uuidv4();
+                const list_key = uuidv4();
+                const hashtable_key = uuidv4();
+                const intset_key = uuidv4();
+                const set_listpack_key = uuidv4();
+                const hash_hashtable_key = uuidv4();
+                const hash_listpack_key = uuidv4();
+                const skiplist_key = uuidv4();
+                const zset_listpack_key = uuidv4();
+                const stream_key = uuidv4();
+                const non_existing_key = uuidv4();
+                const versionLessThan7 =
+                    await checkIfServerVersionLessThan("7.0.0");
+                const versionLessThan72 =
+                    await checkIfServerVersionLessThan("7.2.0");
+
+                expect(await client.object_encoding(non_existing_key)).toEqual(
+                    null,
+                );
+
+                expect(
+                    await client.set(
+                        string_key,
+                        "a really loooooooooooooooooooooooooooooooooooooooong value",
+                    ),
+                ).toEqual("OK");
+                expect(await client.object_encoding(string_key)).toEqual("raw");
+
+                expect(await client.set(string_key, "2")).toEqual("OK");
+                expect(await client.object_encoding(string_key)).toEqual("int");
+
+                expect(await client.set(string_key, "value")).toEqual("OK");
+                expect(await client.object_encoding(string_key)).toEqual(
+                    "embstr",
+                );
+
+                expect(await client.lpush(list_key, ["1"])).toEqual(1);
+
+                if (versionLessThan7) {
+                    expect(await client.object_encoding(list_key)).toEqual(
+                        "quicklist",
+                    );
+                } else {
+                    expect(await client.object_encoding(list_key)).toEqual(
+                        "listpack",
+                    );
+                }
+
+                // The default value of set-max-intset-entries is 512
+                for (let i = 0; i < 513; i++) {
+                    expect(
+                        await client.sadd(hashtable_key, [String(i)]),
+                    ).toEqual(1);
+                }
+
+                expect(await client.object_encoding(hashtable_key)).toEqual(
+                    "hashtable",
+                );
+
+                expect(await client.sadd(intset_key, ["1"])).toEqual(1);
+                expect(await client.object_encoding(intset_key)).toEqual(
+                    "intset",
+                );
+
+                expect(await client.sadd(set_listpack_key, ["foo"])).toEqual(1);
+
+                if (versionLessThan72) {
+                    expect(
+                        await client.object_encoding(set_listpack_key),
+                    ).toEqual("hashtable");
+                } else {
+                    expect(
+                        await client.object_encoding(set_listpack_key),
+                    ).toEqual("listpack");
+                }
+
+                // The default value of hash-max-listpack-entries is 512
+                for (let i = 0; i < 513; i++) {
+                    expect(
+                        await client.hset(hash_hashtable_key, {
+                            [String(i)]: "2",
+                        }),
+                    ).toEqual(1);
+                }
+
+                expect(
+                    await client.object_encoding(hash_hashtable_key),
+                ).toEqual("hashtable");
+
+                expect(
+                    await client.hset(hash_listpack_key, { "1": "2" }),
+                ).toEqual(1);
+
+                if (versionLessThan7) {
+                    expect(
+                        await client.object_encoding(hash_listpack_key),
+                    ).toEqual("ziplist");
+                } else {
+                    expect(
+                        await client.object_encoding(hash_listpack_key),
+                    ).toEqual("listpack");
+                }
+
+                // The default value of zset-max-listpack-entries is 128
+                for (let i = 0; i < 129; i++) {
+                    expect(
+                        await client.zadd(skiplist_key, { [String(i)]: 2.0 }),
+                    ).toEqual(1);
+                }
+
+                expect(await client.object_encoding(skiplist_key)).toEqual(
+                    "skiplist",
+                );
+
+                expect(
+                    await client.zadd(zset_listpack_key, { "1": 2.0 }),
+                ).toEqual(1);
+
+                if (versionLessThan7) {
+                    expect(
+                        await client.object_encoding(zset_listpack_key),
+                    ).toEqual("ziplist");
+                } else {
+                    expect(
+                        await client.object_encoding(zset_listpack_key),
+                    ).toEqual("listpack");
+                }
+
+                expect(
+                    await client.xadd(stream_key, [["field", "value"]]),
+                ).not.toBeNull();
+                expect(await client.object_encoding(stream_key)).toEqual(
+                    "stream",
+                );
             }, protocol);
         },
         config.timeout,

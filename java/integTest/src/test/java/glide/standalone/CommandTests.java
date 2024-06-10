@@ -3,9 +3,13 @@ package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.FlushMode.ASYNC;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
@@ -16,6 +20,7 @@ import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -23,14 +28,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
-import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
@@ -162,9 +170,9 @@ public class CommandTests {
         String value1 = UUID.randomUUID().toString();
         String value2 = UUID.randomUUID().toString();
         String nonExistingKey = UUID.randomUUID().toString();
-        assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
-
         assertEquals(OK, regularClient.select(0).get());
+
+        assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
         assertEquals(OK, regularClient.set(key1, value1).get());
         assertEquals(OK, regularClient.set(key2, value2).get());
         assertEquals(true, regularClient.move(key1, 1L).get());
@@ -340,6 +348,22 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void dbsize() {
+        assertEquals(OK, regularClient.flushall().get());
+        assertEquals(OK, regularClient.select(0).get());
+
+        int numKeys = 10;
+        for (int i = 0; i < numKeys; i++) {
+            assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
+        }
+        assertEquals(10L, regularClient.dbsize().get());
+
+        assertEquals(OK, regularClient.select(1).get());
+        assertEquals(0L, regularClient.dbsize().get());
+    }
+
+    @Test
+    @SneakyThrows
     public void objectFreq() {
         String key = UUID.randomUUID().toString();
         String maxmemoryPolicy = "maxmemory-policy";
@@ -357,28 +381,47 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, regularClient.flushall(FlushMode.SYNC).get());
+        assertEquals(OK, regularClient.flushall(SYNC).get());
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter = (Object[]) regularClient.customCommand(new String[] {"keys", "*"}).get();
         assertEquals(0, keysAfter.length);
 
         assertEquals(OK, regularClient.flushall().get());
-        assertEquals(OK, regularClient.flushall(FlushMode.ASYNC).get());
+        assertEquals(OK, regularClient.flushall(ASYNC).get());
     }
 
     @SneakyThrows
     @Test
-    public void functionLoad() {
+    public void function_commands() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        String libName = "mylib1C";
-        String code =
-                "#!lua name="
-                        + libName
-                        + " \n redis.register_function('myfunc1c', function(keys, args) return args[1] end)";
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        String libName = "mylib1c";
+        String funcName = "myfunc1c";
+        String code = generateLuaLibCode(libName, List.of(funcName));
         assertEquals(libName, regularClient.functionLoad(code, false).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
-        // TODO test with FUNCTION LIST
+
+        var flist = regularClient.functionList(false).get();
+        var expectedDescription =
+                new HashMap<String, String>() {
+                    {
+                        put(funcName, null);
+                    }
+                };
+        var expectedFlags =
+                new HashMap<String, Set<String>>() {
+                    {
+                        put(funcName, Set.of());
+                    }
+                };
+        checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
+
+        flist = regularClient.functionList(true).get();
+        checkFunctionListResponse(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(code));
 
         // re-load library without overwriting
         var executionException =
@@ -389,9 +432,80 @@ public class CommandTests {
 
         // re-load library with overwriting
         assertEquals(libName, regularClient.functionLoad(code, true).get());
-        String newCode =
-                code + "\n redis.register_function('myfunc2c', function(keys, args) return #args end)";
+        String newFuncName = "myfunc2c";
+        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
         assertEquals(libName, regularClient.functionLoad(newCode, true).get());
+
+        // load new lib and delete it - first lib remains loaded
+        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        assertEquals("anotherLib", regularClient.functionLoad(anotherLib, true).get());
+        assertEquals(OK, regularClient.functionDelete("anotherLib").get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionDelete("anotherLib").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
+
+        flist = regularClient.functionList(libName, false).get();
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of());
+        checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
+
+        flist = regularClient.functionList(libName, true).get();
+        checkFunctionListResponse(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
+
         // TODO test with FCALL
+        assertEquals(OK, regularClient.functionFlush(ASYNC).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void copy() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        String source = "{key}-1" + UUID.randomUUID();
+        String destination = "{key}-2" + UUID.randomUUID();
+        long index1 = 1;
+        long index2 = 2;
+
+        try {
+            // neither key exists, returns false
+            assertFalse(regularClient.copy(source, destination, index1, false).get());
+
+            // source exists, destination does not
+            regularClient.set(source, "one").get();
+            assertTrue(regularClient.copy(source, destination, index1, false).get());
+            regularClient.select(1).get();
+            assertEquals("one", regularClient.get(destination).get());
+
+            // new value for source key
+            regularClient.select(0).get();
+            regularClient.set(source, "two").get();
+
+            // no REPLACE, copying to existing key on DB 0&1, non-existing key on DB 2
+            assertFalse(regularClient.copy(source, destination, index1, false).get());
+            assertTrue(regularClient.copy(source, destination, index2, false).get());
+
+            // new value only gets copied to DB 2
+            regularClient.select(1).get();
+            assertEquals("one", regularClient.get(destination).get());
+            regularClient.select(2).get();
+            assertEquals("two", regularClient.get(destination).get());
+
+            // both exists, with REPLACE, when value isn't the same, source always get copied to
+            // destination
+            regularClient.select(0).get();
+            assertTrue(regularClient.copy(source, destination, index1, true).get());
+            regularClient.select(1).get();
+            assertEquals("two", regularClient.get(destination).get());
+        }
+
+        // switching back to db 0
+        finally {
+            regularClient.select(0).get();
+        }
     }
 }

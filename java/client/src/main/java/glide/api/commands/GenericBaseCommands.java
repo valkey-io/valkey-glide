@@ -13,6 +13,8 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericBaseCommands {
+    /** Redis API keyword used to replace the destination key. */
+    String REPLACE_REDIS_API = "REPLACE";
 
     /**
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
@@ -542,4 +544,50 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> touch(String[] keys);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
+     * <code>destination</code> key does not yet exist.
+     *
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set("test1", "one").get();
+     * client.set("test2", "two").get();
+     * assert !client.copy("test1", "test2").get();
+     * assert client.copy("test1", "test2").get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(String source, String destination);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key. When
+     * <code>replace</code> is true, removes the <code>destination</code> key first if it already
+     * exists, otherwise performs no action.
+     *
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set("test1", "one").get();
+     * client.set("test2", "two").get();
+     * assert !client.copy("test1", "test2", false).get();
+     * assert client.copy("test1", "test2", true).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(String source, String destination, boolean replace);
 }

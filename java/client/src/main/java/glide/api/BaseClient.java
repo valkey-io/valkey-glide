@@ -26,6 +26,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.BitField;
 import static redis_request.RedisRequestOuterClass.RequestType.BitFieldReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
 import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -100,6 +101,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
@@ -189,6 +191,8 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Arrays;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -248,7 +252,8 @@ public abstract class BaseClient
                     .connectToRedis(config)
                     .thenApply(ignore -> constructor.apply(connectionManager, commandManager));
         } catch (InterruptedException e) {
-            // Something bad happened while we were establishing netty connection to UDS
+            // Something bad happened while we were establishing netty connection to
+            // UDS
             var future = new CompletableFuture<T>();
             future.completeExceptionally(e);
             return future;
@@ -267,7 +272,8 @@ public abstract class BaseClient
         try {
             connectionManager.closeConnection().get();
         } catch (InterruptedException e) {
-            // suppressing the interrupted exception - it is already suppressed in the future
+            // suppressing the interrupted exception - it is already suppressed in the
+            // future
             throw new RuntimeException(e);
         }
     }
@@ -299,10 +305,15 @@ public abstract class BaseClient
      * @throws RedisException On a type mismatch.
      */
     @SuppressWarnings("unchecked")
-    protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response)
-            throws RedisException {
+    protected <T> T handleRedisResponse(
+            Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws RedisException {
+        boolean encodingUtf8 = flags.contains(ResponseFlags.ENCODING_UTF8);
+        boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
         Object value =
-                new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
+                encodingUtf8
+                        ? new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response)
+                        : new BaseCommandResponseResolver(RedisValueResolver::valueFromPointerBinary)
+                                .apply(response);
         if (isNullable && (value == null)) {
             return null;
         }
@@ -318,43 +329,52 @@ public abstract class BaseClient
     }
 
     protected Object handleObjectOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object.class, true, response);
+        return handleRedisResponse(
+                Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected String handleStringResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, false, response);
+        return handleRedisResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected String handleStringOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, true, response);
+        return handleRedisResponse(
+                String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    protected byte[] handleBytesOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(byte[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Boolean handleBooleanResponse(Response response) throws RedisException {
-        return handleRedisResponse(Boolean.class, false, response);
+        return handleRedisResponse(Boolean.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Long handleLongResponse(Response response) throws RedisException {
-        return handleRedisResponse(Long.class, false, response);
+        return handleRedisResponse(Long.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Long handleLongOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Long.class, true, response);
+        return handleRedisResponse(Long.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Double handleDoubleResponse(Response response) throws RedisException {
-        return handleRedisResponse(Double.class, false, response);
+        return handleRedisResponse(Double.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     protected Double handleDoubleOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Double.class, true, response);
+        return handleRedisResponse(Double.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Object[] handleArrayResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object[].class, false, response);
+        return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected Object[] handleArrayOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object[].class, true, response);
+        return handleRedisResponse(
+                Object[].class,
+                EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8),
+                response);
     }
 
     /**
@@ -364,7 +384,7 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, false, response);
+        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     /**
@@ -374,7 +394,8 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, true, response);
+        return handleRedisResponse(
+                Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
@@ -392,7 +413,19 @@ public abstract class BaseClient
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
-        return handleRedisResponse(Set.class, false, response);
+        return handleRedisResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    /** Process a <code>FUNCTION LIST</code> standalone response. */
+    @SuppressWarnings("unchecked")
+    protected Map<String, Object>[] handleFunctionListResponse(Object[] response) {
+        Map<String, Object>[] data = castArray(response, Map.class);
+        for (Map<String, Object> libraryInfo : data) {
+            Object[] functions = (Object[]) libraryInfo.get("functions");
+            var functionInfo = castArray(functions, Map.class);
+            libraryInfo.put("functions", functionInfo);
+        }
+        return data;
     }
 
     @Override
@@ -407,9 +440,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<byte[]> get(@NonNull byte[] key) {
+        return commandManager.submitNewCommand(
+                Get, Arrays.asList(key), this::handleBytesOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<String> getdel(@NonNull String key) {
         return commandManager.submitNewCommand(
                 GetDel, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> set(@NonNull byte[] key, @NonNull byte[] value) {
+        return commandManager.submitNewCommand(
+                Set, Arrays.asList(key, value), this::handleStringResponse);
     }
 
     @Override
@@ -1675,6 +1720,18 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> spop(@NonNull String key) {
+        String[] arguments = new String[] {key};
+        return commandManager.submitNewCommand(SPop, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<String>> spopCount(@NonNull String key, long count) {
+        String[] arguments = new String[] {key, Long.toString(count)};
+        return commandManager.submitNewCommand(SPop, arguments, this::handleSetResponse);
+    }
+
+    @Override
     public CompletableFuture<Long[]> bitfield(
             @NonNull String key, @NonNull BitFieldSubCommands[] subCommands) {
         String[] arguments = ArrayUtils.addFirst(createBitFieldArgs(subCommands), key);
@@ -1706,5 +1763,21 @@ public abstract class BaseClient
                         keys,
                         new String[] {SET_LIMIT_REDIS_API, Long.toString(limit)});
         return commandManager.submitNewCommand(SInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, boolean replace) {
+        String[] arguments = new String[] {source, destination};
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, REPLACE_REDIS_API);
+        }
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(@NonNull String source, @NonNull String destination) {
+        String[] arguments = new String[] {source, destination};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 }

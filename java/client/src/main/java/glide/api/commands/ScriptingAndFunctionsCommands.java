@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.FlushMode;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -29,4 +31,100 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<String> functionLoad(String libraryCode, boolean replace);
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Info about all libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object>[] response = client.functionList(true).get();
+     * for (Map<String, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get("library_code"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>[]> functionList(boolean withCode);
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @param libNamePattern A wildcard pattern for matching library names.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Info about queried libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object>[] response = client.functionList("myLib?_backup", true).get();
+     * for (Map<String, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get("library_code"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>[]> functionList(String libNamePattern, boolean withCode);
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionFlush().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionFlush();
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionFlush(SYNC).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionFlush(FlushMode mode);
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @param libName The library name to delete.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionDelete("myLib").get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionDelete(String libName);
 }

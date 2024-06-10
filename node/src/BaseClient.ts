@@ -11,7 +11,9 @@ import {
 import * as net from "net";
 import { Buffer, BufferWriter, Reader, Writer } from "protobufjs";
 import {
+    AggregationType,
     ExpireOptions,
+    KeyWeight,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -53,6 +55,7 @@ import {
     createLTrim,
     createMGet,
     createMSet,
+    createObjectEncoding,
     createPExpire,
     createPExpireAt,
     createPTTL,
@@ -81,6 +84,7 @@ import {
     createZAdd,
     createZCard,
     createZCount,
+    createZInterstore,
     createZPopMax,
     createZPopMin,
     createZRange,
@@ -1881,6 +1885,43 @@ export class BaseClient {
         );
     }
 
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     * To get the result directly, see `zinter_withscores`.
+     *
+     * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/zinterstore/ for more details.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  string[] - for keys only.
+     *  KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * @returns The number of elements in the resulting sorted set stored at `destination`.
+     *
+     * @example
+     * ```typescript
+     * // Example usage of zinterstore command with an existing key
+     * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
+     * await client.zadd("key2", {"member1": 9.5})
+     * await client.zinterstore("my_sorted_set", ["key1", "key2"]) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element.
+     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20}  - "member1"  is now stored in "my_sorted_set" with score of 20.
+     * await client.zinterstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 1 - Indicates that the sorted set "my_sorted_set" contains one element, and it's score is the maximum score between the sets.
+     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5}  - "member1"  is now stored in "my_sorted_set" with score of 10.5.
+     * ```
+     */
+    public zinterstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): Promise<number> {
+        return this.createWritePromise(
+            createZInterstore(destination, keys, aggregationType),
+        );
+    }
+
     /** Returns the length of the string value stored at `key`.
      * See https://redis.io/commands/strlen/ for more details.
      *
@@ -2378,6 +2419,23 @@ export class BaseClient {
      */
     public pfadd(key: string, elements: string[]): Promise<number> {
         return this.createWritePromise(createPfAdd(key, elements));
+    }
+
+    /** Returns the internal encoding for the Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-encoding for more details.
+     *
+     * @param key - The `key` of the object to get the internal encoding of.
+     * @returns - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
+     *     Otherwise, returns None.
+     * @example
+     * ```typescript
+     * const result = await client.object_encoding("my_hash");
+     * console.log(result); // Output: "listpack"
+     * ```
+     */
+    public object_encoding(key: string): Promise<string | null> {
+        return this.createWritePromise(createObjectEncoding(key));
     }
 
     /**

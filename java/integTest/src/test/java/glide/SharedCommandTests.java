@@ -261,7 +261,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void get_requires_a_key(BaseClient client) {
-        assertThrows(NullPointerException.class, () -> client.get(null));
+        assertThrows(NullPointerException.class, () -> client.get((String) null));
     }
 
     @SneakyThrows
@@ -318,6 +318,17 @@ public class SharedCommandTests {
         client.set(key, ANOTHER_VALUE, options).get();
         String data = client.get(key).get();
         assertEquals(ANOTHER_VALUE, data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void set_get_binary_data(BaseClient client) {
+        byte[] key = "set_get_binary_data_key".getBytes();
+        byte[] value = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        assert client.set(key, value).get().equals("OK");
+        byte[] data = client.get(key).get();
+        assert Arrays.equals(data, value);
     }
 
     @SneakyThrows
@@ -4492,8 +4503,8 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void lset(BaseClient client) {
         // setup
-        String key = "testKey";
-        String nonExistingKey = "nonExisting";
+        String key = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
         long index = 0;
         long oobIndex = 10;
         long negativeIndex = -1;
@@ -4711,6 +4722,45 @@ public class SharedCommandTests {
         ExecutionException executionExceptionWithCount =
                 assertThrows(ExecutionException.class, () -> client.srandmember(nonSetKey, count).get());
         assertInstanceOf(RequestException.class, executionExceptionWithCount.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void spop_spopCount(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String stringKey = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
+        String member1 = UUID.randomUUID().toString();
+        String member2 = UUID.randomUUID().toString();
+        String member3 = UUID.randomUUID().toString();
+
+        assertEquals(1, client.sadd(key, new String[] {member1}).get());
+        assertEquals(member1, client.spop(key).get());
+
+        assertEquals(3, client.sadd(key, new String[] {member1, member2, member3}).get());
+        // Pop with count value greater than the size of the set
+        assertEquals(Set.of(member1, member2, member3), client.spopCount(key, 4).get());
+        assertEquals(0, client.scard(key).get());
+
+        assertEquals(3, client.sadd(key, new String[] {member1, member2, member3}).get());
+        assertEquals(Set.of(), client.spopCount(key, 0).get());
+
+        assertNull(client.spop(nonExistingKey).get());
+        assertEquals(Set.of(), client.spopCount(nonExistingKey, 3).get());
+
+        // invalid argument - count must be positive
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.spopCount(key, -1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // key exists but is not a set
+        assertEquals(OK, client.set(stringKey, "foo").get());
+        executionException = assertThrows(ExecutionException.class, () -> client.spop(stringKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.spopCount(stringKey, 3).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
@@ -5026,5 +5076,36 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sintercard(badArr).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void copy(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        String source = "{key}-1" + UUID.randomUUID();
+        String destination = "{key}-2" + UUID.randomUUID();
+
+        // neither key exists, returns false
+        assertFalse(client.copy(source, destination, false).get());
+        assertFalse(client.copy(source, destination).get());
+
+        // source exists, destination does not
+        client.set(source, "one");
+        assertTrue(client.copy(source, destination, false).get());
+        assertEquals("one", client.get(destination).get());
+
+        // setting new value for source
+        client.set(source, "two");
+
+        // both exists, no REPLACE
+        assertFalse(client.copy(source, destination).get());
+        assertFalse(client.copy(source, destination, false).get());
+        assertEquals("one", client.get(destination).get());
+
+        // both exists, with REPLACE
+        assertTrue(client.copy(source, destination, true).get());
+        assertEquals("two", client.get(destination).get());
     }
 }

@@ -3,10 +3,14 @@ package glide.cluster;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.FlushMode.ASYNC;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.COMMANDSTATS;
@@ -49,8 +53,11 @@ import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -635,6 +642,28 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void dbsize() {
+        assertEquals(OK, clusterClient.flushall().get());
+        // dbsize should be 0 after flushall() because all keys have been deleted
+        assertEquals(0L, clusterClient.dbsize().get());
+
+        int numKeys = 10;
+        for (int i = 0; i < numKeys; i++) {
+            assertEquals(OK, clusterClient.set(UUID.randomUUID().toString(), "foo").get());
+        }
+        assertEquals(10L, clusterClient.dbsize(ALL_PRIMARIES).get());
+
+        // test dbsize with routing - flush the database first to ensure the set() call is directed to a
+        // node with 0 keys.
+        assertEquals(OK, clusterClient.flushall().get());
+        assertEquals(0L, clusterClient.dbsize().get());
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, clusterClient.set(key, "foo").get());
+        assertEquals(1L, clusterClient.dbsize(new SlotKeyRoute(key, PRIMARY)).get());
+    }
+
+    @Test
+    @SneakyThrows
     public void objectFreq() {
         String key = UUID.randomUUID().toString();
         String maxmemoryPolicy = "maxmemory-policy";
@@ -719,7 +748,8 @@ public class CommandTests {
                 Arguments.of(
                         "sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"}, 1)),
                 Arguments.of(
-                        "xread", null, clusterClient.xread(Map.of("abc", "stream1", "zxy", "stream2"))));
+                        "xread", null, clusterClient.xread(Map.of("abc", "stream1", "zxy", "stream2")))),
+                Arguments.of("copy", "6.2.0", clusterClient.copy("abc", "def", true)));
     }
 
     @SneakyThrows
@@ -765,8 +795,8 @@ public class CommandTests {
         var route = new SlotKeyRoute("key", PRIMARY);
         assertEquals(OK, clusterClient.flushall().get());
         assertEquals(OK, clusterClient.flushall(route).get());
-        assertEquals(OK, clusterClient.flushall(FlushMode.ASYNC).get());
-        assertEquals(OK, clusterClient.flushall(FlushMode.ASYNC, route).get());
+        assertEquals(OK, clusterClient.flushall(ASYNC).get());
+        assertEquals(OK, clusterClient.flushall(ASYNC, route).get());
 
         var replicaRoute = new SlotKeyRoute("key", REPLICA);
         // command should fail on a replica, because it is read-only
@@ -781,53 +811,188 @@ public class CommandTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest
+    @ParameterizedTest(name = "functionLoad: singleNodeRoute = {0}")
     @ValueSource(booleans = {true, false})
-    public void functionLoad(boolean withRoute) {
+    public void function_commands(boolean singleNodeRoute) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        String libName = "mylib1C" + withRoute;
-        String code =
-                "#!lua name="
-                        + libName
-                        + " \n redis.register_function('myfunc1c"
-                        + withRoute
-                        + "', function(keys, args) return args[1] end)";
-        Route route = new SlotKeyRoute("1", PRIMARY);
 
-        var promise =
-                withRoute
-                        ? clusterClient.functionLoad(code, false, route)
-                        : clusterClient.functionLoad(code, false);
-        assertEquals(libName, promise.get());
+        String libName = "mylib1c_" + singleNodeRoute;
+        String funcName = "myfunc1c_" + singleNodeRoute;
+
+        String code = generateLuaLibCode(libName, List.of(funcName));
+        Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
+        assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
         // TODO test function with FCALL when fixed in redis-rs and implemented
-        // TODO test with FUNCTION LIST
+
+        var expectedDescription =
+                new HashMap<String, String>() {
+                    {
+                        put(funcName, null);
+                    }
+                };
+        var expectedFlags =
+                new HashMap<String, Set<String>>() {
+                    {
+                        put(funcName, Set.of());
+                    }
+                };
+
+        var response = clusterClient.functionList(false, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName, expectedDescription, expectedFlags, Optional.empty());
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName, expectedDescription, expectedFlags, Optional.empty());
+            }
+        }
+
+        response = clusterClient.functionList(true, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName, expectedDescription, expectedFlags, Optional.of(code));
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName, expectedDescription, expectedFlags, Optional.of(code));
+            }
+        }
 
         // re-load library without overwriting
-        promise =
-                withRoute
-                        ? clusterClient.functionLoad(code, false, route)
-                        : clusterClient.functionLoad(code, false);
-        var executionException = assertThrows(ExecutionException.class, promise::get);
+        var executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionLoad(code, false, route).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("Library '" + libName + "' already exists"));
 
         // re-load library with overwriting
-        var promise2 =
-                withRoute
-                        ? clusterClient.functionLoad(code, true, route)
-                        : clusterClient.functionLoad(code, true);
-        assertEquals(libName, promise2.get());
-        String newCode =
-                code
-                        + "\n redis.register_function('myfunc2c"
-                        + withRoute
-                        + "', function(keys, args) return #args end)";
-        promise2 =
-                withRoute
-                        ? clusterClient.functionLoad(newCode, true, route)
-                        : clusterClient.functionLoad(newCode, true);
-        assertEquals(libName, promise2.get());
+        assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
+        String newFuncName = "myfunc2c_" + singleNodeRoute;
+        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
+
+        assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
+
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of());
+
+        response = clusterClient.functionList(false, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName, expectedDescription, expectedFlags, Optional.empty());
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName, expectedDescription, expectedFlags, Optional.empty());
+            }
+        }
+
+        // load new lib and delete it - first lib remains loaded
+        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true, route).get());
+        assertEquals(OK, clusterClient.functionDelete("anotherLib", route).get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.functionDelete("anotherLib", route).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
+
+        response = clusterClient.functionList(true, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
+            }
+        }
+
         // TODO test with FCALL
+
+        assertEquals(OK, clusterClient.functionFlush(route).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void function_commands() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC).get());
+
+        String libName = "mylib1c";
+        String funcName = "myfunc1c";
+        String code = generateLuaLibCode(libName, List.of(funcName));
+
+        assertEquals(libName, clusterClient.functionLoad(code, false).get());
+        // TODO test function with FCALL when fixed in redis-rs and implemented
+
+        var flist = clusterClient.functionList(false).get();
+        var expectedDescription =
+                new HashMap<String, String>() {
+                    {
+                        put(funcName, null);
+                    }
+                };
+        var expectedFlags =
+                new HashMap<String, Set<String>>() {
+                    {
+                        put(funcName, Set.of());
+                    }
+                };
+        checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
+
+        flist = clusterClient.functionList(true).get();
+        checkFunctionListResponse(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(code));
+
+        // re-load library without overwriting
+        var executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionLoad(code, false).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("Library '" + libName + "' already exists"));
+
+        // re-load library with overwriting
+        assertEquals(libName, clusterClient.functionLoad(code, true).get());
+        String newFuncName = "myfunc2c";
+        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
+
+        assertEquals(libName, clusterClient.functionLoad(newCode, true).get());
+
+        // load new lib and delete it - first lib remains loaded
+        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true).get());
+        assertEquals(OK, clusterClient.functionDelete("anotherLib").get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionDelete("anotherLib").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
+
+        flist = clusterClient.functionList(libName, false).get();
+        expectedDescription.put(newFuncName, null);
+        expectedFlags.put(newFuncName, Set.of());
+        checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
+
+        flist = clusterClient.functionList(libName, true).get();
+        checkFunctionListResponse(
+                flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
+
+        // TODO test with FCALL
+
+        assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
     }
 }
