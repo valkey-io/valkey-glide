@@ -716,14 +716,14 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element) {
         return commandManager.submitNewCommand(
-            LPos, new String[] {key, element}, this::handleLongResponse);
+            LPos, new String[] {key, element}, this::handleLongOrNullResponse);
     }
 
     @Override
     public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
         String[] arguments = concatenateArrays(new String[] {key, element}, options.toArgs());
         return commandManager.submitNewCommand(
-            LPos, arguments, this::handleLongResponse);
+            LPos, arguments, this::handleLongOrNullResponse);
     }
 
     @Override
@@ -736,9 +736,11 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
+        String[] arguments = concatenateArrays(new String[] {key, element, COUNT_REDIS_API, Long.toString(count)}, options.toArgs());
+
         return commandManager.submitNewCommand(
             LPos,
-            new String[] {key, element, COUNT_REDIS_API, Long.toString(count), Arrays.toString((options.toArgs()))},
+            arguments,
             response -> castArray(handleArrayResponse(response), Long.class));
     }
 

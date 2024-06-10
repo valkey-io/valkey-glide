@@ -939,7 +939,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The index of <code>element</code>.
      * */
     public T lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
-        ArgsArray commandArgs = buildArgs(key, element, Arrays.toString(options.toArgs()));
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addAll(new String[] {key, element}, options.toArgs()));
         protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
         return getThis();
     }
