@@ -8,6 +8,8 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.FlushMode.ASYNC;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
 import static glide.api.models.commands.InfoOptions.Section.CPU;
 import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
@@ -18,6 +20,7 @@ import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -25,7 +28,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
-import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
@@ -379,14 +381,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, regularClient.flushall(FlushMode.SYNC).get());
+        assertEquals(OK, regularClient.flushall(SYNC).get());
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter = (Object[]) regularClient.customCommand(new String[] {"keys", "*"}).get();
         assertEquals(0, keysAfter.length);
 
         assertEquals(OK, regularClient.flushall().get());
-        assertEquals(OK, regularClient.flushall(FlushMode.ASYNC).get());
+        assertEquals(OK, regularClient.flushall(ASYNC).get());
     }
 
     @SneakyThrows
@@ -394,8 +396,7 @@ public class CommandTests {
     public void function_commands() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        // TODO use FUNCTION FLUSH
-        assertEquals(OK, regularClient.customCommand(new String[] {"FUNCTION", "FLUSH", "SYNC"}).get());
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         String libName = "mylib1c";
         String funcName = "myfunc1c";
@@ -457,6 +458,54 @@ public class CommandTests {
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
         // TODO test with FCALL
-        // TODO FUNCTION FLUSH at the end
+        assertEquals(OK, regularClient.functionFlush(ASYNC).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void copy() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        String source = "{key}-1" + UUID.randomUUID();
+        String destination = "{key}-2" + UUID.randomUUID();
+        long index1 = 1;
+        long index2 = 2;
+
+        try {
+            // neither key exists, returns false
+            assertFalse(regularClient.copy(source, destination, index1, false).get());
+
+            // source exists, destination does not
+            regularClient.set(source, "one").get();
+            assertTrue(regularClient.copy(source, destination, index1, false).get());
+            regularClient.select(1).get();
+            assertEquals("one", regularClient.get(destination).get());
+
+            // new value for source key
+            regularClient.select(0).get();
+            regularClient.set(source, "two").get();
+
+            // no REPLACE, copying to existing key on DB 0&1, non-existing key on DB 2
+            assertFalse(regularClient.copy(source, destination, index1, false).get());
+            assertTrue(regularClient.copy(source, destination, index2, false).get());
+
+            // new value only gets copied to DB 2
+            regularClient.select(1).get();
+            assertEquals("one", regularClient.get(destination).get());
+            regularClient.select(2).get();
+            assertEquals("two", regularClient.get(destination).get());
+
+            // both exists, with REPLACE, when value isn't the same, source always get copied to
+            // destination
+            regularClient.select(0).get();
+            assertTrue(regularClient.copy(source, destination, index1, true).get());
+            regularClient.select(1).get();
+            assertEquals("two", regularClient.get(destination).get());
+        }
+
+        // switching back to db 0
+        finally {
+            regularClient.select(0).get();
+        }
     }
 }

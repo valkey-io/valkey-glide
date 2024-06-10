@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
@@ -37,6 +38,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
@@ -49,6 +51,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
@@ -213,6 +216,7 @@ import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamTrimOptions;
+import glide.api.models.configuration.ReadFrom;
 import java.util.Arrays;
 import java.util.Map;
 import lombok.Getter;
@@ -3457,9 +3461,47 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key. When
+     * <code>replace</code> is true, removes the <code>destination</code> key first if it already
+     * exists, otherwise performs no action.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return Command Response - <code>1L</code> if <code>source</code> was copied, <code>0L</code>
+     *     if <code>source</code> was not copied.
+     */
+    public T copy(@NonNull String source, @NonNull String destination, boolean replace) {
+        String[] args = new String[] {source, destination};
+        if (replace) {
+            args = ArrayUtils.add(args, REPLACE_REDIS_API);
+        }
+        ArgsArray commandArgs = buildArgs(args);
+        protobufTransaction.addCommands(buildCommand(Copy, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
+     * <code>destination</code> key does not yet exist.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public T copy(@NonNull String source, @NonNull String destination) {
+        return copy(source, destination, false);
+    }
+
+    /**
      * Counts the number of set bits (population counting) in a string stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @return Command Response - The number of set bits in the string. Returns zero if the key is
      *     missing as it is treated as an empty string.
@@ -3478,7 +3520,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and
      * so on.
      *
-     * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting byte offset.
      * @param end The ending byte offset.
@@ -3502,7 +3544,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * so on.
      *
      * @since Redis 7.0 and above
-     * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting offset.
      * @param end The ending offset.
@@ -3697,7 +3739,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * non-existent then the bit at <code>offset</code> is set to <code>value</code> and the preceding
      * bits are set to <code>0</code>.
      *
-     * @see <a href="https://redis.io/commands/setbit/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/setbit/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param offset The index of the bit to be set.
      * @param value The bit value to set at <code>offset</code>. The value must be <code>0</code> or
@@ -3714,7 +3756,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
      * <code>offset</code> should be greater than or equal to zero.
      *
-     * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getbit/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param offset The index of the bit to return.
      * @return Command Response - The bit at offset of the string. Returns zero if the key is empty or
@@ -3796,7 +3838,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the position of the first bit matching the given <code>bit</code> value.
      *
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @return Command Response - The position of the first occurrence matching <code>bit</code> in
@@ -3816,7 +3858,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * indicating offsets starting at the end of the list, with <code>-1</code> being the last byte of
      * the list, <code>-2</code> being the penultimate, and so on.
      *
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @param start The starting offset.
@@ -3837,7 +3879,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * negative numbers indicating offsets starting at the end of the list, with <code>-1</code> being
      * the last byte of the list, <code>-2</code> being the penultimate, and so on.
      *
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @param start The starting offset.
@@ -3864,7 +3906,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * list, <code>-2</code> being the penultimate, and so on.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @param start The starting offset.
@@ -3893,7 +3935,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Perform a bitwise operation between multiple keys (containing string values) and store the
      * result in the <code>destination</code>.
      *
-     * @see <a href="https://redis.io/commands/bitop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitop/">valkey.io</a> for details.
      * @param bitwiseOperation The bitwise operation to perform.
      * @param destination The key that will store the resulting string.
      * @param keys The list of keys to perform the bitwise operation on.
@@ -4106,7 +4148,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Reads or modifies the array of bits representing the string that is held at <code>key</code>
      * based on the specified <code>subCommands</code>.
      *
-     * @see <a href="https://redis.io/commands/bitfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitfield/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The subCommands to be performed on the binary value of the string at <code>
      *     key</code>, which could be any of the following:
@@ -4137,10 +4179,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Reads the array of bits representing the string that is held at <code>key</code> based on the
-     * specified <code>subCommands</code>.
+     * specified <code>subCommands</code>.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @since Redis 6.0 and above
-     * @see <a href="https://redis.io/docs/latest/commands/bitfield_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed.
      * @return Command Response - An array of results from the <code>GET</code> subcommands.
@@ -4149,6 +4192,32 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull String key, @NonNull BitFieldReadOnlySubCommands[] subCommands) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(createBitFieldArgs(subCommands), key));
         protobufTransaction.addCommands(buildCommand(BitFieldReadOnly, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionFlush() {
+        protobufTransaction.addCommands(buildCommand(FunctionFlush));
+        return getThis();
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionFlush(@NonNull FlushMode mode) {
+        protobufTransaction.addCommands(buildCommand(FunctionFlush, buildArgs(mode.toString())));
         return getThis();
     }
 

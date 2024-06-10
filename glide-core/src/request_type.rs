@@ -162,6 +162,7 @@ pub enum RequestType {
     FunctionLoad = 150,
     FunctionList = 151,
     FunctionDelete = 152,
+    FunctionFlush = 153,
     LMPop = 155,
     ExpireTime = 156,
     PExpireTime = 157,
@@ -179,6 +180,7 @@ pub enum RequestType {
     BitFieldReadOnly = 173,
     Move = 174,
     SInterCard = 175,
+    Copy = 178,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -343,6 +345,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FunctionLoad => RequestType::FunctionLoad,
             ProtobufRequestType::FunctionList => RequestType::FunctionList,
             ProtobufRequestType::FunctionDelete => RequestType::FunctionDelete,
+            ProtobufRequestType::FunctionFlush => RequestType::FunctionFlush,
             ProtobufRequestType::BitPos => RequestType::BitPos,
             ProtobufRequestType::BitOp => RequestType::BitOp,
             ProtobufRequestType::HStrlen => RequestType::HStrlen,
@@ -360,6 +363,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::BitFieldReadOnly => RequestType::BitFieldReadOnly,
             ProtobufRequestType::Move => RequestType::Move,
             ProtobufRequestType::SInterCard => RequestType::SInterCard,
+            ProtobufRequestType::Copy => RequestType::Copy,
             ProtobufRequestType::Sort => RequestType::Sort,
         }
     }
@@ -521,6 +525,7 @@ impl RequestType {
             RequestType::FunctionLoad => Some(get_two_word_command("FUNCTION", "LOAD")),
             RequestType::FunctionList => Some(get_two_word_command("FUNCTION", "LIST")),
             RequestType::FunctionDelete => Some(get_two_word_command("FUNCTION", "DELETE")),
+            RequestType::FunctionFlush => Some(get_two_word_command("FUNCTION", "FLUSH")),
             RequestType::BitPos => Some(cmd("BITPOS")),
             RequestType::BitOp => Some(cmd("BITOP")),
             RequestType::HStrlen => Some(cmd("HSTRLEN")),
@@ -538,6 +543,7 @@ impl RequestType {
             RequestType::BitFieldReadOnly => Some(cmd("BITFIELD_RO")),
             RequestType::Move => Some(cmd("MOVE")),
             RequestType::SInterCard => Some(cmd("SINTERCARD")),
+            RequestType::Copy => Some(cmd("COPY")),
             RequestType::Sort => Some(cmd("SORT")),
         }
     }

@@ -192,6 +192,7 @@ enum RequestType {
     FunctionLoad = 150;
     FunctionList = 151;
     FunctionDelete = 152;
+    FunctionFlush = 153;
     LMPop = 155;
     ExpireTime = 156;
     PExpireTime = 157;
@@ -209,6 +210,7 @@ enum RequestType {
     BitFieldReadOnly = 173;
     Move = 174;
     SInterCard = 175;
+    Copy = 178;
 }
 
 message Command {

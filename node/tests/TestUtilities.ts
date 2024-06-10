@@ -229,6 +229,8 @@ export async function transactionTest(
     const key9 = "{key}" + uuidv4();
     const key10 = "{key}" + uuidv4();
     const key11 = "{key}" + uuidv4(); // hyper log log
+    const key12 = "{key}" + uuidv4();
+    const key13 = "{key}" + uuidv4();
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -349,6 +351,12 @@ export async function transactionTest(
     args.push(["member2", "member3", "member4", "member5"]);
     baseTransaction.zrangeWithScores(key8, { start: 0, stop: -1 });
     args.push({ member2: 3, member3: 3.5, member4: 4, member5: 5 });
+    baseTransaction.zadd(key12, { one: 1, two: 2 });
+    args.push(2);
+    baseTransaction.zadd(key13, { one: 1, two: 2, tree: 3.5 });
+    args.push(3);
+    baseTransaction.zinterstore(key12, [key12, key13]);
+    args.push(2);
     baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
     args.push(4);
     baseTransaction.zpopmin(key8);

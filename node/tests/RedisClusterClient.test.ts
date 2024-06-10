@@ -288,6 +288,7 @@ describe("RedisClusterClient", () => {
                 client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 client.sinter(["abc", "zxy", "lkn"]),
+                client.zinterstore("abc", ["zxy", "lkn"]),
                 // TODO all rest multi-key commands except ones tested below
             ];
 

@@ -4,6 +4,7 @@ package glide;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.FlushMode.ASYNC;
+import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
@@ -97,6 +98,8 @@ public class TransactionTestUtilities {
     private static Object[] genericCommands(BaseTransaction<?> transaction) {
         String genericKey1 = "{GenericKey}-1-" + UUID.randomUUID();
         String genericKey2 = "{GenericKey}-2-" + UUID.randomUUID();
+        String genericKey3 = "{GenericKey}-3-" + UUID.randomUUID();
+        String genericKey4 = "{GenericKey}-4-" + UUID.randomUUID();
 
         transaction
                 .set(genericKey1, value1)
@@ -131,6 +134,14 @@ public class TransactionTestUtilities {
                     .pexpiretime(genericKey1);
         }
 
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            transaction
+                    .set(genericKey3, "value")
+                    .set(genericKey4, "value2")
+                    .copy(genericKey3, genericKey4, false)
+                    .copy(genericKey3, genericKey4, true);
+        }
+
         var expectedResults =
                 new Object[] {
                     OK, // set(genericKey1, value1)
@@ -156,17 +167,30 @@ public class TransactionTestUtilities {
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            return concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        OK, // set(genericKey1, value1)
-                        true, // expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
-                        true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
-                        false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
-                        false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
-                        -2L, // expiretime(genericKey1)
-                        -2L, // pexpiretime(genericKey1)
-                    });
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(genericKey1, value1)
+                                true, // expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                                true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
+                                false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                                false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                                -2L, // expiretime(genericKey1)
+                                -2L, // pexpiretime(genericKey1)
+                            });
+        }
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(genericKey3, "value1")
+                                OK, // set(genericKey4, "value2")
+                                false, // copy(genericKey3, genericKey4, false)
+                                true, // copy(genericKey3, genericKey4, true)
+                            });
         }
         return expectedResults;
     }
@@ -704,24 +728,24 @@ public class TransactionTestUtilities {
                 };
 
         transaction
-                .customCommand(new String[] {"function", "flush", "sync"})
+                .functionFlush(SYNC)
                 .functionList(false)
-                .functionList(true)
                 .functionLoad(code, false)
                 .functionLoad(code, true)
                 .functionList("otherLib", false)
                 .functionList("mylib1T", true)
-                .functionDelete("mylib1T");
+                .functionDelete("mylib1T")
+                .functionList(true);
 
         return new Object[] {
-            OK, // customCommand("function", "flush", "sync")
+            OK, // functionFlush(SYNC)
             new Map[0], // functionList(false)
-            new Map[0], // functionList(true)
             "mylib1T", // functionLoad(code, false)
             "mylib1T", // functionLoad(code, true)
             new Map[0], // functionList("otherLib", false)
             expectedLibData, // functionList("mylib1T", true)
             OK, // functionDelete("mylib1T")
+            new Map[0], // functionList(true)
         };
     }
 

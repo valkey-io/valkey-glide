@@ -1,8 +1,11 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
+import static glide.api.commands.GenericCommands.DB_REDIS_API;
 import static glide.api.models.TransactionTests.buildArgs;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 
@@ -23,6 +26,8 @@ public class StandaloneTransactionTests {
         results.add(Pair.of(Select, buildArgs("5")));
         transaction.move("testKey", 2L);
         results.add(Pair.of(Move, buildArgs("testKey", "2")));
+        transaction.copy("key1", "key2", 1, true);
+        results.add(Pair.of(Copy, buildArgs("key1", "key2", DB_REDIS_API, "1", REPLACE_REDIS_API)));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
