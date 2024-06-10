@@ -142,6 +142,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
+import static redis_request.RedisRequestOuterClass.RequestType.XRead;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -215,6 +216,7 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.ReadFrom;
 import java.util.Arrays;
@@ -2688,7 +2690,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
-     * @param options Stream add options.
+     * @param options Stream add options {@link StreamAddOptions}.
      * @return Command Response - The id of the added entry, or <code>null</code> if {@link
      *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
      *     with the matching <code>key</code> exists.
@@ -2704,11 +2706,41 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Reads entries from the given streams.
+     *
+     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
+     *     pair</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xread(@NonNull Map<String, String> keysAndIds) {
+        return xread(keysAndIds, StreamReadOptions.builder().build());
+    }
+
+    /**
+     * Reads entries from the given streams.
+     *
+     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
+     *     pair</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @param options options detailing how to read the stream {@link StreamReadOptions}.
+     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xread(@NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
+        protobufTransaction.addCommands(buildCommand(XRead, buildArgs(options.toArgs(keysAndIds))));
+        return getThis();
+    }
+
+    /**
      * Trims the stream by evicting older entries.
      *
      * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
      * @param key The key of the stream.
-     * @param options Stream trim options.
+     * @param options Stream trim options {@link StreamTrimOptions}.
      * @return Command Response - The number of entries deleted from the stream.
      */
     public T xtrim(@NonNull String key, @NonNull StreamTrimOptions options) {
