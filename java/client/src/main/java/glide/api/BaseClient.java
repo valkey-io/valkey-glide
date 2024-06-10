@@ -377,6 +377,19 @@ public abstract class BaseClient
         return handleRedisResponse(Map.class, true, response);
     }
 
+    protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
+            throws RedisException {
+        Map<String, Object> mapResponse = handleMapOrNullResponse(response);
+        if (mapResponse == null) {
+            return null;
+        }
+        return mapResponse.entrySet().stream()
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
+    }
+
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
         return handleRedisResponse(Set.class, false, response);
@@ -1255,27 +1268,10 @@ public abstract class BaseClient
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
             @NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
         String[] arguments = options.toArgs(keysAndIds);
-        return commandManager.submitNewCommand(
-                XRead,
-                arguments,
-                response -> {
-                    Map<String, Object> mapResponse = handleMapOrNullResponse(response);
-                    if (mapResponse == null) {
-                        return null;
-                    }
-                    return mapResponse.entrySet().stream()
-                            .collect(
-                                    Collectors.toMap(
-                                            Map.Entry::getKey,
-                                            e -> {
-                                                return castMapOf2DArray(
-                                                        (Map<String, Object[][]>) e.getValue(), String.class);
-                                            }));
-                });
+        return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponse);
     }
 
     @Override
