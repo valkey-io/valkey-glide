@@ -1314,6 +1314,7 @@ export class BaseClient {
      * @param destination - The key of the destination set.
      * @param keys - The keys from which to retrieve the set members.
      * @returns The number of elements in the resulting set.
+     *
      * @example
      * ```typescript
      * const length = await client.sunionstore("mySet", ["set1", "set2"]);
