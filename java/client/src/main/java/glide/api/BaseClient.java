@@ -169,6 +169,7 @@ import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
@@ -1184,19 +1185,9 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String[]> zunion(
-            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        String[] arguments = concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs());
+    public CompletableFuture<String[]> zunion(@NonNull KeyArray keys) {
         return commandManager.submitNewCommand(
-                ZUnion, arguments, response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<String[]> zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        return commandManager.submitNewCommand(
-                ZUnion,
-                keysOrWeightedKeys.toArgs(),
-                response -> castArray(handleArrayResponse(response), String.class));
+                ZUnion, keys.toArgs(), response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -1217,19 +1208,9 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String[]> zinter(
-            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        String[] arguments = concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs());
+    public CompletableFuture<String[]> zinter(@NonNull KeyArray keys) {
         return commandManager.submitNewCommand(
-                ZInter, arguments, response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<String[]> zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        return commandManager.submitNewCommand(
-                ZInter,
-                keysOrWeightedKeys.toArgs(),
-                response -> castArray(handleArrayResponse(response), String.class));
+                ZInter, keys.toArgs(), response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override

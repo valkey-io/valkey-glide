@@ -3437,34 +3437,6 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void zunion_with_options_returns_success() {
-        // setup
-        List<Pair<String, Double>> keysWeights = new ArrayList<>();
-        keysWeights.add(Pair.of("key1", 10.0));
-        keysWeights.add(Pair.of("key2", 20.0));
-        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
-        Aggregate aggregate = Aggregate.MIN;
-        String[] arguments = concatenateArrays(weightedKeys.toArgs(), aggregate.toArgs());
-        String[] value = new String[] {"elem1", "elem2"};
-
-        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(ZUnion), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String[]> response = service.zunion(weightedKeys, aggregate);
-        String[] payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
     public void zunionWithScores_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
@@ -3537,34 +3509,6 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String[]> response = service.zinter(keyArray);
-        String[] payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void zinter_with_aggregation_returns_success() {
-        // setup
-        List<Pair<String, Double>> keysWeights = new ArrayList<>();
-        keysWeights.add(Pair.of("key1", 10.0));
-        keysWeights.add(Pair.of("key2", 20.0));
-        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
-        Aggregate aggregate = Aggregate.MIN;
-        String[] arguments = concatenateArrays(weightedKeys.toArgs(), aggregate.toArgs());
-        String[] value = new String[] {"elem1", "elem2"};
-
-        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(ZInter), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String[]> response = service.zinter(weightedKeys, aggregate);
         String[] payload = response.get();
 
         // verify

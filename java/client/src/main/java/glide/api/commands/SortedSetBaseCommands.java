@@ -672,6 +672,7 @@ public interface SortedSetBaseCommands {
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return An <code>array</code> of elements representing the difference between the sorted sets.
@@ -690,6 +691,7 @@ public interface SortedSetBaseCommands {
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return A <code>Map</code> of elements and their scores representing the difference between the
@@ -711,6 +713,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
      *     the same hash slot.
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
@@ -1083,51 +1086,13 @@ public interface SortedSetBaseCommands {
             String[] keys, ScoreFilter modifier, double timeout, long count);
 
     /**
-     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
-     * </code>.<br>
+     * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
-     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
-     *     hash slot.
+     * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
-     *     elements.
-     * @return The resulting sorted set from the union.
-     * @example
-     *     <pre>{@code
-     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
-     * String[] payload = client.zunion(keyArray, Aggregate.MAX).get()
-     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
-     *
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
-     * String[] payload = client.zunion(weightedKeys, Aggregate.MAX).get()
-     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
-     * }</pre>
-     */
-    CompletableFuture<String[]> zunion(KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
-
-    /**
-     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
-     * </code>.<br>
-     * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
-     * #zunion(KeysOrWeightedKeys, Aggregate)}.<br>
-     * To get the elements with their scores, see {@link #zunionWithScores}.
-     *
-     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
-     *     hash slot.
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
+     * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the union.
      * @example
      *     <pre>{@code
@@ -1140,7 +1105,7 @@ public interface SortedSetBaseCommands {
      * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
      * }</pre>
      */
-    CompletableFuture<String[]> zunion(KeysOrWeightedKeys keysOrWeightedKeys);
+    CompletableFuture<String[]> zunion(KeyArray keys);
 
     /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
@@ -1148,6 +1113,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1180,6 +1146,7 @@ public interface SortedSetBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
      *     hash slot.
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -1202,22 +1169,14 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Map<String, Double>> zunionWithScores(KeysOrWeightedKeys keysOrWeightedKeys);
 
     /**
-     * Returns the intersection of members from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>.<br>
-     * To perform a <code>zinter</code> operation while specifying aggregation settings, use {@link
-     * #zinter(KeysOrWeightedKeys, Aggregate)}.<br>
+     * Returns the intersection of members from sorted sets specified by the given <code>keys</code>.
+     * <br>
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
-     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
-     *     hash slot.
+     * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
      * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
+     * @param keys The keys of the sorted sets.
      * @return The resulting sorted set from the intersection.
      * @example
      *     <pre>{@code
@@ -1230,38 +1189,7 @@ public interface SortedSetBaseCommands {
      * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
      * }</pre>
      */
-    CompletableFuture<String[]> zinter(KeysOrWeightedKeys keysOrWeightedKeys);
-
-    /**
-     * Returns the intersection of members from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
-     * #zinterWithScores}.
-     *
-     * @apiNote When in cluster mode, all keys in <code>keysOrWeightedKeys</code> must map to the same
-     *     hash slot.
-     * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
-     *     elements.
-     * @return The resulting sorted set from the intersection.
-     * @example
-     *     <pre>{@code
-     * KeyArray keyArray = new KeyArray(new String[] {"mySortedSet1", "mySortedSet2"});
-     * String[] payload = client.zinter(keyArray, Aggregate.MAX).get()
-     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
-     *
-     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of("mySortedSet2", 2.0)));
-     * String[] payload = client.zinter(weightedKeys, Aggregate.MAX).get()
-     * assert payload.equals(new String[] {"elem1", "elem2", "elem3"});
-     * }</pre>
-     */
-    CompletableFuture<String[]> zinter(KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
+    CompletableFuture<String[]> zinter(KeyArray keys);
 
     /**
      * Returns the intersection of members and their scores from sorted sets specified by the given
