@@ -201,7 +201,7 @@ public interface StreamBaseCommands {
      * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> xrange(String key, StreamRange start, StreamRange end);
+    CompletableFuture<Map<String, String[][]>> xrange(String key, StreamRange start, StreamRange end);
 
     /**
      * Returns stream entries matching a given range of IDs.
@@ -236,7 +236,7 @@ public interface StreamBaseCommands {
      * });
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> xrange(
+    CompletableFuture<Map<String, String[][]>> xrange(
             String key, StreamRange start, StreamRange end, long count);
 
     /**
@@ -276,7 +276,7 @@ public interface StreamBaseCommands {
      * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> xrevrange(
+    CompletableFuture<Map<String, String[][]>> xrevrange(
             String key, StreamRange end, StreamRange start);
 
     /**
@@ -314,6 +314,6 @@ public interface StreamBaseCommands {
      * });
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> xrevrange(
+    CompletableFuture<Map<String, String[][]>> xrevrange(
             String key, StreamRange end, StreamRange start, long count);
 }

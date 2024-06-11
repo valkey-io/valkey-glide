@@ -1323,7 +1323,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, String[]>> xrange(
+    public CompletableFuture<Map<String, String[][]>> xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end), key);
         return commandManager.submitNewCommand(
@@ -1331,7 +1331,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, String[]>> xrange(
+    public CompletableFuture<Map<String, String[][]>> xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key);
         return commandManager.submitNewCommand(
@@ -1339,7 +1339,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, String[]>> xrevrange(
+    public CompletableFuture<Map<String, String[][]>> xrevrange(
             @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(end, start), key);
         return commandManager.submitNewCommand(
@@ -1349,7 +1349,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, String[]>> xrevrange(
+    public CompletableFuture<Map<String, String[][]>> xrevrange(
             @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(end, start, count), key);
         return commandManager.submitNewCommand(
