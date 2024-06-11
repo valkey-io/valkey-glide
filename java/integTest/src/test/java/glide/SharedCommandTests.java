@@ -67,6 +67,7 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.api.models.configuration.NodeAddress;
@@ -2031,6 +2032,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiff(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
         String key3 = "{testKey}:3-" + UUID.randomUUID();
@@ -2100,6 +2103,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zdiffstore(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
         String key3 = "{testKey}:3-" + UUID.randomUUID();
@@ -2577,6 +2582,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zunion(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
         String key3 = "{testKey}:3-" + UUID.randomUUID();
@@ -2595,33 +2602,21 @@ public class SharedCommandTests {
                 client.zunionWithScores(new KeyArray(new String[] {key1, key2})).get());
 
         // Union results are aggregated by the max score of elements
-        assertArrayEquals(
-                new String[] {"one", "three", "two"},
-                client.zunion(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
         assertEquals(
                 Map.of("one", 1.0, "three", 3.0, "two", 3.5),
                 client.zunionWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
 
         // Union results are aggregated by the min score of elements
-        assertArrayEquals(
-                new String[] {"one", "two", "three"},
-                client.zunion(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
         assertEquals(
                 Map.of("one", 1.0, "two", 2.0, "three", 3.0),
                 client.zunionWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
 
         // Union results are aggregated by the sum of the scores of elements
-        assertArrayEquals(
-                new String[] {"one", "three", "two"},
-                client.zunion(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
         assertEquals(
                 Map.of("one", 1.0, "three", 3.0, "two", 5.5),
                 client.zunionWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
 
         // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
-        assertArrayEquals(
-                new String[] {"one", "three", "two"},
-                client.zunion(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0)))).get());
         assertEquals(
                 Map.of("one", 2.0, "three", 6.0, "two", 11.0),
                 client
@@ -2630,12 +2625,6 @@ public class SharedCommandTests {
 
         // Union results are aggregated by the minimum score, with scores for key1 multiplied by 1.0 and
         // for key2 by -2.0.
-        assertArrayEquals(
-                new String[] {"two", "three", "one"},
-                client
-                        .zunion(
-                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
-                        .get());
         assertEquals(
                 Map.of("two", -7.0, "three", -6.0, "one", 1.0),
                 client
@@ -2663,6 +2652,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void zinter(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
         String key1 = "{testKey}:1-" + UUID.randomUUID();
         String key2 = "{testKey}:2-" + UUID.randomUUID();
         String key3 = "{testKey}:3-" + UUID.randomUUID();
@@ -2679,33 +2670,21 @@ public class SharedCommandTests {
                 Map.of("two", 5.5), client.zinterWithScores(new KeyArray(new String[] {key1, key2})).get());
 
         // Intersection results are aggregated by the max score of elements
-        assertArrayEquals(
-                new String[] {"two"},
-                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
         assertEquals(
                 Map.of("two", 3.5),
                 client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MAX).get());
 
         // Intersection results are aggregated by the min score of elements
-        assertArrayEquals(
-                new String[] {"two"},
-                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
         assertEquals(
                 Map.of("two", 2.0),
                 client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.MIN).get());
 
         // Intersection results are aggregated by the sum of the scores of elements
-        assertArrayEquals(
-                new String[] {"two"},
-                client.zinter(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
         assertEquals(
                 Map.of("two", 5.5),
                 client.zinterWithScores(new KeyArray(new String[] {key1, key2}), Aggregate.SUM).get());
 
         // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
-        assertArrayEquals(
-                new String[] {"two"},
-                client.zinter(new WeightedKeys(List.of(Pair.of(key1, 2.0), Pair.of(key2, 2.0)))).get());
         assertEquals(
                 Map.of("two", 11.0),
                 client
@@ -2714,12 +2693,6 @@ public class SharedCommandTests {
 
         // Intersection results are aggregated by the minimum score,
         // with scores for key1 multiplied by 1.0 and for key2 by -2.0.
-        assertArrayEquals(
-                new String[] {"two"},
-                client
-                        .zinter(
-                                new WeightedKeys(List.of(Pair.of(key1, 1.0), Pair.of(key2, -2.0))), Aggregate.MIN)
-                        .get());
         assertEquals(
                 Map.of("two", -7.0),
                 client
@@ -2738,7 +2711,8 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         executionException =
                 assertThrows(
-                        ExecutionException.class, () -> client.zinter(new WeightedKeys(List.of())).get());
+                        ExecutionException.class,
+                        () -> client.zinterWithScores(new WeightedKeys(List.of())).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Key exists, but it is not a set
@@ -3036,6 +3010,132 @@ public class SharedCommandTests {
         assertTrue(executionException.getCause() instanceof RequestException);
         executionException = assertThrows(ExecutionException.class, () -> client.xlen(key2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xread(BaseClient client) {
+        String key1 = "{key}:1" + UUID.randomUUID();
+        String key2 = "{key}:2" + UUID.randomUUID();
+        String field1 = "f1_";
+        String field2 = "f2_";
+        String field3 = "f3_";
+
+        // setup first entries in streams key1 and key2
+        Map<String, String> timestamp_1_1_map = new LinkedHashMap<>();
+        timestamp_1_1_map.put(field1, field1 + "1");
+        timestamp_1_1_map.put(field3, field3 + "1");
+        String timestamp_1_1 =
+                client.xadd(key1, timestamp_1_1_map, StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
+
+        String timestamp_2_1 =
+                client
+                        .xadd(key2, Map.of(field2, field2 + "1"), StreamAddOptions.builder().id("2-1").build())
+                        .get();
+        assertNotNull(timestamp_2_1);
+
+        // setup second entries in streams key1 and key2
+        String timestamp_1_2 =
+                client
+                        .xadd(key1, Map.of(field1, field1 + "2"), StreamAddOptions.builder().id("1-2").build())
+                        .get();
+        assertNotNull(timestamp_1_2);
+
+        String timestamp_2_2 =
+                client
+                        .xadd(key2, Map.of(field2, field2 + "2"), StreamAddOptions.builder().id("2-2").build())
+                        .get();
+        assertNotNull(timestamp_2_2);
+
+        // setup third entries in streams key1 and key2
+        Map<String, String> timestamp_1_3_map = new LinkedHashMap<>();
+        timestamp_1_3_map.put(field1, field1 + "3");
+        timestamp_1_3_map.put(field3, field3 + "3");
+        String timestamp_1_3 =
+                client.xadd(key1, timestamp_1_3_map, StreamAddOptions.builder().id("1-3").build()).get();
+        assertNotNull(timestamp_1_3);
+
+        String timestamp_2_3 =
+                client
+                        .xadd(key2, Map.of(field2, field2 + "3"), StreamAddOptions.builder().id("2-3").build())
+                        .get();
+        assertNotNull(timestamp_2_3);
+
+        Map<String, Map<String, String[][]>> result =
+                client.xread(Map.of(key1, timestamp_1_1, key2, timestamp_2_1)).get();
+
+        // check key1
+        Map<String, String[][]> expected_key1 = new LinkedHashMap<>();
+        expected_key1.put(timestamp_1_2, new String[][] {{field1, field1 + "2"}});
+        expected_key1.put(
+                timestamp_1_3,
+                new String[][] {
+                    {field1, field1 + "3"},
+                    {field3, field3 + "3"}
+                });
+        assertDeepEquals(expected_key1, result.get(key1));
+
+        // check key2
+        Map<String, String[][]> expected_key2 = new LinkedHashMap<>();
+        expected_key2.put(timestamp_2_2, new String[][] {{field2, field2 + "2"}});
+        expected_key2.put(timestamp_2_3, new String[][] {{field2, field2 + "3"}});
+        assertDeepEquals(expected_key2, result.get(key2));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xread_return_failures(BaseClient client) {
+        String key1 = "{key}:1" + UUID.randomUUID();
+        String nonStreamKey = "{key}:3" + UUID.randomUUID();
+        String field1 = "f1_";
+
+        // setup first entries in streams key1 and key2
+        Map<String, String> timestamp_1_1_map = new LinkedHashMap<>();
+        timestamp_1_1_map.put(field1, field1 + "1");
+        String timestamp_1_1 =
+                client.xadd(key1, timestamp_1_1_map, StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
+
+        // Key exists, but it is not a stream
+        assertEquals(OK, client.set(nonStreamKey, "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xread(Map.of(nonStreamKey, timestamp_1_1, key1, timestamp_1_1)).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xread(Map.of(key1, timestamp_1_1, nonStreamKey, timestamp_1_1)).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            long oneSecondInMS = 1000L;
+            assertNull(
+                    testClient
+                            .xread(
+                                    Map.of(key1, timestamp_1_1),
+                                    StreamReadOptions.builder().block(oneSecondInMS).build())
+                            .get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .xread(Map.of(key1, timestamp_1_1), StreamReadOptions.builder().block(0L).build())
+                                    .get(3, TimeUnit.SECONDS));
+        }
     }
 
     @SneakyThrows

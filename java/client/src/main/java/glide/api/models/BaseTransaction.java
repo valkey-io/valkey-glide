@@ -143,6 +143,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
+import static redis_request.RedisRequestOuterClass.RequestType.XRead;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -216,7 +217,9 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
+import glide.api.models.configuration.ReadFrom;
 import java.util.Arrays;
 import java.util.Map;
 import lombok.Getter;
@@ -2108,6 +2111,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the difference between the first sorted set and all the successive sorted sets.<br>
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - An <code>array</code> of elements representing the difference
@@ -2124,6 +2128,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - A <code>Map</code> of elements and their scores representing the
@@ -2144,6 +2149,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
      * overwriting it if it already exists. Non-existent keys are treated as empty sets.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
@@ -2476,46 +2482,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
-     * </code>.<br>
+     * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
-     *     elements.
+     * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the union.
      */
-    public T zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        ArgsArray commandArgs =
-                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
-        protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
-     * </code>.<br>
-     * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
-     * #zunion(KeysOrWeightedKeys, Aggregate)}.<br>
-     * To get the elements with their scores, see {@link #zunionWithScores}.
-     *
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @return Command Response - The resulting sorted set from the union.
-     */
-    public T zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
+    public T zunion(@NonNull KeyArray keys) {
+        ArgsArray commandArgs = buildArgs(keys.toArgs());
         protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
         return getThis();
     }
@@ -2524,6 +2500,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      * keysOrWeightedKeys</code>.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2553,6 +2530,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
      * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2571,48 +2549,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the intersection of members from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>.<br>
-     * To perform a <code>zinter</code> operation while specifying aggregation settings, use {@link
-     * #zinter(KeysOrWeightedKeys, Aggregate)}.<br>
+     * Returns the intersection of members from sorted sets specified by the given <code>keys</code>.
+     * <br>
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
      * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
+     * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the intersection.
      */
-    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
-        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Returns the intersection of members from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
-     * #zinterWithScores}.
-     *
-     * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys intersection.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
-     *     elements.
-     * @return Command Response - The resulting sorted set from the intersection.
-     */
-    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        ArgsArray commandArgs =
-                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
+    public T zinter(@NonNull KeyArray keys) {
+        ArgsArray commandArgs = buildArgs(keys.toArgs());
         protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
         return getThis();
     }
@@ -2688,7 +2635,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
-     * @param options Stream add options.
+     * @param options Stream add options {@link StreamAddOptions}.
      * @return Command Response - The id of the added entry, or <code>null</code> if {@link
      *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
      *     with the matching <code>key</code> exists.
@@ -2704,11 +2651,41 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Reads entries from the given streams.
+     *
+     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
+     *     pair</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xread(@NonNull Map<String, String> keysAndIds) {
+        return xread(keysAndIds, StreamReadOptions.builder().build());
+    }
+
+    /**
+     * Reads entries from the given streams.
+     *
+     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
+     *     pair</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @param options options detailing how to read the stream {@link StreamReadOptions}.
+     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xread(@NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
+        protobufTransaction.addCommands(buildCommand(XRead, buildArgs(options.toArgs(keysAndIds))));
+        return getThis();
+    }
+
+    /**
      * Trims the stream by evicting older entries.
      *
      * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
      * @param key The key of the stream.
-     * @param options Stream trim options.
+     * @param options Stream trim options {@link StreamTrimOptions}.
      * @return Command Response - The number of entries deleted from the stream.
      */
     public T xtrim(@NonNull String key, @NonNull StreamTrimOptions options) {
@@ -3501,7 +3478,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Counts the number of set bits (population counting) in a string stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @return Command Response - The number of set bits in the string. Returns zero if the key is
      *     missing as it is treated as an empty string.
@@ -3520,7 +3497,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and
      * so on.
      *
-     * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting byte offset.
      * @param end The ending byte offset.
@@ -3544,7 +3521,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * so on.
      *
      * @since Redis 7.0 and above
-     * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting offset.
      * @param end The ending offset.
@@ -3775,7 +3752,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * non-existent then the bit at <code>offset</code> is set to <code>value</code> and the preceding
      * bits are set to <code>0</code>.
      *
-     * @see <a href="https://redis.io/commands/setbit/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/setbit/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param offset The index of the bit to be set.
      * @param value The bit value to set at <code>offset</code>. The value must be <code>0</code> or
@@ -3792,7 +3769,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
      * <code>offset</code> should be greater than or equal to zero.
      *
-     * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getbit/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param offset The index of the bit to return.
      * @return Command Response - The bit at offset of the string. Returns zero if the key is empty or
@@ -3874,7 +3851,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the position of the first bit matching the given <code>bit</code> value.
      *
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @return Command Response - The position of the first occurrence matching <code>bit</code> in
@@ -3894,7 +3871,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * indicating offsets starting at the end of the list, with <code>-1</code> being the last byte of
      * the list, <code>-2</code> being the penultimate, and so on.
      *
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @param start The starting offset.
@@ -3915,7 +3892,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * negative numbers indicating offsets starting at the end of the list, with <code>-1</code> being
      * the last byte of the list, <code>-2</code> being the penultimate, and so on.
      *
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @param start The starting offset.
@@ -3942,7 +3919,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * list, <code>-2</code> being the penultimate, and so on.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @param start The starting offset.
@@ -3971,7 +3948,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Perform a bitwise operation between multiple keys (containing string values) and store the
      * result in the <code>destination</code>.
      *
-     * @see <a href="https://redis.io/commands/bitop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitop/">valkey.io</a> for details.
      * @param bitwiseOperation The bitwise operation to perform.
      * @param destination The key that will store the resulting string.
      * @param keys The list of keys to perform the bitwise operation on.
@@ -4184,7 +4161,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Reads or modifies the array of bits representing the string that is held at <code>key</code>
      * based on the specified <code>subCommands</code>.
      *
-     * @see <a href="https://redis.io/commands/bitfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitfield/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The subCommands to be performed on the binary value of the string at <code>
      *     key</code>, which could be any of the following:
@@ -4215,10 +4192,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Reads the array of bits representing the string that is held at <code>key</code> based on the
-     * specified <code>subCommands</code>.
+     * specified <code>subCommands</code>.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @since Redis 6.0 and above
-     * @see <a href="https://redis.io/docs/latest/commands/bitfield_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param subCommands The <code>GET</code> subCommands to be performed.
      * @return Command Response - An array of results from the <code>GET</code> subcommands.

@@ -288,6 +288,9 @@ describe("RedisClusterClient", () => {
                 client.smove("abc", "zxy", "value"),
                 client.renamenx("abc", "zxy"),
                 client.sinter(["abc", "zxy", "lkn"]),
+                client.zinterstore("abc", ["zxy", "lkn"]),
+                client.sunionstore("abc", ["zxy", "lkn"]),
+                client.pfcount(["abc", "zxy", "lkn"]),
                 // TODO all rest multi-key commands except ones tested below
             ];
 
@@ -318,6 +321,47 @@ describe("RedisClusterClient", () => {
             await client.mget(["abc", "zxy", "lkn"]);
             await client.mset({ abc: "1", zxy: "2", lkn: "3" });
             // TODO touch
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object freq transaction test_%p",
+        async (protocol) => {
+            const client = await RedisClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+            const maxmemoryPolicyKey = "maxmemory-policy";
+            const config = await client.configGet([maxmemoryPolicyKey]);
+            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+
+            try {
+                const transaction = new ClusterTransaction();
+                transaction.configSet({
+                    [maxmemoryPolicyKey]: "allkeys-lfu",
+                });
+                transaction.set(key, "foo");
+                transaction.object_freq(key);
+
+                const response = await client.exec(transaction);
+                expect(response).not.toBeNull();
+
+                if (response != null) {
+                    expect(response.length).toEqual(3);
+                    expect(response[0]).toEqual("OK");
+                    expect(response[1]).toEqual("OK");
+                    expect(response[2]).toBeGreaterThanOrEqual(0);
+                }
+            } finally {
+                expect(
+                    await client.configSet({
+                        [maxmemoryPolicyKey]: maxmemoryPolicy,
+                    }),
+                ).toEqual("OK");
+            }
+
             client.close();
         },
     );

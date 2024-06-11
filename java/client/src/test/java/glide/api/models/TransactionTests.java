@@ -27,6 +27,9 @@ import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_A
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -153,6 +156,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
+import static redis_request.RedisRequestOuterClass.RequestType.XRead;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -214,6 +218,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -624,20 +629,6 @@ public class TransactionTests {
                                 AGGREGATE_REDIS_API,
                                 Aggregate.MAX.toString())));
 
-        transaction.zunion(new WeightedKeys(weightedKeys), Aggregate.MAX);
-        results.add(
-                Pair.of(
-                        ZUnion,
-                        buildArgs(
-                                "2",
-                                "key1",
-                                "key2",
-                                WEIGHTS_REDIS_API,
-                                "10.0",
-                                "20.0",
-                                AGGREGATE_REDIS_API,
-                                Aggregate.MAX.toString())));
-
         transaction.zunionWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
@@ -664,20 +655,6 @@ public class TransactionTests {
         transaction.zinterWithScores(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
 
-        transaction.zinter(new WeightedKeys(weightedKeys), Aggregate.MAX);
-        results.add(
-                Pair.of(
-                        ZInter,
-                        buildArgs(
-                                "2",
-                                "key1",
-                                "key2",
-                                WEIGHTS_REDIS_API,
-                                "10.0",
-                                "20.0",
-                                AGGREGATE_REDIS_API,
-                                Aggregate.MAX.toString())));
-
         transaction.zinterWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
@@ -701,6 +678,22 @@ public class TransactionTests {
 
         transaction.xtrim("key", new MinId(true, "id"));
         results.add(Pair.of(XTrim, buildArgs("key", TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "id")));
+
+        transaction.xread(Map.of("key", "id"));
+        results.add(Pair.of(XRead, buildArgs(READ_STREAMS_REDIS_API, "key", "id")));
+
+        transaction.xread(Map.of("key", "id"), StreamReadOptions.builder().block(1L).count(2L).build());
+        results.add(
+                Pair.of(
+                        XRead,
+                        buildArgs(
+                                READ_COUNT_REDIS_API,
+                                "2",
+                                READ_BLOCK_REDIS_API,
+                                "1",
+                                READ_STREAMS_REDIS_API,
+                                "key",
+                                "id")));
 
         transaction.xlen("key");
         results.add(Pair.of(XLen, buildArgs("key")));

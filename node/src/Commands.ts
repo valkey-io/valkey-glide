@@ -602,6 +602,16 @@ export function createSInter(keys: string[]): redis_request.Command {
 /**
  * @internal
  */
+export function createSUnionStore(
+    destination: string,
+    keys: string[],
+): redis_request.Command {
+    return createCommand(RequestType.SUnionStore, [destination].concat(keys));
+}
+
+/**
+ * @internal
+ */
 export function createSIsMember(
     key: string,
     member: string,
@@ -825,6 +835,50 @@ export function createZAdd(
         ]),
     );
     return createCommand(RequestType.ZAdd, args);
+}
+
+/**
+ * `KeyWeight` - pair of variables represents a weighted key for the `ZINTERSTORE` and `ZUNIONSTORE` sorted sets commands.
+ */
+export type KeyWeight = [string, number];
+/**
+ * `AggregationType` - representing aggregation types for `ZINTERSTORE` and `ZUNIONSTORE` sorted set commands.
+ */
+export type AggregationType = "SUM" | "MIN" | "MAX";
+
+/**
+ * @internal
+ */
+export function createZInterstore(
+    destination: string,
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+): redis_request.Command {
+    const args = createZCmdStoreArgs(destination, keys, aggregationType);
+    return createCommand(RequestType.ZInterStore, args);
+}
+
+function createZCmdStoreArgs(
+    destination: string,
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+): string[] {
+    const args: string[] = [destination, keys.length.toString()];
+
+    if (typeof keys[0] === "string") {
+        args.push(...(keys as string[]));
+    } else {
+        const weightsKeys = keys.map(([key]) => key);
+        args.push(...(weightsKeys as string[]));
+        const weights = keys.map(([, weight]) => weight.toString());
+        args.push("WEIGHTS", ...weights);
+    }
+
+    if (aggregationType) {
+        args.push("AGGREGATE", aggregationType);
+    }
+
+    return args;
 }
 
 /**
@@ -1054,6 +1108,32 @@ export function createLIndex(
     index: number,
 ): redis_request.Command {
     return createCommand(RequestType.LIndex, [key, index.toString()]);
+}
+
+/**
+ * Defines where to insert new elements into a list.
+ */
+export enum InsertPosition {
+    /**
+     * Insert new element before the pivot.
+     */
+    Before = "before",
+    /**
+     * Insert new element after the pivot.
+     */
+    After = "after",
+}
+
+/**
+ * @internal
+ */
+export function createLInsert(
+    key: string,
+    position: InsertPosition,
+    pivot: string,
+    element: string,
+): redis_request.Command {
+    return createCommand(RequestType.LInsert, [key, position, pivot, element]);
 }
 
 /**
@@ -1372,6 +1452,20 @@ export function createPfAdd(
 /**
  * @internal
  */
+export function createPfCount(keys: string[]): redis_request.Command {
+    return createCommand(RequestType.PfCount, keys);
+}
+
+/**
+ * @internal
+ */
 export function createObjectEncoding(key: string): redis_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createObjectFreq(key: string): redis_request.Command {
+    return createCommand(RequestType.ObjectFreq, [key]);
 }

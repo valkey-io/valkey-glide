@@ -9,6 +9,7 @@ import {
     ClosingError,
     ExpireOptions,
     InfoOptions,
+    InsertPosition,
     ProtocolVersion,
     RedisClient,
     RedisClusterClient,
@@ -1161,6 +1162,66 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sunionstore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}:${uuidv4()}`;
+                const key2 = `{key}:${uuidv4()}`;
+                const key3 = `{key}:${uuidv4()}`;
+                const key4 = `{key}:${uuidv4()}`;
+                const stringKey = `{key}:${uuidv4()}`;
+                const nonExistingKey = `{key}:${uuidv4()}`;
+
+                expect(await client.sadd(key1, ["a", "b", "c"])).toEqual(3);
+                expect(await client.sadd(key2, ["c", "d", "e"])).toEqual(3);
+                expect(await client.sadd(key3, ["e", "f", "g"])).toEqual(3);
+
+                // store union in new key
+                expect(await client.sunionstore(key4, [key1, key2])).toEqual(5);
+                expect(await client.smembers(key4)).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // overwrite existing set
+                expect(await client.sunionstore(key1, [key4, key2])).toEqual(5);
+                expect(await client.smembers(key1)).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // overwrite one of the source keys
+                expect(await client.sunionstore(key2, [key4, key2])).toEqual(5);
+                expect(await client.smembers(key2)).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // union with a non-existing key
+                expect(
+                    await client.sunionstore(key2, [nonExistingKey]),
+                ).toEqual(0);
+                expect(await client.smembers(key2)).toEqual(new Set());
+
+                // invalid argument - key list must not be empty
+                await expect(client.sunionstore(key4, [])).rejects.toThrow();
+
+                // key exists, but it is not a set
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.sunionstore(key4, [stringKey, key1]),
+                ).rejects.toThrow();
+
+                // overwrite destination when destination is not a set
+                expect(
+                    await client.sunionstore(stringKey, [key1, key3]),
+                ).toEqual(7);
+                expect(await client.smembers(stringKey)).toEqual(
+                    new Set(["a", "b", "c", "d", "e", "f", "g"]),
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sismember test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -1878,6 +1939,141 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    // Zinterstore command tests
+    async function zinterstoreWithAggregation(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:3-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+
+        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
+        expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+        // Intersection results are aggregated by the MAX score of elements
+        expect(await client.zinterstore(key3, [key1, key2], "MAX")).toEqual(2);
+        const zinterstoreMapMax = await client.zrangeWithScores(key3, range);
+        const expectedMapMax = {
+            one: 2,
+            two: 3,
+        };
+        expect(compareMaps(zinterstoreMapMax, expectedMapMax)).toBe(true);
+
+        // Intersection results are aggregated by the MIN score of elements
+        expect(await client.zinterstore(key3, [key1, key2], "MIN")).toEqual(2);
+        const zinterstoreMapMin = await client.zrangeWithScores(key3, range);
+        const expectedMapMin = {
+            one: 1,
+            two: 2,
+        };
+        expect(compareMaps(zinterstoreMapMin, expectedMapMin)).toBe(true);
+
+        // Intersection results are aggregated by the SUM score of elements
+        expect(await client.zinterstore(key3, [key1, key2], "SUM")).toEqual(2);
+        const zinterstoreMapSum = await client.zrangeWithScores(key3, range);
+        const expectedMapSum = {
+            one: 3,
+            two: 5,
+        };
+        expect(compareMaps(zinterstoreMapSum, expectedMapSum)).toBe(true);
+    }
+
+    async function zinterstoreBasicTest(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:3-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+
+        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
+        expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+        expect(await client.zinterstore(key3, [key1, key2])).toEqual(2);
+        const zinterstoreMap = await client.zrangeWithScores(key3, range);
+        const expectedMap = {
+            one: 3,
+            two: 5,
+        };
+        expect(compareMaps(zinterstoreMap, expectedMap)).toBe(true);
+    }
+
+    async function zinterstoreWithWeightsAndAggregation(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+        const key3 = "{testKey}:3-" + uuidv4();
+        const range = {
+            start: 0,
+            stop: -1,
+        };
+        const membersScores1 = { one: 1.0, two: 2.0 };
+        const membersScores2 = { one: 2.0, two: 3.0, three: 4.0 };
+
+        expect(await client.zadd(key1, membersScores1)).toEqual(2);
+        expect(await client.zadd(key2, membersScores2)).toEqual(3);
+
+        // Scores are multiplied by 2.0 for key1 and key2 during aggregation.
+        expect(
+            await client.zinterstore(
+                key3,
+                [
+                    [key1, 2.0],
+                    [key2, 2.0],
+                ],
+                "SUM",
+            ),
+        ).toEqual(2);
+        const zinterstoreMapMultiplied = await client.zrangeWithScores(
+            key3,
+            range,
+        );
+        const expectedMapMultiplied = {
+            one: 6,
+            two: 10,
+        };
+        expect(
+            compareMaps(zinterstoreMapMultiplied, expectedMapMultiplied),
+        ).toBe(true);
+    }
+
+    async function zinterstoreEmptyCases(client: BaseClient) {
+        const key1 = "{testKey}:1-" + uuidv4();
+        const key2 = "{testKey}:2-" + uuidv4();
+
+        // Non existing key
+        expect(
+            await client.zinterstore(key2, [
+                key1,
+                "{testKey}-non_existing_key",
+            ]),
+        ).toEqual(0);
+
+        // Empty list check
+        await expect(client.zinterstore("{xyz}", [])).rejects.toThrow();
+    }
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zinterstore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                await zinterstoreBasicTest(client);
+                await zinterstoreWithAggregation(client);
+                await zinterstoreWithWeightsAndAggregation(client);
+                await zinterstoreEmptyCases(client);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `type test_%p`,
         async (protocol) => {
@@ -1976,6 +2172,69 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
                 expect(await client.lindex("notExsitingList", 1)).toEqual(null);
                 expect(await client.lindex(listName, 3)).toEqual(null);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `linsert test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const stringKey = uuidv4();
+                const nonExistingKey = uuidv4();
+
+                expect(await client.lpush(key1, ["4", "3", "2", "1"])).toEqual(
+                    4,
+                );
+                expect(
+                    await client.linsert(
+                        key1,
+                        InsertPosition.Before,
+                        "2",
+                        "1.5",
+                    ),
+                ).toEqual(5);
+                expect(
+                    await client.linsert(
+                        key1,
+                        InsertPosition.After,
+                        "3",
+                        "3.5",
+                    ),
+                ).toEqual(6);
+                expect(await client.lrange(key1, 0, -1)).toEqual([
+                    "1",
+                    "1.5",
+                    "2",
+                    "3",
+                    "3.5",
+                    "4",
+                ]);
+
+                expect(
+                    await client.linsert(
+                        key1,
+                        InsertPosition.Before,
+                        "nonExistingPivot",
+                        "4",
+                    ),
+                ).toEqual(-1);
+                expect(
+                    await client.linsert(
+                        nonExistingKey,
+                        InsertPosition.Before,
+                        "pivot",
+                        "elem",
+                    ),
+                ).toEqual(0);
+
+                // key exists, but it is not a list
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(
+                    client.linsert(stringKey, InsertPosition.Before, "a", "b"),
+                ).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
@@ -2474,6 +2733,46 @@ export function runBaseTests<Context>(config: {
         config.timeout,
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "pfcount test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+                const stringKey = `{key}-4-${uuidv4()}`;
+                const nonExistingKey = `{key}-5-${uuidv4()}`;
+
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfcount([key1])).toEqual(3);
+                expect(await client.pfcount([key2])).toEqual(3);
+                expect(await client.pfcount([key1, key2])).toEqual(4);
+                expect(
+                    await client.pfcount([key1, key2, nonExistingKey]),
+                ).toEqual(4);
+
+                // empty HyperLogLog data set
+                expect(await client.pfadd(key3, [])).toEqual(1);
+                expect(await client.pfcount([key3])).toEqual(0);
+
+                // invalid argument - key list must not be empty
+                try {
+                    expect(await client.pfcount([])).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "ResponseError: wrong number of arguments",
+                    );
+                }
+
+                // key exists, but it is not a HyperLogLog
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(client.pfcount([stringKey])).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
     // Set command tests
 
     async function setWithExpiryOptions(client: BaseClient) {
@@ -2840,6 +3139,41 @@ export function runBaseTests<Context>(config: {
                 expect(await client.object_encoding(stream_key)).toEqual(
                     "stream",
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object freq test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const maxmemoryPolicyKey = "maxmemory-policy";
+                const config = await client.configGet([maxmemoryPolicyKey]);
+                const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+
+                try {
+                    expect(
+                        await client.configSet({
+                            [maxmemoryPolicyKey]: "allkeys-lfu",
+                        }),
+                    ).toEqual("OK");
+                    expect(await client.object_freq(nonExistingKey)).toEqual(
+                        null,
+                    );
+                    expect(await client.set(key, "foobar")).toEqual("OK");
+                    expect(
+                        await client.object_freq(key),
+                    ).toBeGreaterThanOrEqual(0);
+                } finally {
+                    expect(
+                        await client.configSet({
+                            [maxmemoryPolicyKey]: maxmemoryPolicy,
+                        }),
+                    ).toEqual("OK");
+                }
             }, protocol);
         },
         config.timeout,
