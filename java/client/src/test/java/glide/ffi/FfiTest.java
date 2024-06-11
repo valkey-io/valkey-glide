@@ -8,11 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import glide.ffi.resolvers.NativeUtils;
 import glide.ffi.resolvers.RedisValueResolver;
 import java.util.HashMap;
 import java.util.HashSet;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -45,11 +43,13 @@ public class FfiTest {
 
     public static native long createLeakedLongSet(long[] value);
 
-    public static native long handlePanics(boolean shouldPanic, boolean errorPresent, long value, long defaultValue);
+    public static native long handlePanics(
+            boolean shouldPanic, boolean errorPresent, long value, long defaultValue);
 
     public static native long handleErrors(boolean isSuccess, long value, long defaultValue);
 
-    public static native void throwException(boolean throwTwice, boolean isRuntimeException, String message);
+    public static native void throwException(
+            boolean throwTwice, boolean isRuntimeException, String message);
 
     @Test
     public void redisValueToJavaValue_Nil() {
