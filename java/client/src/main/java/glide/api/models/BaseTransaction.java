@@ -2743,8 +2743,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of item pairings.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xrange(@NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end), key));
@@ -2773,8 +2772,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of item pairings.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
@@ -2806,8 +2804,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of item pairings.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xrevrange(@NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(end, start), key));
@@ -2838,8 +2835,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of item pairings.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xrevrange(
             @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {

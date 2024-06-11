@@ -184,7 +184,7 @@ public interface StreamBaseCommands {
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
@@ -221,7 +221,7 @@ public interface StreamBaseCommands {
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
-     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * // Retrieve the first 2 stream entries
@@ -257,7 +257,7 @@ public interface StreamBaseCommands {
      *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
-     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
@@ -297,7 +297,7 @@ public interface StreamBaseCommands {
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
-     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * // Retrieve the first 2 stream entries
