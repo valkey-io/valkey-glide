@@ -143,6 +143,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -2742,8 +2743,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of item pairings.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xrange(@NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end), key));
@@ -2772,14 +2772,76 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
-     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is
-     *     an array of item pairings.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
         ArgsArray commandArgs =
                 buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key));
         protobufTransaction.addCommands(buildCommand(XRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs in reverse order.<br>
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange)} but returns the entries in
+     * reverse order.
+     *
+     * @param key The key of the stream.
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xrevrange(@NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(end, start), key));
+        protobufTransaction.addCommands(buildCommand(XRevRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs in reverse order.<br>
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange, long)} but returns the entries
+     * in reverse order.
+     *
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param count Maximum count of stream entries to return.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xrevrange(
+            @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(end, start, count), key));
+        protobufTransaction.addCommands(buildCommand(XRevRange, commandArgs));
         return getThis();
     }
 

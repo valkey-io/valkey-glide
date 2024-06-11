@@ -118,6 +118,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -1322,19 +1323,39 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, String[]>> xrange(
+    public CompletableFuture<Map<String, String[][]>> xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end), key);
         return commandManager.submitNewCommand(
-                XRange, arguments, response -> castMapOfArrays(handleMapResponse(response), String.class));
+                XRange, arguments, response -> castMapOf2DArray(handleMapResponse(response), String.class));
     }
 
     @Override
-    public CompletableFuture<Map<String, String[]>> xrange(
+    public CompletableFuture<Map<String, String[][]>> xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key);
         return commandManager.submitNewCommand(
-                XRange, arguments, response -> castMapOfArrays(handleMapResponse(response), String.class));
+                XRange, arguments, response -> castMapOf2DArray(handleMapResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[][]>> xrevrange(
+            @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start) {
+        String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(end, start), key);
+        return commandManager.submitNewCommand(
+                XRevRange,
+                arguments,
+                response -> castMapOf2DArray(handleMapResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[][]>> xrevrange(
+            @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
+        String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(end, start, count), key);
+        return commandManager.submitNewCommand(
+                XRevRange,
+                arguments,
+                response -> castMapOf2DArray(handleMapResponse(response), String.class));
     }
 
     @Override

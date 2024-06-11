@@ -668,6 +668,8 @@ public class TransactionTestUtilities {
                 .xread(Map.of(streamKey1, "0-2"))
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
+                .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
+                .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
                 .xtrim(streamKey1, new MinId(true, "0-2"))
                 .xdel(streamKey1, new String[] {"0-3", "0-5"});
 
@@ -679,8 +681,11 @@ public class TransactionTestUtilities {
             Map.of(
                     streamKey1,
                     Map.of("0-3", new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"));
-            Map.of("0-1", new String[] {"field1", "value1"}), // .xrange(streamKey1, "0-1", "0-1")
-            Map.of("0-1", new String[] {"field1", "value1"}), // .xrange(streamKey1, "0-1", "0-1", 1l)
+            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1")
+            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1", 1l)
+            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1")
+            Map.of(
+                    "0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1", 1l)
             1L, // xtrim(streamKey1, new MinId(true, "0-2"))
             1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"});
         };
