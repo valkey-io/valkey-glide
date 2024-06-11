@@ -6,6 +6,7 @@ import {
     AggregationType,
     ExpireOptions,
     InfoOptions,
+    InsertPosition,
     KeyWeight,
     RangeByIndex,
     RangeByLex,
@@ -49,6 +50,7 @@ import {
     createIncrByFloat,
     createInfo,
     createLIndex,
+    createLInsert,
     createLLen,
     createLPop,
     createLPush,
@@ -1264,6 +1266,30 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public lindex(key: string, index: number): T {
         return this.addAndReturn(createLIndex(key, index));
+    }
+
+    /**
+     * Inserts `element` in the list at `key` either before or after the `pivot`.
+     *
+     * See https://valkey.io/commands/linsert/ for more details.
+     *
+     * @param key - The key of the list.
+     * @param position - The relative position to insert into - either `InsertPosition.Before` or
+     *     `InsertPosition.After` the `pivot`.
+     * @param pivot - An element of the list.
+     * @param element - The new element to insert.
+     *
+     * Command Response - The list length after a successful insert operation.
+     * If the `key` doesn't exist returns `-1`.
+     * If the `pivot` wasn't found, returns `0`.
+     */
+    public linsert(
+        key: string,
+        position: InsertPosition,
+        pivot: string,
+        element: string,
+    ): T {
+        return this.addAndReturn(createLInsert(key, position, pivot, element));
     }
 
     /**

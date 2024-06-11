@@ -1111,6 +1111,32 @@ export function createLIndex(
 }
 
 /**
+ * Defines where to insert new elements into a list.
+ */
+export enum InsertPosition {
+    /**
+     * Insert new element before the pivot.
+     */
+    Before = "before",
+    /**
+     * Insert new element after the pivot.
+     */
+    After = "after",
+}
+
+/**
+ * @internal
+ */
+export function createLInsert(
+    key: string,
+    position: InsertPosition,
+    pivot: string,
+    element: string,
+): redis_request.Command {
+    return createCommand(RequestType.LInsert, [key, position, pivot, element]);
+}
+
+/**
  * @internal
  */
 export function createZPopMin(
