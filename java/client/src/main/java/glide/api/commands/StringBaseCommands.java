@@ -157,6 +157,23 @@ public interface StringBaseCommands {
     CompletableFuture<String> mset(Map<String, String> keyValueMap);
 
     /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://redis.io/commands/msetnx/">redis.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
+     * @example
+     *     <pre>{@code
+     * Boolean result = client.msetnx(Map.of("key1", "value1", "key2", "value2"}).get();
+     * assert result;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> msetnx(Map<String, String> keyValueMap);
+
+    /**
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
      * is set to 0 before performing the operation.
      *

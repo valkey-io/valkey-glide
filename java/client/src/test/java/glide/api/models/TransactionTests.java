@@ -110,6 +110,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
@@ -277,6 +278,9 @@ public class TransactionTests {
 
         transaction.mset(Map.of("key", "value"));
         results.add(Pair.of(MSet, buildArgs("key", "value")));
+
+        transaction.msetnx(Map.of("key", "value"));
+        results.add(Pair.of(MSetNX, buildArgs("key", "value")));
 
         transaction.mget(new String[] {"key"});
         results.add(Pair.of(MGet, buildArgs("key")));
