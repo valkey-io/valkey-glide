@@ -117,7 +117,8 @@ public interface GenericClusterCommands {
      * Returns a random key.
      *
      * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
-     * @param route
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return A random <code>key</code> from the database.
      * @example
      *     <pre>{@code

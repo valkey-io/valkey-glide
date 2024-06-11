@@ -1560,12 +1560,6 @@ public class CommandTests {
 
         // no keys in database
         assertEquals(OK, clusterClient.flushall().get());
-        // for randomkey, see:
-        // This isn't based on response_tips, but on the discussion here - https://github.com/redis/redis/issues/12410
-        // b"FUNCTION KILL" | b"SCRIPT KILL" | b"RANDOMKEY" => Some(OneSucceeded),
-        // TODO checkout amazon-contributing/redis-rs#149
-          ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> clusterClient.randomKey().get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertNull(clusterClient.randomKey().get());
     }
 }
