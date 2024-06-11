@@ -180,6 +180,7 @@ pub enum RequestType {
     BitFieldReadOnly = 173,
     Move = 174,
     SInterCard = 175,
+    XRevRange = 176,
     Copy = 178,
 }
 
@@ -365,6 +366,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SInterCard => RequestType::SInterCard,
             ProtobufRequestType::Copy => RequestType::Copy,
             ProtobufRequestType::Sort => RequestType::Sort,
+            ProtobufRequestType::XRevRange => RequestType::XRevRange,
         }
     }
 }
@@ -545,6 +547,7 @@ impl RequestType {
             RequestType::SInterCard => Some(cmd("SINTERCARD")),
             RequestType::Copy => Some(cmd("COPY")),
             RequestType::Sort => Some(cmd("SORT")),
+            RequestType::XRevRange => Some(cmd("XREVRANGE")),
         }
     }
 }

@@ -156,6 +156,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -712,6 +713,21 @@ public class TransactionTests {
                                 "key",
                                 MINIMUM_RANGE_REDIS_API,
                                 MAXIMUM_RANGE_REDIS_API,
+                                RANGE_COUNT_REDIS_API,
+                                "99")));
+
+        transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN);
+        results.add(
+                Pair.of(XRevRange, buildArgs("key", MAXIMUM_RANGE_REDIS_API, MINIMUM_RANGE_REDIS_API)));
+
+        transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN, 99L);
+        results.add(
+                Pair.of(
+                        XRevRange,
+                        buildArgs(
+                                "key",
+                                MAXIMUM_RANGE_REDIS_API,
+                                MINIMUM_RANGE_REDIS_API,
                                 RANGE_COUNT_REDIS_API,
                                 "99")));
 

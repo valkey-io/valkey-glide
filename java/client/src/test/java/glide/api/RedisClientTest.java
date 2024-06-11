@@ -176,6 +176,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -4120,20 +4121,20 @@ public class RedisClientTest {
         String key = "testKey";
         StreamRange start = IdBound.of(9999L);
         StreamRange end = IdBound.ofExclusive("696969-10");
-        Map<String, String[]> completedResult =
-                Map.of(key, new String[] {"duration", "12345", "event-id", "2", "user-id", "42"});
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
 
-        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(
                         eq(XRange), eq(new String[] {key, "9999", "(696969-10"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.xrange(key, start, end);
-        Map<String, String[]> payload = response.get();
+        CompletableFuture<Map<String, String[][]>> response = service.xrange(key, start, end);
+        Map<String, String[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -4148,14 +4149,14 @@ public class RedisClientTest {
         StreamRange start = InfRangeBound.MIN;
         StreamRange end = InfRangeBound.MAX;
         long count = 99L;
-        Map<String, String[]> completedResult =
-                Map.of(key, new String[] {"duration", "12345", "event-id", "2", "user-id", "42"});
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
 
-        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(
                         eq(XRange),
                         eq(
                                 new String[] {
@@ -4169,8 +4170,72 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.xrange(key, start, end, count);
-        Map<String, String[]> payload = response.get();
+        CompletableFuture<Map<String, String[][]>> response = service.xrange(key, start, end, count);
+        Map<String, String[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @Test
+    @SneakyThrows
+    public void xrevrange_returns_success() {
+        // setup
+        String key = "testKey";
+        StreamRange end = IdBound.of(9999L);
+        StreamRange start = IdBound.ofExclusive("696969-10");
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(
+                        eq(XRevRange), eq(new String[] {key, "9999", "(696969-10"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[][]>> response = service.xrevrange(key, end, start);
+        Map<String, String[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @Test
+    @SneakyThrows
+    public void xrevrange_withcount_returns_success() {
+        // setup
+        String key = "testKey";
+        StreamRange end = InfRangeBound.MAX;
+        StreamRange start = InfRangeBound.MIN;
+        long count = 99L;
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(
+                        eq(XRevRange),
+                        eq(
+                                new String[] {
+                                    key,
+                                    MAXIMUM_RANGE_REDIS_API,
+                                    MINIMUM_RANGE_REDIS_API,
+                                    RANGE_COUNT_REDIS_API,
+                                    Long.toString(count)
+                                }),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[][]>> response = service.xrevrange(key, end, start, count);
+        Map<String, String[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
