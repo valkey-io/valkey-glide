@@ -912,10 +912,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the index of matching elements inside a list. By default, it will scan the list from
      * head to tail, looking for the first match of <code>element</code>. If the <code>element</code>
-     * is found, its index is returned. If no match is found, null is returned.
+     * is found, its index is returned. If no match is found, <code>null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
-     * @param key The key of the list.
+     * @param key The name of the list.
      * @param element The value to search for within the list.
      * @return Command Response - The index of <code>element</code>.
      */
@@ -944,14 +944,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns an array of indices of matching elements inside a list. If no match is found, null is
-     * returned.
+     * Returns an array of indices of matching elements within a list. If no match is found, <code>
+     * null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
-     * @param key The key of the list.
+     * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
-     * @return Command Response - An array that holds the indices of the matching elements inside the
+     * @return Command Response - An array that holds the indices of the matching elements within the
      *     list.
      */
     public T lposCount(@NonNull String key, @NonNull String element, long count) {
@@ -961,15 +961,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns an array of indices of matching elements inside a list. If no match is found, null is
-     * returned.
+     * Returns an array of indices of matching elements inside a list. If no match is found, <code>
+     * null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
-     * @param key The key of the list.
+     * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
      * @param options The LPos options.
-     * @return Command Response - An array that holds the indices of the matching elements inside the
+     * @return Command Response - An array that holds the indices of the matching elements within the
      *     list.
      */
     public T lposCount(

@@ -64,7 +64,7 @@ public interface ListBaseCommands {
      * is found, its index is returned. If no match is found, <code>null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
-     * @param key The key of the list.
+     * @param key The name of the list.
      * @param element The value to search for within the list.
      * @return The index of <code>element</code>.
      * @example
@@ -81,7 +81,7 @@ public interface ListBaseCommands {
      * is found, its index is returned. If no match is found, <code>null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
-     * @param key The key of the list.
+     * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param options The LPos options.
      * @return The index of <code>element</code>.
@@ -92,10 +92,6 @@ public interface ListBaseCommands {
      * LPosOptions options = LPosOptions.builder().rank(2L).build();
      * assertEquals(5L, client.lpos("my_list", "e", options);
      *
-     * // maxlength with at most 1000 comparisons.
-     * LPosOptions options = LPosOptions.builder().maxLength(1000L).build();
-     * assertEquals(4L, client.lpos("my_list", "e", options);
-     *
      * // rank and maxLength
      * LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
      * assertEquals(4L, client.lpos("my_list", "e", options);
@@ -105,18 +101,18 @@ public interface ListBaseCommands {
             @NonNull String key, @NonNull String element, @NonNull LPosOptions options);
 
     /**
-     * Returns an array of indices of matching elements inside a list. If no match is found, <code>
+     * Returns an array of indices of matching elements within a list. If no match is found, <code>
      * null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
-     * @param key The key of the list.
+     * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
-     * @return An array that holds the indices of the matching elements inside the list.
+     * @return An array that holds the indices of the matching elements within the list.
      * @example
      *     <pre>{@code
-     * assertEquals(7L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e", "e"}).get());
-     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", 3L).get());
+     * assertEquals(new Long[]{7L}, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e", "e"}).get());
+     * assertEquals(new Long[]{4L, 5L, 6L}, client.lposCount("my_list", "e", 3L).get());
      * }</pre>
      */
     CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count);
@@ -126,26 +122,22 @@ public interface ListBaseCommands {
      * null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
-     * @param key The key of the list.
+     * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
      * @param options The LPos options.
-     * @return An array that holds the indices of the matching elements inside the list.
+     * @return An array that holds the indices of the matching elements within the list.
      * @example
      *     <pre>{@code
      * assertEquals(6L, client.rpush("my_list", new String[] {"a", "b", "c", "d", "e", "e", "e"}).get());
      *
      * // rank
      * LPosOptions options = LPosOptions.builder().rank(2L).build();
-     * assertEquals([5], client.lposCount("my_list", "e", 1L, options).get());
-     *
-     * // maxlength with at most 1000 comparisons.
-     * LPosOptions options = LPosOptions.builder.maxLength(1000L).build();
-     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", 3L, options).get());
+     * assertEquals(new Long[]{5L}, client.lposCount("my_list", "e", 1L, options).get());
      *
      * // rank and maxLength
      * LPosOptions options = LPosOptions.builder.rank(2L).maxLength(1000L).build();
-     * assertEquals([4, 5, 6], client.lposCount("my_list", "e", 3L, options).get());
+     * assertEquals(new Long[]{5L, 6L}, client.lposCount("my_list", "e", 3L, options).get());
      * }</pre>
      */
     CompletableFuture<Long[]> lposCount(
