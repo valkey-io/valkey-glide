@@ -35,7 +35,6 @@ import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -400,9 +399,13 @@ public class CommandTests {
 
         String libName = "mylib1c";
         String funcName = "myfunc1c";
-        String code = generateLuaLibCode(libName, List.of(funcName));
+        // function $funcName returns first argument
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
         assertEquals(libName, regularClient.functionLoad(code, false).get());
-        // TODO test function with FCALL when fixed in redis-rs and implemented
+
+        var functionResult =
+                regularClient.fcall(funcName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals("one", functionResult);
 
         var flist = regularClient.functionList(false).get();
         var expectedDescription =
@@ -433,11 +436,15 @@ public class CommandTests {
         // re-load library with overwriting
         assertEquals(libName, regularClient.functionLoad(code, true).get());
         String newFuncName = "myfunc2c";
-        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
+        // function $funcName returns first argument
+        // function $newFuncName returns argument array len
+        String newCode =
+                generateLuaLibCode(
+                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), false);
         assertEquals(libName, regularClient.functionLoad(newCode, true).get());
 
         // load new lib and delete it - first lib remains loaded
-        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        String anotherLib = generateLuaLibCode("anotherLib", Map.of("anotherFunc", ""), false);
         assertEquals("anotherLib", regularClient.functionLoad(anotherLib, true).get());
         assertEquals(OK, regularClient.functionDelete("anotherLib").get());
 
@@ -457,7 +464,10 @@ public class CommandTests {
         checkFunctionListResponse(
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
-        // TODO test with FCALL
+        functionResult =
+                regularClient.fcall(newFuncName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals(2L, functionResult);
+
         assertEquals(OK, regularClient.functionFlush(ASYNC).get());
     }
 

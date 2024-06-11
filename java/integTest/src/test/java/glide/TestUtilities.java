@@ -164,14 +164,20 @@ public class TestUtilities {
         assertTrue(hasLib);
     }
 
-    /** Generate a dummy LUA library code. */
-    public static String generateLuaLibCode(String libName, List<String> funcNames) {
+    /** Generate a LUA library code. */
+    public static String generateLuaLibCode(
+            String libName, Map<String, String> functions, boolean readonly) {
         StringBuilder code = new StringBuilder("#!lua name=" + libName + "\n");
-        for (var funcName : funcNames) {
-            code.append("redis.register_function('")
-                    .append(funcName)
-                    // function returns first argument
-                    .append("', function(keys, args) return args[1] end)\n");
+        for (var function : functions.entrySet()) {
+            code.append("redis.register_function{ function_name = '")
+                    .append(function.getKey())
+                    .append("', callback = function(keys, args) ")
+                    .append(function.getValue())
+                    .append(" end");
+            if (readonly) {
+                code.append(", flags = { 'no-writes' }");
+            }
+            code.append(" }\n");
         }
         return code.toString();
     }

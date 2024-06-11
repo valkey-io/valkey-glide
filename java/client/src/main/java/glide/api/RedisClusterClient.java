@@ -18,6 +18,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
+import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
@@ -542,5 +543,36 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> functionDelete(@NonNull String libName, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionDelete, new String[] {libName}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcall(@NonNull String function) {
+        return fcall(function, new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> fcall(
+            @NonNull String function, @NonNull Route route) {
+        return fcall(function, new String[0], route);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcall(@NonNull String function, @NonNull String[] arguments) {
+        String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
+        return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> fcall(
+            @NonNull String function, @NonNull String[] arguments, @NonNull Route route) {
+        String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
+        return commandManager.submitNewCommand(
+                FCall,
+                args,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
     }
 }
