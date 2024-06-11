@@ -3210,25 +3210,25 @@ public class SharedCommandTests {
         assertEquals(2L, client.xlen(key).get());
 
         // get everything from the stream
-        Map<String, String[]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        Map<String, String[][]> result = client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(2, result.size());
         assertNotNull(result.get(streamId1));
         assertNotNull(result.get(streamId2));
 
         // get everything from the stream using a reverse range search
-        Map<String, String[]> revResult =
+        Map<String, String[][]> revResult =
                 client.xrevrange(key, InfRangeBound.MAX, InfRangeBound.MIN).get();
         assertEquals(2, revResult.size());
         assertNotNull(revResult.get(streamId1));
         assertNotNull(revResult.get(streamId2));
 
         // returns empty if + before -
-        Map<String, String[]> emptyResult =
+        Map<String, String[][]> emptyResult =
                 client.xrange(key, InfRangeBound.MAX, InfRangeBound.MIN).get();
         assertEquals(0, emptyResult.size());
 
         // rev search returns empty if - before +
-        Map<String, String[]> emptyRevResult =
+        Map<String, String[][]> emptyRevResult =
                 client.xrevrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(0, emptyRevResult.size());
 
@@ -3242,23 +3242,23 @@ public class SharedCommandTests {
                         .get());
 
         // get the newest entry
-        Map<String, String[]> newResult =
+        Map<String, String[][]> newResult =
                 client.xrange(key, IdBound.ofExclusive(streamId2), IdBound.ofExclusive(5), 1L).get();
         assertEquals(1, newResult.size());
         assertNotNull(newResult.get(streamId3));
         // ...and from xrevrange
-        Map<String, String[]> newRevResult =
+        Map<String, String[][]> newRevResult =
                 client.xrevrange(key, IdBound.ofExclusive(5), IdBound.ofExclusive(streamId2), 1L).get();
         assertEquals(1, newRevResult.size());
         assertNotNull(newRevResult.get(streamId3));
 
         // xrange against an emptied stream
         assertEquals(3, client.xdel(key, new String[] {streamId1, streamId2, streamId3}).get());
-        Map<String, String[]> emptiedResult =
+        Map<String, String[][]> emptiedResult =
                 client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX, 10L).get();
         assertEquals(0, emptiedResult.size());
         // ...and xrevrange
-        Map<String, String[]> emptiedRevResult =
+        Map<String, String[][]> emptiedRevResult =
                 client.xrevrange(key, InfRangeBound.MAX, InfRangeBound.MIN, 10L).get();
         assertEquals(0, emptiedRevResult.size());
 
