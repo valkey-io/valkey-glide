@@ -20,7 +20,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 public class FfiTest {
 
     static {
-        NativeUtils.loadGlideLib();
+        System.loadLibrary("glide_rs");
     }
 
     public static native long createLeakedNil();
