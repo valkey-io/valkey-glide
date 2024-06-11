@@ -184,24 +184,23 @@ public interface StreamBaseCommands {
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @return @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     item pairings.
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
-     * Map<String, String[]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX).get();
+     * Map<String, String[][]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX).get();
      * result.forEach((k, v) -> {
      *     System.out.println("Stream ID: " + k);
-     *     for (int i = 0; i < v.length;) {
-     *         System.out.println(v[i++] + ": " + v[i++]);
+     *     for (int i = 0; i < v.length; i++) {
+     *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
      * });
      * // Retrieve exactly one stream entry by id
-     * Map<String, String[]> result = client.xrange("key", IdBound.of(streamId), IdBound.of(streamId)).get();
+     * Map<String, String[][]> result = client.xrange("key", IdBound.of(streamId), IdBound.of(streamId)).get();
      * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> xrange(String key, StreamRange start, StreamRange end);
+    CompletableFuture<Map<String, String[][]>> xrange(String key, StreamRange start, StreamRange end);
 
     /**
      * Returns stream entries matching a given range of IDs.
@@ -222,20 +221,95 @@ public interface StreamBaseCommands {
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
-     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of item
-     *     pairings.
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * // Retrieve the first 2 stream entries
-     * Map<String, String[]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 2).get();
+     * Map<String, String[][]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 2).get();
      * result.forEach((k, v) -> {
      *     System.out.println("Stream ID: " + k);
-     *     for (int i = 0; i < v.length;) {
-     *         System.out.println(v[i++] + ": " + v[i++]);
+     *     for (int i = 0; i < v.length; i++) {
+     *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
      * });
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> xrange(
+    CompletableFuture<Map<String, String[][]>> xrange(
             String key, StreamRange start, StreamRange end, long count);
+
+    /**
+     * Returns stream entries matching a given range of IDs in reverse order.<br>
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange)} but returns the entries in
+     * reverse order.
+     *
+     * @param key The key of the stream.
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * // Retrieve all stream entries
+     * Map<String, String[][]> result = client.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN).get();
+     * result.forEach((k, v) -> {
+     *     System.out.println("Stream ID: " + k);
+     *     for (int i = 0; i < v.length; i++) {
+     *         System.out.println(v[i][0] + ": " + v[i][1]);
+     *     }
+     * });
+     * // Retrieve exactly one stream entry by id
+     * Map<String, String[][]> result = client.xrevrange("key", IdBound.of(streamId), IdBound.of(streamId)).get();
+     * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[][]>> xrevrange(
+            String key, StreamRange end, StreamRange start);
+
+    /**
+     * Returns stream entries matching a given range of IDs in reverse order.<br>
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange, long)} but returns the entries
+     * in reverse order.
+     *
+     * @param key The key of the stream.
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param count Maximum count of stream entries to return.
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * // Retrieve the first 2 stream entries
+     * Map<String, String[][]> result = client.xrange("key", InfRangeBound.MAX, InfRangeBound.MIN, 2).get();
+     * result.forEach((k, v) -> {
+     *     System.out.println("Stream ID: " + k);
+     *     for (int i = 0; i < v.length; i++) {
+     *         System.out.println(v[i][0] + ": " + v[i][1]);
+     *     }
+     * });
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[][]>> xrevrange(
+            String key, StreamRange end, StreamRange start, long count);
 }
