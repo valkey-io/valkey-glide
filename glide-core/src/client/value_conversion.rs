@@ -683,12 +683,10 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
 
     // TODO use enum to avoid mistakes
     match command.as_slice() {
-        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => {
-            Some(ExpectedReturnType::Map {
-                key_type: &None,
-                value_type: &None,
-            })
-        }
+        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => Some(ExpectedReturnType::Map {
+            key_type: &None,
+            value_type: &None,
+        }),
         b"XRANGE" | b"XREVRANGE" => Some(ExpectedReturnType::Map {
             key_type: &Some(ExpectedReturnType::BulkString),
             value_type: &Some(ExpectedReturnType::ArrayOfPairs),
