@@ -683,12 +683,14 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
 
     // TODO use enum to avoid mistakes
     match command.as_slice() {
-        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" | b"XRANGE" => {
-            Some(ExpectedReturnType::Map {
-                key_type: &None,
-                value_type: &None,
-            })
-        }
+        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => Some(ExpectedReturnType::Map {
+            key_type: &None,
+            value_type: &None,
+        }),
+        b"XRANGE" | b"XREVRANGE" => Some(ExpectedReturnType::Map {
+            key_type: &Some(ExpectedReturnType::BulkString),
+            value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+        }),
         b"XREAD" => Some(ExpectedReturnType::Map {
             key_type: &Some(ExpectedReturnType::BulkString),
             value_type: &Some(ExpectedReturnType::Map {
@@ -986,6 +988,24 @@ mod tests {
             Some(ExpectedReturnType::Lolwut),
         );
         assert!(converted_4.is_err());
+    }
+
+    #[test]
+    fn convert_xrange_xrevrange() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XRANGE").arg("key").arg("start").arg("end")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::BulkString),
+                value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+            })
+        ));
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XREVRANGE").arg("key").arg("end").arg("start")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::BulkString),
+                value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+            })
+        ));
     }
 
     #[test]

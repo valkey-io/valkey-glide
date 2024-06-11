@@ -210,6 +210,7 @@ enum RequestType {
     BitFieldReadOnly = 173;
     Move = 174;
     SInterCard = 175;
+    XRevRange = 176;
     Copy = 178;
 }
 
