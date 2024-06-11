@@ -265,4 +265,78 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> functionDelete(String libName, Route route);
+
+    /**
+     * Invokes a previously loaded function.<br>
+     * The command will be routed to a random node.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * Object response = client.fcall("Deep_Thought").get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcall(String function);
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> response = client.fcall("Deep_Thought", ALL_NODES).get();
+     * for (Object nodeResponse : response.getMultiValue().values()) {
+     *   assert nodeResponse == 42L;
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> fcall(String function, Route route);
+
+    /**
+     * Invokes a previously loaded function.<br>
+     * The command will be routed to a random node.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     *     </code> should not represent names of keys.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * String[] args = new String[] { "Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything" };
+     * Object response = client.fcall("Deep_Thought", args).get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcall(String function, String[] arguments);
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     *     </code> should not represent names of keys.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
+     * @example
+     *     <pre>{@code
+     * String[] args = new String[] { "Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything" };
+     * ClusterValue<Object> response = client.fcall("Deep_Thought", args, RANDOM).get();
+     * assert response.getSingleValue() == 42L;
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> fcall(String function, String[] arguments, Route route);
 }
