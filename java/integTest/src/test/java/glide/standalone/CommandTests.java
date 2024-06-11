@@ -691,10 +691,20 @@ public class CommandTests {
         checkFunctionStatsResponse(response, new String[0], 0, 0);
     }
 
-    // regualar client
-    // for randomkey, see:
-    // This isn't based on response_tips, but on the discussion here -
-    // https://github.com/redis/redis/issues/12410
-    // b"FUNCTION KILL" | b"SCRIPT KILL" | b"RANDOMKEY" => Some(OneSucceeded),
-    // TODO checkout amazon-contributing/redis-rs#149
+    @SneakyThrows
+    @Test
+    public void randomkey() {
+        String key1 = "{key}" + UUID.randomUUID();
+        String key2 = "{key}" + UUID.randomUUID();
+
+        assertEquals(OK, regularClient.set(key1, "a").get());
+        assertEquals(OK, regularClient.set(key2, "b").get());
+
+        String randomKey = regularClient.randomKey().get();
+        assertEquals(1L, regularClient.exists(new String[] {randomKey}).get());
+
+        // no keys in database
+        assertEquals(OK, regularClient.flushall().get());
+        assertNull(regularClient.randomKey().get());
+    }
 }
