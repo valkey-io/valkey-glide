@@ -5133,4 +5133,28 @@ public class SharedCommandTests {
         assertTrue(client.copy(source, destination, true).get());
         assertEquals("two", client.get(destination).get());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void msetnx(BaseClient client) {
+        // keys are from different slots
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String nonExisting = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> keyValueMap1 = Map.of(key1, value, key2, value);
+        Map<String, String> keyValueMap2 = Map.of(key2, value, key3, value);
+
+        // all keys are empty, successfully set
+        assertTrue(client.msetnx(keyValueMap1).get());
+        assertArrayEquals(
+                new String[] {value, value, null},
+                client.mget(new String[] {key1, key2, nonExisting}).get());
+
+        // one of the keys is already set, nothing gets set
+        assertFalse(client.msetnx(keyValueMap2).get());
+        assertNull(client.get(key3).get());
+    }
 }
