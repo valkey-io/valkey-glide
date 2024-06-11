@@ -86,7 +86,7 @@ pub fn throw_java_exception(env: &mut JNIEnv, exception_type: ExceptionType, mes
     match env.exception_check() {
         Ok(true) => (),
         Ok(false) => {
-            env.throw_new(exception_type.to_string(), &message)
+            env.throw_new(exception_type.to_string(), message)
                 .unwrap_or_else(|err| {
                     error!(
                         "Failed to create exception with string {}: {}",
