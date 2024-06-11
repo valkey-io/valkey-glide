@@ -3,6 +3,7 @@ package glide.cluster;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
@@ -28,6 +29,7 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleS
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.PRIMARY;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SlotType.REPLICA;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -37,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClusterClient;
+import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -47,6 +50,7 @@ import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
+import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
 import glide.api.models.exceptions.RedisException;
 import glide.api.models.exceptions.RequestException;
@@ -748,6 +752,10 @@ public class CommandTests {
                 Arguments.of(
                         "sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"}, 1)),
                 Arguments.of(
+                        "fcall",
+                        "7.0.0",
+                        clusterClient.fcall("func", new String[] {"abc", "zxy", "lkn"}, new String[0])),
+                Arguments.of(
                         "xread", null, clusterClient.xread(Map.of("abc", "stream1", "zxy", "stream2"))),
                 Arguments.of("copy", "6.2.0", clusterClient.copy("abc", "def", true)));
     }
@@ -813,18 +821,26 @@ public class CommandTests {
     @SneakyThrows
     @ParameterizedTest(name = "functionLoad: singleNodeRoute = {0}")
     @ValueSource(booleans = {true, false})
-    public void function_commands(boolean singleNodeRoute) {
+    public void function_commands_without_keys_with_route(boolean singleNodeRoute) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
         String libName = "mylib1c_" + singleNodeRoute;
         String funcName = "myfunc1c_" + singleNodeRoute;
-
-        String code = generateLuaLibCode(libName, List.of(funcName));
+        // function $funcName returns first argument
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
         Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
-        // TODO test function with FCALL when fixed in redis-rs and implemented
+
+        var fcallResult = clusterClient.fcall(funcName, new String[] {"one", "two"}, route).get();
+        if (route instanceof SingleNodeRoute) {
+            assertEquals("one", fcallResult.getSingleValue());
+        } else {
+            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+                assertEquals("one", nodeResponse);
+            }
+        }
 
         var expectedDescription =
                 new HashMap<String, String>() {
@@ -874,7 +890,11 @@ public class CommandTests {
         // re-load library with overwriting
         assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
         String newFuncName = "myfunc2c_" + singleNodeRoute;
-        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
+        // function $funcName returns first argument
+        // function $newFuncName returns argument array len
+        String newCode =
+                generateLuaLibCode(
+                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), false);
 
         assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
 
@@ -894,7 +914,7 @@ public class CommandTests {
         }
 
         // load new lib and delete it - first lib remains loaded
-        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        String anotherLib = generateLuaLibCode("anotherLib", Map.of("anotherFunc", ""), false);
         assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true, route).get());
         assertEquals(OK, clusterClient.functionDelete("anotherLib", route).get());
 
@@ -918,24 +938,35 @@ public class CommandTests {
             }
         }
 
-        // TODO test with FCALL
+        fcallResult = clusterClient.fcall(newFuncName, new String[] {"one", "two"}, route).get();
+        if (route instanceof SingleNodeRoute) {
+            assertEquals(2L, fcallResult.getSingleValue());
+        } else {
+            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+                assertEquals(2L, nodeResponse);
+            }
+        }
 
         assertEquals(OK, clusterClient.functionFlush(route).get());
     }
 
     @SneakyThrows
     @Test
-    public void function_commands() {
+    public void function_commands_without_keys_and_without_route() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
         assertEquals(OK, clusterClient.functionFlush(SYNC).get());
 
         String libName = "mylib1c";
         String funcName = "myfunc1c";
-        String code = generateLuaLibCode(libName, List.of(funcName));
+        // function $funcName returns first argument
+        // generating RO functions to execution on a replica (default routing goes to RANDOM including
+        // replicas)
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
-        // TODO test function with FCALL when fixed in redis-rs and implemented
+
+        assertEquals("one", clusterClient.fcall(funcName, new String[] {"one", "two"}).get());
 
         var flist = clusterClient.functionList(false).get();
         var expectedDescription =
@@ -947,7 +978,7 @@ public class CommandTests {
         var expectedFlags =
                 new HashMap<String, Set<String>>() {
                     {
-                        put(funcName, Set.of());
+                        put(funcName, Set.of("no-writes"));
                     }
                 };
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
@@ -966,12 +997,16 @@ public class CommandTests {
         // re-load library with overwriting
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
         String newFuncName = "myfunc2c";
-        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
+        // function $funcName returns first argument
+        // function $newFuncName returns argument array len
+        String newCode =
+                generateLuaLibCode(
+                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), true);
 
         assertEquals(libName, clusterClient.functionLoad(newCode, true).get());
 
         // load new lib and delete it - first lib remains loaded
-        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        String anotherLib = generateLuaLibCode("anotherLib", Map.of("anotherFunc", ""), false);
         assertEquals("anotherLib", clusterClient.functionLoad(anotherLib, true).get());
         assertEquals(OK, clusterClient.functionDelete("anotherLib").get());
 
@@ -984,15 +1019,81 @@ public class CommandTests {
 
         flist = clusterClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
-        expectedFlags.put(newFuncName, Set.of());
+        expectedFlags.put(newFuncName, Set.of("no-writes"));
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
         flist = clusterClient.functionList(libName, true).get();
         checkFunctionListResponse(
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
-        // TODO test with FCALL
+        assertEquals(2L, clusterClient.fcall(newFuncName, new String[] {"one", "two"}).get());
 
         assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc", "xyz", "kln"})
+    @SneakyThrows
+    public void fcall_with_keys(String prefix) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String key = "{" + prefix + "}-fcall_with_keys-";
+        SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
+        String libName = "mylib_with_keys";
+        String funcName = "myfunc_with_keys";
+        // function $funcName returns array with first two arguments
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return {keys[1], keys[2]}"), false);
+
+        // loading function to the node where key is stored
+        assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
+
+        // due to common prefix, all keys are mapped to the same hash slot
+        var functionResult =
+                clusterClient.fcall(funcName, new String[] {key + 1, key + 2}, new String[0]).get();
+        assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
+
+        var transaction =
+                new ClusterTransaction().fcall(funcName, new String[] {key + 1, key + 2}, new String[0]);
+
+        // check response from a routed transaction request
+        assertDeepEquals(
+                new Object[][] {{key + 1, key + 2}}, clusterClient.exec(transaction, route).get());
+        // if no route given, GLIDE should detect it automatically
+        assertDeepEquals(new Object[][] {{key + 1, key + 2}}, clusterClient.exec(transaction).get());
+
+        assertEquals(OK, clusterClient.functionDelete(libName, route).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_readonly_function() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "fcall_readonly_function";
+        // intentionally using a REPLICA route
+        Route route = new SlotKeyRoute(libName, REPLICA);
+        String funcName = "fcall_readonly_function";
+
+        // function $funcName returns a magic number
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), false);
+
+        assertEquals(libName, clusterClient.functionLoad(code, false).get());
+
+        // fcall on a replica node should fail, because a function isn't guaranteed to be RO
+        var executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.fcall(funcName, route).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("You can't write against a read only replica."));
+
+        // create the same function, but with RO flag
+        code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), true);
+
+        assertEquals(libName, clusterClient.functionLoad(code, true).get());
+
+        // fcall should succeed now
+        assertEquals(42L, clusterClient.fcall(funcName, route).get().getSingleValue());
+
+        assertEquals(OK, clusterClient.functionDelete(libName).get());
     }
 }
