@@ -20,7 +20,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 public class FfiTest {
 
     static {
-        NativeUtils.loadGlideLib();
+        System.loadLibrary("glide_rs");
     }
 
     public static native long createLeakedNil();
@@ -181,7 +181,7 @@ public class FfiTest {
 
     @Test
     public void handleErrors_error() {
-        assertThrows(Exception.class, () -> FfiTest.handleErrors(true, 0L, 1L));
+        assertThrows(Exception.class, () -> FfiTest.handleErrors(false, 0L, 1L));
     }
 
     @Test
@@ -198,6 +198,4 @@ public class FfiTest {
     public void throwException_throwRuntimeException() {
         assertThrows(RuntimeException.class, () -> FfiTest.throwException(false, true, "My message"));
     }
-
-
 }
