@@ -183,6 +183,7 @@ pub enum RequestType {
     SInterCard = 175,
     XRevRange = 176,
     Copy = 178,
+    MSetNX = 179,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -369,6 +370,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Copy => RequestType::Copy,
             ProtobufRequestType::Sort => RequestType::Sort,
             ProtobufRequestType::XRevRange => RequestType::XRevRange,
+            ProtobufRequestType::MSetNX => RequestType::MSetNX,
         }
     }
 }
@@ -551,6 +553,7 @@ impl RequestType {
             RequestType::Copy => Some(cmd("COPY")),
             RequestType::Sort => Some(cmd("SORT")),
             RequestType::XRevRange => Some(cmd("XREVRANGE")),
+            RequestType::MSetNX => Some(cmd("MSETNX")),
         }
     }
 }
