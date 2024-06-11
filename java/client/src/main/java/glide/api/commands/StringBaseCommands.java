@@ -168,7 +168,7 @@ public interface StringBaseCommands {
      * @example
      *     <pre>{@code
      * Boolean result = client.msetnx(Map.of("key1", "value1", "key2", "value2"}).get();
-     * assertTrue(result);
+     * assert result;
      * }</pre>
      */
     CompletableFuture<Boolean> msetnx(Map<String, String> keyValueMap);
