@@ -255,6 +255,11 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> fcall(@NonNull String function) {
+        return fcall(function, new String[0], new String[0]);
+    }
+
+    @Override
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, long destinationDB) {
         String[] arguments =

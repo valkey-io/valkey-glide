@@ -6,8 +6,8 @@ import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * Supports commands and transactions for the "Scripting and Function" group for standalone and
- * cluster clients.
+ * Supports commands and transactions for the "Scripting and Function" group for a standalone
+ * client.
  *
  * @see <a href="https://redis.io/docs/latest/commands/?group=scripting">Scripting and Function
  *     Commands</a>
@@ -127,4 +127,19 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<String> functionDelete(String libName);
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * Object response = client.fcall("Deep_Thought").get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcall(String function);
 }

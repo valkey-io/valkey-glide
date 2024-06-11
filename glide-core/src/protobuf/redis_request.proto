@@ -193,6 +193,7 @@ enum RequestType {
     FunctionList = 151;
     FunctionDelete = 152;
     FunctionFlush = 153;
+    FCall = 154;
     LMPop = 155;
     ExpireTime = 156;
     PExpireTime = 157;
