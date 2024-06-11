@@ -9,6 +9,7 @@ import {
     ClosingError,
     ExpireOptions,
     InfoOptions,
+    InsertPosition,
     ProtocolVersion,
     RedisClient,
     RedisClusterClient,
@@ -2171,6 +2172,69 @@ export function runBaseTests<Context>(config: {
                 expect(await client.lindex(listName, 1)).toEqual(listKey1Value);
                 expect(await client.lindex("notExsitingList", 1)).toEqual(null);
                 expect(await client.lindex(listName, 3)).toEqual(null);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `linsert test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const stringKey = uuidv4();
+                const nonExistingKey = uuidv4();
+
+                expect(await client.lpush(key1, ["4", "3", "2", "1"])).toEqual(
+                    4,
+                );
+                expect(
+                    await client.linsert(
+                        key1,
+                        InsertPosition.Before,
+                        "2",
+                        "1.5",
+                    ),
+                ).toEqual(5);
+                expect(
+                    await client.linsert(
+                        key1,
+                        InsertPosition.After,
+                        "3",
+                        "3.5",
+                    ),
+                ).toEqual(6);
+                expect(await client.lrange(key1, 0, -1)).toEqual([
+                    "1",
+                    "1.5",
+                    "2",
+                    "3",
+                    "3.5",
+                    "4",
+                ]);
+
+                expect(
+                    await client.linsert(
+                        key1,
+                        InsertPosition.Before,
+                        "nonExistingPivot",
+                        "4",
+                    ),
+                ).toEqual(-1);
+                expect(
+                    await client.linsert(
+                        nonExistingKey,
+                        InsertPosition.Before,
+                        "pivot",
+                        "elem",
+                    ),
+                ).toEqual(0);
+
+                // key exists, but it is not a list
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(
+                    client.linsert(stringKey, InsertPosition.Before, "a", "b"),
+                ).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
