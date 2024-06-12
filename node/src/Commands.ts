@@ -901,6 +901,23 @@ export function createZCard(key: string): redis_request.Command {
 /**
  * @internal
  */
+export function createZInterCard(
+    keys: string[],
+    limit?: number,
+): redis_request.Command {
+    let args: string[] = keys;
+    args.unshift(keys.length.toString());
+
+    if (limit != undefined) {
+        args = args.concat(["LIMIT", limit.toString()]);
+    }
+
+    return createCommand(RequestType.ZInterCard, args);
+}
+
+/**
+ * @internal
+ */
 export function createZScore(
     key: string,
     member: string,
