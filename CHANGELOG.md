@@ -22,6 +22,7 @@
 * Node: Added OBJECT FREQ command ([#1542](https://github.com/aws/glide-for-redis/pull/1542))
 * Node: Added LINSERT command ([#1544](https://github.com/aws/glide-for-redis/pull/1544))
 * Node: Added XLEN command ([#1555](https://github.com/aws/glide-for-redis/pull/1555))
+* Node: Added ZINTERCARD command ([#1553](https://github.com/aws/glide-for-redis/pull/1553))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

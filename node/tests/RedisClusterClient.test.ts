@@ -19,7 +19,7 @@ import {
     RedisClusterClient,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { runBaseTests } from "./SharedTests";
+import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
 import {
     flushAndCloseClient,
     getClientConfigurationOption,
@@ -281,7 +281,10 @@ describe("RedisClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
-            const promises = [
+            const versionLessThan7 =
+                await checkIfServerVersionLessThan("7.0.0");
+
+            const promises: Promise<unknown>[] = [
                 client.blpop(["abc", "zxy", "lkn"], 0.1),
                 client.rename("abc", "zxy"),
                 client.brpop(["abc", "zxy", "lkn"], 0.1),
@@ -293,6 +296,10 @@ describe("RedisClusterClient", () => {
                 client.pfcount(["abc", "zxy", "lkn"]),
                 // TODO all rest multi-key commands except ones tested below
             ];
+
+            if (!versionLessThan7) {
+                promises.push(client.zintercard(["abc", "zxy", "lkn"]));
+            }
 
             for (const promise of promises) {
                 try {

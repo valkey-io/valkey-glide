@@ -1637,6 +1637,49 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zintercard test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("7.0.0")) {
+                    return;
+                }
+
+                const key1 = `{key}:${uuidv4()}`;
+                const key2 = `{key}:${uuidv4()}`;
+                const stringKey = `{key}:${uuidv4()}`;
+                const nonExistingKey = `{key}:${uuidv4()}`;
+                const memberScores1 = { one: 1, two: 2, three: 3 };
+                const memberScores2 = { two: 2, three: 3, four: 4 };
+
+                expect(await client.zadd(key1, memberScores1)).toEqual(3);
+                expect(await client.zadd(key2, memberScores2)).toEqual(3);
+
+                expect(await client.zintercard([key1, key2])).toEqual(2);
+                expect(await client.zintercard([key1, nonExistingKey])).toEqual(
+                    0,
+                );
+
+                expect(await client.zintercard([key1, key2], 0)).toEqual(2);
+                expect(await client.zintercard([key1, key2], 1)).toEqual(1);
+                expect(await client.zintercard([key1, key2], 2)).toEqual(2);
+
+                // invalid argument - key list must not be empty
+                await expect(client.zintercard([])).rejects.toThrow();
+
+                // invalid argument - limit must be non-negative
+                await expect(
+                    client.zintercard([key1, key2], -1),
+                ).rejects.toThrow();
+
+                // key exists, but it is not a sorted set
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(client.zintercard([stringKey])).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zscore test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
