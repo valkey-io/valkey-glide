@@ -89,12 +89,10 @@ public final class Logger {
     /**
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when
      * there is no intention to replace an existing logger. The logger will filter all logs with a
-     * level lower than the default level decided by Glide core. If given a <code>fileName</code>
-     * argument, will write the logs to files postfixed with <code>fileName</code>. If <code>fileName
-     * </code> isn't provided, the logs will be written to the console.
+     * level lower than the default level decided by Glide core. Given a <code>fileName</code>
+     * argument, will write the logs to files postfixed with <code>fileName</code>.
      *
-     * @param fileName The target of the logs will be the file mentioned. Otherwise, logs will be
-     *     printed to the console.
+     * @param fileName The target of the logs will be the file mentioned.
      */
     public static void init(@NonNull String fileName) {
         init(Level.DEFAULT, fileName);
