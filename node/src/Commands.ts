@@ -861,7 +861,7 @@ export function createZInterstore(
 /**
  * @internal
  */
-export function createZUnionstore(
+export function createZUnionStore(
     destination: string,
     keys: string[] | KeyWeight[],
     aggregationType?: AggregationType,

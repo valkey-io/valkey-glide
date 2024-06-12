@@ -106,7 +106,7 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createZUnionstore
+    createZUnionStore,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -1118,13 +1118,13 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
      * Command Response - The number of elements in the resulting sorted set stored at `destination`.
      */
-    public zunionstore(
+    public zunionStore(
         destination: string,
         keys: string[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): T {
         return this.addAndReturn(
-            createZUnionstore(destination, keys, aggregationType),
+            createZUnionStore(destination, keys, aggregationType),
         );
     }
 

@@ -101,7 +101,7 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createZUnionstore
+    createZUnionStore,
 } from "./Commands";
 import {
     ClosingError,
@@ -1992,22 +1992,22 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * // Example usage of zunionstore command with an existing key
+     * // Example usage of zunionStore command with an existing key
      * await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
      * await client.zadd("key2", {"member1": 9.5})
-     * await client.zunionstore("my_sorted_set", ["key1", "key2"]) // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements.
-     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 20 and "member2" with score of 8.2.
-     * await client.zunionstore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
-     * await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 10.5 and "member2" with score of 8.2.
+     * await client.zunionStore("my_sorted_set", ["key1", "key2"]) // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 20, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 20 and "member2" with score of 8.2.
+     * await client.zunionStore("my_sorted_set", ["key1", "key2"] , AggregationType.MAX ) // Output: 2 - Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
+     * await client.zrangeWithScores("my_sorted_set", RangeByIndex(0, -1)) // Output: {'member1': 10.5, 'member2': 8.2}  - "member1"  is now stored in "my_sorted_set" with score of 10.5 and "member2" with score of 8.2.
      * ```
      */
-    public zunionstore(
+    public zunionStore(
         destination: string,
         keys: string[] | KeyWeight[],
         aggregationType?: AggregationType,
     ): Promise<number> {
         return this.createWritePromise(
-            createZUnionstore(destination, keys, aggregationType),
+            createZUnionStore(destination, keys, aggregationType),
         );
     }
 
