@@ -214,6 +214,7 @@ enum RequestType {
     XRevRange = 176;
     Copy = 178;
     MSetNX = 179;
+    LCS = 181;
 }
 
 message Command {
