@@ -66,18 +66,6 @@ public final class Logger {
         loggerLevel = Level.fromInt(initInternal(level.getLevel(), fileName));
     }
 
-    private static void initLogger(String fileName) {
-        initLogger(Level.DEFAULT, fileName);
-    }
-
-    private static void initLogger(@NonNull Level level) {
-        initLogger(level, null);
-    }
-
-    private static void initLogger() {
-        initLogger(Level.DEFAULT, null);
-    }
-
     /**
      * Initialize a logger if it wasn't initialized before - this method is meant to be used when
      * there is no intention to replace an existing logger. The logger will filter all logs with a
@@ -85,7 +73,7 @@ public final class Logger {
      * logs to files postfixed with <code>fileName</code>. If <code>fileName</code> isn't provided,
      * the logs will be written to the console.
      *
-     * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
+     * @param level Set the logger level to one of <code>[DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
      *     configuration decided by Glide core.
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
@@ -104,10 +92,10 @@ public final class Logger {
      * argument, will write the logs to files postfixed with <code>fileName</code>. If <code>fileName
      * </code> isn't provided, the logs will be written to the console.
      *
-     * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
+     * @param fileName The target of the logs will be the file mentioned. Otherwise, logs
      *     will be printed to the console.
      */
-    public static void init(String fileName) {
+    public static void init(@NonNull String fileName) {
         init(Level.DEFAULT, fileName);
     }
 
@@ -133,6 +121,13 @@ public final class Logger {
         init(level, null);
     }
 
+    /**
+     * Logs the provided message if the provided log level is lower then the logger level.
+     *
+     * @param level The log level of the provided message.
+     * @param logIdentifier The log identifier should give the log a context.
+     * @param message The message to log.
+     */
     public static void log(
             @NonNull Level level, @NonNull String logIdentifier, @NonNull String message) {
         if (loggerLevel == null) {
@@ -147,7 +142,7 @@ public final class Logger {
     /**
      * Creates a new logger instance and configure it with the provided log level and file name.
      *
-     * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
+     * @param level Set the logger level to one of <code>[DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
      *     configuration decided by Glide core.
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
@@ -161,7 +156,7 @@ public final class Logger {
      * Creates a new logger instance and configure it with the provided log level. The logs will be
      * written to stdout.
      *
-     * @param level Set the logger level to one of <code>[DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
+     * @param level Set the logger level to one of <code>[DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
      *     configuration decided by Glide core.
      */
