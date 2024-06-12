@@ -93,6 +93,41 @@ To run all tests, use the following command:
 ./gradlew test
 ```
 
+To run a unit test, use the following command:
+
+```bash
+./gradlew :client:test
+```
+
+To run an integration test, use the following command:
+
+```bash
+./gradlew :integTest:test
+```
+
+To run FFI tests, use the following command:
+
+```bash
+./gradlew :client:testFfi
+```
+
+To run a single test, use the following command:
+```bash
+./gradlew :integTest:test --tests '*.functionLoad_and_functionList' --rerun
+```
+
+To run one class, use the following command:
+```bash
+./gradlew :client:test --tests 'TransactionTests' --rerun
+```
+
+### Generate files
+To (re)generate files, use the following command:
+
+```bash
+./gradlew protobuf
+```
+
 ### Submodules
 
 After pulling new changes, ensure that you update the submodules by running the following command:
@@ -135,3 +170,10 @@ Development on the Java wrapper may involve changes in either the Java or Rust c
 ### Recommended extensions for VS Code
 
 -   [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer) - Rust language support for VSCode.
+-   [spotless-gradle](https://marketplace.visualstudio.com/items?itemName=richardwillis.vscode-spotless-gradle) - Spotless Gradle plugin for VSCode.
+-   [gradle](https://marketplace.visualstudio.com/items?itemName=vscjava.vscode-gradle) - Gradle extension for Java.
+
+### Recommended extensions for IntelliJ
+
+-   [spotless-gradle](https://plugins.jetbrains.com/plugin/18321-spotless-gradle) - Spotless Gradle plugin for IntelliJ.
+-   [lombok](https://plugins.jetbrains.com/plugin/6317-lombok) - Lombok plugin for IntelliJ.
