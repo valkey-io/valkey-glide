@@ -2467,10 +2467,12 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `streams add and trim test_%p`,
-        async () => {
+        `streams add, trim, and len test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const stringKey = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
 
@@ -2501,7 +2503,7 @@ export function runBaseTests<Context>(config: {
                         [field2, "bar2"],
                     ]),
                 ).not.toBeNull();
-                expect(await client.customCommand(["XLEN", key])).toEqual(2);
+                expect(await client.xlen(key)).toEqual(2);
 
                 // this will trim the first entry.
                 const id = await client.xadd(
@@ -2519,7 +2521,7 @@ export function runBaseTests<Context>(config: {
                     },
                 );
                 expect(id).not.toBeNull();
-                expect(await client.customCommand(["XLEN", key])).toEqual(2);
+                expect(await client.xlen(key)).toEqual(2);
 
                 // this will trim the 2nd entry.
                 expect(
@@ -2538,7 +2540,7 @@ export function runBaseTests<Context>(config: {
                         },
                     ),
                 ).not.toBeNull();
-                expect(await client.customCommand(["XLEN", key])).toEqual(2);
+                expect(await client.xlen(key)).toEqual(2);
 
                 expect(
                     await client.xtrim(key, {
@@ -2547,8 +2549,39 @@ export function runBaseTests<Context>(config: {
                         exact: true,
                     }),
                 ).toEqual(1);
-                expect(await client.customCommand(["XLEN", key])).toEqual(1);
-            }, ProtocolVersion.RESP2);
+                expect(await client.xlen(key)).toEqual(1);
+
+                expect(
+                    await client.xtrim(key, {
+                        method: "maxlen",
+                        threshold: 0,
+                        exact: true,
+                    }),
+                ).toEqual(1);
+                // Unlike other Redis collection types, stream keys still exist even after removing all entries
+                expect(await client.exists([key])).toEqual(1);
+                expect(await client.xlen(key)).toEqual(0);
+
+                expect(
+                    await client.xtrim(nonExistingKey, {
+                        method: "maxlen",
+                        threshold: 1,
+                        exact: true,
+                    }),
+                ).toEqual(0);
+                expect(await client.xlen(nonExistingKey)).toEqual(0);
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.xtrim(stringKey, {
+                        method: "maxlen",
+                        threshold: 1,
+                        exact: true,
+                    }),
+                ).rejects.toThrow();
+                await expect(client.xlen(stringKey)).rejects.toThrow();
+            }, protocol);
         },
         config.timeout,
     );
