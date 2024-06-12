@@ -104,8 +104,8 @@ public interface ListBaseCommands {
             @NonNull String key, @NonNull String element, @NonNull LPosOptions options);
 
     /**
-     * Returns an array of indices of matching elements within a list. If no match is found, an empty <code>array</code>
-     * is returned.
+     * Returns an <code>array</code> of indices of matching elements within a list based on the given <code>options</code>.
+     * If no match is found, an empty <code>array</code>is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
@@ -122,8 +122,8 @@ public interface ListBaseCommands {
     CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count);
 
     /**
-     * Returns an array of indices of matching elements inside a list based on the given <code>options</code>.
-     * If no match is found, an empty list is returned.
+     * Returns an <code>array</code> of indices of matching elements within a list based on the given <code>options</code>.
+     * If no match is found, an empty <code>array</code>is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
