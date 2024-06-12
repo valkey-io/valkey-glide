@@ -1778,7 +1778,7 @@ export class BaseClient {
      *
      * @example
      * ```typescript
-     * const cardinality = await client.zintercard(["key1", "key2"]);
+     * const cardinality = await client.zintercard(["key1", "key2"], 10);
      * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
      * ```
      */

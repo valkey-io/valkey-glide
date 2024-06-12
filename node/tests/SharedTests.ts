@@ -1667,7 +1667,9 @@ export function runBaseTests<Context>(config: {
                 await expect(client.zintercard([])).rejects.toThrow();
 
                 // invalid argument - limit must be non-negative
-                await expect(client.zintercard([], -1)).rejects.toThrow();
+                await expect(
+                    client.zintercard([key1, key2], -1),
+                ).rejects.toThrow();
 
                 // key exists, but it is not a sorted set
                 expect(await client.set(stringKey, "foo")).toEqual("OK");
