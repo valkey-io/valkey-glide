@@ -104,6 +104,7 @@ import {
     createZRemRangeByScore,
     createZScore,
     createSUnionStore,
+    createXLen,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -1344,6 +1345,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         options?: StreamReadOptions,
     ): T {
         return this.addAndReturn(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Returns the number of entries in the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xlen/ for more details.
+     *
+     * @param key - The key of the stream.
+     *
+     * Command Response - The number of entries in the stream. If `key` does not exist, returns `0`.
+     */
+    public xlen(key: string): T {
+        return this.addAndReturn(createXLen(key));
     }
 
     /**
