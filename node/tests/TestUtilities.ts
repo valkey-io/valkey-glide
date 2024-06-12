@@ -232,6 +232,7 @@ export async function transactionTest(
     const key11 = "{key}" + uuidv4(); // hyper log log
     const key12 = "{key}" + uuidv4();
     const key13 = "{key}" + uuidv4();
+    const key14 = "{key}" + uuidv4(); // sorted set
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -380,13 +381,25 @@ export async function transactionTest(
         "negativeInfinity",
         "positiveInfinity",
     );
-    args.push(1);
+    args.push(1); // key8 is now empty
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
+        args.push(2);
+        baseTransaction.zintercard([key8, key14]);
+        args.push(0);
+        baseTransaction.zintercard([key8, key14], 1);
+        args.push(0);
+    }
+
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
     args.push("0-1");
     baseTransaction.xadd(key9, [["field", "value2"]], { id: "0-2" });
     args.push("0-2");
     baseTransaction.xadd(key9, [["field", "value3"]], { id: "0-3" });
     args.push("0-3");
+    baseTransaction.xlen(key9);
+    args.push(3);
     baseTransaction.xread({ [key9]: "0-1" });
     args.push({
         [key9]: {

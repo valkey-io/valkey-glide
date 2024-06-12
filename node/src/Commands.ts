@@ -901,6 +901,23 @@ export function createZCard(key: string): redis_request.Command {
 /**
  * @internal
  */
+export function createZInterCard(
+    keys: string[],
+    limit?: number,
+): redis_request.Command {
+    let args: string[] = keys;
+    args.unshift(keys.length.toString());
+
+    if (limit != undefined) {
+        args = args.concat(["LIMIT", limit.toString()]);
+    }
+
+    return createCommand(RequestType.ZInterCard, args);
+}
+
+/**
+ * @internal
+ */
 export function createZScore(
     key: string,
     member: string,
@@ -1416,6 +1433,13 @@ export function createXRead(
     addStreamsArgs(keys_and_ids, args);
 
     return createCommand(RequestType.XRead, args);
+}
+
+/**
+ * @internal
+ */
+export function createXLen(key: string): redis_request.Command {
+    return createCommand(RequestType.XLen, [key]);
 }
 
 /**

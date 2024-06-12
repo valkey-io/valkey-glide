@@ -200,6 +200,8 @@ public class TransactionTestUtilities {
         String stringKey1 = "{StringKey}-1-" + UUID.randomUUID();
         String stringKey2 = "{StringKey}-2-" + UUID.randomUUID();
         String stringKey3 = "{StringKey}-3-" + UUID.randomUUID();
+        String stringKey4 = "{StringKey}-4-" + UUID.randomUUID();
+        String stringKey5 = "{StringKey}-5-" + UUID.randomUUID();
 
         transaction
                 .set(stringKey1, value1)
@@ -216,7 +218,12 @@ public class TransactionTestUtilities {
                 .decrBy(stringKey3, 2)
                 .incrByFloat(stringKey3, 0.5)
                 .setrange(stringKey3, 0, "GLIDE")
-                .getrange(stringKey3, 0, 5);
+                .getrange(stringKey3, 0, 5)
+                .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                .mget(new String[] {stringKey4, stringKey5})
+                .del(new String[] {stringKey5})
+                .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                .mget(new String[] {stringKey4, stringKey5});
 
         return new Object[] {
             OK, // set(stringKey1, value1)
@@ -233,7 +240,12 @@ public class TransactionTestUtilities {
             0L, // decrBy(stringKey3, 2)
             0.5, // incrByFloat(stringKey3, 0.5)
             5L, // setrange(stringKey3, 0, "GLIDE")
-            "GLIDE" // getrange(stringKey3, 0, 5)
+            "GLIDE", // getrange(stringKey3, 0, 5)
+            true, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+            new String[] {"foo", "bar"}, // mget({stringKey4, stringKey5})
+            1L, // del(stringKey5)
+            false, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+            new String[] {"foo", null}, // mget({stringKey4, stringKey5})
         };
     }
 
@@ -738,8 +750,10 @@ public class TransactionTestUtilities {
         }
 
         final String code =
-                "#!lua name=mylib1T \n"
-                        + " redis.register_function('myfunc1T', function(keys, args) return args[1] end)";
+                "#!lua name=mylib1T\n"
+                        + "redis.register_function('myfunc1T',"
+                        + "function(keys, args) return args[1] end)"; // function returns first argument
+
         var expectedFuncData =
                 new HashMap<String, Object>() {
                     {
@@ -767,6 +781,8 @@ public class TransactionTestUtilities {
                 .functionList(false)
                 .functionLoad(code, false)
                 .functionLoad(code, true)
+                .fcall("myfunc1T", new String[0], new String[] {"a", "b"})
+                .fcall("myfunc1T", new String[] {"a", "b"})
                 .functionList("otherLib", false)
                 .functionList("mylib1T", true)
                 .functionDelete("mylib1T")
@@ -777,6 +793,8 @@ public class TransactionTestUtilities {
             new Map[0], // functionList(false)
             "mylib1T", // functionLoad(code, false)
             "mylib1T", // functionLoad(code, true)
+            "a", // fcall("myfunc1T", new String[0], new String[]{"a", "b"})
+            "a", // fcall("myfunc1T", new String[] {"a", "b"})
             new Map[0], // functionList("otherLib", false)
             expectedLibData, // functionList("mylib1T", true)
             OK, // functionDelete("mylib1T")

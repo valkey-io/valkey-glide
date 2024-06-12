@@ -99,6 +99,8 @@ import {
     createZRemRangeByScore,
     createZScore,
     createSUnionStore,
+    createXLen,
+    createZInterCard,
 } from "./Commands";
 import {
     ClosingError,
@@ -1761,6 +1763,29 @@ export class BaseClient {
         return this.createWritePromise(createZCard(key));
     }
 
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+     *
+     * See https://valkey.io/commands/zintercard/ for more details.
+     *
+     * @remarks When in cluster mode, all `keys` must map to the same hash slot.
+     * @param keys - The keys of the sorted sets to intersect.
+     * @param limit - An optional argument that can be used to specify a maximum number for the
+     * intersection cardinality. If limit is not supplied, or if it is set to `0`, there will be no limit.
+     * @returns The cardinality of the intersection of the given sorted sets.
+     *
+     * since - Redis version 7.0.0.
+     *
+     * @example
+     * ```typescript
+     * const cardinality = await client.zintercard(["key1", "key2"], 10);
+     * console.log(cardinality); // Output: 3 - The intersection of the sorted sets at "key1" and "key2" has a cardinality of 3.
+     * ```
+     */
+    public zintercard(keys: string[], limit?: number): Promise<number> {
+        return this.createWritePromise(createZInterCard(keys, limit));
+    }
+
     /** Returns the score of `member` in the sorted set stored at `key`.
      * See https://redis.io/commands/zscore/ for more details.
      *
@@ -2269,6 +2294,24 @@ export class BaseClient {
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, string[][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Returns the number of entries in the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xlen/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @returns The number of entries in the stream. If `key` does not exist, returns `0`.
+     *
+     * @example
+     * ```typescript
+     * const numEntries = await client.xlen("my_stream");
+     * console.log(numEntries); // Output: 2 - "my_stream" contains 2 entries.
+     * ```
+     */
+    public xlen(key: string): Promise<number> {
+        return this.createWritePromise(createXLen(key));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

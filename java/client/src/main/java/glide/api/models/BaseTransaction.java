@@ -49,6 +49,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
+import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
@@ -96,6 +97,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
@@ -456,6 +458,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(args);
 
         protobufTransaction.addCommands(buildCommand(MSet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets multiple keys to multiple values in a single operation. Performs no operation at all even
+     * if just a single key already exists.
+     *
+     * @see <a href="https://redis.io/commands/msetnx/">redis.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return Command Response - <code>true</code> if all keys were set, <code>false</code> if no key
+     *     was set.
+     */
+    public T msetnx(@NonNull Map<String, String> keyValueMap) {
+        String[] args = convertMapToKeyValueStringArray(keyValueMap);
+        ArgsArray commandArgs = buildArgs(args);
+
+        protobufTransaction.addCommands(buildCommand(MSetNX, commandArgs));
         return getThis();
     }
 
@@ -3829,6 +3848,42 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         : buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern);
         protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
         return getThis();
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param keys An <code>array</code> of key arguments accessed by the function. To ensure the
+     *     correct execution of functions, both in standalone and clustered deployments, all names of
+     *     keys that a function accesses must be explicitly provided as <code>keys</code>.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcall(@NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {function, Long.toString(keys.length)}, keys, arguments));
+        protobufTransaction.addCommands(buildCommand(FCall, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcall(@NonNull String function, @NonNull String[] arguments) {
+        return fcall(function, new String[0], arguments);
     }
 
     /**
