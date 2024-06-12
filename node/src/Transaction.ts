@@ -105,6 +105,7 @@ import {
     createZScore,
     createSUnionStore,
     createXLen,
+    createZInterCard,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -977,6 +978,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public zcard(key: string): T {
         return this.addAndReturn(createZCard(key));
+    }
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+     *
+     * See https://valkey.io/commands/zintercard/ for more details.
+     *
+     * @param keys - The keys of the sorted sets to intersect.
+     * @param limit - An optional argument that can be used to specify a maximum number for the
+     * intersection cardinality. If limit is not supplied, or if it is set to `0`, there will be no limit.
+     *
+     * Command Response - The cardinality of the intersection of the given sorted sets.
+     *
+     * since - Redis version 7.0.0.
+     */
+    public zintercard(keys: string[], limit?: number): T {
+        return this.addAndReturn(createZInterCard(keys, limit));
     }
 
     /** Returns the score of `member` in the sorted set stored at `key`.
