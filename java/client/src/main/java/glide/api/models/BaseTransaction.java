@@ -910,14 +910,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the index of matching elements inside a list. By default, it will scan the list from
-     * head to tail, looking for the first match of <code>element</code>. If the <code>element</code>
-     * is found, its index is returned. If no match is found, <code>null</code> is returned.
+     * Returns the index of the first occurrence of <code>element</code> inside the list specified by <code>key</code>.
+     * If no match is found, <code>null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
-     * @return Command Response - The index of <code>element</code>.
+     * @return The index of the first occurrence of <code>element</code>, or <code>null</code> if <code>element</code>
+     * is not in the list.
      */
     public T lpos(@NonNull String key, @NonNull String element) {
         ArgsArray commandArgs = buildArgs(key, element);
@@ -926,15 +926,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the index of matching elements inside a list. By default, it will scan the list from
-     * head to tail, looking for the first match of <code>element</code>. If the <code>element</code>
-     * is found, its index is returned. If no match is found, null is returned.
+     * Returns the index of the first occurrence of <code>element</code> inside the list specified by <code>key</code>.
+     * If no match is found, <code>null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
-     * @param key The key of the list.
+     * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param options The LPos options.
-     * @return Command Response - The index of <code>element</code>.
+     * @return The index of <code>element</code>, or <code>null</code> if <code>element</code> is not in the list.
      */
     public T lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
         ArgsArray commandArgs =
@@ -944,15 +943,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns an array of indices of matching elements within a list. If no match is found, <code>
-     * null</code> is returned.
+     * Returns an array of indices of matching elements within a list. If no match is found, an empty <code>array</code>
+     * is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
-     * @return Command Response - An array that holds the indices of the matching elements within the
-     *     list.
+     * @return An <code>array</code> that holds the indices of the matching elements within the list.
      */
     public T lposCount(@NonNull String key, @NonNull String element, long count) {
         ArgsArray commandArgs = buildArgs(key, element, COUNT_REDIS_API, Long.toString(count));
@@ -961,16 +959,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns an array of indices of matching elements inside a list. If no match is found, <code>
-     * null</code> is returned.
+     * Returns an array of indices of matching elements inside a list based on the given <code>options</code>.
+     * If no match is found, an empty list is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
      * @param options The LPos options.
-     * @return Command Response - An array that holds the indices of the matching elements within the
-     *     list.
+     * @return An <code>array</code> that holds the indices of the matching elements within the list.
      */
     public T lposCount(
             @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {

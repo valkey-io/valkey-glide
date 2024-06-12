@@ -1,15 +1,14 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
+import glide.api.commands.ListBaseCommands;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
 
 /**
- * Optional arguments to {@link glide.api.commands.ListBaseCommands#lpos(java.lang.String,
- * java.lang.String, glide.api.models.commands.LPosOptions)} and {@link
- * glide.api.commands.ListBaseCommands#lposCount(java.lang.String, java.lang.String, long,
- * glide.api.models.commands.LPosOptions)} command.
+ * Optional arguments to {@link ListBaseCommands#lpos(String, String, LPosOptions)} and
+ * {@link ListBaseCommands#lposCount(String, String, long)} command.
  *
  * @see <a href="https://redis.io/commands/lpos/">redis.io</a>
  */
@@ -22,7 +21,7 @@ public final class LPosOptions {
     /** The maximum number of comparisons to make between the element and the items in the list. */
     private Long maxLength;
 
-    /** Redis API keyword used to extract specific count of members from a sorted set. */
+    /** Redis API keyword used to extract specific number of matching indices from a list. */
     public static final String COUNT_REDIS_API = "COUNT";
 
     /** Redis API keyword use to determine the rank of the match to return. */

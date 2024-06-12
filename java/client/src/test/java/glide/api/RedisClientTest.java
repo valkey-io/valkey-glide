@@ -1755,9 +1755,9 @@ public class RedisClientTest {
     @Test
     public void lpos() {
         // setup
-        String[] set = {"a", "b", "c", "a", "c"};
+        String[] list = {"a", "b", "c", "a", "c"};
         String element = "b";
-        String[] args = new String[] {"set", "element"};
+        String[] args = new String[] {"list", "element"};
         long index = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -1767,7 +1767,7 @@ public class RedisClientTest {
         when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any())).thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.lpos("set", "element");
+        CompletableFuture<Long> response = service.lpos("list", "element");
         Long payload = response.get();
 
         // verify
@@ -1779,10 +1779,10 @@ public class RedisClientTest {
     @Test
     public void lpos_withOptions() {
         // setup
-        String[] set = {"a", "b", "c", "a", "c"};
+        String[] list = {"a", "b", "c", "a", "c"};
         String element = "b";
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
-        String[] args = new String[] {"set", "element", "RANK", "1", "MAXLEN", "1000"};
+        String[] args = new String[] {"list", "element", "RANK", "1", "MAXLEN", "1000"};
         long index = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -1792,7 +1792,7 @@ public class RedisClientTest {
         when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any())).thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.lpos("set", "element", options);
+        CompletableFuture<Long> response = service.lpos("list", "element", options);
         Long payload = response.get();
 
         // verify
@@ -1804,9 +1804,9 @@ public class RedisClientTest {
     @Test
     public void lposCount() {
         // setup
-        String[] set = {"a", "b", "c", "a", "c"};
+        String[] list = {"a", "b", "c", "a", "c"};
         String element = "a";
-        String[] args = new String[] {"set", "element", "COUNT", "1"};
+        String[] args = new String[] {"list", "element", "COUNT", "1"};
         Long[] index = new Long[] {1L};
 
         CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
@@ -1817,7 +1817,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long[]> response = service.lposCount("set", "element", 1L);
+        CompletableFuture<Long[]> response = service.lposCount("list", "element", 1L);
         Long[] payload = response.get();
 
         // verify
@@ -1829,10 +1829,10 @@ public class RedisClientTest {
     @Test
     public void lposCount_withOptions() {
         // setup
-        String[] set = {"a", "b", "c", "a", "c"};
+        String[] list = {"a", "b", "c", "a", "c"};
         String element = "a";
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
-        String[] args = new String[] {"set", "element", "COUNT", "0", "RANK", "1", "MAXLEN", "1000"};
+        String[] args = new String[] {"list", "element", "COUNT", "0", "RANK", "1", "MAXLEN", "1000"};
         Long[] index = new Long[] {0L};
 
         CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
@@ -1843,7 +1843,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long[]> response = service.lposCount("set", "element", 0L, options);
+        CompletableFuture<Long[]> response = service.lposCount("list", "element", 0L, options);
         Long[] payload = response.get();
 
         // verify
