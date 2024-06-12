@@ -1460,7 +1460,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
      *     Otherwise, returns None.
      */
-    public object_encoding(key: string): T {
+    public objectEncoding(key: string): T {
         return this.addAndReturn(createObjectEncoding(key));
     }
 
@@ -1472,7 +1472,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If `key` exists, returns the logarithmic access frequency counter of
      *     the object stored at `key` as a `number`. Otherwise, returns `null`.
      */
-    public object_freq(key: string): T {
+    public objectFreq(key: string): T {
         return this.addAndReturn(createObjectFreq(key));
     }
 }

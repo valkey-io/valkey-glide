@@ -237,7 +237,7 @@ export async function transactionTest(
     const args: ReturnType[] = [];
     baseTransaction.set(key1, "bar");
     args.push("OK");
-    baseTransaction.object_encoding(key1);
+    baseTransaction.objectEncoding(key1);
     args.push("embstr");
     baseTransaction.type(key1);
     args.push("string");

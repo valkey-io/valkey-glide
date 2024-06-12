@@ -2525,11 +2525,11 @@ export class BaseClient {
      *     Otherwise, returns None.
      * @example
      * ```typescript
-     * const result = await client.object_encoding("my_hash");
+     * const result = await client.objectEncoding("my_hash");
      * console.log(result); // Output: "listpack"
      * ```
      */
-    public object_encoding(key: string): Promise<string | null> {
+    public objectEncoding(key: string): Promise<string | null> {
         return this.createWritePromise(createObjectEncoding(key));
     }
 
@@ -2542,11 +2542,11 @@ export class BaseClient {
      *            stored at `key` as a `number`. Otherwise, returns `null`.
      * @example
      * ```typescript
-     * const result = await client.object_freq("my_hash");
+     * const result = await client.objectFreq("my_hash");
      * console.log(result); // Output: 2 - The logarithmic access frequency counter of "my_hash".
      * ```
      */
-    public object_freq(key: string): Promise<number | null> {
+    public objectFreq(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectFreq(key));
     }
 

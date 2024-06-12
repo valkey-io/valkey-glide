@@ -343,7 +343,7 @@ describe("RedisClusterClient", () => {
                     [maxmemoryPolicyKey]: "allkeys-lfu",
                 });
                 transaction.set(key, "foo");
-                transaction.object_freq(key);
+                transaction.objectFreq(key);
 
                 const response = await client.exec(transaction);
                 expect(response).not.toBeNull();
