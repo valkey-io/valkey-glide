@@ -73,7 +73,8 @@ public final class Logger {
      * logs to files postfixed with <code>fileName</code>. If <code>fileName</code> isn't provided,
      * the logs will be written to the console.
      *
-     * @param level Set the logger level to one of <code>[DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
+     * @param level Set the logger level to one of <code>
+     *     [DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
      *     configuration decided by Glide core.
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
@@ -92,8 +93,8 @@ public final class Logger {
      * argument, will write the logs to files postfixed with <code>fileName</code>. If <code>fileName
      * </code> isn't provided, the logs will be written to the console.
      *
-     * @param fileName The target of the logs will be the file mentioned. Otherwise, logs
-     *     will be printed to the console.
+     * @param fileName The target of the logs will be the file mentioned. Otherwise, logs will be
+     *     printed to the console.
      */
     public static void init(@NonNull String fileName) {
         init(Level.DEFAULT, fileName);
@@ -142,7 +143,8 @@ public final class Logger {
     /**
      * Creates a new logger instance and configure it with the provided log level and file name.
      *
-     * @param level Set the logger level to one of <code>[DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
+     * @param level Set the logger level to one of <code>
+     *     [DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
      *     configuration decided by Glide core.
      * @param fileName If provided, the target of the logs will be the file mentioned. Otherwise, logs
@@ -156,7 +158,8 @@ public final class Logger {
      * Creates a new logger instance and configure it with the provided log level. The logs will be
      * written to stdout.
      *
-     * @param level Set the logger level to one of <code>[DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
+     * @param level Set the logger level to one of <code>
+     *     [DISABLED, DEFAULT, ERROR, WARN, INFO, DEBUG, TRACE]
      *     </code>. If log level isn't provided, the logger will be configured with default
      *     configuration decided by Glide core.
      */
