@@ -140,6 +140,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
@@ -216,6 +218,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
@@ -2619,7 +2622,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
      * If the <code>key</code> doesn't exist, the stream is created.
      *
-     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @return Command Response - The id of the added entry.
@@ -2632,7 +2635,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
      * If the <code>key</code> doesn't exist, the stream is created.
      *
-     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @param options Stream add options {@link StreamAddOptions}.
@@ -2653,7 +2656,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Reads entries from the given streams.
      *
-     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
      * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
      *     pair</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
@@ -2667,7 +2670,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Reads entries from the given streams.
      *
-     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
      * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
      *     pair</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
@@ -2683,7 +2686,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Trims the stream by evicting older entries.
      *
-     * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xtrim/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param options Stream trim options {@link StreamTrimOptions}.
      * @return Command Response - The number of entries deleted from the stream.
@@ -2726,6 +2729,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns stream entries matching a given range of IDs.
      *
+     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
@@ -2754,6 +2758,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns stream entries matching a given range of IDs.
      *
+     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
@@ -2787,6 +2792,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Equivalent to {@link #xrange(String, StreamRange, StreamRange)} but returns the entries in
      * reverse order.
      *
+     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param end Ending stream ID bound for range.
      *     <ul>
@@ -2817,6 +2823,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Equivalent to {@link #xrange(String, StreamRange, StreamRange, long)} but returns the entries
      * in reverse order.
      *
+     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
@@ -2842,6 +2849,61 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs =
                 buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(end, start, count), key));
         protobufTransaction.addCommands(buildCommand(XRevRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @param id Stream ID that specifies the last delivered entry in the stream from the new group’s
+     *     perspective. The special ID <code>"$"</code> can be used to specify the last entry in the
+     *     stream.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T xgroupCreate(@NonNull String key, @NonNull String groupname, @NonNull String id) {
+        protobufTransaction.addCommands(buildCommand(XGroupCreate, buildArgs(key, groupname, id)));
+        return getThis();
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @param id Stream ID that specifies the last delivered entry in the stream from the new group’s
+     *     perspective. The special ID <code>"$"</code> can be used to specify the last entry in the
+     *     stream.
+     * @param options The group options {@link StreamGroupOptions}.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T xgroupCreate(
+            @NonNull String key,
+            @NonNull String groupname,
+            @NonNull String id,
+            @NonNull StreamGroupOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {key, groupname, id}, options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(XGroupCreate, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @return Command Response - <code>true</code> if the consumer group is destroyed. Otherwise,
+     *     <code>false</code>.
+     */
+    public T xgroupDestroy(@NonNull String key, @NonNull String groupname) {
+        protobufTransaction.addCommands(buildCommand(XGroupDestroy, buildArgs(key, groupname)));
         return getThis();
     }
 
