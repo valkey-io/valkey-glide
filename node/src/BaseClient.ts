@@ -99,6 +99,7 @@ import {
     createZRemRangeByScore,
     createZScore,
     createSUnionStore,
+    createXLen,
 } from "./Commands";
 import {
     ClosingError,
@@ -2269,6 +2270,24 @@ export class BaseClient {
         options?: StreamReadOptions,
     ): Promise<Record<string, Record<string, string[][]>>> {
         return this.createWritePromise(createXRead(keys_and_ids, options));
+    }
+
+    /**
+     * Returns the number of entries in the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xlen/ for more details.
+     *
+     * @param key - The key of the stream.
+     * @returns The number of entries in the stream. If `key` does not exist, returns `0`.
+     *
+     * @example
+     * ```typescript
+     * const numEntries = await client.xlen("my_stream");
+     * console.log(numEntries); // Output: 2 - "my_stream" contains 2 entries.
+     * ```
+     */
+    public xlen(key: string): Promise<number> {
+        return this.createWritePromise(createXLen(key));
     }
 
     private readonly MAP_READ_FROM_STRATEGY: Record<

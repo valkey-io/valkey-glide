@@ -387,6 +387,8 @@ export async function transactionTest(
     args.push("0-2");
     baseTransaction.xadd(key9, [["field", "value3"]], { id: "0-3" });
     args.push("0-3");
+    baseTransaction.xlen(key9);
+    args.push(3);
     baseTransaction.xread({ [key9]: "0-1" });
     args.push({
         [key9]: {

@@ -1421,6 +1421,13 @@ export function createXRead(
 /**
  * @internal
  */
+export function createXLen(key: string): redis_request.Command {
+    return createCommand(RequestType.XLen, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createRename(
     key: string,
     newKey: string,
