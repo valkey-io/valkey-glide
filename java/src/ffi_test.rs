@@ -1,7 +1,7 @@
-use crate::errors::{handle_errors, handle_panics, throw_java_exception, ExceptionType, FFIError};
 /**
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
+use crate::errors::{handle_errors, handle_panics, throw_java_exception, ExceptionType, FFIError};
 use jni::{
     objects::{JByteArray, JClass, JLongArray, JString},
     sys::{jboolean, jdouble, jlong},
@@ -148,7 +148,7 @@ fn java_long_array_to_value<'local>(
 
 #[no_mangle]
 pub extern "system" fn Java_glide_ffi_FfiTest_handlePanics<'local>(
-    mut env: JNIEnv<'local>,
+    _env: JNIEnv<'local>,
     _class: JClass<'local>,
     should_panic: jboolean,
     error_present: jboolean,

@@ -158,7 +158,7 @@ jar.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRustRelease')
 compileTestJava.dependsOn('publishToMavenLocal')
 test.dependsOn('buildRust')
-testFfi.dependsOn(['buildRust', 'copyNativeLib'])
+testFfi.dependsOn('buildRust')
 
 test {
     exclude "glide/ffi/FfiTest.class"
