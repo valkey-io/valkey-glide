@@ -1117,11 +1117,10 @@ public class CommandTests {
                     RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
                             .get()) {
                 // call the function without await
-                // TODO use FCALL
                 // Using a random primary node route, otherwise FCALL can go to a replica.
                 // FKILL and FSTATS go to primary nodes if no route given, test fails in such case.
                 Route route = new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY);
-                var promise = testClient.customCommand(new String[] {"FCALL", funcName, "0"}, route);
+                var promise = testClient.fcall(funcName, route);
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
@@ -1203,8 +1202,7 @@ public class CommandTests {
                     RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
                             .get()) {
                 // call the function without await
-                // TODO use FCALL
-                var promise = testClient.customCommand(new String[] {"FCALL", funcName, "0"}, route);
+                var promise = testClient.fcall(funcName, route);
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
@@ -1294,8 +1292,7 @@ public class CommandTests {
                     RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
                             .get()) {
                 // call the function without await
-                // TODO use FCALL
-                var promise = testClient.customCommand(new String[] {"FCALL", funcName, "1", key});
+                var promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
@@ -1365,14 +1362,13 @@ public class CommandTests {
             assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
 
             // load the lib
-            assertEquals(libName, clusterClient.functionLoadReplace(code, route).get());
+            assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
 
             try (var testClient =
                     RedisClusterClient.CreateClient(commonClusterClientConfig().requestTimeout(7000).build())
                             .get()) {
                 // call the function without await
-                // TODO use FCALL
-                var promise = testClient.customCommand(new String[] {"FCALL", funcName, "1", key});
+                var promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
@@ -1394,7 +1390,7 @@ public class CommandTests {
                 assertInstanceOf(RequestException.class, exception.getCause());
                 assertTrue(exception.getMessage().toLowerCase().contains("unkillable"));
 
-                assertEquals("Timed out 6 sec", promise.get().getSingleValue());
+                assertEquals("Timed out 6 sec", promise.get());
 
                 exception =
                         assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());

@@ -537,8 +537,7 @@ public class CommandTests {
             try (var testClient =
                     RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
                 // call the function without await
-                // TODO use FCALL
-                var promise = testClient.customCommand(new String[] {"FCALL", funcName, "0"});
+                var promise = testClient.fcall(funcName);
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
@@ -606,8 +605,7 @@ public class CommandTests {
             try (var testClient =
                     RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
                 // call the function without await
-                // TODO use FCALL
-                var promise = testClient.customCommand(new String[] {"FCALL", funcName, "1", libName});
+                var promise = testClient.fcall(funcName, new String[] {libName}, new String[0]);
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
