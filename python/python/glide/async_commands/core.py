@@ -1286,7 +1286,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lmpop/ for details.
 
         Args:
-            keys (List[str]): An array of keys to lists.
+            keys (List[str]): An array of keys of lists.
             direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
             count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
 
@@ -1295,15 +1295,12 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.lpush("testKey", ["one", "two", "three"])
-            >>> result = await client.lmpop(["testKey"], ListDirection.LEFT, 2)
-            >>> result_value = result["testKey"]
-            ["three", "two"]
+            >>> await client.lmpop(["testKey"], ListDirection.LEFT, 2)
+               {"testKey": ["three", "two"]}
 
         Since: Redis version 7.0.0.
         """
-        args = [str(len(keys))]
-        args += keys
-        args.append(direction.value)
+        args = [str(len(keys)), *keys, direction.value]
         if count is not None:
             args += ["COUNT", str(count)]
 
@@ -1331,7 +1328,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/blmpop/ for details.
 
         Args:
-            keys (List[str]): An array of keys to lists.
+            keys (List[str]): An array of keys of lists.
             direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
             count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
@@ -1341,16 +1338,12 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.lpush("testKey", ["one", "two", "three"])
-            >>> result = await client.blmpop(["testKey"], ListDirection.LEFT, 0.1, 2)
-            >>> result["testKey"]
-            ["three", "two"]
+            >>> await client.blmpop(["testKey"], ListDirection.LEFT, 0.1, 2)
+               {"testKey": ["three", "two"]}
 
         Since: Redis version 7.0.0.
         """
-        args = [str(timeout)]
-        args.append(str(len(keys)))
-        args += keys
-        args.append(direction.value)
+        args = [str(timeout), str(len(keys)), *keys, direction.value]
         if count is not None:
             args += ["COUNT", str(count)]
 
