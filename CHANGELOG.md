@@ -17,8 +17,13 @@
 * Python: Added SORT command ([#1439](https://github.com/aws/glide-for-redis/pull/1439))
 * Node: Added OBJECT ENCODING command ([#1518](https://github.com/aws/glide-for-redis/pull/1518))
 * Python: Added LMOVE and BLMOVE commands ([#1536](https://github.com/aws/glide-for-redis/pull/1536))
+* Node: Added SUNIONSTORE command ([#1549](https://github.com/aws/glide-for-redis/pull/1549))
+* Node: Added PFCOUNT command ([#1545](https://github.com/aws/glide-for-redis/pull/1545))
+* Node: Added OBJECT FREQ command ([#1542](https://github.com/aws/glide-for-redis/pull/1542))
+* Node: Added LINSERT command ([#1544](https://github.com/aws/glide-for-redis/pull/1544))
+* Node: Added XLEN command ([#1555](https://github.com/aws/glide-for-redis/pull/1555))
+* Node: Added ZINTERCARD command ([#1553](https://github.com/aws/glide-for-redis/pull/1553))
 * Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
-
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

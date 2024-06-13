@@ -199,6 +199,8 @@ public class TransactionTestUtilities {
         String stringKey1 = "{StringKey}-1-" + UUID.randomUUID();
         String stringKey2 = "{StringKey}-2-" + UUID.randomUUID();
         String stringKey3 = "{StringKey}-3-" + UUID.randomUUID();
+        String stringKey4 = "{StringKey}-4-" + UUID.randomUUID();
+        String stringKey5 = "{StringKey}-5-" + UUID.randomUUID();
 
         transaction
                 .set(stringKey1, value1)
@@ -215,7 +217,12 @@ public class TransactionTestUtilities {
                 .decrBy(stringKey3, 2)
                 .incrByFloat(stringKey3, 0.5)
                 .setrange(stringKey3, 0, "GLIDE")
-                .getrange(stringKey3, 0, 5);
+                .getrange(stringKey3, 0, 5)
+                .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                .mget(new String[] {stringKey4, stringKey5})
+                .del(new String[] {stringKey5})
+                .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                .mget(new String[] {stringKey4, stringKey5});
 
         return new Object[] {
             OK, // set(stringKey1, value1)
@@ -232,7 +239,12 @@ public class TransactionTestUtilities {
             0L, // decrBy(stringKey3, 2)
             0.5, // incrByFloat(stringKey3, 0.5)
             5L, // setrange(stringKey3, 0, "GLIDE")
-            "GLIDE" // getrange(stringKey3, 0, 5)
+            "GLIDE", // getrange(stringKey3, 0, 5)
+            true, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+            new String[] {"foo", "bar"}, // mget({stringKey4, stringKey5})
+            1L, // del(stringKey5)
+            false, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+            new String[] {"foo", null}, // mget({stringKey4, stringKey5})
         };
     }
 
@@ -473,6 +485,9 @@ public class TransactionTestUtilities {
         String zSetKey1 = "{ZSetKey}-1-" + UUID.randomUUID();
         String zSetKey2 = "{ZSetKey}-2-" + UUID.randomUUID();
         String zSetKey3 = "{ZSetKey}-3-" + UUID.randomUUID();
+        String zSetKey4 = "{ZSetKey}-4-" + UUID.randomUUID();
+        String zSetKey5 = "{ZSetKey}-4-" + UUID.randomUUID();
+        String zSetKey6 = "{ZSetKey}-5-" + UUID.randomUUID();
 
         transaction
                 .zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
@@ -495,38 +510,42 @@ public class TransactionTestUtilities {
                 .zremrangebyrank(zSetKey1, 5, 10)
                 .zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
                 .zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
-                .zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
                 .zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
-                .zdiff(new String[] {zSetKey2, zSetKey1})
-                .zdiffWithScores(new String[] {zSetKey2, zSetKey1})
-                .zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zunion(new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zunion(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
-                .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
-                .zinterstore(zSetKey1, new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
-                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .bzpopmax(new String[] {zSetKey2}, .1)
                 .zrandmember(zSetKey2)
                 .zrandmemberWithCount(zSetKey2, 1)
                 .zrandmemberWithCountWithScores(zSetKey2, 1)
-                .bzpopmin(new String[] {zSetKey2}, .1)
-                // zSetKey2 is now empty
-                .zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.));
+                .bzpopmin(new String[] {zSetKey2}, .1);
+        // zSetKey2 is now empty
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            transaction
+                    .zadd(zSetKey5, Map.of("one", 1.0, "two", 2.0))
+                    // zSetKey6 is empty
+                    .zdiffstore(zSetKey6, new String[] {zSetKey6, zSetKey6})
+                    .zdiff(new String[] {zSetKey5, zSetKey6})
+                    .zdiffWithScores(new String[] {zSetKey5, zSetKey6})
+                    .zunionstore(zSetKey5, new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zunion(new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zunionWithScores(new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zunionWithScores(new KeyArray(new String[] {zSetKey5, zSetKey6}), Aggregate.MAX)
+                    .zinterstore(zSetKey6, new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zinter(new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zinterWithScores(new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zinterWithScores(new KeyArray(new String[] {zSetKey5, zSetKey6}), Aggregate.MAX);
+        }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
+                    .zadd(zSetKey4, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
                     .zmpop(new String[] {zSetKey3}, MAX)
                     .zmpop(new String[] {zSetKey3}, MIN, 2)
                     .bzmpop(new String[] {zSetKey3}, MAX, .1)
                     .bzmpop(new String[] {zSetKey3}, MIN, .1, 2)
                     .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
-                    .zintercard(new String[] {zSetKey2, zSetKey3})
-                    .zintercard(new String[] {zSetKey2, zSetKey3}, 2);
+                    .zintercard(new String[] {zSetKey4, zSetKey3})
+                    .zintercard(new String[] {zSetKey4, zSetKey3}, 2);
         }
 
         var expectedResults =
@@ -550,41 +569,49 @@ public class TransactionTestUtilities {
                     0L, // zremrangebyrank(zSetKey1, 5, 10)
                     0L, // zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
                     0L, // zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
-                    0L, // zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
                     2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
-                    new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, zSetKey1})
-                    Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, zSetKey1})
-                    2L, // zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                    new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}))
-                    new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX);
-                    Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}));
-                    Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}), MAX)
-                    0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
-                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}))
-                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
-                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}))
-                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
                     new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
-                    "one", // .zrandmember(zSetKey2)
+                    "one", // zrandmember(zSetKey2)
                     new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
                     new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
                     new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
-                    4L, // zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
                 };
 
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                2L, // zadd(zSetKey5, Map.of("one", 1.0, "two", 2.0))
+                                0L, // zdiffstore(zSetKey6, new String[] {zSetKey6, zSetKey6})
+                                new String[] {"one", "two"}, // zdiff(new String[] {zSetKey5, zSetKey6})
+                                Map.of("one", 1.0, "two", 2.0), // zdiffWithScores({zSetKey5, zSetKey6})
+                                2L, // zunionstore(zSetKey5, new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                                new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey5, zSetKey6}))
+                                Map.of("one", 1.0, "two", 2.0), // zunionWithScores({zSetKey5, zSetKey6})
+                                Map.of("one", 1.0, "two", 2.0), // zunionWithScores({zSetKey5, zSetKey6}, MAX)
+                                0L, // zinterstore(zSetKey6, new String[] {zSetKey5, zSetKey6})
+                                new String[0], // zinter(new KeyArray({zSetKey5, zSetKey6}))
+                                Map.of(), // zinterWithScores(new KeyArray({zSetKey5, zSetKey6}))
+                                Map.of(), // zinterWithScores(new KeyArray({zSetKey5, zSetKey6}), Aggregate.MAX)
+                            });
+        }
+
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            return concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        7L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
-                        new Object[] {zSetKey3, Map.of("g", 7.)}, // zmpop(zSetKey3, MAX)
-                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
-                        new Object[] {zSetKey3, Map.of("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
-                        new Object[] {zSetKey3, Map.of("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
-                        6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
-                        4L, // zintercard(new String[] {zSetKey2, zSetKey3})
-                        2L, // zintercard(new String[] {zSetKey2, zSetKey3}, 2)
-                    });
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                7L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                                4L, // zadd(zSetKey4, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
+                                new Object[] {zSetKey3, Map.of("g", 7.)}, // zmpop(zSetKey3, MAX)
+                                new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
+                                new Object[] {zSetKey3, Map.of("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
+                                new Object[] {zSetKey3, Map.of("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                                6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                                4L, // zintercard(new String[] {zSetKey4, zSetKey3})
+                                2L, // zintercard(new String[] {zSetKey4, zSetKey3}, 2)
+                            });
         }
         return expectedResults;
     }
@@ -650,8 +677,11 @@ public class TransactionTestUtilities {
                 .xadd(streamKey1, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
                 .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
                 .xlen(streamKey1)
+                .xread(Map.of(streamKey1, "0-2"))
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
+                .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
+                .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
                 .xtrim(streamKey1, new MinId(true, "0-2"))
                 .xdel(streamKey1, new String[] {"0-3", "0-5"});
 
@@ -660,8 +690,14 @@ public class TransactionTestUtilities {
             "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
             "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
             3L, // xlen(streamKey1)
-            Map.of("0-1", new String[] {"field1", "value1"}), // .xrange(streamKey1, "0-1", "0-1")
-            Map.of("0-1", new String[] {"field1", "value1"}), // .xrange(streamKey1, "0-1", "0-1", 1l)
+            Map.of(
+                    streamKey1,
+                    Map.of("0-3", new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"));
+            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1")
+            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1", 1l)
+            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1")
+            Map.of(
+                    "0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1", 1l)
             1L, // xtrim(streamKey1, new MinId(true, "0-2"))
             1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"});
         };
@@ -703,8 +739,10 @@ public class TransactionTestUtilities {
         }
 
         final String code =
-                "#!lua name=mylib1T \n"
-                        + " redis.register_function('myfunc1T', function(keys, args) return args[1] end)";
+                "#!lua name=mylib1T\n"
+                        + "redis.register_function('myfunc1T',"
+                        + "function(keys, args) return args[1] end)"; // function returns first argument
+
         var expectedFuncData =
                 new HashMap<String, Object>() {
                     {
@@ -732,6 +770,8 @@ public class TransactionTestUtilities {
                 .functionList(false)
                 .functionLoad(code, false)
                 .functionLoad(code, true)
+                .fcall("myfunc1T", new String[0], new String[] {"a", "b"})
+                .fcall("myfunc1T", new String[] {"a", "b"})
                 .functionList("otherLib", false)
                 .functionList("mylib1T", true)
                 .functionDelete("mylib1T")
@@ -742,6 +782,8 @@ public class TransactionTestUtilities {
             new Map[0], // functionList(false)
             "mylib1T", // functionLoad(code, false)
             "mylib1T", // functionLoad(code, true)
+            "a", // fcall("myfunc1T", new String[0], new String[]{"a", "b"})
+            "a", // fcall("myfunc1T", new String[] {"a", "b"})
             new Map[0], // functionList("otherLib", false)
             expectedLibData, // functionList("mylib1T", true)
             OK, // functionDelete("mylib1T")

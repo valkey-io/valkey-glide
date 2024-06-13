@@ -6,6 +6,7 @@ import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -41,7 +42,7 @@ public interface StreamBaseCommands {
      * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
-     * @param options Stream add options.
+     * @param options Stream add options {@link StreamAddOptions}.
      * @return The id of the added entry, or <code>null</code> if {@link
      *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
      *     with the matching <code>key</code> exists.
@@ -58,11 +59,67 @@ public interface StreamBaseCommands {
     CompletableFuture<String> xadd(String key, Map<String, String> values, StreamAddOptions options);
 
     /**
+     * Reads entries from the given streams.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @return A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * Map<String, String> xreadKeys = Map.of("streamKey", "0-0");
+     * Map<String, Map<String, String[][]>> streamReadResponse = client.xread(xreadKeys).get();
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Map<String, String[][]>>> xread(Map<String, String> keysAndIds);
+
+    /**
+     * Reads entries from the given streams.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @param options Options detailing how to read the stream {@link StreamReadOptions}.
+     * @return A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * // retrieve streamKey entries and block for 1 second if is no stream data
+     * Map<String, String> xreadKeys = Map.of("streamKey", "0-0");
+     * StreamReadOptions options = StreamReadOptions.builder().block(1L).build();
+     * Map<String, Map<String, String[][]>> streamReadResponse = client.xread(xreadKeys, options).get();
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Map<String, String[][]>>> xread(
+            Map<String, String> keysAndIds, StreamReadOptions options);
+
+    /**
      * Trims the stream by evicting older entries.
      *
      * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
      * @param key The key of the stream.
-     * @param options Stream trim options.
+     * @param options Stream trim options {@link StreamTrimOptions}.
      * @return The number of entries deleted from the stream.
      * @example
      *     <pre>{@code
@@ -127,24 +184,23 @@ public interface StreamBaseCommands {
      *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
-     * @return @return A <code>Map</code> of key to stream entry data, where entry data is an array of
-     *     item pairings.
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * // Retrieve all stream entries
-     * Map<String, String[]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX).get();
+     * Map<String, String[][]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX).get();
      * result.forEach((k, v) -> {
      *     System.out.println("Stream ID: " + k);
-     *     for (int i = 0; i < v.length;) {
-     *         System.out.println(v[i++] + ": " + v[i++]);
+     *     for (int i = 0; i < v.length; i++) {
+     *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
      * });
      * // Retrieve exactly one stream entry by id
-     * Map<String, String[]> result = client.xrange("key", IdBound.of(streamId), IdBound.of(streamId)).get();
+     * Map<String, String[][]> result = client.xrange("key", IdBound.of(streamId), IdBound.of(streamId)).get();
      * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> xrange(String key, StreamRange start, StreamRange end);
+    CompletableFuture<Map<String, String[][]>> xrange(String key, StreamRange start, StreamRange end);
 
     /**
      * Returns stream entries matching a given range of IDs.
@@ -165,20 +221,95 @@ public interface StreamBaseCommands {
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
-     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of item
-     *     pairings.
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
      * // Retrieve the first 2 stream entries
-     * Map<String, String[]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 2).get();
+     * Map<String, String[][]> result = client.xrange("key", InfRangeBound.MIN, InfRangeBound.MAX, 2).get();
      * result.forEach((k, v) -> {
      *     System.out.println("Stream ID: " + k);
-     *     for (int i = 0; i < v.length;) {
-     *         System.out.println(v[i++] + ": " + v[i++]);
+     *     for (int i = 0; i < v.length; i++) {
+     *         System.out.println(v[i][0] + ": " + v[i][1]);
      *     }
      * });
      * }</pre>
      */
-    CompletableFuture<Map<String, String[]>> xrange(
+    CompletableFuture<Map<String, String[][]>> xrange(
             String key, StreamRange start, StreamRange end, long count);
+
+    /**
+     * Returns stream entries matching a given range of IDs in reverse order.<br>
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange)} but returns the entries in
+     * reverse order.
+     *
+     * @param key The key of the stream.
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * // Retrieve all stream entries
+     * Map<String, String[][]> result = client.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN).get();
+     * result.forEach((k, v) -> {
+     *     System.out.println("Stream ID: " + k);
+     *     for (int i = 0; i < v.length; i++) {
+     *         System.out.println(v[i][0] + ": " + v[i][1]);
+     *     }
+     * });
+     * // Retrieve exactly one stream entry by id
+     * Map<String, String[][]> result = client.xrevrange("key", IdBound.of(streamId), IdBound.of(streamId)).get();
+     * System.out.println("Stream ID: " + streamid + " -> " + Arrays.toString(result.get(streamid)));
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[][]>> xrevrange(
+            String key, StreamRange end, StreamRange start);
+
+    /**
+     * Returns stream entries matching a given range of IDs in reverse order.<br>
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange, long)} but returns the entries
+     * in reverse order.
+     *
+     * @param key The key of the stream.
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param count Maximum count of stream entries to return.
+     * @return A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     * @example
+     *     <pre>{@code
+     * // Retrieve the first 2 stream entries
+     * Map<String, String[][]> result = client.xrange("key", InfRangeBound.MAX, InfRangeBound.MIN, 2).get();
+     * result.forEach((k, v) -> {
+     *     System.out.println("Stream ID: " + k);
+     *     for (int i = 0; i < v.length; i++) {
+     *         System.out.println(v[i][0] + ": " + v[i][1]);
+     *     }
+     * });
+     * }</pre>
+     */
+    CompletableFuture<Map<String, String[][]>> xrevrange(
+            String key, StreamRange end, StreamRange start, long count);
 }

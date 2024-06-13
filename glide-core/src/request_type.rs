@@ -163,6 +163,7 @@ pub enum RequestType {
     FunctionList = 151,
     FunctionDelete = 152,
     FunctionFlush = 153,
+    FCall = 154,
     LMPop = 155,
     ExpireTime = 156,
     PExpireTime = 157,
@@ -180,7 +181,9 @@ pub enum RequestType {
     BitFieldReadOnly = 173,
     Move = 174,
     SInterCard = 175,
+    XRevRange = 176,
     Copy = 178,
+    MSetNX = 179,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -346,6 +349,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FunctionList => RequestType::FunctionList,
             ProtobufRequestType::FunctionDelete => RequestType::FunctionDelete,
             ProtobufRequestType::FunctionFlush => RequestType::FunctionFlush,
+            ProtobufRequestType::FCall => RequestType::FCall,
             ProtobufRequestType::BitPos => RequestType::BitPos,
             ProtobufRequestType::BitOp => RequestType::BitOp,
             ProtobufRequestType::HStrlen => RequestType::HStrlen,
@@ -365,6 +369,8 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SInterCard => RequestType::SInterCard,
             ProtobufRequestType::Copy => RequestType::Copy,
             ProtobufRequestType::Sort => RequestType::Sort,
+            ProtobufRequestType::XRevRange => RequestType::XRevRange,
+            ProtobufRequestType::MSetNX => RequestType::MSetNX,
         }
     }
 }
@@ -526,6 +532,7 @@ impl RequestType {
             RequestType::FunctionList => Some(get_two_word_command("FUNCTION", "LIST")),
             RequestType::FunctionDelete => Some(get_two_word_command("FUNCTION", "DELETE")),
             RequestType::FunctionFlush => Some(get_two_word_command("FUNCTION", "FLUSH")),
+            RequestType::FCall => Some(cmd("FCALL")),
             RequestType::BitPos => Some(cmd("BITPOS")),
             RequestType::BitOp => Some(cmd("BITOP")),
             RequestType::HStrlen => Some(cmd("HSTRLEN")),
@@ -545,6 +552,8 @@ impl RequestType {
             RequestType::SInterCard => Some(cmd("SINTERCARD")),
             RequestType::Copy => Some(cmd("COPY")),
             RequestType::Sort => Some(cmd("SORT")),
+            RequestType::XRevRange => Some(cmd("XREVRANGE")),
+            RequestType::MSetNX => Some(cmd("MSETNX")),
         }
     }
 }

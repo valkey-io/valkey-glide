@@ -30,6 +30,9 @@ import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_R
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_LIMIT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MAXLEN_REDIS_API;
@@ -78,6 +81,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
+import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
@@ -125,6 +129,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
@@ -172,6 +177,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
+import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -242,6 +249,7 @@ import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -1048,6 +1056,32 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void msetnx_returns_success() {
+        // setup
+        Map<String, String> keyValueMap = new LinkedHashMap<>();
+        keyValueMap.put("key1", "value1");
+        keyValueMap.put("key2", "value2");
+        String[] args = {"key1", "value1", "key2", "value2"};
+        Boolean value = true;
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(MSetNX), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.msetnx(keyValueMap);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows
@@ -3432,34 +3466,6 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void zunion_with_options_returns_success() {
-        // setup
-        List<Pair<String, Double>> keysWeights = new ArrayList<>();
-        keysWeights.add(Pair.of("key1", 10.0));
-        keysWeights.add(Pair.of("key2", 20.0));
-        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
-        Aggregate aggregate = Aggregate.MIN;
-        String[] arguments = concatenateArrays(weightedKeys.toArgs(), aggregate.toArgs());
-        String[] value = new String[] {"elem1", "elem2"};
-
-        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(ZUnion), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String[]> response = service.zunion(weightedKeys, aggregate);
-        String[] payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
     public void zunionWithScores_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
@@ -3532,34 +3538,6 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String[]> response = service.zinter(keyArray);
-        String[] payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(value, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void zinter_with_aggregation_returns_success() {
-        // setup
-        List<Pair<String, Double>> keysWeights = new ArrayList<>();
-        keysWeights.add(Pair.of("key1", 10.0));
-        keysWeights.add(Pair.of("key2", 20.0));
-        WeightedKeys weightedKeys = new WeightedKeys(keysWeights);
-        Aggregate aggregate = Aggregate.MIN;
-        String[] arguments = concatenateArrays(weightedKeys.toArgs(), aggregate.toArgs());
-        String[] value = new String[] {"elem1", "elem2"};
-
-        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
-
-        // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(ZInter), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String[]> response = service.zinter(weightedKeys, aggregate);
         String[] payload = response.get();
 
         // verify
@@ -3730,34 +3708,6 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void xadd_returns_success() {
-        // setup
-        String key = "testKey";
-        Map<String, String> fieldValues = new LinkedHashMap<>();
-        fieldValues.put("testField1", "testValue1");
-        fieldValues.put("testField2", "testValue2");
-        String[] fieldValuesArgs = convertMapToKeyValueStringArray(fieldValues);
-        String[] arguments = new String[] {key, "*"};
-        arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
-        String returnId = "testId";
-
-        CompletableFuture<String> testResponse = new CompletableFuture<>();
-        testResponse.complete(returnId);
-
-        // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(XAdd), eq(arguments), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String> response = service.xadd(key, fieldValues);
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(returnId, response.get());
-    }
-
-    @SneakyThrows
-    @Test
     public void zrandmember_returns_success() {
         // setup
         String key = "testKey";
@@ -3854,6 +3804,34 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xadd_returns_success() {
+        // setup
+        String key = "testKey";
+        Map<String, String> fieldValues = new LinkedHashMap<>();
+        fieldValues.put("testField1", "testValue1");
+        fieldValues.put("testField2", "testValue2");
+        String[] fieldValuesArgs = convertMapToKeyValueStringArray(fieldValues);
+        String[] arguments = new String[] {key, "*"};
+        arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
+        String returnId = "testId";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(returnId);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xadd(key, fieldValues);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(returnId, response.get());
     }
 
     private static List<Arguments> getStreamAddOptions() {
@@ -4062,6 +4040,83 @@ public class RedisClientTest {
         assertEquals(completedResult, payload);
     }
 
+    @SneakyThrows
+    @Test
+    public void xread_multiple_keys() {
+        // setup
+        String keyOne = "one";
+        String streamIdOne = "id-one";
+        String keyTwo = "two";
+        String streamIdTwo = "id-two";
+        String[][] fieldValues = {{"field", "value"}};
+        Map<String, Map<String, String[][]>> completedResult = new LinkedHashMap<>();
+        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        String[] arguments = {READ_STREAMS_REDIS_API, keyOne, keyTwo, streamIdOne, streamIdTwo};
+
+        CompletableFuture<Map<String, Map<String, String[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+                        eq(XRead), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        Map<String, String> keysAndIds = new LinkedHashMap<>();
+        keysAndIds.put(keyOne, streamIdOne);
+        keysAndIds.put(keyTwo, streamIdTwo);
+        CompletableFuture<Map<String, Map<String, String[][]>>> response = service.xread(keysAndIds);
+        Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xread_with_options() {
+        // setup
+        String keyOne = "one";
+        String streamIdOne = "id-one";
+        Long block = 2L;
+        Long count = 10L;
+        String[][] fieldValues = {{"field", "value"}};
+        Map<String, Map<String, String[][]>> completedResult =
+                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+        String[] arguments = {
+            READ_COUNT_REDIS_API,
+            count.toString(),
+            READ_BLOCK_REDIS_API,
+            block.toString(),
+            READ_STREAMS_REDIS_API,
+            keyOne,
+            streamIdOne
+        };
+
+        CompletableFuture<Map<String, Map<String, String[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+                        eq(XRead), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Map<String, String[][]>>> response =
+                service.xread(
+                        Map.of(keyOne, streamIdOne),
+                        StreamReadOptions.builder().block(block).count(count).build());
+        Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
     @Test
     @SneakyThrows
     public void xdel_returns_success() {
@@ -4094,20 +4149,20 @@ public class RedisClientTest {
         String key = "testKey";
         StreamRange start = IdBound.of(9999L);
         StreamRange end = IdBound.ofExclusive("696969-10");
-        Map<String, String[]> completedResult =
-                Map.of(key, new String[] {"duration", "12345", "event-id", "2", "user-id", "42"});
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
 
-        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(
                         eq(XRange), eq(new String[] {key, "9999", "(696969-10"}), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.xrange(key, start, end);
-        Map<String, String[]> payload = response.get();
+        CompletableFuture<Map<String, String[][]>> response = service.xrange(key, start, end);
+        Map<String, String[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -4122,14 +4177,14 @@ public class RedisClientTest {
         StreamRange start = InfRangeBound.MIN;
         StreamRange end = InfRangeBound.MAX;
         long count = 99L;
-        Map<String, String[]> completedResult =
-                Map.of(key, new String[] {"duration", "12345", "event-id", "2", "user-id", "42"});
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
 
-        CompletableFuture<Map<String, String[]>> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(completedResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[]>>submitNewCommand(
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(
                         eq(XRange),
                         eq(
                                 new String[] {
@@ -4143,8 +4198,72 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[]>> response = service.xrange(key, start, end, count);
-        Map<String, String[]> payload = response.get();
+        CompletableFuture<Map<String, String[][]>> response = service.xrange(key, start, end, count);
+        Map<String, String[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @Test
+    @SneakyThrows
+    public void xrevrange_returns_success() {
+        // setup
+        String key = "testKey";
+        StreamRange end = IdBound.of(9999L);
+        StreamRange start = IdBound.ofExclusive("696969-10");
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(
+                        eq(XRevRange), eq(new String[] {key, "9999", "(696969-10"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[][]>> response = service.xrevrange(key, end, start);
+        Map<String, String[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @Test
+    @SneakyThrows
+    public void xrevrange_withcount_returns_success() {
+        // setup
+        String key = "testKey";
+        StreamRange end = InfRangeBound.MAX;
+        StreamRange start = InfRangeBound.MIN;
+        long count = 99L;
+        String[][] fieldValuesResult = {{"duration", "12345"}, {"event-id", "2"}, {"user-id", "42"}};
+        Map<String, String[][]> completedResult = Map.of(key, fieldValuesResult);
+
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(
+                        eq(XRevRange),
+                        eq(
+                                new String[] {
+                                    key,
+                                    MAXIMUM_RANGE_REDIS_API,
+                                    MINIMUM_RANGE_REDIS_API,
+                                    RANGE_COUNT_REDIS_API,
+                                    Long.toString(count)
+                                }),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[][]>> response = service.xrevrange(key, end, start, count);
+        Map<String, String[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -5059,6 +5178,52 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_with_keys_and_args_returns_success() {
+        // setup
+        String function = "func";
+        String[] keys = new String[] {"key1", "key2"};
+        String[] arguments = new String[] {"1", "2"};
+        String[] args = new String[] {function, "2", "key1", "key2", "1", "2"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCall), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcall(function, keys, arguments);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_returns_success() {
+        // setup
+        String function = "func";
+        String[] args = new String[] {function, "0"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCall), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcall(function);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows

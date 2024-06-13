@@ -9,6 +9,7 @@ import {
     ClosingError,
     ExpireOptions,
     InfoOptions,
+    InsertPosition,
     ProtocolVersion,
     RedisClient,
     RedisClusterClient,
@@ -1161,6 +1162,66 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `sunionstore test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}:${uuidv4()}`;
+                const key2 = `{key}:${uuidv4()}`;
+                const key3 = `{key}:${uuidv4()}`;
+                const key4 = `{key}:${uuidv4()}`;
+                const stringKey = `{key}:${uuidv4()}`;
+                const nonExistingKey = `{key}:${uuidv4()}`;
+
+                expect(await client.sadd(key1, ["a", "b", "c"])).toEqual(3);
+                expect(await client.sadd(key2, ["c", "d", "e"])).toEqual(3);
+                expect(await client.sadd(key3, ["e", "f", "g"])).toEqual(3);
+
+                // store union in new key
+                expect(await client.sunionstore(key4, [key1, key2])).toEqual(5);
+                expect(await client.smembers(key4)).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // overwrite existing set
+                expect(await client.sunionstore(key1, [key4, key2])).toEqual(5);
+                expect(await client.smembers(key1)).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // overwrite one of the source keys
+                expect(await client.sunionstore(key2, [key4, key2])).toEqual(5);
+                expect(await client.smembers(key2)).toEqual(
+                    new Set(["a", "b", "c", "d", "e"]),
+                );
+
+                // union with a non-existing key
+                expect(
+                    await client.sunionstore(key2, [nonExistingKey]),
+                ).toEqual(0);
+                expect(await client.smembers(key2)).toEqual(new Set());
+
+                // invalid argument - key list must not be empty
+                await expect(client.sunionstore(key4, [])).rejects.toThrow();
+
+                // key exists, but it is not a set
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.sunionstore(key4, [stringKey, key1]),
+                ).rejects.toThrow();
+
+                // overwrite destination when destination is not a set
+                expect(
+                    await client.sunionstore(stringKey, [key1, key3]),
+                ).toEqual(7);
+                expect(await client.smembers(stringKey)).toEqual(
+                    new Set(["a", "b", "c", "d", "e", "f", "g"]),
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `sismember test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -1570,6 +1631,49 @@ export function runBaseTests<Context>(config: {
                 expect(await client.zcard(key)).toEqual(3);
                 expect(await client.zrem(key, ["one"])).toEqual(1);
                 expect(await client.zcard(key)).toEqual(2);
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `zintercard test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                if (await checkIfServerVersionLessThan("7.0.0")) {
+                    return;
+                }
+
+                const key1 = `{key}:${uuidv4()}`;
+                const key2 = `{key}:${uuidv4()}`;
+                const stringKey = `{key}:${uuidv4()}`;
+                const nonExistingKey = `{key}:${uuidv4()}`;
+                const memberScores1 = { one: 1, two: 2, three: 3 };
+                const memberScores2 = { two: 2, three: 3, four: 4 };
+
+                expect(await client.zadd(key1, memberScores1)).toEqual(3);
+                expect(await client.zadd(key2, memberScores2)).toEqual(3);
+
+                expect(await client.zintercard([key1, key2])).toEqual(2);
+                expect(await client.zintercard([key1, nonExistingKey])).toEqual(
+                    0,
+                );
+
+                expect(await client.zintercard([key1, key2], 0)).toEqual(2);
+                expect(await client.zintercard([key1, key2], 1)).toEqual(1);
+                expect(await client.zintercard([key1, key2], 2)).toEqual(2);
+
+                // invalid argument - key list must not be empty
+                await expect(client.zintercard([])).rejects.toThrow();
+
+                // invalid argument - limit must be non-negative
+                await expect(
+                    client.zintercard([key1, key2], -1),
+                ).rejects.toThrow();
+
+                // key exists, but it is not a sorted set
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(client.zintercard([stringKey])).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
@@ -2117,6 +2221,69 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `linsert test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = uuidv4();
+                const stringKey = uuidv4();
+                const nonExistingKey = uuidv4();
+
+                expect(await client.lpush(key1, ["4", "3", "2", "1"])).toEqual(
+                    4,
+                );
+                expect(
+                    await client.linsert(
+                        key1,
+                        InsertPosition.Before,
+                        "2",
+                        "1.5",
+                    ),
+                ).toEqual(5);
+                expect(
+                    await client.linsert(
+                        key1,
+                        InsertPosition.After,
+                        "3",
+                        "3.5",
+                    ),
+                ).toEqual(6);
+                expect(await client.lrange(key1, 0, -1)).toEqual([
+                    "1",
+                    "1.5",
+                    "2",
+                    "3",
+                    "3.5",
+                    "4",
+                ]);
+
+                expect(
+                    await client.linsert(
+                        key1,
+                        InsertPosition.Before,
+                        "nonExistingPivot",
+                        "4",
+                    ),
+                ).toEqual(-1);
+                expect(
+                    await client.linsert(
+                        nonExistingKey,
+                        InsertPosition.Before,
+                        "pivot",
+                        "elem",
+                    ),
+                ).toEqual(0);
+
+                // key exists, but it is not a list
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(
+                    client.linsert(stringKey, InsertPosition.Before, "a", "b"),
+                ).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `zpopmin test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
@@ -2343,10 +2510,12 @@ export function runBaseTests<Context>(config: {
     );
 
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
-        `streams add and trim test_%p`,
-        async () => {
+        `streams add, trim, and len test_%p`,
+        async (protocol) => {
             await runTest(async (client: BaseClient) => {
                 const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const stringKey = uuidv4();
                 const field1 = uuidv4();
                 const field2 = uuidv4();
 
@@ -2377,7 +2546,7 @@ export function runBaseTests<Context>(config: {
                         [field2, "bar2"],
                     ]),
                 ).not.toBeNull();
-                expect(await client.customCommand(["XLEN", key])).toEqual(2);
+                expect(await client.xlen(key)).toEqual(2);
 
                 // this will trim the first entry.
                 const id = await client.xadd(
@@ -2395,7 +2564,7 @@ export function runBaseTests<Context>(config: {
                     },
                 );
                 expect(id).not.toBeNull();
-                expect(await client.customCommand(["XLEN", key])).toEqual(2);
+                expect(await client.xlen(key)).toEqual(2);
 
                 // this will trim the 2nd entry.
                 expect(
@@ -2414,7 +2583,7 @@ export function runBaseTests<Context>(config: {
                         },
                     ),
                 ).not.toBeNull();
-                expect(await client.customCommand(["XLEN", key])).toEqual(2);
+                expect(await client.xlen(key)).toEqual(2);
 
                 expect(
                     await client.xtrim(key, {
@@ -2423,8 +2592,39 @@ export function runBaseTests<Context>(config: {
                         exact: true,
                     }),
                 ).toEqual(1);
-                expect(await client.customCommand(["XLEN", key])).toEqual(1);
-            }, ProtocolVersion.RESP2);
+                expect(await client.xlen(key)).toEqual(1);
+
+                expect(
+                    await client.xtrim(key, {
+                        method: "maxlen",
+                        threshold: 0,
+                        exact: true,
+                    }),
+                ).toEqual(1);
+                // Unlike other Redis collection types, stream keys still exist even after removing all entries
+                expect(await client.exists([key])).toEqual(1);
+                expect(await client.xlen(key)).toEqual(0);
+
+                expect(
+                    await client.xtrim(nonExistingKey, {
+                        method: "maxlen",
+                        threshold: 1,
+                        exact: true,
+                    }),
+                ).toEqual(0);
+                expect(await client.xlen(nonExistingKey)).toEqual(0);
+
+                // key exists, but it is not a stream
+                expect(await client.set(stringKey, "foo")).toEqual("OK");
+                await expect(
+                    client.xtrim(stringKey, {
+                        method: "maxlen",
+                        threshold: 1,
+                        exact: true,
+                    }),
+                ).rejects.toThrow();
+                await expect(client.xlen(stringKey)).rejects.toThrow();
+            }, protocol);
         },
         config.timeout,
     );
@@ -2604,6 +2804,46 @@ export function runBaseTests<Context>(config: {
                 // key exists, but it is not a HyperLogLog
                 expect(await client.set("foo", "value")).toEqual("OK");
                 await expect(client.pfadd("foo", [])).rejects.toThrow();
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "pfcount test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key1 = `{key}-1-${uuidv4()}`;
+                const key2 = `{key}-2-${uuidv4()}`;
+                const key3 = `{key}-3-${uuidv4()}`;
+                const stringKey = `{key}-4-${uuidv4()}`;
+                const nonExistingKey = `{key}-5-${uuidv4()}`;
+
+                expect(await client.pfadd(key1, ["a", "b", "c"])).toEqual(1);
+                expect(await client.pfadd(key2, ["b", "c", "d"])).toEqual(1);
+                expect(await client.pfcount([key1])).toEqual(3);
+                expect(await client.pfcount([key2])).toEqual(3);
+                expect(await client.pfcount([key1, key2])).toEqual(4);
+                expect(
+                    await client.pfcount([key1, key2, nonExistingKey]),
+                ).toEqual(4);
+
+                // empty HyperLogLog data set
+                expect(await client.pfadd(key3, [])).toEqual(1);
+                expect(await client.pfcount([key3])).toEqual(0);
+
+                // invalid argument - key list must not be empty
+                try {
+                    expect(await client.pfcount([])).toThrow();
+                } catch (e) {
+                    expect((e as Error).message).toMatch(
+                        "ResponseError: wrong number of arguments",
+                    );
+                }
+
+                // key exists, but it is not a HyperLogLog
+                expect(await client.set(stringKey, "value")).toEqual("OK");
+                await expect(client.pfcount([stringKey])).rejects.toThrow();
             }, protocol);
         },
         config.timeout,
@@ -2975,6 +3215,41 @@ export function runBaseTests<Context>(config: {
                 expect(await client.object_encoding(stream_key)).toEqual(
                     "stream",
                 );
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object freq test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const maxmemoryPolicyKey = "maxmemory-policy";
+                const config = await client.configGet([maxmemoryPolicyKey]);
+                const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+
+                try {
+                    expect(
+                        await client.configSet({
+                            [maxmemoryPolicyKey]: "allkeys-lfu",
+                        }),
+                    ).toEqual("OK");
+                    expect(await client.object_freq(nonExistingKey)).toEqual(
+                        null,
+                    );
+                    expect(await client.set(key, "foobar")).toEqual("OK");
+                    expect(
+                        await client.object_freq(key),
+                    ).toBeGreaterThanOrEqual(0);
+                } finally {
+                    expect(
+                        await client.configSet({
+                            [maxmemoryPolicyKey]: maxmemoryPolicy,
+                        }),
+                    ).toEqual("OK");
+                }
             }, protocol);
         },
         config.timeout,

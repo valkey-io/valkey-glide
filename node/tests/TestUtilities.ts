@@ -10,6 +10,7 @@ import {
     BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
+    InsertPosition,
     Logger,
     ProtocolVersion,
     RedisClient,
@@ -231,6 +232,7 @@ export async function transactionTest(
     const key11 = "{key}" + uuidv4(); // hyper log log
     const key12 = "{key}" + uuidv4();
     const key13 = "{key}" + uuidv4();
+    const key14 = "{key}" + uuidv4(); // sorted set
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
@@ -295,6 +297,13 @@ export async function transactionTest(
     args.push([field + "3", field + "2"]);
     baseTransaction.lpopCount(key5, 2);
     args.push([field + "3", field + "2"]);
+    baseTransaction.linsert(
+        key5,
+        InsertPosition.Before,
+        "nonExistingPivot",
+        "element",
+    );
+    args.push(0);
     baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
     args.push(3);
     baseTransaction.lindex(key6, 0);
@@ -304,6 +313,8 @@ export async function transactionTest(
     baseTransaction.rpopCount(key6, 2);
     args.push([field + "2", field + "1"]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
+    args.push(2);
+    baseTransaction.sunionstore(key7, [key7, key7]);
     args.push(2);
     baseTransaction.sinter([key7, key7]);
     args.push(new Set(["bar", "foo"]));
@@ -370,13 +381,25 @@ export async function transactionTest(
         "negativeInfinity",
         "positiveInfinity",
     );
-    args.push(1);
+    args.push(1); // key8 is now empty
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
+        args.push(2);
+        baseTransaction.zintercard([key8, key14]);
+        args.push(0);
+        baseTransaction.zintercard([key8, key14], 1);
+        args.push(0);
+    }
+
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
     args.push("0-1");
     baseTransaction.xadd(key9, [["field", "value2"]], { id: "0-2" });
     args.push("0-2");
     baseTransaction.xadd(key9, [["field", "value3"]], { id: "0-3" });
     args.push("0-3");
+    baseTransaction.xlen(key9);
+    args.push(3);
     baseTransaction.xread({ [key9]: "0-1" });
     args.push({
         [key9]: {
@@ -406,5 +429,7 @@ export async function transactionTest(
     args.push([key6, field + "1"]);
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
+    baseTransaction.pfcount([key11]);
+    args.push(3);
     return args;
 }

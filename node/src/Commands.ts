@@ -602,6 +602,16 @@ export function createSInter(keys: string[]): redis_request.Command {
 /**
  * @internal
  */
+export function createSUnionStore(
+    destination: string,
+    keys: string[],
+): redis_request.Command {
+    return createCommand(RequestType.SUnionStore, [destination].concat(keys));
+}
+
+/**
+ * @internal
+ */
 export function createSIsMember(
     key: string,
     member: string,
@@ -891,6 +901,23 @@ export function createZCard(key: string): redis_request.Command {
 /**
  * @internal
  */
+export function createZInterCard(
+    keys: string[],
+    limit?: number,
+): redis_request.Command {
+    let args: string[] = keys;
+    args.unshift(keys.length.toString());
+
+    if (limit != undefined) {
+        args = args.concat(["LIMIT", limit.toString()]);
+    }
+
+    return createCommand(RequestType.ZInterCard, args);
+}
+
+/**
+ * @internal
+ */
 export function createZScore(
     key: string,
     member: string,
@@ -1098,6 +1125,32 @@ export function createLIndex(
     index: number,
 ): redis_request.Command {
     return createCommand(RequestType.LIndex, [key, index.toString()]);
+}
+
+/**
+ * Defines where to insert new elements into a list.
+ */
+export enum InsertPosition {
+    /**
+     * Insert new element before the pivot.
+     */
+    Before = "before",
+    /**
+     * Insert new element after the pivot.
+     */
+    After = "after",
+}
+
+/**
+ * @internal
+ */
+export function createLInsert(
+    key: string,
+    position: InsertPosition,
+    pivot: string,
+    element: string,
+): redis_request.Command {
+    return createCommand(RequestType.LInsert, [key, position, pivot, element]);
 }
 
 /**
@@ -1385,6 +1438,13 @@ export function createXRead(
 /**
  * @internal
  */
+export function createXLen(key: string): redis_request.Command {
+    return createCommand(RequestType.XLen, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createRename(
     key: string,
     newKey: string,
@@ -1416,6 +1476,20 @@ export function createPfAdd(
 /**
  * @internal
  */
+export function createPfCount(keys: string[]): redis_request.Command {
+    return createCommand(RequestType.PfCount, keys);
+}
+
+/**
+ * @internal
+ */
 export function createObjectEncoding(key: string): redis_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createObjectFreq(key: string): redis_request.Command {
+    return createCommand(RequestType.ObjectFreq, [key]);
 }
