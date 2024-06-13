@@ -309,6 +309,24 @@ class BaseTransaction:
             parameters.extend(pair)
         return self.append_command(RequestType.MSet, parameters)
 
+    def msetnx(self: TTransaction, key_value_map: Mapping[str, str]) -> TTransaction:
+        """
+        Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+        more keys already exist, the entire operation fails.
+
+        See https://valkey.io/commands/msetnx/ for more details.
+
+        Args:
+            key_value_map (Mapping[str, str]): A key-value map consisting of keys and their respective values to set.
+
+        Commands response:
+            bool: True if all keys were set. False if no key was set.
+        """
+        parameters: List[str] = []
+        for pair in key_value_map.items():
+            parameters.extend(pair)
+        return self.append_command(RequestType.MSetNX, parameters)
+
     def mget(self: TTransaction, keys: List[str]) -> TTransaction:
         """
         Retrieve the values of multiple keys.
