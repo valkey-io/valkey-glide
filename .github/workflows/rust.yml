@@ -36,7 +36,7 @@ jobs:
           - name: Load the engine matrix
             id: load-engine-matrix
             shell: bash
-            run: echo "matrix=$(jq -c . < .github/workflows/engine-matrix.json)" >> $GITHUB_OUTPUT
+            run: echo "matrix=$(jq -c . < .github/json_matrices/engine-matrix.json)" >> $GITHUB_OUTPUT
 
     build:
         runs-on: ubuntu-latest

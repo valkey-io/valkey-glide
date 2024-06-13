@@ -24,10 +24,6 @@ runs:
     using: "composite"
 
     steps:
-        # - name: Create a folder for valkey binaries
-        #   run: mkdir -p ~/valkey-binaries/${{ inputs.valkey-version }}
-        #   shell: bash
-
         - name: Cache Valkey
           uses: actions/cache@v4
           id: cache-valkey
@@ -46,23 +42,13 @@ runs:
             cd valkey
             git checkout ${{ inputs.valkey-version }}
             make BUILD_TLS=yes
-            # sudo mv src/valkey-server src/valkey-cli ~/valkey-binaries/${{ inputs.valkey-version }}
 
         - name: Install Valkey
           shell: bash
           run: |
             cd ~/valkey
             sudo make install
-        # - name: Remove the source package
-        #   if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
-        #   shell: bash
-        #   run: sudo rm -rf valkey/
-
-
-        # - name: Copy executable to place
-        #     shell: bash
-        #     run: |
-        #         sudo cp ~/redis-binaries/${{ inputs.redis-version }}/redis-server ~/redis-binaries/${{ inputs.redis-version }}/redis-cli /usr/bin/
+            echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
         - name: Verify Valkey installation and symlinks
           shell: bash
