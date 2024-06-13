@@ -575,9 +575,7 @@ public class CommandTests {
             }
         }
 
-        // TODO replace with FUNCTION DELETE
-        assertEquals(
-                OK, regularClient.customCommand(new String[] {"FUNCTION", "DELETE", libName}).get());
+        assertEquals(OK, regularClient.functionDelete(libName).get());
 
         assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
@@ -644,9 +642,7 @@ public class CommandTests {
             }
         }
 
-        // TODO replace with FUNCTION DELETE
-        assertEquals(
-                OK, regularClient.customCommand(new String[] {"FUNCTION", "DELETE", libName}).get());
+        assertEquals(OK, regularClient.functionDelete(libName).get());
 
         assertTrue(error.isEmpty(), "Something went wrong during the test");
     }

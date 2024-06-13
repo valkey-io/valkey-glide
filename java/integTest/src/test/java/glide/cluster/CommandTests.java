@@ -1164,13 +1164,7 @@ public class CommandTests {
             }
         }
 
-        // TODO replace with FUNCTION DELETE
-        assertEquals(
-                OK,
-                clusterClient
-                        .customCommand(new String[] {"FUNCTION", "DELETE", libName})
-                        .get()
-                        .getSingleValue());
+        assertEquals(OK, clusterClient.functionDelete(libName).get());
 
         assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
@@ -1255,13 +1249,7 @@ public class CommandTests {
             }
         }
 
-        // TODO replace with FUNCTION DELETE
-        assertEquals(
-                OK,
-                clusterClient
-                        .customCommand(new String[] {"FUNCTION", "DELETE", libName}, route)
-                        .get()
-                        .getSingleValue());
+        assertEquals(OK, clusterClient.functionDelete(libName, route).get());
 
         assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
@@ -1331,13 +1319,7 @@ public class CommandTests {
             }
         }
 
-        // TODO replace with FUNCTION DELETE
-        assertEquals(
-                OK,
-                clusterClient
-                        .customCommand(new String[] {"FUNCTION", "DELETE", libName}, route)
-                        .get()
-                        .getSingleValue());
+        assertEquals(OK, clusterClient.functionDelete(libName, route).get());
 
         assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
@@ -1408,13 +1390,7 @@ public class CommandTests {
             }
         }
 
-        // TODO replace with FUNCTION DELETE
-        assertEquals(
-                OK,
-                clusterClient
-                        .customCommand(new String[] {"FUNCTION", "DELETE", libName}, route)
-                        .get()
-                        .getSingleValue());
+        assertEquals(OK, clusterClient.functionDelete(libName, route).get());
 
         assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
