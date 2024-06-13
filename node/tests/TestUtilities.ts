@@ -24,12 +24,7 @@ beforeAll(() => {
     Logger.init("info");
 });
 
-function getClassName(obj: any) {
-    if (typeof obj === "undefined") return "undefined";
-    if (obj === null) return "null";
-    return obj.constructor.name;
-}
-
+/* eslint-disable @typescript-eslint/no-explicit-any */
 function intoArrayInternal(obj: any, builder: Array<string>) {
     if (obj == null) {
         builder.push("null");
@@ -42,7 +37,8 @@ function intoArrayInternal(obj: any, builder: Array<string>) {
             intoArrayInternal(item, builder);
         }
     } else if (obj instanceof Set) {
-        let arr = Array.from(obj);
+        const arr = Array.from(obj);
+
         for (const item of arr) {
             intoArrayInternal(item, builder);
         }
@@ -68,7 +64,7 @@ function intoArrayInternal(obj: any, builder: Array<string>) {
  * accept any variable `v` and convert it into String, recursively
  */
 export function intoString(v: any): string {
-    let builder: Array<string> = [];
+    const builder: Array<string> = [];
     intoArrayInternal(v, builder);
     return builder.join("");
 }
@@ -77,7 +73,7 @@ export function intoString(v: any): string {
  * accept any variable `v` and convert it into array of string
  */
 export function intoArray(v: any): Array<string> {
-    let result: Array<string> = [];
+    const result: Array<string> = [];
     intoArrayInternal(v, result);
     return result;
 }
