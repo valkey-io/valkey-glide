@@ -18,7 +18,6 @@ import {
 } from "../";
 import {
     Client,
-    Checker,
     checkSimple,
     GetAndSetRandomValue,
     compareMaps,

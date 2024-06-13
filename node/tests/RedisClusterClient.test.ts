@@ -103,6 +103,7 @@ describe("RedisClusterClient", () => {
             );
 
             const replicationInfo = intoArray(infoReplicationValues);
+
             for (const item of replicationInfo) {
                 expect(item).toContain("role:master");
                 expect(item).toContain("# Replication");
