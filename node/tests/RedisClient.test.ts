@@ -266,6 +266,31 @@ describe("RedisClient", () => {
         },
     );
 
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object refcount transaction test_%p",
+        async (protocol) => {
+            const client = await RedisClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+            const transaction = new Transaction();
+            transaction.set(key, "foo");
+            transaction.objectRefcount(key);
+
+            const response = await client.exec(transaction);
+            expect(response).not.toBeNull();
+
+            if (response != null) {
+                expect(response.length).toEqual(2);
+                expect(response[0]).toEqual("OK"); // transaction.set(key, "foo");
+                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount(key);
+            }
+
+            client.close();
+        },
+    );
+
     runBaseTests<Context>({
         init: async (protocol, clientName?) => {
             const options = getClientConfigurationOption(
