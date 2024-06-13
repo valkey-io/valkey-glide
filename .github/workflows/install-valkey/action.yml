@@ -1,0 +1,82 @@
+name: Install Valkey
+
+inputs:
+    valkey-version:
+        description: "valkey version to install"
+        required: true
+        type: string
+    target:
+        description: "Specified target toolchain, ex. x86_64-unknown-linux-gnu"
+        type: string
+        required: true
+        options:
+            - x86_64-unknown-linux-gnu
+            - aarch64-unknown-linux-gnu
+            - x86_64-apple-darwin
+            - aarch64-apple-darwin
+            - aarch64-unknown-linux-musl
+            - x86_64-unknown-linux-musl
+
+env:
+    CARGO_TERM_COLOR: always
+
+runs:
+    using: "composite"
+
+    steps:
+        # - name: Create a folder for valkey binaries
+        #   run: mkdir -p ~/valkey-binaries/${{ inputs.valkey-version }}
+        #   shell: bash
+
+        - name: Cache Valkey
+          uses: actions/cache@v4
+          id: cache-valkey
+          with:
+            path: |
+                ~/valkey
+            key: valkey-${{ inputs.valkey-version }}-${{ inputs.target }}
+
+        - name: Build Valkey
+          if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
+          shell: bash
+          run: | 
+            echo "Building valkey ${{ inputs.valkey-version }}"
+            cd ~
+            git clone https://github.com/valkey-io/valkey.git
+            cd valkey
+            git checkout ${{ inputs.valkey-version }}
+            make BUILD_TLS=yes
+            # sudo mv src/valkey-server src/valkey-cli ~/valkey-binaries/${{ inputs.valkey-version }}
+
+        - name: Install Valkey
+          shell: bash
+          run: |
+            cd ~/valkey
+            sudo make install
+        # - name: Remove the source package
+        #   if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
+        #   shell: bash
+        #   run: sudo rm -rf valkey/
+
+
+        # - name: Copy executable to place
+        #     shell: bash
+        #     run: |
+        #         sudo cp ~/redis-binaries/${{ inputs.redis-version }}/redis-server ~/redis-binaries/${{ inputs.redis-version }}/redis-cli /usr/bin/
+
+        - name: Verify Valkey installation and symlinks
+          shell: bash
+          run: | 
+            VALKEY_SERVER_VER=$(valkey-server -v)
+            REDIS_SERVER_VER=$(redis-server -v)
+            
+            if [[ $VALKEY_SERVER_VER != $REDIS_SERVER_VER ]]; then
+                echo "Symlink from valkey to redis failed. valkey: $VALKEY_SERVER_VER, redis: $REDIS_SERVER_VER"
+                exit 1
+            elif [[ $VALKEY_SERVER_VER != *"${{ inputs.valkey-version }}"* ]]; then
+                echo "Wrong valkey version has been installed. Expected: ${{ inputs.valkey-version }}, Installed: $VALKEY_SERVER_VER"
+                exit 1
+            else
+                echo "Successfully installed valkey: $VALKEY_SERVER_VER"
+            fi
+          
