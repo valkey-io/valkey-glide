@@ -53,7 +53,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
@@ -3786,20 +3785,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         ? buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API)
                         : buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern);
         protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Kills a function that is currently executing.<br>
-     * <code>FUNCTION KILL</code> terminates read-only functions only.
-     *
-     * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-kill/">redis.io</a> for details.
-     * @return Command Response - <code>OK</code> if function is terminated. Otherwise, throws an
-     *     error.
-     */
-    public T functionKill() {
-        protobufTransaction.addCommands(buildCommand(FunctionKill));
         return getThis();
     }
 

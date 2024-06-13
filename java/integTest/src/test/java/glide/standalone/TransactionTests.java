@@ -8,9 +8,7 @@ import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -18,12 +16,10 @@ import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClient;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -259,19 +255,5 @@ public class TransactionTests {
 
         Object[] result = client.exec(transaction).get();
         assertArrayEquals(expectedResult, result);
-    }
-
-    @Test
-    public void functionKill() {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-
-        Transaction transaction = new Transaction().functionKill();
-        // nothing to kill
-        var exception = assertThrows(ExecutionException.class, () -> client.exec(transaction).get());
-        assertInstanceOf(RequestException.class, exception.getCause());
-        assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
-
-        // can't test a successfull call to FUNCTION KILL in a transaction,
-        // because Redis rejects transaction when blocked by a function/script
     }
 }
