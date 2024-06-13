@@ -14,20 +14,21 @@ public interface TransactionsBaseCommands {
      * will only execute commands if the watched keys are not modified before execution of the
      * transaction.
      *
-     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
      * @see <a href="https://redis.io/docs/latest/commands/watch/">redis.io</a> for details.
      * @param keys The keys to watch.
-     * @return The string <code>OK</code>.
+     * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * assert client.watch(new String[] {"sampleKey"}).get() == "OK";
+     * assert client.watch(new String[] {"sampleKey"}).get().equals("OK");
      * transaction.set("sampleKey", "foobar");
      * Object[] result = client.exec(transaction).get();
      * assert result != null; // Executes successfully and keys are unwatched.
      *
-     * assert client.watch(new String[] {"sampleKey"}).get() == "OK";
+     * assert client.watch(new String[] {"sampleKey"}).get().equals("OK");
      * transaction.set("sampleKey", "foobar");
-     * assert client.set("sampleKey", "hello world").get() == "OK";
+     * assert client.set("sampleKey", "hello world").get().equals("OK");
      * Object[] result = client.exec(transaction).get();
      * assert result == null; // null is returned when the watched key is modified before transaction execution.
      * }</pre>
@@ -39,11 +40,11 @@ public interface TransactionsBaseCommands {
      * automatically flush all previously watched keys.
      *
      * @see <a href="https://redis.io/docs/latest/commands/unwatch/">redis.io</a> for details.
-     * @return The string <code>OK</code>.
+     * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * assert client.watch(new String[] {"sampleKey"}).get() == "OK";
-     * assert client.unwatch().get() == "OK"; // Flushes "sampleKey" from watched keys.
+     * assert client.watch(new String[] {"sampleKey"}).get().equals("OK");
+     * assert client.unwatch().get().equals("OK"); // Flushes "sampleKey" from watched keys.
      * }</pre>
      */
     CompletableFuture<String> unwatch();

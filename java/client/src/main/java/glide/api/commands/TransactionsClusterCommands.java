@@ -9,7 +9,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @see <a href="https://redis.io/commands/?group=transactions">Transactions Commands</a>
  */
-public interface TransactionsBaseClusterCommands {
+public interface TransactionsClusterCommands {
     /**
      * Flushes all the previously watched keys for a transaction. Executing a transaction will
      * automatically flush all previously watched keys.
@@ -17,11 +17,11 @@ public interface TransactionsBaseClusterCommands {
      * @see <a href="https://redis.io/docs/latest/commands/unwatch/">redis.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
-     * @return The string <code>OK</code>.
+     * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * assert client.watch(new String[] {"sampleKey"}).get() == "OK";
-     * assert client.unwatch(ALL_PRIMARIES).get() == "OK"; // Flushes "sampleKey" from watched keys for all primary nodes.
+     * assert client.watch(new String[] {"sampleKey"}).get().equals("OK");
+     * assert client.unwatch(ALL_PRIMARIES).get().equals("OK"); // Flushes "sampleKey" from watched keys for all primary nodes.
      * }</pre>
      */
     CompletableFuture<String> unwatch(Route route);

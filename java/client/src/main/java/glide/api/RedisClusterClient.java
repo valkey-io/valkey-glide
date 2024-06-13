@@ -38,7 +38,7 @@ import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
-import glide.api.commands.TransactionsBaseClusterCommands;
+import glide.api.commands.TransactionsClusterCommands;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
@@ -65,7 +65,7 @@ public class RedisClusterClient extends BaseClient
                 GenericClusterCommands,
                 ServerManagementClusterCommands,
                 ScriptingAndFunctionsClusterCommands,
-                TransactionsBaseClusterCommands {
+                TransactionsClusterCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
