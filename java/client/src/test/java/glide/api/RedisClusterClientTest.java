@@ -1458,17 +1458,16 @@ public class RedisClusterClientTest {
     @Test
     public void unwatch_with_route_returns_success() {
         // setup
-        CompletableFuture<ClusterValue<String>> testResponse = new CompletableFuture<>();
-        testResponse.complete(ClusterValue.ofSingleValue(OK));
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<String>>submitNewCommand(
-                        eq(UnWatch), eq(new String[0]), eq(RANDOM), any()))
+        when(commandManager.<String>submitNewCommand(eq(UnWatch), eq(new String[0]), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<String>> response = service.unwatch(RANDOM);
-        String payload = response.get().getSingleValue();
+        CompletableFuture<String> response = service.unwatch(RANDOM);
+        String payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

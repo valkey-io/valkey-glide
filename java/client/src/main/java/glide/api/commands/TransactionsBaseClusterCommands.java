@@ -1,7 +1,6 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import glide.api.models.ClusterValue;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.concurrent.CompletableFuture;
 
@@ -25,5 +24,5 @@ public interface TransactionsBaseClusterCommands {
      * client.unwatch(ALL_PRIMARIES); // Flushes "sampleKey" from watched keys for all primary nodes.
      * }</pre>
      */
-    CompletableFuture<ClusterValue<String>> unwatch(Route route);
+    CompletableFuture<String> unwatch(Route route);
 }

@@ -23,7 +23,7 @@ import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotIdRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotType;
-import glide.api.models.exceptions.RequestException;
+import glide.api.models.exceptions.ConnectionException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Map;
@@ -234,7 +234,7 @@ public class ClusterTransactionTests {
         // WATCH can not have an empty String array parameter
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> clusterClient.watch(new String[] {}).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertInstanceOf(ConnectionException.class, executionException.getCause());
     }
 
     @Test
@@ -254,8 +254,7 @@ public class ClusterTransactionTests {
         // Transaction executes successfully after modifying a watched key then calling UNWATCH
         assertEquals(OK, clusterClient.watch(keys).get());
         assertEquals(OK, clusterClient.set(key2, helloString).get());
-        Map<String, String> multiPayload = clusterClient.unwatch(ALL_PRIMARIES).get().getMultiValue();
-        multiPayload.forEach((key, value) -> assertEquals(OK, value));
+        assertEquals(OK, clusterClient.unwatch(ALL_PRIMARIES).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString);
         assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
         assertEquals(foobarString, clusterClient.get(key1).get());

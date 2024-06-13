@@ -656,14 +656,8 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<String>> unwatch(@NonNull Route route) {
+    public CompletableFuture<String> unwatch(@NonNull Route route) {
         return commandManager.submitNewCommand(
-                UnWatch,
-                new String[0],
-                route,
-                response ->
-                        route instanceof SingleNodeRoute
-                                ? ClusterValue.of(handleStringResponse(response))
-                                : ClusterValue.of(handleMapResponse(response)));
+                UnWatch, new String[0], route, this::handleStringResponse);
     }
 }
