@@ -24,6 +24,12 @@ public interface TransactionsBaseCommands {
      * transaction.set("sampleKey", "foobar");
      * Object[] result = client.exec(transaction).get();
      * assert result != null; // Executes successfully and keys are unwatched.
+     *
+     * assert client.watch(new String[] {"sampleKey"}).get() == "OK";
+     * transaction.set("sampleKey", "foobar");
+     * assert client.set("sampleKey", "hello world").get() == "OK";
+     * Object[] result = client.exec(transaction).get();
+     * assert result == null; // null is returned when the watched key is modified before transaction execution.
      * }</pre>
      */
     CompletableFuture<String> watch(String[] keys);
