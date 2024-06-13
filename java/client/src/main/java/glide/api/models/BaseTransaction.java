@@ -917,8 +917,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
-     * @return The index of the first occurrence of <code>element</code>, or <code>null</code> if
-     *     <code>element</code> is not in the list.
+     * @return Command Response - The index of the first occurrence of <code>element</code>, or <code>
+     *     null</code> if <code>element</code> is not in the list.
      */
     public T lpos(@NonNull String key, @NonNull String element) {
         ArgsArray commandArgs = buildArgs(key, element);
@@ -935,8 +935,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param options The LPos options.
-     * @return The index of <code>element</code>, or <code>null</code> if <code>element</code> is not
-     *     in the list.
+     * @return Command Response - The index of <code>element</code>, or <code>null</code> if <code>
+     *     element</code> is not in the list.
      */
     public T lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
         ArgsArray commandArgs =
@@ -953,7 +953,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
-     * @return An <code>array</code> that holds the indices of the matching elements within the list.
+     * @return Command Response - An <code>array</code> that holds the indices of the matching
+     *     elements within the list.
      */
     public T lposCount(@NonNull String key, @NonNull String element, long count) {
         ArgsArray commandArgs = buildArgs(key, element, COUNT_REDIS_API, Long.toString(count));
@@ -971,7 +972,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param element The value to search for within the list.
      * @param count The number of matches wanted.
      * @param options The LPos options.
-     * @return An <code>array</code> that holds the indices of the matching elements within the list.
+     * @return Command Response - An <code>array</code> that holds the indices of the matching
+     *     elements within the list.
      */
     public T lposCount(
             @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
