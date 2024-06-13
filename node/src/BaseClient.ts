@@ -102,6 +102,7 @@ import {
     createXLen,
     createZInterCard,
     createObjectIdletime,
+    createObjectRefcount,
 } from "./Commands";
 import {
     ClosingError,
@@ -2591,6 +2592,25 @@ export class BaseClient {
      */
     public objectIdletime(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectIdletime(key));
+    }
+
+    /**
+     * Returns the reference count of the object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-refcount/ for more details.
+     *
+     * @param key - The `key` of the object to get the reference count of.
+     * @returns If `key` exists, returns the reference count of the object stored at `key` as a `number`.
+     * Otherwise, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.objectRefcount("my_hash");
+     * console.log(result); // Output: 2 - "my_hash" has a reference count of 2.
+     * ```
+     */
+    public objectRefcount(key: string): Promise<number | null> {
+        return this.createWritePromise(createObjectRefcount(key));
     }
 
     /**
