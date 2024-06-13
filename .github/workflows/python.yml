@@ -45,9 +45,7 @@ jobs:
           - name: Load the engine matrix
             id: load-engine-matrix
             shell: bash
-            run: |
-              # Get the engine type and version matrix from the engine-matrix.json file
-              echo "matrix=$(jq -c . < .github/workflows/engine-matrix.json)" >> $GITHUB_OUTPUT
+            run: echo "matrix=$(jq -c . < .github/workflows/engine-matrix.json)" >> $GITHUB_OUTPUT
 
     test-ubuntu-latest:
         runs-on: ubuntu-latest

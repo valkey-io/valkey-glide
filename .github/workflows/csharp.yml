@@ -31,14 +31,26 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    load-engine-matrix:
+        runs-on: ubuntu-latest
+        outputs:
+          matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+        steps:
+            - name: Checkout
+              uses: actions/checkout@v4
+  
+            - name: Load the engine matrix
+              id: load-engine-matrix
+              shell: bash
+              run: echo "matrix=$(jq -c . < .github/workflows/engine-matrix.json)" >> $GITHUB_OUTPUT
+  
     run-tests:
+        needs: load-engine-matrix
         timeout-minutes: 25
         strategy:
             fail-fast: false
             matrix:
-                redis:
-                    - 6.2.14
-                    - 7.2.3
+                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
                 dotnet:
                     - '6.0'
                     - '8.0'
@@ -62,11 +74,18 @@ jobs:
                   submodules: recursive
 
             - name: Install redis
+              if: ${{ matrix.engine.type == 'redis' && matrix.host.OS == 'ubuntu' }}
               # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
-              if: ${{ matrix.host.OS == 'ubuntu' }}
               uses: ./.github/workflows/install-redis
               with:
-                  redis-version: ${{ matrix.redis }}
+                  redis-version: ${{ matrix.engine.version }}
+
+            - name: Install Valkey
+              if: ${{ matrix.engine.type == 'valkey' }}
+              uses: ./.github/workflows/install-valkey
+              with:
+                  valkey-version: ${{ matrix.engine.version }}
+                  target: ${{ matrix.host.TARGET }}
 
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
