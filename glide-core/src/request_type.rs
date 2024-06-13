@@ -184,6 +184,7 @@ pub enum RequestType {
     XRevRange = 176,
     Copy = 178,
     MSetNX = 179,
+    LCS = 181,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -371,6 +372,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Sort => RequestType::Sort,
             ProtobufRequestType::XRevRange => RequestType::XRevRange,
             ProtobufRequestType::MSetNX => RequestType::MSetNX,
+            ProtobufRequestType::LCS => RequestType::LCS,
         }
     }
 }
@@ -554,6 +556,7 @@ impl RequestType {
             RequestType::Sort => Some(cmd("SORT")),
             RequestType::XRevRange => Some(cmd("XREVRANGE")),
             RequestType::MSetNX => Some(cmd("MSETNX")),
+            RequestType::LCS => Some(cmd("LCS")),
         }
     }
 }
