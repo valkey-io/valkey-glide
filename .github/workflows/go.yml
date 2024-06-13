@@ -21,7 +21,21 @@ concurrency:
 
 
 jobs:
+    load-engine-matrix:
+      runs-on: ubuntu-latest
+      outputs:
+        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+      steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Load the engine matrix
+            id: load-engine-matrix
+            shell: bash
+            run: echo "matrix=$(jq -c . < .github/workflows/engine-matrix.json)" >> $GITHUB_OUTPUT
+
     build-and-test-go-client:
+        needs: load-engine-matrix
         timeout-minutes: 35
         strategy:
             # Run all jobs
@@ -30,9 +44,7 @@ jobs:
                 go:
                     - '1.18.10'
                     - '1.22.0'
-                redis:
-                    - 6.2.14
-                    - 7.2.3
+                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
                 host:
                   - {
                     OS: ubuntu,
@@ -58,19 +70,28 @@ jobs:
                   go-version: ${{ matrix.go }}
                   cache-dependency-path: go/go.sum
 
+            - name: Install redis
+              if: ${{ matrix.engine.type == 'redis' && matrix.host.OS == 'ubuntu' }}
+              # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
+              uses: ./.github/workflows/install-redis
+              with:
+                  redis-version: ${{ matrix.engine.version }}
+
+            - name: Install Valkey
+              if: ${{ matrix.engine.type == 'valkey' }}
+              uses: ./.github/workflows/install-valkey
+              with:
+                  valkey-version: ${{ matrix.engine.version }}
+                  target: ${{ matrix.host.TARGET }}
+
+
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install redis
-              # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
-              if: ${{ matrix.os == 'ubuntu-latest' }}
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: ${{ matrix.redis }}
+                  install-redis: 'false'
 
             - name: Install tools for Go ${{ matrix.go }}
               working-directory: ./go

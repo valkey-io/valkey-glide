@@ -71,7 +71,9 @@ runs:
             REDIS_SERVER_VER=$(redis-server -v)
             
             if [[ $VALKEY_SERVER_VER != $REDIS_SERVER_VER ]]; then
-                echo "Symlink from valkey to redis failed. valkey: $VALKEY_SERVER_VER, redis: $REDIS_SERVER_VER"
+                echo $'Symlink from valkey to redis failed.' \
+                $'\nvalkey: '"$VALKEY_SERVER_VER"$', path:'"$(which valkey-server)" \
+                $'\nredis: '"$REDIS_SERVER_VER"$', path:'"$(which redis-server)"
                 exit 1
             elif [[ $VALKEY_SERVER_VER != *"${{ inputs.valkey-version }}"* ]]; then
                 echo "Wrong valkey version has been installed. Expected: ${{ inputs.valkey-version }}, Installed: $VALKEY_SERVER_VER"

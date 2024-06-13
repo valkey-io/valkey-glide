@@ -25,15 +25,27 @@ env:
     CARGO_TERM_COLOR: always
 
 jobs:
+    load-engine-matrix:
+      runs-on: ubuntu-latest
+      outputs:
+        matrix: ${{ steps.load-engine-matrix.outputs.matrix }}
+      steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Load the engine matrix
+            id: load-engine-matrix
+            shell: bash
+            run: echo "matrix=$(jq -c . < .github/workflows/engine-matrix.json)" >> $GITHUB_OUTPUT
+
     build:
         runs-on: ubuntu-latest
+        needs: load-engine-matrix
         timeout-minutes: 15
         strategy:
             fail-fast: false
             matrix:
-                redis:
-                    - 6.2.14
-                    - 7.2.3
+                engine: ${{ fromJson(needs.load-engine-matrix.outputs.matrix) }}
 
         steps:
             - uses: actions/checkout@v4
@@ -41,9 +53,17 @@ jobs:
                   submodules: recursive
 
             - name: Install redis
+              if: ${{ matrix.engine.type == 'redis' }}
               uses: ./.github/workflows/install-redis
               with:
-                  redis-version: ${{ matrix.redis }}
+                  redis-version: ${{ matrix.engine.version }}
+
+            - name: Install Valkey
+              if: ${{ matrix.engine.type == 'valkey' }}
+              uses: ./.github/workflows/install-valkey
+              with:
+                  valkey-version: ${{ matrix.engine.version }}
+                  target: "x86_64-unknown-linux-gnu"
 
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
