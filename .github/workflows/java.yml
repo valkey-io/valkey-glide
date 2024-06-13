@@ -77,19 +77,6 @@ jobs:
                   distribution: "temurin"
                   java-version: ${{ matrix.java }}
 
-            - name: Install shared software dependencies
-              uses: ./.github/workflows/install-shared-dependencies
-              with:
-                  os: ${{ matrix.host.OS }}
-                  target: ${{ matrix.host.TARGET }}
-                  github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install protoc (protobuf)
-              uses: arduino/setup-protoc@v3
-              with:
-                  version: "26.1"
-                  repo-token: ${{ secrets.GITHUB_TOKEN }}
-
             - name: Install redis
               if: ${{ matrix.engine.type == 'redis' && matrix.host.OS == 'ubuntu' }}
               # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
@@ -103,6 +90,20 @@ jobs:
               with:
                   valkey-version: ${{ matrix.engine.version }}
                   target: ${{ matrix.host.TARGET }}
+            
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: ${{ matrix.host.OS }}
+                  target: ${{ matrix.host.TARGET }}
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  install-redis: ${{ ((matrix.engine.type == 'valkey' || matrix.host.OS == 'ubuntu') && 'false') || 'true' }}
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "26.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
 
             - name: Build java client
               working-directory: java
