@@ -23,6 +23,8 @@ import {
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
+    intoString,
+    checkSimple,
 } from "./TestUtilities";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -108,9 +110,13 @@ describe("RedisClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = await client.info();
-            expect(result).toEqual(expect.stringContaining("# Server"));
-            expect(result).toEqual(expect.stringContaining("# Replication"));
-            expect(result).toEqual(
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("# Server"),
+            );
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("# Replication"),
+            );
+            expect(intoString(result)).toEqual(
                 expect.not.stringContaining("# Latencystats"),
             );
         },
@@ -123,20 +129,20 @@ describe("RedisClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             let selectResult = await client.select(0);
-            expect(selectResult).toEqual("OK");
+            checkSimple(selectResult).toEqual("OK");
 
             const key = uuidv4();
             const value = uuidv4();
             const result = await client.set(key, value);
-            expect(result).toEqual("OK");
+            checkSimple(result).toEqual("OK");
 
             selectResult = await client.select(1);
-            expect(selectResult).toEqual("OK");
+            checkSimple(selectResult).toEqual("OK");
             expect(await client.get(key)).toEqual(null);
 
             selectResult = await client.select(0);
-            expect(selectResult).toEqual("OK");
-            expect(await client.get(key)).toEqual(value);
+            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.get(key)).toEqual(value);
         },
     );
 
@@ -151,7 +157,7 @@ describe("RedisClient", () => {
             transaction.select(0);
             const result = await client.exec(transaction);
             expectedRes.push("OK");
-            expect(result).toEqual(expectedRes);
+            expect(intoString(result)).toEqual(intoString(expectedRes));
         },
     );
 
