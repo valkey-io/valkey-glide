@@ -1,7 +1,7 @@
 import json
 import random
 import string
-from typing import Any, Dict, List, Mapping, TypeVar, Union
+from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
 from glide.async_commands.core import InfoSection
 from glide.constants import TResult
@@ -79,24 +79,24 @@ async def check_if_server_version_lt(client: TRedisClient, min_version: str) -> 
 
 
 def compare_maps(
-    map: Union[Mapping[str, TResult], Dict[str, TResult]],
-    map2: Union[Mapping[str, TResult], Dict[str, TResult]],
+    map1: Optional[Union[Mapping[str, TResult], Dict[str, TResult]]],
+    map2: Optional[Union[Mapping[str, TResult], Dict[str, TResult]]],
 ) -> bool:
     """
     Compare two maps by converting them to JSON strings and checking for equality, including property order.
 
     Args:
-        map (Union[Mapping[str, TResult], Dict[str, TResult]]): The first map to compare.
-        map2 (Union[Mapping[str, TResult], Dict[str, TResult]]): The second map to compare.
+        map1 (Optional[Union[Mapping[str, TResult], Dict[str, TResult]]]): The first map to compare.
+        map2 (Optional[Union[Mapping[str, TResult], Dict[str, TResult]]]): The second map to compare.
 
-        Returns:
-            bool: True if the maps are equal, False otherwise.
+    Returns:
+        bool: True if the maps are equal, False otherwise.
 
     Notes:
         This function compares two maps, including their property order.
         It checks that each key-value pair in `map1` is equal to the corresponding key-value pair in `map2`,
         and ensures that the order of properties is also the same.
-        Direct comparison with `assert map == map2` might ignore the order of properties.
+        Direct comparison with `assert map1 == map2` might ignore the order of properties.
 
     Example:
         mapA = {'name': 'John', 'age': 30}
@@ -108,4 +108,8 @@ def compare_maps(
         # Correct comparison using compare_maps function
         compare_maps(mapA, mapB)  # This will return False due to different property order
     """
-    return json.dumps(map) == json.dumps(map2)
+    if map1 is None and map2 is None:
+        return True
+    if map1 is None or map2 is None:
+        return False
+    return json.dumps(map1) == json.dumps(map2)

@@ -948,6 +948,93 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lmpop(self, redis_client: TRedisClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = f"{{test}}-1-f{get_random_string(10)}"
+        key2 = f"{{test}}-2-f{get_random_string(10)}"
+        key3 = f"{{test}}-3-f{get_random_string(10)}"
+
+        # Initialize the lists
+        assert await redis_client.lpush(key1, ["3", "2", "1"]) == 3
+        assert await redis_client.lpush(key2, ["6", "5", "4"]) == 3
+
+        # Pop from LEFT
+        result = await redis_client.lmpop([key1, key2], ListDirection.LEFT, 2)
+        expected_result = {key1: ["1", "2"]}
+        assert compare_maps(result, expected_result) is True
+
+        # Pop from RIGHT
+        result = await redis_client.lmpop([key2, key1], ListDirection.RIGHT, 2)
+        expected_result = {key2: ["6", "5"]}
+        assert compare_maps(result, expected_result) is True
+
+        # Pop without count (default is 1)
+        result = await redis_client.lmpop([key1, key2], ListDirection.LEFT)
+        expected_result = {key1: ["3"]}
+        assert compare_maps(result, expected_result) is True
+
+        # Non-existing key
+        result = await redis_client.lmpop([key3], ListDirection.LEFT, 1)
+        assert result is None
+
+        # Non-list key
+        assert await redis_client.set(key3, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.lmpop([key3], ListDirection.LEFT, 1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_blmpop(self, redis_client: TRedisClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = f"{{test}}-1-f{get_random_string(10)}"
+        key2 = f"{{test}}-2-f{get_random_string(10)}"
+        key3 = f"{{test}}-3-f{get_random_string(10)}"
+        key4 = f"{{test}}-4-f{get_random_string(10)}"
+
+        # Initialize the lists
+        assert await redis_client.lpush(key1, ["3", "2", "1"]) == 3
+        assert await redis_client.lpush(key2, ["6", "5", "4"]) == 3
+
+        # Pop from LEFT with blocking
+        result = await redis_client.blmpop([key1, key2], ListDirection.LEFT, 0.1, 2)
+        expected_result = {key1: ["1", "2"]}
+        assert compare_maps(result, expected_result) is True
+
+        # Pop from RIGHT with blocking
+        result = await redis_client.blmpop([key2, key1], ListDirection.RIGHT, 0.1, 2)
+        expected_result = {key2: ["6", "5"]}
+        assert compare_maps(result, expected_result) is True
+
+        # Pop without count (default is 1)
+        result = await redis_client.blmpop([key1, key2], ListDirection.LEFT, 0.1)
+        expected_result = {key1: ["3"]}
+        assert compare_maps(result, expected_result) is True
+
+        # Non-existing key with blocking
+        result = await redis_client.blmpop([key3], ListDirection.LEFT, 0.1, 1)
+        assert result is None
+
+        # Non-list key with blocking
+        assert await redis_client.set(key4, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.blmpop([key4], ListDirection.LEFT, 0.1, 1)
+
+        # BLMPOP is called against a non-existing key with no timeout, but we wrap the call in an asyncio timeout to
+        # avoid having the test block forever
+        async def endless_blmpop_call():
+            await redis_client.blmpop([key3], ListDirection.LEFT, 0, 1)
+
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_blmpop_call(), timeout=3)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lindex(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = [get_random_string(5), get_random_string(5)]
@@ -4105,6 +4192,8 @@ class TestMultiKeyCommandCrossSlot:
                     redis_client.zintercard(["abc", "def"]),
                     redis_client.zmpop(["abc", "zxy", "lkn"], ScoreFilter.MAX),
                     redis_client.sintercard(["def", "ghi"]),
+                    redis_client.lmpop(["def", "ghi"], ListDirection.LEFT),
+                    redis_client.blmpop(["def", "ghi"], ListDirection.LEFT, 1),
                 ]
             )
 

@@ -190,6 +190,13 @@ async def transaction_test(
     args.append([value2, value])
     transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
     args.append(0)
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.lpush(key5, [value, value2])
+        args.append(2)
+        transaction.lmpop([key5], ListDirection.LEFT)
+        args.append({key5: [value2]})
+        transaction.blmpop([key5], ListDirection.LEFT, 0.1)
+        args.append({key5: [value]})
 
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
