@@ -284,7 +284,7 @@ describe("RedisClient", () => {
             if (response != null) {
                 expect(response.length).toEqual(2);
                 expect(response[0]).toEqual("OK"); // transaction.set(key, "foo");
-                expect(response[1]).toBeGreaterThanOrEqual(0); // transaction.objectRefcount(key);
+                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount(key);
             }
 
             client.close();

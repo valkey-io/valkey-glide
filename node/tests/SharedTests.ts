@@ -3308,7 +3308,7 @@ export function runBaseTests<Context>(config: {
                 expect(await client.objectRefcount(nonExistingKey)).toBeNull();
                 expect(await client.set(key, "foo")).toEqual("OK");
                 expect(await client.objectRefcount(key)).toBeGreaterThanOrEqual(
-                    0,
+                    1,
                 );
             }, protocol);
         },
