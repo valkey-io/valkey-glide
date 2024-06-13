@@ -60,6 +60,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.LCS;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
@@ -1803,5 +1804,17 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> msetnx(@NonNull Map<String, String> keyValueMap) {
         String[] args = convertMapToKeyValueStringArray(keyValueMap);
         return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lcs(@NonNull String key1, @NonNull String key2) {
+        String[] arguments = new String[] {key1, key2};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lcsLen(@NonNull String key1, @NonNull String key2) {
+        String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
     }
 }
