@@ -270,7 +270,7 @@ public class TransactionTests {
         assertEquals(OK, client.set(key2, helloString).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
         assertEquals(null, client.exec(setFoobarTransaction).get());
-        assertEquals(null, client.get(key1).get());
+        assertEquals(null, client.get(key1).get()); // Sanity check
         assertEquals(helloString, client.get(key2).get());
         assertEquals(null, client.get(key3).get());
 
@@ -279,14 +279,14 @@ public class TransactionTests {
         assertEquals(OK, client.watch(keys).get());
         assertEquals(helloString, client.get(key2).get());
         assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
-        assertEquals(foobarString, client.get(key1).get());
+        assertEquals(foobarString, client.get(key1).get()); // Sanity check
         assertEquals(foobarString, client.get(key2).get());
         assertEquals(foobarString, client.get(key3).get());
 
         // Transaction executes command successfully with unmodified watched keys
         assertEquals(OK, client.watch(keys).get());
         assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
-        assertEquals(foobarString, client.get(key1).get());
+        assertEquals(foobarString, client.get(key1).get()); // Sanity check
         assertEquals(foobarString, client.get(key2).get());
         assertEquals(foobarString, client.get(key3).get());
 
@@ -295,7 +295,7 @@ public class TransactionTests {
         assertEquals(OK, client.watch(new String[] {key4}).get());
         setHelloTransaction.set(key1, helloString).set(key2, helloString).set(key3, helloString);
         assertArrayEquals(expectedExecResponse, client.exec(setHelloTransaction).get());
-        assertEquals(helloString, client.get(key1).get());
+        assertEquals(helloString, client.get(key1).get()); // Sanity check
         assertEquals(helloString, client.get(key2).get());
         assertEquals(helloString, client.get(key3).get());
 

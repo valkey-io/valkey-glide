@@ -189,7 +189,7 @@ public class ClusterTransactionTests {
         assertEquals(OK, clusterClient.watch(keys).get());
         assertEquals(OK, clusterClient.set(key2, helloString).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
-        assertEquals(null, clusterClient.exec(setFoobarTransaction).get());
+        assertEquals(null, clusterClient.exec(setFoobarTransaction).get()); // Sanity check
         assertEquals(null, clusterClient.get(key1).get());
         assertEquals(helloString, clusterClient.get(key2).get());
         assertEquals(null, clusterClient.get(key3).get());
@@ -199,14 +199,14 @@ public class ClusterTransactionTests {
         assertEquals(OK, clusterClient.watch(keys).get());
         assertEquals(helloString, clusterClient.get(key2).get());
         assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
-        assertEquals(foobarString, clusterClient.get(key1).get());
+        assertEquals(foobarString, clusterClient.get(key1).get()); // Sanity check
         assertEquals(foobarString, clusterClient.get(key2).get());
         assertEquals(foobarString, clusterClient.get(key3).get());
 
         // Transaction executes command successfully with unmodified watched keys
         assertEquals(OK, clusterClient.watch(keys).get());
         assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
-        assertEquals(foobarString, clusterClient.get(key1).get());
+        assertEquals(foobarString, clusterClient.get(key1).get()); // Sanity check
         assertEquals(foobarString, clusterClient.get(key2).get());
         assertEquals(foobarString, clusterClient.get(key3).get());
 
@@ -215,7 +215,7 @@ public class ClusterTransactionTests {
         assertEquals(OK, clusterClient.watch(new String[] {key4}).get());
         setHelloTransaction.set(key1, helloString).set(key2, helloString).set(key3, helloString);
         assertArrayEquals(expectedExecResponse, clusterClient.exec(setHelloTransaction).get());
-        assertEquals(helloString, clusterClient.get(key1).get());
+        assertEquals(helloString, clusterClient.get(key1).get()); // Sanity check
         assertEquals(helloString, clusterClient.get(key2).get());
         assertEquals(helloString, clusterClient.get(key3).get());
 
