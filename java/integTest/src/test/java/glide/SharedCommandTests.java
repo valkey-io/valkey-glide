@@ -5157,4 +5157,64 @@ public class SharedCommandTests {
         assertFalse(client.msetnx(keyValueMap2).get());
         assertNull(client.get(key3).get());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lcs(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String nonStringKey = "{key}-4" + UUID.randomUUID();
+
+        // keys does not exist or is empty
+        assertEquals("", client.lcs(key1, key2).get());
+
+        // setting string values
+        client.set(key1, "abcd");
+        client.set(key2, "bcde");
+        client.set(key3, "wxyz");
+
+        // getting the lcs
+        assertEquals("", client.lcs(key1, key3).get());
+        assertEquals("bcd", client.lcs(key1, key2).get());
+
+        // non set keys are used
+        client.sadd(nonStringKey, new String[] {"setmember"}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lcs_with_len_option(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String nonStringKey = "{key}-4" + UUID.randomUUID();
+
+        // keys does not exist or is empty
+        assertEquals(0, client.lcsLen(key1, key2).get());
+
+        // setting string values
+        client.set(key1, "abcd");
+        client.set(key2, "bcde");
+        client.set(key3, "wxyz");
+
+        // getting the lcs
+        assertEquals(0, client.lcsLen(key1, key3).get());
+        assertEquals(3, client.lcsLen(key1, key2).get());
+
+        // non set keys are used
+        client.sadd(nonStringKey, new String[] {"setmember"}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
 }

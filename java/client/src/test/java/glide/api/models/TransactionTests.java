@@ -94,6 +94,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LCS;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
@@ -978,6 +979,12 @@ public class TransactionTests {
 
         transaction.copy("key1", "key2", true);
         results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_REDIS_API)));
+
+        transaction.lcs("key1", "key2");
+        results.add(Pair.of(LCS, buildArgs("key1", "key2")));
+
+        transaction.lcsLen("key1", "key2");
+        results.add(Pair.of(LCS, buildArgs("key1", "key2", "LEN")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
