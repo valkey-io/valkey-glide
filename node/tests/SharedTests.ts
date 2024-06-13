@@ -3297,6 +3297,23 @@ export function runBaseTests<Context>(config: {
             setTimeout(resolve, numMilliseconds);
         });
     }
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `object refcount test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = `{key}:${uuidv4()}`;
+                const nonExistingKey = `{key}:${uuidv4()}`;
+
+                expect(await client.objectRefcount(nonExistingKey)).toBeNull();
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.objectRefcount(key)).toBeGreaterThanOrEqual(
+                    1,
+                );
+            }, protocol);
+        },
+        config.timeout,
+    );
 }
 
 export function runCommonTests<Context>(config: {
