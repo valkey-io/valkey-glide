@@ -339,4 +339,37 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<Object>> fcall(String function, String[] arguments, Route route);
+
+    /**
+     * Kills a function that is currently executing.<br>
+     * <code>FUNCTION KILL</code> terminates read-only functions only.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-kill/">redis.io</a> for details.
+     * @return <code>OK</code> if function is terminated. Otherwise, throws an error.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionKill().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionKill();
+
+    /**
+     * Kills a function that is currently executing.<br>
+     * <code>FUNCTION KILL</code> terminates read-only functions only.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-kill/">redis.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code> if function is terminated. Otherwise, throws an error.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionKill(RANDOM).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionKill(Route route);
 }
