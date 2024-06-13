@@ -2587,7 +2587,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: backtrace:0.3.72
+Package: backtrace:0.3.73
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -15205,7 +15205,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: object:0.35.0
+Package: object:0.36.0
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19712,7 +19712,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: regex:1.10.4
+Package: regex:1.10.5
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -19941,7 +19941,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: regex-automata:0.4.6
+Package: regex-automata:0.4.7
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -20170,7 +20170,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: regex-syntax:0.8.3
+Package: regex-syntax:0.8.4
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36469,7 +36469,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: prettier:3.3.0
+Package: prettier:3.3.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36494,7 +36494,7 @@ SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ----
 
-Package: protobufjs:7.3.0
+Package: protobufjs:7.3.2
 
 The following copyrights and licenses were found in the source code of this package:
 
@@ -36860,7 +36860,7 @@ THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 ----
 
-Package: @types:node:20.14.1
+Package: @types:node:20.14.2
 
 The following copyrights and licenses were found in the source code of this package:
 
