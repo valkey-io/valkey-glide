@@ -345,7 +345,7 @@ public class TransactionTestUtilities {
                 .ltrim(listKey1, 1, -1)
                 .lrange(listKey1, 0, -2)
                 .lpop(listKey1)
-                .lpopCount(listKey1, 2)    // listKey1 is now empty
+                .lpopCount(listKey1, 2) // listKey1 is now empty
                 .rpush(listKey1, new String[] {value1, value1, value2, value3, value3})
                 .lpos(listKey1, value1)
                 .lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())

@@ -1124,7 +1124,8 @@ public class SharedCommandTests {
         assertEquals(2L, client.sadd(wrong_data_type, new String[] {"a", "b"}).get());
         ExecutionException lposWrongKeyDataTypeException =
             assertThrows(
-                ExecutionException.class, () -> client.lposCount(wrong_data_type, "a", 1L).get());
+                ExecutionException.class,
+                () -> client.lposCount(wrong_data_type, "a", 1L).get());
         assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
     }
 

@@ -1755,8 +1755,6 @@ public class RedisClientTest {
     @Test
     public void lpos() {
         // setup
-        String[] list = {"a", "b", "c", "a", "c"};
-        String element = "b";
         String[] args = new String[] {"list", "element"};
         long index = 1L;
 
@@ -1779,8 +1777,6 @@ public class RedisClientTest {
     @Test
     public void lpos_withOptions() {
         // setup
-        String[] list = {"a", "b", "c", "a", "c"};
-        String element = "b";
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
         String[] args = new String[] {"list", "element", "RANK", "1", "MAXLEN", "1000"};
         long index = 1L;
@@ -1804,8 +1800,6 @@ public class RedisClientTest {
     @Test
     public void lposCount() {
         // setup
-        String[] list = {"a", "b", "c", "a", "c"};
-        String element = "a";
         String[] args = new String[] {"list", "element", "COUNT", "1"};
         Long[] index = new Long[] {1L};
 
@@ -1829,8 +1823,6 @@ public class RedisClientTest {
     @Test
     public void lposCount_withOptions() {
         // setup
-        String[] list = {"a", "b", "c", "a", "c"};
-        String element = "a";
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
         String[] args = new String[] {"list", "element", "COUNT", "0", "RANK", "1", "MAXLEN", "1000"};
         Long[] index = new Long[] {0L};

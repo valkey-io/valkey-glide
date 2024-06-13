@@ -7,8 +7,8 @@ import java.util.List;
 import lombok.Builder;
 
 /**
- * Optional arguments to {@link ListBaseCommands#lpos(String, String, LPosOptions)} and
- * {@link ListBaseCommands#lposCount(String, String, long)} command.
+ * Optional arguments to {@link ListBaseCommands#lpos(String, String, LPosOptions)} and {@link
+ * ListBaseCommands#lposCount(String, String, long)} command.
  *
  * @see <a href="https://redis.io/commands/lpos/">redis.io</a>
  */

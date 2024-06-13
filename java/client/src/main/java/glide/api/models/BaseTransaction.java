@@ -910,14 +910,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the index of the first occurrence of <code>element</code> inside the list specified by <code>key</code>.
-     * If no match is found, <code>null</code> is returned.
+     * Returns the index of the first occurrence of <code>element</code> inside the list specified by
+     * <code>key</code>. If no match is found, <code>null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
-     * @return The index of the first occurrence of <code>element</code>, or <code>null</code> if <code>element</code>
-     * is not in the list.
+     * @return The index of the first occurrence of <code>element</code>, or <code>null</code> if
+     *     <code>element</code> is not in the list.
      */
     public T lpos(@NonNull String key, @NonNull String element) {
         ArgsArray commandArgs = buildArgs(key, element);
@@ -926,14 +926,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the index of the first occurrence of <code>element</code> inside the list specified by <code>key</code>.
-     * If no match is found, <code>null</code> is returned.
+     * Returns the index of an occurrence of <code>element</code> within a list based on the given by
+     * <code>key</code>. If no match is found, <code>null</code> is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
      * @param element The value to search for within the list.
      * @param options The LPos options.
-     * @return The index of <code>element</code>, or <code>null</code> if <code>element</code> is not in the list.
+     * @return The index of <code>element</code>, or <code>null</code> if <code>element</code> is not
+     *     in the list.
      */
     public T lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
         ArgsArray commandArgs =
@@ -943,8 +944,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns an <code>array</code> of indices of matching elements within a list based on the given <code>options</code>.
-     * If no match is found, an empty <code>array</code>is returned.
+     * Returns an <code>array</code> of indices of matching elements within a list.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
@@ -959,8 +959,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns an <code>array</code> of indices of matching elements within a list based on the given <code>options</code>.
-     * If no match is found, an empty <code>array</code>is returned.
+     * Returns an <code>array</code> of indices of matching elements within a list based on the given
+     * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
      *
      * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
      * @param key The name of the list.
