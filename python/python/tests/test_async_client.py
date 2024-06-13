@@ -379,6 +379,26 @@ class TestCommands:
         assert await redis_client.select(0) == OK
         assert await redis_client.get(key) == value
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_move(self, redis_client: RedisClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+
+        assert await redis_client.select(0) == OK
+        assert await redis_client.move(key, 1) is False
+
+        assert await redis_client.set(key, value) == OK
+        assert await redis_client.get(key) == value
+
+        assert await redis_client.move(key, 1) is True
+        assert await redis_client.get(key) is None
+        assert await redis_client.select(1) == OK
+        assert await redis_client.get(key) == value
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.move(key, -1)
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_delete(self, redis_client: TRedisClient):
