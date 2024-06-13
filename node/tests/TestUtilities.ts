@@ -38,6 +38,7 @@ function intoArrayInternal(obj: any, builder: Array<string>) {
         }
     } else if (obj instanceof Set) {
         const arr = Array.from(obj);
+        arr.sort();
 
         for (const item of arr) {
             intoArrayInternal(item, builder);
