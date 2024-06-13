@@ -24,6 +24,7 @@
 * Node: Added XLEN command ([#1555](https://github.com/aws/glide-for-redis/pull/1555))
 * Node: Added ZINTERCARD command ([#1553](https://github.com/aws/glide-for-redis/pull/1553))
 * Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
+* Node: Added OBJECT IDLETIME command ([#1567](https://github.com/aws/glide-for-redis/pull/1567))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
