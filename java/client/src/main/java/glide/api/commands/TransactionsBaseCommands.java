@@ -20,9 +20,10 @@ public interface TransactionsBaseCommands {
      * @return The string <code>OK</code>.
      * @example
      *     <pre>{@code
-     * client.watch(new String[] {"sampleKey"});
+     * assert client.watch(new String[] {"sampleKey"}).get() == "OK";
      * transaction.set("sampleKey", "foobar");
-     * client.exec(transaction).get(); // Executes successfully and keys are unwatched.
+     * Object[] result = client.exec(transaction).get();
+     * assert result != null; // Executes successfully and keys are unwatched.
      * }</pre>
      */
     CompletableFuture<String> watch(String[] keys);
@@ -35,8 +36,8 @@ public interface TransactionsBaseCommands {
      * @return The string <code>OK</code>.
      * @example
      *     <pre>{@code
-     * client.watch(new String[] {"sampleKey"});
-     * client.unwatch(); // Flushes "sampleKey" from watched keys.
+     * assert client.watch(new String[] {"sampleKey"}).get() == "OK";
+     * assert client.unwatch().get() == "OK"; // Flushes "sampleKey" from watched keys.
      * }</pre>
      */
     CompletableFuture<String> unwatch();

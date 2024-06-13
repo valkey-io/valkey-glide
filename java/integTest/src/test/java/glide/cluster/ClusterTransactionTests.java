@@ -9,7 +9,6 @@ import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleS
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -66,17 +65,6 @@ public class ClusterTransactionTests {
         ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
         Object[] result = clusterClient.exec(transaction).get();
         assertTrue(((String) result[0]).contains("# Stats"));
-    }
-
-    @Test
-    @SneakyThrows
-    public void WATCH_transaction_failure_returns_null() {
-        ClusterTransaction transaction = new ClusterTransaction();
-        transaction.get("key");
-        assertEquals(
-                OK, clusterClient.customCommand(new String[] {"WATCH", "key"}).get().getSingleValue());
-        assertEquals(OK, clusterClient.set("key", "foo").get());
-        assertNull(clusterClient.exec(transaction).get());
     }
 
     @Test

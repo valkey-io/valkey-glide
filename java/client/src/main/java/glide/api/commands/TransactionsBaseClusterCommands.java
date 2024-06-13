@@ -20,8 +20,8 @@ public interface TransactionsBaseClusterCommands {
      * @return The string <code>OK</code>.
      * @example
      *     <pre>{@code
-     * client.watch(new String[] {"sampleKey"});
-     * client.unwatch(ALL_PRIMARIES); // Flushes "sampleKey" from watched keys for all primary nodes.
+     * assert client.watch(new String[] {"sampleKey"}).get() == "OK";
+     * assert client.unwatch(ALL_PRIMARIES).get() == "OK"; // Flushes "sampleKey" from watched keys for all primary nodes.
      * }</pre>
      */
     CompletableFuture<String> unwatch(Route route);
