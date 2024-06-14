@@ -199,7 +199,6 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
-
 import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.List;

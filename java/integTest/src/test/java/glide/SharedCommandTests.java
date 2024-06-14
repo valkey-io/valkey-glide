@@ -1054,23 +1054,23 @@ public class SharedCommandTests {
 
         // unlimited comparisons
         assertEquals(
-            0L, client.lpos(key, "a", LPosOptions.builder().rank(1L).maxLength(0L).build()).get());
+                0L, client.lpos(key, "a", LPosOptions.builder().rank(1L).maxLength(0L).build()).get());
 
         // limited comparisons
         assertNull(client.lpos(key, "c", LPosOptions.builder().rank(1L).maxLength(2L).build()).get());
 
         // invalid rank value
         ExecutionException lposException =
-            assertThrows(
-                ExecutionException.class,
-                () -> client.lpos(key, "a", LPosOptions.builder().rank(0L).build()).get());
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lpos(key, "a", LPosOptions.builder().rank(0L).build()).get());
         assertTrue(lposException.getCause() instanceof RequestException);
 
         // invalid maxlen value
         ExecutionException lposMaxlenException =
-            assertThrows(
-                ExecutionException.class,
-                () -> client.lpos(key, "a", LPosOptions.builder().maxLength(-1L).build()).get());
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lpos(key, "a", LPosOptions.builder().maxLength(-1L).build()).get());
         assertTrue(lposMaxlenException.getCause() instanceof RequestException);
 
         // non-existent key
@@ -1080,7 +1080,7 @@ public class SharedCommandTests {
         String wrong_data_type = "key" + UUID.randomUUID();
         assertEquals(2L, client.sadd(wrong_data_type, new String[] {"a", "b"}).get());
         ExecutionException lposWrongKeyDataTypeException =
-            assertThrows(ExecutionException.class, () -> client.lpos(wrong_data_type, "a").get());
+                assertThrows(ExecutionException.class, () -> client.lpos(wrong_data_type, "a").get());
         assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
     }
 
@@ -1097,24 +1097,24 @@ public class SharedCommandTests {
 
         // invalid count value
         ExecutionException lposCountException =
-            assertThrows(ExecutionException.class, () -> client.lposCount(key, "a", -1L).get());
+                assertThrows(ExecutionException.class, () -> client.lposCount(key, "a", -1L).get());
         assertTrue(lposCountException.getCause() instanceof RequestException);
 
         // with option
         assertArrayEquals(
-            new Long[] {0L, 1L, 4L},
-            client.lposCount(key, "a", 0L, LPosOptions.builder().rank(1L).build()).get());
+                new Long[] {0L, 1L, 4L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(1L).build()).get());
         assertArrayEquals(
-            new Long[] {1L, 4L},
-            client.lposCount(key, "a", 0L, LPosOptions.builder().rank(2L).build()).get());
+                new Long[] {1L, 4L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(2L).build()).get());
         assertArrayEquals(
-            new Long[] {4L},
-            client.lposCount(key, "a", 0L, LPosOptions.builder().rank(3L).build()).get());
+                new Long[] {4L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(3L).build()).get());
 
         // reverse traversal
         assertArrayEquals(
-            new Long[] {4L, 1L, 0L},
-            client.lposCount(key, "a", 0L, LPosOptions.builder().rank(-1L).build()).get());
+                new Long[] {4L, 1L, 0L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(-1L).build()).get());
 
         // non-existent key
         assertArrayEquals(new Long[] {}, client.lposCount("non-existent_key", "a", 1L).get());
@@ -1123,9 +1123,8 @@ public class SharedCommandTests {
         String wrong_data_type = "key" + UUID.randomUUID();
         assertEquals(2L, client.sadd(wrong_data_type, new String[] {"a", "b"}).get());
         ExecutionException lposWrongKeyDataTypeException =
-            assertThrows(
-                ExecutionException.class,
-                () -> client.lposCount(wrong_data_type, "a", 1L).get());
+                assertThrows(
+                        ExecutionException.class, () -> client.lposCount(wrong_data_type, "a", 1L).get());
         assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
     }
 
