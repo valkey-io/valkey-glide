@@ -4056,7 +4056,9 @@ class CoreCommands(Protocol):
         """
         return cast(
             int,
-            await self._execute_command(RequestType.SetBit, [key, str(offset), str(value)]),
+            await self._execute_command(
+                RequestType.SetBit, [key, str(offset), str(value)]
+            ),
         )
 
     async def object_encoding(self, key: str) -> Optional[str]:

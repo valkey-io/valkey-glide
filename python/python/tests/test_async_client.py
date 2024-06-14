@@ -4033,7 +4033,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_setbit(self, redis_client: TRedisClient):
         key = get_random_string(10)
-        string_key = get_random_string(10)
+        set_key = get_random_string(10)
 
         assert await redis_client.setbit(key, 0, 1) == 0
         assert await redis_client.setbit(key, 0, 0) == 1
@@ -4043,9 +4043,9 @@ class TestCommands:
             assert await redis_client.setbit(key, -1, 0) == 1
 
         # key exists, but it is not a string
-        assert await redis_client.set(string_key, "foo")
+        assert await redis_client.sadd(set_key, ["foo"]) == 1
         with pytest.raises(RequestError):
-            assert await redis_client.setbit(string_key, 0, 0)
+            await redis_client.setbit(set_key, 0, 0)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
