@@ -3,6 +3,7 @@ package glide;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
 import static glide.TestConfiguration.STANDALONE_PORTS;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -162,6 +163,40 @@ public class TestUtilities {
             }
         }
         assertTrue(hasLib);
+    }
+
+    /**
+     * Validate whether `FUNCTION STATS` response contains required info.
+     *
+     * @param response The response from server.
+     * @param runningFunction Command line of running function expected. Empty, if nothing expected.
+     * @param libCount Expected libraries count.
+     * @param functionCount Expected functions count.
+     */
+    public static void checkFunctionStatsResponse(
+            Map<String, Map<String, Object>> response,
+            String[] runningFunction,
+            long libCount,
+            long functionCount) {
+        Map<String, Object> runningScriptInfo = response.get("running_script");
+        if (runningScriptInfo == null && runningFunction.length != 0) {
+            fail("No running function info");
+        }
+        if (runningScriptInfo != null && runningFunction.length == 0) {
+            String[] command = (String[]) runningScriptInfo.get("command");
+            fail("Unexpected running function info: " + String.join(" ", command));
+        }
+
+        if (runningScriptInfo != null) {
+            String[] command = (String[]) runningScriptInfo.get("command");
+            assertArrayEquals(runningFunction, command);
+            // command line format is:
+            // fcall|fcall_ro <function name> <num keys> <key>* <arg>*
+            assertEquals(runningFunction[1], runningScriptInfo.get("name"));
+        }
+        var expected =
+                Map.of("LUA", Map.of("libraries_count", libCount, "functions_count", functionCount));
+        assertEquals(expected, response.get("engines"));
     }
 
     /** Generate a LUA library code. */
