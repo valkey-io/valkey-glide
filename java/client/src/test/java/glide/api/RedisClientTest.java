@@ -4484,17 +4484,12 @@ public class RedisClientTest {
     public void randomKey() {
         // setup
         String key1 = "key1";
-        String key2 = "key2";
-        String[] arguments = new String[] {};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(key1);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(RandomKey), eq(arguments), any()))
-                .thenReturn(testResponse);
+        when(commandManager.<String>submitNewCommand(eq(RandomKey), eq(new String[0]), any()));
 
-        // exercise
-        service.set(key1, "a");
         CompletableFuture<String> response = service.randomKey();
 
         // verify
