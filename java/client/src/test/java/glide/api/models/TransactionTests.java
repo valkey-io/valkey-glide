@@ -68,6 +68,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -874,6 +875,9 @@ public class TransactionTests {
         results.add(Pair.of(FCall, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
         transaction.fcall("func", new String[] {"arg1", "arg2"});
         results.add(Pair.of(FCall, buildArgs("func", "0", "arg1", "arg2")));
+
+        transaction.functionStats();
+        results.add(Pair.of(FunctionStats, buildArgs()));
 
         transaction.geodist("key", "Place", "Place2");
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2")));

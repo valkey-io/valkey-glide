@@ -89,6 +89,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -5248,6 +5249,29 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionStats_returns_success() {
+        // setup
+        String[] args = new String[0];
+        Map<String, Map<String, Object>> value = Map.of("1", Map.of("2", 2));
+        CompletableFuture<Map<String, Map<String, Object>>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Map<String, Object>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Map<String, Object>>> response = service.functionStats();
+        Map<String, Map<String, Object>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 
     @SneakyThrows

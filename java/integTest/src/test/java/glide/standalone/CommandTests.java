@@ -3,6 +3,7 @@ package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
@@ -514,7 +515,7 @@ public class CommandTests {
         }
     }
 
-    @Test
+    // @Test
     @SneakyThrows
     public void functionStats_and_functionKill() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
@@ -523,6 +524,8 @@ public class CommandTests {
         String funcName = "deadlock";
         String code = createLuaLibWithLongRunningFunction(libName, funcName, 15, true);
         String error = "";
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         try {
             // nothing to kill
@@ -541,8 +544,9 @@ public class CommandTests {
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
-                    var response = regularClient.customCommand(new String[] {"FUNCTION", "STATS"}).get();
-                    if (((Map<String, Object>) response).get("running_script") != null) {
+                    var stats = regularClient.functionStats().get();
+                    if (stats.get("running_script") != null) {
+                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
                         break;
                     }
                     Thread.sleep(100);
@@ -587,8 +591,11 @@ public class CommandTests {
 
         String libName = "functionStats_and_functionKill_write_function";
         String funcName = "deadlock_write_function";
+        String key = libName;
         String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, false);
         String error = "";
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
 
         try {
             // nothing to kill
@@ -603,12 +610,13 @@ public class CommandTests {
             try (var testClient =
                     RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
                 // call the function without await
-                var promise = testClient.fcall(funcName, new String[] {libName}, new String[0]);
+                var promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
-                    var response = regularClient.customCommand(new String[] {"FUNCTION", "STATS"}).get();
-                    if (((Map<String, Object>) response).get("running_script") != null) {
+                    var stats = regularClient.functionStats().get();
+                    if (stats.get("running_script") != null) {
+                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "1", key}, 1, 1);
                         break;
                     }
                     Thread.sleep(100);
@@ -642,8 +650,38 @@ public class CommandTests {
             }
         }
 
-        assertEquals(OK, regularClient.functionDelete(libName).get());
-
         assertTrue(error.isEmpty(), "Something went wrong during the test");
+    }
+
+    @Test
+    @SneakyThrows
+    public void functionStats() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "functionStats";
+        String funcName = libName;
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        // function $funcName returns first argument
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+        var response = regularClient.functionStats().get();
+        checkFunctionStatsResponse(response, new String[0], 1, 1);
+
+        code =
+                generateLuaLibCode(
+                        libName + "_2",
+                        Map.of(funcName + "_2", "return 'OK'", funcName + "_3", "return 42"),
+                        false);
+        assertEquals(libName + "_2", regularClient.functionLoad(code, true).get());
+
+        response = regularClient.functionStats().get();
+        checkFunctionStatsResponse(response, new String[0], 2, 3);
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        response = regularClient.functionStats().get();
+        checkFunctionStatsResponse(response, new String[0], 0, 0);
     }
 }

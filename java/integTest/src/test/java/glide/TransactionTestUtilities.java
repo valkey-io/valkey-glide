@@ -770,10 +770,15 @@ public class TransactionTestUtilities {
             return new Object[0];
         }
 
+        final String libName = "mylib1T";
+        final String funcName = "myfunc1T";
+
         final String code =
-                "#!lua name=mylib1T\n"
-                        + "redis.register_function('myfunc1T',"
-                        + "function(keys, args) return args[1] end)"; // function returns first argument
+                "#!lua name="
+                        + libName
+                        + "\n redis.register_function('"
+                        + funcName
+                        + "', function(keys, args) return args[1] end)"; // function returns first argument
 
         var expectedFuncData =
                 new HashMap<String, Object>() {
@@ -797,29 +802,48 @@ public class TransactionTestUtilities {
                             code)
                 };
 
+        var expectedFunctionStatsNonEmpty =
+                new HashMap<String, Map<String, Object>>() {
+                    {
+                        put("running_script", null);
+                        put("engines", Map.of("LUA", Map.of("libraries_count", 1L, "functions_count", 1L)));
+                    }
+                };
+        var expectedFunctionStatsEmpty =
+                new HashMap<String, Map<String, Object>>() {
+                    {
+                        put("running_script", null);
+                        put("engines", Map.of("LUA", Map.of("libraries_count", 0L, "functions_count", 0L)));
+                    }
+                };
+
         transaction
                 .functionFlush(SYNC)
                 .functionList(false)
                 .functionLoad(code, false)
                 .functionLoad(code, true)
+                .functionStats()
                 .fcall("myfunc1T", new String[0], new String[] {"a", "b"})
                 .fcall("myfunc1T", new String[] {"a", "b"})
                 .functionList("otherLib", false)
                 .functionList("mylib1T", true)
                 .functionDelete("mylib1T")
-                .functionList(true);
+                .functionList(true)
+                .functionStats();
 
         return new Object[] {
             OK, // functionFlush(SYNC)
             new Map[0], // functionList(false)
             "mylib1T", // functionLoad(code, false)
             "mylib1T", // functionLoad(code, true)
+            expectedFunctionStatsNonEmpty, // functionStats()
             "a", // fcall("myfunc1T", new String[0], new String[]{"a", "b"})
             "a", // fcall("myfunc1T", new String[] {"a", "b"})
             new Map[0], // functionList("otherLib", false)
             expectedLibData, // functionList("mylib1T", true)
             OK, // functionDelete("mylib1T")
             new Map[0], // functionList(true)
+            expectedFunctionStatsEmpty, // functionStats()
         };
     }
 
