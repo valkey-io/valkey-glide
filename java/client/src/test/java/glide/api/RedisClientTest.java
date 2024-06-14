@@ -4308,7 +4308,8 @@ public class RedisClientTest {
         String groupName = "testGroupName";
         String id = "testId";
         String testEntry = "testEntry";
-        StreamGroupOptions options = new StreamGroupOptions(true, testEntry);
+        StreamGroupOptions options =
+                StreamGroupOptions.builder().makeStream().entriesRead(testEntry).build();
         String[] arguments =
                 new String[] {key, groupName, id, MAKE_STREAM_REDIS_API, ENTRIES_READ_REDIS_API, testEntry};
 

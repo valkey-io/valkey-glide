@@ -4,6 +4,7 @@ package glide.api.models.commands.stream;
 import glide.api.commands.StreamBaseCommands;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Builder;
 
 /**
  * Optional arguments for {@link StreamBaseCommands#xgroupCreate(String, String, String,
@@ -11,13 +12,28 @@ import java.util.List;
  *
  * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a>
  */
+@Builder
 public final class StreamGroupOptions {
 
+    // Redis API String argument for makeStream
     public static final String MAKE_STREAM_REDIS_API = "MKSTREAM";
+
+    // Redis API String argument for entriesRead
     public static final String ENTRIES_READ_REDIS_API = "ENTRIESREAD";
 
-    /** If the stream doesn't exist, creates a new stream with a length of <code>0</code>. */
-    boolean makeStream;
+    /**
+     * If <code>true</code> and the stream doesn't exist, creates a new stream with a length of <code>
+     * 0</code>.
+     */
+    @Builder.Default private boolean mkStream = false;
+
+    public static class StreamGroupOptionsBuilder {
+
+        /** If the stream doesn't exist, this creates a new stream with a length of <code>0</code>. */
+        public StreamGroupOptionsBuilder makeStream() {
+            return mkStream(true);
+        }
+    }
 
     /**
      * An arbitrary ID (that isn't the first ID, last ID, or the zero <code>"0-0"</code>. Use it to
@@ -26,45 +42,7 @@ public final class StreamGroupOptions {
      *
      * @since Redis 7.0.0
      */
-    String entriesRead;
-
-    /**
-     * Options for {@link StreamBaseCommands#xgroupCreate(String, String, String, StreamGroupOptions)}
-     *
-     * @param makeStream If the stream doesn't exist, creates a new stream with a length of <code>0
-     *     </code>.
-     */
-    public StreamGroupOptions(Boolean makeStream) {
-        this.makeStream = makeStream;
-    }
-
-    /**
-     * Options for {@link StreamBaseCommands#xgroupCreate(String, String, String, StreamGroupOptions)}
-     *
-     * @param entriesRead An arbitrary ID that isn't the first ID, last ID, or the zero <code>"0-0"
-     *     </code>. Use it to find out how many entries are between the arbitrary ID (excluding it)
-     *     and the stream's last entry.
-     * @since ENTRIESREAD was added in Redis 7.0.0.
-     */
-    public StreamGroupOptions(String entriesRead) {
-        this.makeStream = false;
-        this.entriesRead = entriesRead;
-    }
-
-    /**
-     * Options for {@link StreamBaseCommands#xgroupCreate(String, String, String, StreamGroupOptions)}
-     *
-     * @param makeStream If the stream doesn't exist, creates a new stream with a length of <code>0
-     *     </code>.
-     * @param entriesRead An arbitrary ID that isn't the first ID, last ID, or the zero <code>"0-0"
-     *     </code>. Use it to find out how many entries are between the arbitrary ID (excluding it)
-     *     and the stream's last entry.
-     * @since ENTRIESREAD was added in Redis 7.0.0.
-     */
-    public StreamGroupOptions(Boolean makeStream, String entriesRead) {
-        this.makeStream = makeStream;
-        this.entriesRead = entriesRead;
-    }
+    private String entriesRead;
 
     /**
      * Converts options and the key-to-id input for {@link StreamBaseCommands#xgroupCreate(String,
@@ -75,7 +53,7 @@ public final class StreamGroupOptions {
     public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>();
 
-        if (this.makeStream) {
+        if (this.mkStream) {
             optionArgs.add(MAKE_STREAM_REDIS_API);
         }
 
