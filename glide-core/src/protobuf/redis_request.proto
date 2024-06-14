@@ -216,6 +216,7 @@ enum RequestType {
     XRevRange = 176;
     Copy = 178;
     MSetNX = 179;
+    LPos = 180;
     LCS = 181;
 }
 
