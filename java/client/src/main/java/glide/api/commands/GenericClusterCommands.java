@@ -114,13 +114,13 @@ public interface GenericClusterCommands {
     CompletableFuture<Object[]> exec(ClusterTransaction transaction, SingleNodeRoute route);
 
     /**
-     * Returns a random key. The command will be routed to all primary nodes, and will return the
-     * first successful result.
+     * Returns a random key. <br>
+     * The command will be routed to all primary nodes, and will return the first successful result.
      *
      * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>, and will return the first successful
-     *     result..
+     *     result.
      * @return A random <code>key</code> from the database.
      * @example
      *     <pre>{@code

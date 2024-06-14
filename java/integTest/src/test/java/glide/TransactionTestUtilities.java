@@ -209,6 +209,7 @@ public class TransactionTestUtilities {
         String stringKey8 = "{StringKey}-8-" + UUID.randomUUID();
 
         transaction
+                .flushall()
                 .set(stringKey1, value1)
                 .randomKey()
                 .get(stringKey1)
@@ -244,6 +245,7 @@ public class TransactionTestUtilities {
 
         var expectedResults =
                 new Object[] {
+                    OK, // flushall()
                     OK, // set(stringKey1, value1)
                     stringKey1, // randomKey()
                     value1, // get(stringKey1)

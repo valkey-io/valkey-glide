@@ -4488,8 +4488,8 @@ public class RedisClientTest {
         testResponse.complete(key1);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(RandomKey), eq(new String[0]), any()));
-
+        when(commandManager.<String>submitNewCommand(eq(RandomKey), eq(new String[0]), any()))
+                .thenReturn(testResponse);
         CompletableFuture<String> response = service.randomKey();
 
         // verify
