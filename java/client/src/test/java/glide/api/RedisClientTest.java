@@ -123,6 +123,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -217,6 +218,7 @@ import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -1748,6 +1750,98 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lpos() {
+        // setup
+        String[] args = new String[] {"list", "element"};
+        long index = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpos("list", "element");
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lpos_withOptions() {
+        // setup
+        LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+        String[] args = new String[] {"list", "element", "RANK", "1", "MAXLEN", "1000"};
+        long index = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpos("list", "element", options);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lposCount() {
+        // setup
+        String[] args = new String[] {"list", "element", "COUNT", "1"};
+        Long[] index = new Long[] {1L};
+
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(LPos), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response = service.lposCount("list", "element", 1L);
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lposCount_withOptions() {
+        // setup
+        LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+        String[] args = new String[] {"list", "element", "COUNT", "0", "RANK", "1", "MAXLEN", "1000"};
+        Long[] index = new Long[] {0L};
+
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(LPos), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response = service.lposCount("list", "element", 0L, options);
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(index, payload);
     }
 
     @SneakyThrows

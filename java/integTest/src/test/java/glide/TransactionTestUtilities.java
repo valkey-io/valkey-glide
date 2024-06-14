@@ -12,6 +12,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -344,7 +345,12 @@ public class TransactionTestUtilities {
                 .ltrim(listKey1, 1, -1)
                 .lrange(listKey1, 0, -2)
                 .lpop(listKey1)
-                .lpopCount(listKey1, 2)
+                .lpopCount(listKey1, 2) // listKey1 is now empty
+                .rpush(listKey1, new String[] {value1, value1, value2, value3, value3})
+                .lpos(listKey1, value1)
+                .lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())
+                .lposCount(listKey1, value1, 1L)
+                .lposCount(listKey1, value1, 0L, LPosOptions.builder().rank(1L).build())
                 .rpush(listKey2, new String[] {value1, value2, value2})
                 .rpop(listKey2)
                 .rpopCount(listKey2, 2)
@@ -391,6 +397,11 @@ public class TransactionTestUtilities {
                     new String[] {value3, value2}, // lrange(listKey1, 0, -2)
                     value3, // lpop(listKey1)
                     new String[] {value2, value1}, // lpopCount(listKey1, 2)
+                    5L, // lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
+                    0L, // lpos(listKey1, value1)
+                    1L, // lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())
+                    new Long[] {0L}, // lposCount(listKey1, value1, 1L)
+                    new Long[] {0L, 1L}, // lposCount(listKey1, value1, 0L, LPosOptions.rank(2L))
                     3L, // rpush(listKey2, new String[] {value1, value2, value2})
                     value2, // rpop(listKey2)
                     new String[] {value2, value1}, // rpopCount(listKey2, 2)
@@ -402,7 +413,7 @@ public class TransactionTestUtilities {
                     new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01)
                     2L, // lpush(listKey5, new String[] {value2, value3})
                     OK, // lset(listKey5, 0, value1)
-                    new String[] {value1, value2} // lrange(listKey5, 0, -1)
+                    new String[] {value1, value2}, // lrange(listKey5, 0, -1)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {

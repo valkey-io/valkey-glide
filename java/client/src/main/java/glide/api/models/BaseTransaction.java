@@ -90,6 +90,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -183,6 +184,7 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -905,6 +907,83 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lpop(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of the first occurrence of <code>element</code> inside the list specified by
+     * <code>key</code>. If no match is found, <code>null</code> is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @return Command Response - The index of the first occurrence of <code>element</code>, or <code>
+     *     null</code> if <code>element</code> is not in the list.
+     */
+    public T lpos(@NonNull String key, @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, element);
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of an occurrence of <code>element</code> within a list based on the given
+     * <code>options</code>. If no match is found, <code>null</code> is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param options The LPos options.
+     * @return Command Response - The index of <code>element</code>, or <code>null</code> if <code>
+     *     element</code> is not in the list.
+     */
+    public T lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addAll(new String[] {key, element}, options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns an <code>array</code> of indices of matching elements within a list.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param count The number of matches wanted.
+     * @return Command Response - An <code>array</code> that holds the indices of the matching
+     *     elements within the list.
+     */
+    public T lposCount(@NonNull String key, @NonNull String element, long count) {
+        ArgsArray commandArgs = buildArgs(key, element, COUNT_REDIS_API, Long.toString(count));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns an <code>array</code> of indices of matching elements within a list based on the given
+     * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param count The number of matches wanted.
+     * @param options The LPos options.
+     * @return Command Response - An <code>array</code> that holds the indices of the matching
+     *     elements within the list.
+     */
+    public T lposCount(
+            @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, element, COUNT_REDIS_API, Long.toString(count)},
+                                options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
         return getThis();
     }
 
