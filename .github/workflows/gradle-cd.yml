@@ -38,7 +38,7 @@ jobs:
                echo "::set-output name=matrix::${{toJson( env.MATRIX )}}"
 
     start-self-hosted-runner:
-        if: github.repository_owner == 'aws'
+        #if: github.repository_owner == 'aws'
         runs-on: ubuntu-latest
         steps:
           - name: Checkout
@@ -55,7 +55,7 @@ jobs:
 
     publish-binaries:
         needs: [start-self-hosted-runner, output-matrix]
-        if: github.repository_owner == 'aws'
+        #if: github.repository_owner == 'aws'
         name: Publish packages to Maven Central
         runs-on: ${{ matrix.build.RUNNER }}
         container:
