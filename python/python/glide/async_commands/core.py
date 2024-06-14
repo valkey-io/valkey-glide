@@ -362,6 +362,11 @@ class InsertPosition(Enum):
     AFTER = "AFTER"
 
 
+class FlushMode(Enum):
+    ASYNC = "ASYNC"
+    SYNC = "SYNC"
+
+
 def _build_sort_args(
     key: str,
     by_pattern: Optional[str] = None,
@@ -4118,4 +4123,29 @@ class CoreCommands(Protocol):
         return cast(
             Optional[int],
             await self._execute_command(RequestType.ObjectRefCount, [key]),
+        )
+
+    async def flushall(self, flushmode: Optional[FlushMode] = "") -> str:
+        """
+        Returns ...
+
+        See https://valkey.io/commands/flushall for more details.
+
+        Args:
+            flushmode (Optional[FlushMode]): An optional argument that ...
+
+        Returns:
+            str: OK.
+
+        Examples:
+             >>> await client.flushall(FlushMode.ASYNC)
+            OK  # This command never fails.
+        """
+        args = []
+        if flushmode is not None and flushmode is not "":
+            args.append(flushmode.value)
+
+        return cast(
+            str,
+            await self._execute_command(RequestType.FlushAll, args),
         )

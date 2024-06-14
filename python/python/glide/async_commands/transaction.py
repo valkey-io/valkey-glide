@@ -15,7 +15,7 @@ from glide.async_commands.core import (
     StreamAddOptions,
     StreamTrimOptions,
     UpdateOptions,
-    _build_sort_args,
+    _build_sort_args, FlushMode,
 )
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -3031,5 +3031,22 @@ class ClusterTransaction(BaseTransaction):
         """
         args = _build_sort_args(key, None, limit, None, order, alpha, store=destination)
         return self.append_command(RequestType.Sort, args)
+
+    def msetnx(self: TTransaction, flushmode: Optional[FlushMode]) -> str:
+        """
+        Returns ...
+
+        See https://valkey.io/commands/flushall for more details.
+
+        Args:
+            flushmode (Optional[FlushMode]): An optional argument that ...
+
+        Returns:
+            str: OK.
+        """
+        parameters = []
+        if flushmode is not None:
+            parameters.append(flushmode.value)
+        return self.append_command(RequestType.FlushAll, parameters)
 
     # TODO: add all CLUSTER commands

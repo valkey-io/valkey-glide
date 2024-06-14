@@ -11,7 +11,7 @@ from glide.async_commands.core import (
     GeospatialData,
     InsertPosition,
     StreamAddOptions,
-    TrimByMinId,
+    TrimByMinId, FlushMode,
 )
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -393,6 +393,12 @@ async def transaction_test(
         alpha=True,
     )
     args.append(4)
+    transaction.flushall()
+    args.append(OK)
+    transaction.flushall(FlushMode.SYNC)
+    args.append(OK)
+    transaction.flushall(FlushMode.ASYNC)
+    args.append(OK)
 
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):

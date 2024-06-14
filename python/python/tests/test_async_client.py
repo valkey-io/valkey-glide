@@ -17,6 +17,7 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
+    FlushMode,
     GeospatialData,
     GeoUnit,
     InfBound,
@@ -4145,6 +4146,13 @@ class TestCommands:
         assert await redis_client.set(string_key, "foo") == OK
         refcount = await redis_client.object_refcount(string_key)
         assert refcount is not None and refcount >= 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_flushall(self, redis_client: TRedisClient):
+        assert await redis_client.flushall() is OK
+        assert await redis_client.flushall(FlushMode.ASYNC) is OK
+        assert await redis_client.flushall(FlushMode.SYNC) is OK
 
 
 class TestMultiKeyCommandCrossSlot:
