@@ -25,6 +25,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
@@ -586,5 +587,35 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> functionKill(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionKill, new String[0], route, this::handleStringResponse);
+    }
+
+    /** Process a <code>FUNCTION STATS</code> cluster response. */
+    protected ClusterValue<Map<String, Map<String, Object>>> handleFunctionStatsResponse(
+            Response response, boolean isSingleValue) {
+        if (isSingleValue) {
+            return ClusterValue.ofSingleValue(handleFunctionStatsResponse(handleMapResponse(response)));
+        } else {
+            Map<String, Map<String, Map<String, Object>>> data = handleMapResponse(response);
+            for (var nodeInfo : data.entrySet()) {
+                nodeInfo.setValue(handleFunctionStatsResponse(nodeInfo.getValue()));
+            }
+            return ClusterValue.ofMultiValue(data);
+        }
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats() {
+        return commandManager.submitNewCommand(
+                FunctionStats, new String[0], response -> handleFunctionStatsResponse(response, false));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats(
+            @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionStats,
+                new String[0],
+                route,
+                response -> handleFunctionStatsResponse(response, route instanceof SingleNodeRoute));
     }
 }

@@ -33,6 +33,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
@@ -1585,5 +1586,57 @@ public class RedisClusterClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionStats_returns_success() {
+        // setup
+        String[] args = new String[0];
+        ClusterValue<Map<String, Map<String, Object>>> value =
+                ClusterValue.ofSingleValue(Map.of("1", Map.of("2", 2)));
+        CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Map<String, Object>>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> response =
+                service.functionStats();
+        ClusterValue<Map<String, Map<String, Object>>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionStats_with_route_returns_success() {
+        // setup
+        String[] args = new String[0];
+        ClusterValue<Map<String, Map<String, Object>>> value =
+                ClusterValue.ofSingleValue(Map.of("1", Map.of("2", 2)));
+        CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Map<String, Object>>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> response =
+                service.functionStats(RANDOM);
+        ClusterValue<Map<String, Map<String, Object>>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
     }
 }

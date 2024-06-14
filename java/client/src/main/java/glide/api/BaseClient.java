@@ -439,6 +439,17 @@ public abstract class BaseClient
         return data;
     }
 
+    /** Process a <code>FUNCTION STATS</code> standalone response. */
+    protected Map<String, Map<String, Object>> handleFunctionStatsResponse(
+            Map<String, Map<String, Object>> response) {
+        Map<String, Object> runningScriptInfo = response.get("running_script");
+        if (runningScriptInfo != null) {
+            Object[] command = (Object[]) runningScriptInfo.get("command");
+            runningScriptInfo.put("command", castArray(command, String.class));
+        }
+        return response;
+    }
+
     @Override
     public CompletableFuture<Long> del(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);

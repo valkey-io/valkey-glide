@@ -4,6 +4,7 @@ package glide.cluster;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
@@ -1105,6 +1106,8 @@ public class CommandTests {
         String code = createLuaLibWithLongRunningFunction(libName, funcName, 15, true);
         String error = "";
 
+        assertEquals(OK, clusterClient.functionFlush(SYNC).get());
+
         try {
             // nothing to kill
             var exception =
@@ -1126,11 +1129,12 @@ public class CommandTests {
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
-                    var stats = clusterClient.customCommand(new String[] {"FUNCTION", "STATS"}).get();
+                    var response = clusterClient.functionStats().get().getMultiValue();
                     boolean found = false;
-                    for (var response : stats.getMultiValue().values()) {
-                        if (((Map<String, Object>) response).get("running_script") != null) {
+                    for (var stats : response.values()) {
+                        if (stats.get("running_script") != null) {
                             found = true;
+                            checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
                             break;
                         }
                     }
@@ -1166,8 +1170,6 @@ public class CommandTests {
             }
         }
 
-        assertEquals(OK, clusterClient.functionDelete(libName).get());
-
         assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
@@ -1183,6 +1185,8 @@ public class CommandTests {
         Route route =
                 singleNodeRoute ? new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY) : ALL_PRIMARIES;
         String error = "";
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
         try {
             // nothing to kill
@@ -1202,17 +1206,19 @@ public class CommandTests {
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
-                    var stats = clusterClient.customCommand(new String[] {"FUNCTION", "STATS"}, route).get();
+                    var response = clusterClient.functionStats(route).get();
                     if (singleNodeRoute) {
-                        var response = stats.getSingleValue();
-                        if (((Map<String, Object>) response).get("running_script") != null) {
+                        var stats = response.getSingleValue();
+                        if (stats.get("running_script") != null) {
+                            checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
                             break;
                         }
                     } else {
                         boolean found = false;
-                        for (var response : stats.getMultiValue().values()) {
-                            if (((Map<String, Object>) response).get("running_script") != null) {
+                        for (var stats : response.getMultiValue().values()) {
+                            if (stats.get("running_script") != null) {
                                 found = true;
+                                checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
                                 break;
                             }
                         }
@@ -1251,8 +1257,6 @@ public class CommandTests {
             }
         }
 
-        assertEquals(OK, clusterClient.functionDelete(libName, route).get());
-
         assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
@@ -1267,6 +1271,8 @@ public class CommandTests {
         String code = createLuaLibWithLongRunningFunction(libName, funcName, 15, true);
         Route route = new SlotKeyRoute(key, PRIMARY);
         String error = "";
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
         try {
             // nothing to kill
@@ -1286,9 +1292,9 @@ public class CommandTests {
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
-                    var stats = clusterClient.customCommand(new String[] {"FUNCTION", "STATS"}, route).get();
-                    var response = stats.getSingleValue();
-                    if (((Map<String, Object>) response).get("running_script") != null) {
+                    var stats = clusterClient.functionStats(route).get().getSingleValue();
+                    if (stats.get("running_script") != null) {
+                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "1", key}, 1, 1);
                         break;
                     }
                     Thread.sleep(100);
@@ -1321,8 +1327,6 @@ public class CommandTests {
             }
         }
 
-        assertEquals(OK, clusterClient.functionDelete(libName, route).get());
-
         assertTrue(error.isEmpty(), "Something went wrong during the test");
     }
 
@@ -1337,6 +1341,8 @@ public class CommandTests {
         String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, false);
         Route route = new SlotKeyRoute(key, PRIMARY);
         String error = "";
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
 
         try {
             // nothing to kill
@@ -1356,9 +1362,9 @@ public class CommandTests {
 
                 int timeout = 5200; // ms
                 while (timeout > 0) {
-                    var stats = clusterClient.customCommand(new String[] {"FUNCTION", "STATS"}, route).get();
-                    var response = stats.getSingleValue();
-                    if (((Map<String, Object>) response).get("running_script") != null) {
+                    var stats = clusterClient.functionStats(route).get().getSingleValue();
+                    if (stats.get("running_script") != null) {
+                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "1", key}, 1, 1);
                         break;
                     }
                     Thread.sleep(100);
@@ -1392,8 +1398,97 @@ public class CommandTests {
             }
         }
 
-        assertEquals(OK, clusterClient.functionDelete(libName, route).get());
-
         assertTrue(error.isEmpty(), "Something went wrong during the test");
+    }
+
+    @Test
+    @SneakyThrows
+    public void functionStats_without_route() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "functionStats_without_route";
+        String funcName = libName;
+        assertEquals(OK, clusterClient.functionFlush(SYNC).get());
+
+        // function $funcName returns first argument
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        assertEquals(libName, clusterClient.functionLoad(code, true).get());
+
+        var response = clusterClient.functionStats().get().getMultiValue();
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], 1, 1);
+        }
+
+        code =
+                generateLuaLibCode(
+                        libName + "_2",
+                        Map.of(funcName + "_2", "return 'OK'", funcName + "_3", "return 42"),
+                        false);
+        assertEquals(libName + "_2", clusterClient.functionLoad(code, true).get());
+
+        response = clusterClient.functionStats().get().getMultiValue();
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], 2, 3);
+        }
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC).get());
+
+        response = clusterClient.functionStats().get().getMultiValue();
+        for (var nodeResponse : response.values()) {
+            checkFunctionStatsResponse(nodeResponse, new String[0], 0, 0);
+        }
+    }
+
+    @ParameterizedTest(name = "single node route = {0}")
+    @ValueSource(booleans = {true, false})
+    @SneakyThrows
+    public void functionStats_with_route(boolean singleNodeRoute) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        Route route =
+                singleNodeRoute ? new SlotKeyRoute(UUID.randomUUID().toString(), PRIMARY) : ALL_PRIMARIES;
+        String libName = "functionStats_with_route_" + singleNodeRoute;
+        String funcName = libName;
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
+
+        // function $funcName returns first argument
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
+
+        var response = clusterClient.functionStats(route).get();
+        if (singleNodeRoute) {
+            checkFunctionStatsResponse(response.getSingleValue(), new String[0], 1, 1);
+        } else {
+            for (var nodeResponse : response.getMultiValue().values()) {
+                checkFunctionStatsResponse(nodeResponse, new String[0], 1, 1);
+            }
+        }
+
+        code =
+                generateLuaLibCode(
+                        libName + "_2",
+                        Map.of(funcName + "_2", "return 'OK'", funcName + "_3", "return 42"),
+                        false);
+        assertEquals(libName + "_2", clusterClient.functionLoad(code, true, route).get());
+
+        response = clusterClient.functionStats(route).get();
+        if (singleNodeRoute) {
+            checkFunctionStatsResponse(response.getSingleValue(), new String[0], 2, 3);
+        } else {
+            for (var nodeResponse : response.getMultiValue().values()) {
+                checkFunctionStatsResponse(nodeResponse, new String[0], 2, 3);
+            }
+        }
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
+
+        response = clusterClient.functionStats(route).get();
+        if (singleNodeRoute) {
+            checkFunctionStatsResponse(response.getSingleValue(), new String[0], 0, 0);
+        } else {
+            for (var nodeResponse : response.getMultiValue().values()) {
+                checkFunctionStatsResponse(nodeResponse, new String[0], 0, 0);
+            }
+        }
     }
 }
