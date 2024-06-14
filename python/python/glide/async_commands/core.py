@@ -4033,6 +4033,32 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def setbit(self, key: str, offset: int, value: int) -> int:
+        """
+        Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
+        with `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less
+        than `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to
+        `value` and the preceding bits are set to `0`.
+
+        See https://valkey.io/commands/setbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to be set.
+            value (int): The bit value to set at `offset`. The value must be `0` or `1`.
+
+        Returns:
+            int: The bit value that was previously stored at `offset`.
+
+        Examples:
+            >>> await client.setbit("string_key", 1, 1)
+                0  # The second bit value was 0 before setting to 1.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.SetBit, [key, str(offset), str(value)]),
+        )
+
     async def object_encoding(self, key: str) -> Optional[str]:
         """
         Returns the internal encoding for the Redis object stored at `key`.
@@ -4101,33 +4127,6 @@ class CoreCommands(Protocol):
     async def object_refcount(self, key: str) -> Optional[int]:
         """
         Returns the reference count of the object stored at `key`.
-
-        See https://valkey.io/commands/object-refcount for more details.
-
-        Args:
-            key (str): The key of the object to get the reference count of.
-
-        Returns:
-            Optional[int]: If `key` exists, returns the reference count of the object stored at `key` as an integer.
-                Otherwise, returns None.
-
-        Examples:
-            >>> await client.object_refcount("my_hash")
-                2  # "my_hash" has a reference count of 2.
-        """
-        return cast(
-            Optional[int],
-            await self._execute_command(RequestType.ObjectRefCount, [key]),
-        )
-
-    async def setbit(self, key: str) -> Optional[int]:
-        """
-        Sets or clears the bit at `offset` in the string value stored at `key`.
-        The `offset` is a zero-based index, with `0` being the first element of
-        the list, `1` being the next element, and so on. The <code>offset</code> must be
-        less than <code>2^32</code> and greater than or equal to <code>0</code>. If a key is
-        non-existent then the bit at <code>offset</code> is set to <code>value</code> and the preceding
-        bits are set to <code>0</code>.
 
         See https://valkey.io/commands/object-refcount for more details.
 
