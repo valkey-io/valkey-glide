@@ -200,6 +200,8 @@ enum RequestType {
     BLMPop = 158;
     XLen = 159;
     Sort = 160;
+    FunctionKill = 161;
+    FunctionStats = 162;
     FCallReadOnly = 163;
     LSet = 165;
     XDel = 166;
@@ -215,6 +217,8 @@ enum RequestType {
     XRevRange = 176;
     Copy = 178;
     MSetNX = 179;
+    LPos = 180;
+    LCS = 181;
 }
 
 message Command {

@@ -799,6 +799,64 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.BLPop, keys + [str(timeout)])
 
+    def lmpop(
+        self: TTransaction,
+        keys: List[str],
+        direction: ListDirection,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Pops one or more elements from the first non-empty list from the provided `keys`.
+
+        See https://valkey.io/commands/lmpop/ for details.
+
+        Args:
+            keys (List[str]): An array of keys of lists.
+            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+
+        Command response:
+            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(len(keys)), *keys, direction.value]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return self.append_command(RequestType.LMPop, args)
+
+    def blmpop(
+        self: TTransaction,
+        keys: List[str],
+        direction: ListDirection,
+        timeout: float,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Blocks the connection until it pops one or more elements from the first non-empty list from the provided `keys`.
+
+        `BLMPOP` is the blocking variant of `LMPOP`.
+
+        See https://valkey.io/commands/blmpop/ for details.
+
+        Args:
+            keys (List[str]): An array of keys of lists.
+            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+
+        Command response:
+            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(timeout), str(len(keys)), *keys, direction.value]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return self.append_command(RequestType.BLMPop, args)
+
     def lrange(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Retrieve the specified elements of the list stored at `key` within the given range.
@@ -2716,6 +2774,25 @@ class BaseTransaction:
             OK: A simple OK response.
         """
         return self.append_command(RequestType.PfMerge, [destination] + source_keys)
+
+    def setbit(self: TTransaction, key: str, offset: int, value: int) -> TTransaction:
+        """
+        Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
+        with `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less
+        than `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to
+        `value` and the preceding bits are set to `0`.
+
+        See https://valkey.io/commands/setbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to be set.
+            value (int): The bit value to set at `offset`. The value must be `0` or `1`.
+
+        Command response:
+            int: The bit value that was previously stored at `offset`.
+        """
+        return self.append_command(RequestType.SetBit, [key, str(offset), str(value)])
 
     def object_encoding(self: TTransaction, key: str) -> TTransaction:
         """

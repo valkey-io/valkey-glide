@@ -1275,6 +1275,83 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.BLPop, keys + [str(timeout)]),
         )
 
+    async def lmpop(
+        self, keys: List[str], direction: ListDirection, count: Optional[int] = None
+    ) -> Optional[Mapping[str, List[str]]]:
+        """
+        Pops one or more elements from the first non-empty list from the provided `keys`.
+
+        When in cluster mode, all `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/lmpop/ for details.
+
+        Args:
+            keys (List[str]): An array of keys of lists.
+            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+
+        Returns:
+            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
+
+        Examples:
+            >>> await client.lpush("testKey", ["one", "two", "three"])
+            >>> await client.lmpop(["testKey"], ListDirection.LEFT, 2)
+               {"testKey": ["three", "two"]}
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(len(keys)), *keys, direction.value]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return cast(
+            Optional[Mapping[str, List[str]]],
+            await self._execute_command(RequestType.LMPop, args),
+        )
+
+    async def blmpop(
+        self,
+        keys: List[str],
+        direction: ListDirection,
+        timeout: float,
+        count: Optional[int] = None,
+    ) -> Optional[Mapping[str, List[str]]]:
+        """
+        Blocks the connection until it pops one or more elements from the first non-empty list from the provided `keys`.
+
+        `BLMPOP` is the blocking variant of `LMPOP`.
+
+        Notes:
+            1. When in cluster mode, all `keys` must map to the same hash slot.
+            2. `BLMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/blmpop/ for details.
+
+        Args:
+            keys (List[str]): An array of keys of lists.
+            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+
+        Returns:
+            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
+
+        Examples:
+            >>> await client.lpush("testKey", ["one", "two", "three"])
+            >>> await client.blmpop(["testKey"], ListDirection.LEFT, 0.1, 2)
+               {"testKey": ["three", "two"]}
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(timeout), str(len(keys)), *keys, direction.value]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return cast(
+            Optional[Mapping[str, List[str]]],
+            await self._execute_command(RequestType.BLMPop, args),
+        )
+
     async def lrange(self, key: str, start: int, end: int) -> List[str]:
         """
         Retrieve the specified elements of the list stored at `key` within the given range.
@@ -3953,6 +4030,34 @@ class CoreCommands(Protocol):
             TOK,
             await self._execute_command(
                 RequestType.PfMerge, [destination] + source_keys
+            ),
+        )
+
+    async def setbit(self, key: str, offset: int, value: int) -> int:
+        """
+        Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
+        with `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less
+        than `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to
+        `value` and the preceding bits are set to `0`.
+
+        See https://valkey.io/commands/setbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to be set.
+            value (int): The bit value to set at `offset`. The value must be `0` or `1`.
+
+        Returns:
+            int: The bit value that was previously stored at `offset`.
+
+        Examples:
+            >>> await client.setbit("string_key", 1, 1)
+                0  # The second bit value was 0 before setting to 1.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.SetBit, [key, str(offset), str(value)]
             ),
         )
 

@@ -20,8 +20,10 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
@@ -281,5 +283,18 @@ public class RedisClient extends BaseClient
             arguments = ArrayUtils.add(arguments, REPLACE_REDIS_API);
         }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionKill() {
+        return commandManager.submitNewCommand(FunctionKill, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, Object>>> functionStats() {
+        return commandManager.submitNewCommand(
+                FunctionStats,
+                new String[0],
+                response -> handleFunctionStatsResponse(handleMapResponse(response)));
     }
 }

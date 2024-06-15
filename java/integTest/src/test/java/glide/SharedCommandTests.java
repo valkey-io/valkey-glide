@@ -33,6 +33,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -1031,6 +1032,100 @@ public class SharedCommandTests {
         assertEquals(1, client.lrem(key, 0, "value2").get());
         assertArrayEquals(new String[] {"value1"}, client.lrange(key, 0, -1).get());
         assertEquals(0, client.lrem("non_existing_key", 0, "value").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lpos(BaseClient client) {
+        String key = "{ListKey}-1-" + UUID.randomUUID();
+        String[] valueArray = new String[] {"a", "a", "b", "c", "a", "b"};
+        assertEquals(6L, client.rpush(key, valueArray).get());
+
+        // simplest case
+        assertEquals(0L, client.lpos(key, "a").get());
+        assertEquals(5L, client.lpos(key, "b", LPosOptions.builder().rank(2L).build()).get());
+
+        // element doesn't exist
+        assertNull(client.lpos(key, "e").get());
+
+        // reverse traversal
+        assertEquals(2L, client.lpos(key, "b", LPosOptions.builder().rank(-2L).build()).get());
+
+        // unlimited comparisons
+        assertEquals(
+                0L, client.lpos(key, "a", LPosOptions.builder().rank(1L).maxLength(0L).build()).get());
+
+        // limited comparisons
+        assertNull(client.lpos(key, "c", LPosOptions.builder().rank(1L).maxLength(2L).build()).get());
+
+        // invalid rank value
+        ExecutionException lposException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lpos(key, "a", LPosOptions.builder().rank(0L).build()).get());
+        assertTrue(lposException.getCause() instanceof RequestException);
+
+        // invalid maxlen value
+        ExecutionException lposMaxlenException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lpos(key, "a", LPosOptions.builder().maxLength(-1L).build()).get());
+        assertTrue(lposMaxlenException.getCause() instanceof RequestException);
+
+        // non-existent key
+        assertNull(client.lpos("non-existent_key", "a").get());
+
+        // wrong key data type
+        String wrong_data_type = "key" + UUID.randomUUID();
+        assertEquals(2L, client.sadd(wrong_data_type, new String[] {"a", "b"}).get());
+        ExecutionException lposWrongKeyDataTypeException =
+                assertThrows(ExecutionException.class, () -> client.lpos(wrong_data_type, "a").get());
+        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lposCount(BaseClient client) {
+        String key = "{ListKey}-1-" + UUID.randomUUID();
+        String[] valueArray = new String[] {"a", "a", "b", "c", "a", "b"};
+        assertEquals(6L, client.rpush(key, valueArray).get());
+
+        assertArrayEquals(new Long[] {0L, 1L}, client.lposCount(key, "a", 2L).get());
+        assertArrayEquals(new Long[] {0L, 1L, 4L}, client.lposCount(key, "a", 0L).get());
+
+        // invalid count value
+        ExecutionException lposCountException =
+                assertThrows(ExecutionException.class, () -> client.lposCount(key, "a", -1L).get());
+        assertTrue(lposCountException.getCause() instanceof RequestException);
+
+        // with option
+        assertArrayEquals(
+                new Long[] {0L, 1L, 4L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(1L).build()).get());
+        assertArrayEquals(
+                new Long[] {1L, 4L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(2L).build()).get());
+        assertArrayEquals(
+                new Long[] {4L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(3L).build()).get());
+
+        // reverse traversal
+        assertArrayEquals(
+                new Long[] {4L, 1L, 0L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(-1L).build()).get());
+
+        // non-existent key
+        assertArrayEquals(new Long[] {}, client.lposCount("non-existent_key", "a", 1L).get());
+
+        // wrong key data type
+        String wrong_data_type = "key" + UUID.randomUUID();
+        assertEquals(2L, client.sadd(wrong_data_type, new String[] {"a", "b"}).get());
+        ExecutionException lposWrongKeyDataTypeException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lposCount(wrong_data_type, "a", 1L).get());
+        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
@@ -5156,5 +5251,65 @@ public class SharedCommandTests {
         // one of the keys is already set, nothing gets set
         assertFalse(client.msetnx(keyValueMap2).get());
         assertNull(client.get(key3).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lcs(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String nonStringKey = "{key}-4" + UUID.randomUUID();
+
+        // keys does not exist or is empty
+        assertEquals("", client.lcs(key1, key2).get());
+
+        // setting string values
+        client.set(key1, "abcd");
+        client.set(key2, "bcde");
+        client.set(key3, "wxyz");
+
+        // getting the lcs
+        assertEquals("", client.lcs(key1, key3).get());
+        assertEquals("bcd", client.lcs(key1, key2).get());
+
+        // non set keys are used
+        client.sadd(nonStringKey, new String[] {"setmember"}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lcs_with_len_option(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String nonStringKey = "{key}-4" + UUID.randomUUID();
+
+        // keys does not exist or is empty
+        assertEquals(0, client.lcsLen(key1, key2).get());
+
+        // setting string values
+        client.set(key1, "abcd");
+        client.set(key2, "bcde");
+        client.set(key3, "wxyz");
+
+        // getting the lcs
+        assertEquals(0, client.lcsLen(key1, key3).get());
+        assertEquals(3, client.lcsLen(key1, key2).get());
+
+        // non set keys are used
+        client.sadd(nonStringKey, new String[] {"setmember"}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }

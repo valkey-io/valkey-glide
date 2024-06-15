@@ -56,6 +56,7 @@ async def transaction_test(
     key16 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
     key17 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
+    key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -190,6 +191,13 @@ async def transaction_test(
     args.append([value2, value])
     transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
     args.append(0)
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.lpush(key5, [value, value2])
+        args.append(2)
+        transaction.lmpop([key5], ListDirection.LEFT)
+        args.append({key5: [value2]})
+        transaction.blmpop([key5], ListDirection.LEFT, 0.1)
+        args.append({key5: [value]})
 
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
@@ -336,6 +344,11 @@ async def transaction_test(
     args.append(OK)
     transaction.pfcount([key10])
     args.append(3)
+
+    transaction.setbit(key19, 1, 1)
+    args.append(0)
+    transaction.setbit(key19, 1, 0)
+    args.append(1)
 
     transaction.geoadd(
         key12,
