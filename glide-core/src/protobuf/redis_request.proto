@@ -200,6 +200,7 @@ enum RequestType {
     BLMPop = 158;
     XLen = 159;
     Sort = 160;
+    FCallReadOnly = 163;
     LSet = 165;
     XDel = 166;
     XRange = 167;
