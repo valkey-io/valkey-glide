@@ -311,7 +311,7 @@ describe("GlideClusterClient", () => {
         TIMEOUT,
     );
 
-    it.only.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `check that multi key command returns a cross slot error`,
         async (protocol) => {
             const client = await GlideClusterClient.createClient(
