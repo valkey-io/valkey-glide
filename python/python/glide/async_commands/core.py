@@ -329,6 +329,19 @@ class InsertPosition(Enum):
     AFTER = "AFTER"
 
 
+class FlushMode(Enum):
+    """
+    A modifiers to dictate the flushing mode explicitly.
+    - ASYNC: flushes the databases asynchronously
+    - SYNC: flushes the databases synchronously
+
+    Since: SYNC was added in Redis version 6.2.0.
+    """
+
+    ASYNC = "ASYNC"
+    SYNC = "SYNC"
+
+
 def _build_sort_args(
     key: str,
     by_pattern: Optional[str] = None,
@@ -4663,4 +4676,29 @@ class CoreCommands(Protocol):
         return cast(
             List[str],
             await self._execute_command(RequestType.SRandMember, [key, str(count)]),
+        )
+
+    async def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Delete all the keys of all the existing databases, not just the currently selected one. This command never fails.
+
+        See https://valkey.io/commands/flushall for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): An optional argument that dictates the flushing mode explicitly.
+
+        Returns:
+            str: OK.
+
+        Examples:
+             >>> await client.flushall(FlushMode.ASYNC)
+            OK  # This command never fails.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.FlushAll, args),
         )
