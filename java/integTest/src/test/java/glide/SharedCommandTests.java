@@ -3341,8 +3341,11 @@ public class SharedCommandTests {
 
         // Stream with option to create creates stream & Group
         assertEquals(
-                OK, client.xgroupCreate(key, groupName, streamId, StreamGroupOptions.builder().makeStream()
-                .build()).get());
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, streamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
 
         // ...and again results in BUSYGROUP error, because group names must be unique
         executionException =
@@ -3376,7 +3379,11 @@ public class SharedCommandTests {
                         ExecutionException.class,
                         () ->
                                 client
-                                        .xgroupCreate(stringKey, groupName, streamId, StreamGroupOptions.builder().makeStream().build())
+                                        .xgroupCreate(
+                                                stringKey,
+                                                groupName,
+                                                streamId,
+                                                StreamGroupOptions.builder().makeStream().build())
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 

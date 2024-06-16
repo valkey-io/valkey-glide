@@ -687,7 +687,8 @@ public class TransactionTestUtilities {
                 .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
                 .xtrim(streamKey1, new MinId(true, "0-2"))
                 .xgroupCreate(streamKey1, groupName1, "0-0")
-                .xgroupCreate(streamKey1, groupName2, "0-0", StreamGroupOptions.builder().makeStream().build())
+                .xgroupCreate(
+                        streamKey1, groupName2, "0-0", StreamGroupOptions.builder().makeStream().build())
                 .xgroupDestroy(streamKey1, groupName1)
                 .xgroupDestroy(streamKey1, groupName2)
                 .xdel(streamKey1, new String[] {"0-3", "0-5"});
