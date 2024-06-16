@@ -3097,7 +3097,7 @@ export function runBaseTests<Context>(config: {
                 const versionLessThan72 =
                     await checkIfServerVersionLessThan("7.2.0");
 
-                expect(await client.object_encoding(non_existing_key)).toEqual(
+                expect(await client.objectEncoding(non_existing_key)).toEqual(
                     null,
                 );
 
@@ -3107,24 +3107,24 @@ export function runBaseTests<Context>(config: {
                         "a really loooooooooooooooooooooooooooooooooooooooong value",
                     ),
                 ).toEqual("OK");
-                expect(await client.object_encoding(string_key)).toEqual("raw");
+                expect(await client.objectEncoding(string_key)).toEqual("raw");
 
                 expect(await client.set(string_key, "2")).toEqual("OK");
-                expect(await client.object_encoding(string_key)).toEqual("int");
+                expect(await client.objectEncoding(string_key)).toEqual("int");
 
                 expect(await client.set(string_key, "value")).toEqual("OK");
-                expect(await client.object_encoding(string_key)).toEqual(
+                expect(await client.objectEncoding(string_key)).toEqual(
                     "embstr",
                 );
 
                 expect(await client.lpush(list_key, ["1"])).toEqual(1);
 
                 if (versionLessThan7) {
-                    expect(await client.object_encoding(list_key)).toEqual(
+                    expect(await client.objectEncoding(list_key)).toEqual(
                         "quicklist",
                     );
                 } else {
-                    expect(await client.object_encoding(list_key)).toEqual(
+                    expect(await client.objectEncoding(list_key)).toEqual(
                         "listpack",
                     );
                 }
@@ -3136,12 +3136,12 @@ export function runBaseTests<Context>(config: {
                     ).toEqual(1);
                 }
 
-                expect(await client.object_encoding(hashtable_key)).toEqual(
+                expect(await client.objectEncoding(hashtable_key)).toEqual(
                     "hashtable",
                 );
 
                 expect(await client.sadd(intset_key, ["1"])).toEqual(1);
-                expect(await client.object_encoding(intset_key)).toEqual(
+                expect(await client.objectEncoding(intset_key)).toEqual(
                     "intset",
                 );
 
@@ -3149,11 +3149,11 @@ export function runBaseTests<Context>(config: {
 
                 if (versionLessThan72) {
                     expect(
-                        await client.object_encoding(set_listpack_key),
+                        await client.objectEncoding(set_listpack_key),
                     ).toEqual("hashtable");
                 } else {
                     expect(
-                        await client.object_encoding(set_listpack_key),
+                        await client.objectEncoding(set_listpack_key),
                     ).toEqual("listpack");
                 }
 
@@ -3166,9 +3166,9 @@ export function runBaseTests<Context>(config: {
                     ).toEqual(1);
                 }
 
-                expect(
-                    await client.object_encoding(hash_hashtable_key),
-                ).toEqual("hashtable");
+                expect(await client.objectEncoding(hash_hashtable_key)).toEqual(
+                    "hashtable",
+                );
 
                 expect(
                     await client.hset(hash_listpack_key, { "1": "2" }),
@@ -3176,11 +3176,11 @@ export function runBaseTests<Context>(config: {
 
                 if (versionLessThan7) {
                     expect(
-                        await client.object_encoding(hash_listpack_key),
+                        await client.objectEncoding(hash_listpack_key),
                     ).toEqual("ziplist");
                 } else {
                     expect(
-                        await client.object_encoding(hash_listpack_key),
+                        await client.objectEncoding(hash_listpack_key),
                     ).toEqual("listpack");
                 }
 
@@ -3191,7 +3191,7 @@ export function runBaseTests<Context>(config: {
                     ).toEqual(1);
                 }
 
-                expect(await client.object_encoding(skiplist_key)).toEqual(
+                expect(await client.objectEncoding(skiplist_key)).toEqual(
                     "skiplist",
                 );
 
@@ -3201,18 +3201,18 @@ export function runBaseTests<Context>(config: {
 
                 if (versionLessThan7) {
                     expect(
-                        await client.object_encoding(zset_listpack_key),
+                        await client.objectEncoding(zset_listpack_key),
                     ).toEqual("ziplist");
                 } else {
                     expect(
-                        await client.object_encoding(zset_listpack_key),
+                        await client.objectEncoding(zset_listpack_key),
                     ).toEqual("listpack");
                 }
 
                 expect(
                     await client.xadd(stream_key, [["field", "value"]]),
                 ).not.toBeNull();
-                expect(await client.object_encoding(stream_key)).toEqual(
+                expect(await client.objectEncoding(stream_key)).toEqual(
                     "stream",
                 );
             }, protocol);
@@ -3236,13 +3236,13 @@ export function runBaseTests<Context>(config: {
                             [maxmemoryPolicyKey]: "allkeys-lfu",
                         }),
                     ).toEqual("OK");
-                    expect(await client.object_freq(nonExistingKey)).toEqual(
+                    expect(await client.objectFreq(nonExistingKey)).toEqual(
                         null,
                     );
                     expect(await client.set(key, "foobar")).toEqual("OK");
-                    expect(
-                        await client.object_freq(key),
-                    ).toBeGreaterThanOrEqual(0);
+                    expect(await client.objectFreq(key)).toBeGreaterThanOrEqual(
+                        0,
+                    );
                 } finally {
                     expect(
                         await client.configSet({
@@ -3250,6 +3250,66 @@ export function runBaseTests<Context>(config: {
                         }),
                     ).toEqual("OK");
                 }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object idletime test_%p",
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = uuidv4();
+                const nonExistingKey = uuidv4();
+                const maxmemoryPolicyKey = "maxmemory-policy";
+                const config = await client.configGet([maxmemoryPolicyKey]);
+                const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+
+                try {
+                    expect(
+                        await client.configSet({
+                            // OBJECT IDLETIME requires a non-LFU maxmemory-policy
+                            [maxmemoryPolicyKey]: "allkeys-random",
+                        }),
+                    ).toEqual("OK");
+                    expect(await client.objectIdletime(nonExistingKey)).toEqual(
+                        null,
+                    );
+                    expect(await client.set(key, "foobar")).toEqual("OK");
+
+                    await wait(2000);
+
+                    expect(await client.objectIdletime(key)).toBeGreaterThan(0);
+                } finally {
+                    expect(
+                        await client.configSet({
+                            [maxmemoryPolicyKey]: maxmemoryPolicy,
+                        }),
+                    ).toEqual("OK");
+                }
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    function wait(numMilliseconds: number) {
+        return new Promise((resolve) => {
+            setTimeout(resolve, numMilliseconds);
+        });
+    }
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `object refcount test_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
+                const key = `{key}:${uuidv4()}`;
+                const nonExistingKey = `{key}:${uuidv4()}`;
+
+                expect(await client.objectRefcount(nonExistingKey)).toBeNull();
+                expect(await client.set(key, "foo")).toEqual("OK");
+                expect(await client.objectRefcount(key)).toBeGreaterThanOrEqual(
+                    1,
+                );
             }, protocol);
         },
         config.timeout,

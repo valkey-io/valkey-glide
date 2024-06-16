@@ -106,6 +106,8 @@ import {
     createSUnionStore,
     createXLen,
     createZInterCard,
+    createObjectIdletime,
+    createObjectRefcount,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -1478,7 +1480,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
      *     Otherwise, returns None.
      */
-    public object_encoding(key: string): T {
+    public objectEncoding(key: string): T {
         return this.addAndReturn(createObjectEncoding(key));
     }
 
@@ -1490,8 +1492,35 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * Command Response - If `key` exists, returns the logarithmic access frequency counter of
      *     the object stored at `key` as a `number`. Otherwise, returns `null`.
      */
-    public object_freq(key: string): T {
+    public objectFreq(key: string): T {
         return this.addAndReturn(createObjectFreq(key));
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at `key`.
+     *
+     * See https://valkey.io/commands/object-idletime/ for more details.
+     *
+     * @param key - The key of the object to get the idle time of.
+     *
+     * Command Response - If `key` exists, returns the idle time in seconds. Otherwise, returns `null`.
+     */
+    public objectIdletime(key: string): T {
+        return this.addAndReturn(createObjectIdletime(key));
+    }
+
+    /**
+     * Returns the reference count of the object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-refcount/ for more details.
+     *
+     * @param key - The `key` of the object to get the reference count of.
+     *
+     * Command Response - If `key` exists, returns the reference count of the object stored at `key` as a `number`.
+     * Otherwise, returns `null`.
+     */
+    public objectRefcount(key: string): T {
+        return this.addAndReturn(createObjectRefcount(key));
     }
 }
 

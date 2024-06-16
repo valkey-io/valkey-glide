@@ -12,6 +12,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -201,6 +202,9 @@ public class TransactionTestUtilities {
         String stringKey3 = "{StringKey}-3-" + UUID.randomUUID();
         String stringKey4 = "{StringKey}-4-" + UUID.randomUUID();
         String stringKey5 = "{StringKey}-5-" + UUID.randomUUID();
+        String stringKey6 = "{StringKey}-6-" + UUID.randomUUID();
+        String stringKey7 = "{StringKey}-7-" + UUID.randomUUID();
+        String stringKey8 = "{StringKey}-8-" + UUID.randomUUID();
 
         transaction
                 .set(stringKey1, value1)
@@ -224,28 +228,57 @@ public class TransactionTestUtilities {
                 .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
                 .mget(new String[] {stringKey4, stringKey5});
 
-        return new Object[] {
-            OK, // set(stringKey1, value1)
-            value1, // get(stringKey1)
-            value1, // getdel(stringKey1)
-            null, // set(stringKey2, value2, returnOldValue(true))
-            (long) value1.length(), // strlen(key2)
-            Long.valueOf(value2.length() * 2), // append(key2, value2)
-            OK, // mset(Map.of(stringKey1, value2, stringKey2, value1))
-            new String[] {value2, value1}, // mget(new String[] {stringKey1, stringKey2})
-            1L, // incr(stringKey3)
-            3L, // incrBy(stringKey3, 2)
-            2L, // decr(stringKey3)
-            0L, // decrBy(stringKey3, 2)
-            0.5, // incrByFloat(stringKey3, 0.5)
-            5L, // setrange(stringKey3, 0, "GLIDE")
-            "GLIDE", // getrange(stringKey3, 0, 5)
-            true, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
-            new String[] {"foo", "bar"}, // mget({stringKey4, stringKey5})
-            1L, // del(stringKey5)
-            false, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
-            new String[] {"foo", null}, // mget({stringKey4, stringKey5})
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .set(stringKey6, "abcd")
+                    .set(stringKey7, "bcde")
+                    .set(stringKey8, "wxyz")
+                    .lcs(stringKey6, stringKey7)
+                    .lcs(stringKey6, stringKey8)
+                    .lcsLen(stringKey6, stringKey7)
+                    .lcsLen(stringKey6, stringKey8);
+        }
+
+        var expectedResults =
+                new Object[] {
+                    OK, // set(stringKey1, value1)
+                    value1, // get(stringKey1)
+                    value1, // getdel(stringKey1)
+                    null, // set(stringKey2, value2, returnOldValue(true))
+                    (long) value1.length(), // strlen(key2)
+                    Long.valueOf(value2.length() * 2), // append(key2, value2)
+                    OK, // mset(Map.of(stringKey1, value2, stringKey2, value1))
+                    new String[] {value2, value1}, // mget(new String[] {stringKey1, stringKey2})
+                    1L, // incr(stringKey3)
+                    3L, // incrBy(stringKey3, 2)
+                    2L, // decr(stringKey3)
+                    0L, // decrBy(stringKey3, 2)
+                    0.5, // incrByFloat(stringKey3, 0.5)
+                    5L, // setrange(stringKey3, 0, "GLIDE")
+                    "GLIDE", // getrange(stringKey3, 0, 5)
+                    true, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                    new String[] {"foo", "bar"}, // mget({stringKey4, stringKey5})
+                    1L, // del(stringKey5)
+                    false, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                    new String[] {"foo", null}, // mget({stringKey4, stringKey5})
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey6, "abcd")
+                                OK, // set(stringKey6, "bcde")
+                                OK, // set(stringKey6, "wxyz")
+                                "bcd", // lcs(stringKey6, stringKey7)
+                                "", // lcs(stringKey6, stringKey8)
+                                3L, // lcsLEN(stringKey6, stringKey7)
+                                0L, // lcsLEN(stringKey6, stringKey8)
+                            });
+        }
+
+        return expectedResults;
     }
 
     private static Object[] hashCommands(BaseTransaction<?> transaction) {
@@ -312,7 +345,12 @@ public class TransactionTestUtilities {
                 .ltrim(listKey1, 1, -1)
                 .lrange(listKey1, 0, -2)
                 .lpop(listKey1)
-                .lpopCount(listKey1, 2)
+                .lpopCount(listKey1, 2) // listKey1 is now empty
+                .rpush(listKey1, new String[] {value1, value1, value2, value3, value3})
+                .lpos(listKey1, value1)
+                .lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())
+                .lposCount(listKey1, value1, 1L)
+                .lposCount(listKey1, value1, 0L, LPosOptions.builder().rank(1L).build())
                 .rpush(listKey2, new String[] {value1, value2, value2})
                 .rpop(listKey2)
                 .rpopCount(listKey2, 2)
@@ -359,6 +397,11 @@ public class TransactionTestUtilities {
                     new String[] {value3, value2}, // lrange(listKey1, 0, -2)
                     value3, // lpop(listKey1)
                     new String[] {value2, value1}, // lpopCount(listKey1, 2)
+                    5L, // lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
+                    0L, // lpos(listKey1, value1)
+                    1L, // lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())
+                    new Long[] {0L}, // lposCount(listKey1, value1, 1L)
+                    new Long[] {0L, 1L}, // lposCount(listKey1, value1, 0L, LPosOptions.rank(2L))
                     3L, // rpush(listKey2, new String[] {value1, value2, value2})
                     value2, // rpop(listKey2)
                     new String[] {value2, value1}, // rpopCount(listKey2, 2)
@@ -370,7 +413,7 @@ public class TransactionTestUtilities {
                     new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01)
                     2L, // lpush(listKey5, new String[] {value2, value3})
                     OK, // lset(listKey5, 0, value1)
-                    new String[] {value1, value2} // lrange(listKey5, 0, -1)
+                    new String[] {value1, value2}, // lrange(listKey5, 0, -1)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -738,10 +781,15 @@ public class TransactionTestUtilities {
             return new Object[0];
         }
 
+        final String libName = "mylib1T";
+        final String funcName = "myfunc1T";
+
         final String code =
-                "#!lua name=mylib1T\n"
-                        + "redis.register_function('myfunc1T',"
-                        + "function(keys, args) return args[1] end)"; // function returns first argument
+                "#!lua name="
+                        + libName
+                        + "\n redis.register_function('"
+                        + funcName
+                        + "', function(keys, args) return args[1] end)"; // function returns first argument
 
         var expectedFuncData =
                 new HashMap<String, Object>() {
@@ -765,29 +813,48 @@ public class TransactionTestUtilities {
                             code)
                 };
 
+        var expectedFunctionStatsNonEmpty =
+                new HashMap<String, Map<String, Object>>() {
+                    {
+                        put("running_script", null);
+                        put("engines", Map.of("LUA", Map.of("libraries_count", 1L, "functions_count", 1L)));
+                    }
+                };
+        var expectedFunctionStatsEmpty =
+                new HashMap<String, Map<String, Object>>() {
+                    {
+                        put("running_script", null);
+                        put("engines", Map.of("LUA", Map.of("libraries_count", 0L, "functions_count", 0L)));
+                    }
+                };
+
         transaction
                 .functionFlush(SYNC)
                 .functionList(false)
                 .functionLoad(code, false)
                 .functionLoad(code, true)
+                .functionStats()
                 .fcall("myfunc1T", new String[0], new String[] {"a", "b"})
                 .fcall("myfunc1T", new String[] {"a", "b"})
                 .functionList("otherLib", false)
                 .functionList("mylib1T", true)
                 .functionDelete("mylib1T")
-                .functionList(true);
+                .functionList(true)
+                .functionStats();
 
         return new Object[] {
             OK, // functionFlush(SYNC)
             new Map[0], // functionList(false)
             "mylib1T", // functionLoad(code, false)
             "mylib1T", // functionLoad(code, true)
+            expectedFunctionStatsNonEmpty, // functionStats()
             "a", // fcall("myfunc1T", new String[0], new String[]{"a", "b"})
             "a", // fcall("myfunc1T", new String[] {"a", "b"})
             new Map[0], // functionList("otherLib", false)
             expectedLibData, // functionList("mylib1T", true)
             OK, // functionDelete("mylib1T")
             new Map[0], // functionList(true)
+            expectedFunctionStatsEmpty, // functionStats()
         };
     }
 

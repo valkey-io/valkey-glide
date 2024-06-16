@@ -1493,3 +1493,17 @@ export function createObjectEncoding(key: string): redis_request.Command {
 export function createObjectFreq(key: string): redis_request.Command {
     return createCommand(RequestType.ObjectFreq, [key]);
 }
+
+/**
+ * @internal
+ */
+export function createObjectIdletime(key: string): redis_request.Command {
+    return createCommand(RequestType.ObjectIdleTime, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createObjectRefcount(key: string): redis_request.Command {
+    return createCommand(RequestType.ObjectRefCount, [key]);
+}

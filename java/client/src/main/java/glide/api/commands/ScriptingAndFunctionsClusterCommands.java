@@ -339,4 +339,104 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<Object>> fcall(String function, String[] arguments, Route route);
+
+    /**
+     * Kills a function that is currently executing.<br>
+     * <code>FUNCTION KILL</code> terminates read-only functions only.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-kill/">redis.io</a> for details.
+     * @return <code>OK</code> if function is terminated. Otherwise, throws an error.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionKill().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionKill();
+
+    /**
+     * Kills a function that is currently executing.<br>
+     * <code>FUNCTION KILL</code> terminates read-only functions only.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-kill/">redis.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code> if function is terminated. Otherwise, throws an error.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionKill(RANDOM).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionKill(Route route);
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @return A <code>Map</code> with two keys:
+     *     <ul>
+     *       <li><code>running_script</code> with information about the running script.
+     *       <li><code>engines</code> with information about available engines and their stats.
+     *     </ul>
+     *     See example for more details.
+     * @example
+     *     <pre>{@code
+     * Map<String, Map<String, Map<String, Object>>> response = client.functionStats().get().getMultiValue();
+     * for (String node : response.keySet()) {
+     *   Map<String, Object> runningScriptInfo = response.get(node).get("running_script");
+     *   if (runningScriptInfo != null) {
+     *     String[] commandLine = (String[]) runningScriptInfo.get("command");
+     *     System.out.printf("Node '%s' is currently running function '%s' with command line '%s', which has been running for %d ms%n",
+     *         node, runningScriptInfo.get("name"), String.join(" ", commandLine), (long) runningScriptInfo.get("duration_ms"));
+     *   }
+     *   Map<String, Object> enginesInfo = response.get(node).get("engines");
+     *   for (String engineName : enginesInfo.keySet()) {
+     *     Map<String, Long> engine = (Map<String, Long>) enginesInfo.get(engineName);
+     *     System.out.printf("Node '%s' supports engine '%s', which has %d libraries and %d functions in total%n",
+     *         node, engineName, engine.get("libraries_count"), engine.get("functions_count"));
+     *   }
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats();
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return A <code>Map</code> with two keys:
+     *     <ul>
+     *       <li><code>running_script</code> with information about the running script.
+     *       <li><code>engines</code> with information about available engines and their stats.
+     *     </ul>
+     *     See example for more details.
+     * @example
+     *     <pre>{@code
+     * Map<String, Map<String, Object>> response = client.functionStats(RANDOM).get().getSingleValue();
+     * Map<String, Object> runningScriptInfo = response.get("running_script");
+     * if (runningScriptInfo != null) {
+     *   String[] commandLine = (String[]) runningScriptInfo.get("command");
+     *   System.out.printf("Node is currently running function '%s' with command line '%s', which has been running for %d ms%n",
+     *       runningScriptInfo.get("name"), String.join(" ", commandLine), (long)runningScriptInfo.get("duration_ms"));
+     * }
+     * Map<String, Object> enginesInfo = response.get("engines");
+     * for (String engineName : enginesInfo.keySet()) {
+     *   Map<String, Long> engine = (Map<String, Long>) enginesInfo.get(engineName);
+     *   System.out.printf("Node supports engine '%s', which has %d libraries and %d functions in total%n",
+     *       engineName, engine.get("libraries_count"), engine.get("functions_count"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats(Route route);
 }

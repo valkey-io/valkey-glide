@@ -56,6 +56,7 @@ async def transaction_test(
     key16 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
     key17 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
+    key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -343,6 +344,11 @@ async def transaction_test(
     args.append(OK)
     transaction.pfcount([key10])
     args.append(3)
+
+    transaction.setbit(key19, 1, 1)
+    args.append(0)
+    transaction.setbit(key19, 1, 0)
+    args.append(1)
 
     transaction.geoadd(
         key12,
