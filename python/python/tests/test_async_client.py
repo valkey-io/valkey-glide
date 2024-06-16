@@ -281,7 +281,7 @@ class TestCommands:
         key = get_random_string(10)
         value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
         assert await redis_client.set(key, value) == OK
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode('utf-8')
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
