@@ -27,6 +27,8 @@ import {
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
+    intoString,
+    intoArray,
 } from "./TestUtilities";
 type Context = {
     client: RedisClusterClient;
@@ -92,24 +94,20 @@ describe("RedisClusterClient", () => {
             const info_server = getFirstResult(
                 await client.info([InfoOptions.Server]),
             );
-            expect(info_server).toEqual(expect.stringContaining("# Server"));
+            expect(intoString(info_server)).toEqual(
+                expect.stringContaining("# Server"),
+            );
 
-            const result = (await client.info([
-                InfoOptions.Replication,
-            ])) as Record<string, string>;
-            const clusterNodes = await client.customCommand([
-                "CLUSTER",
-                "NODES",
-            ]);
-            expect(
-                (clusterNodes as string)?.split("master").length - 1,
-            ).toEqual(Object.keys(result).length);
-            Object.values(result).every((item) => {
-                expect(item).toEqual(expect.stringContaining("# Replication"));
-                expect(item).toEqual(
-                    expect.not.stringContaining("# Errorstats"),
-                );
-            });
+            const infoReplicationValues = Object.values(
+                await client.info([InfoOptions.Replication]),
+            );
+
+            const replicationInfo = intoArray(infoReplicationValues);
+
+            for (const item of replicationInfo) {
+                expect(item).toContain("role:master");
+                expect(item).toContain("# Replication");
+            }
         },
         TIMEOUT,
     );
@@ -124,9 +122,12 @@ describe("RedisClusterClient", () => {
                 [InfoOptions.Server],
                 "randomNode",
             );
-            expect(typeof result).toEqual("string");
-            expect(result).toEqual(expect.stringContaining("# Server"));
-            expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("# Server"),
+            );
+            expect(intoString(result)).toEqual(
+                expect.not.stringContaining("# Errorstats"),
+            );
         },
         TIMEOUT,
     );
@@ -148,10 +149,12 @@ describe("RedisClusterClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = cleanResult(
-                (await client.customCommand(
-                    ["cluster", "nodes"],
-                    "randomNode",
-                )) as string,
+                intoString(
+                    await client.customCommand(
+                        ["cluster", "nodes"],
+                        "randomNode",
+                    ),
+                ),
             );
 
             // check that routing without explicit port works
@@ -162,10 +165,12 @@ describe("RedisClusterClient", () => {
             }
 
             const secondResult = cleanResult(
-                (await client.customCommand(["cluster", "nodes"], {
-                    type: "routeByAddress",
-                    host,
-                })) as string,
+                intoString(
+                    await client.customCommand(["cluster", "nodes"], {
+                        type: "routeByAddress",
+                        host,
+                    }),
+                ),
             );
 
             expect(result).toEqual(secondResult);
@@ -174,11 +179,13 @@ describe("RedisClusterClient", () => {
 
             // check that routing with explicit port works
             const thirdResult = cleanResult(
-                (await client.customCommand(["cluster", "nodes"], {
-                    type: "routeByAddress",
-                    host: host2,
-                    port: Number(port),
-                })) as string,
+                intoString(
+                    await client.customCommand(["cluster", "nodes"], {
+                        type: "routeByAddress",
+                        host: host2,
+                        port: Number(port),
+                    }),
+                ),
             );
 
             expect(result).toEqual(thirdResult);
@@ -212,7 +219,9 @@ describe("RedisClusterClient", () => {
             transaction.configSet({ timeout: "1000" });
             transaction.configGet(["timeout"]);
             const result = await client.exec(transaction);
-            expect(result).toEqual(["OK", { timeout: "1000" }]);
+            expect(intoString(result)).toEqual(
+                intoString(["OK", { timeout: "1000" }]),
+            );
         },
         TIMEOUT,
     );
@@ -226,7 +235,7 @@ describe("RedisClusterClient", () => {
             const transaction = new ClusterTransaction();
             const expectedRes = await transactionTest(transaction);
             const result = await client.exec(transaction);
-            expect(result).toEqual(expectedRes);
+            expect(intoString(result)).toEqual(intoString(expectedRes));
         },
         TIMEOUT,
     );
@@ -267,8 +276,8 @@ describe("RedisClusterClient", () => {
             const echoDict = await client.echo(message, "allNodes");
 
             expect(typeof echoDict).toBe("object");
-            expect(Object.values(echoDict)).toEqual(
-                expect.arrayContaining([message]),
+            expect(intoArray(echoDict)).toEqual(
+                expect.arrayContaining(intoArray([message])),
             );
         },
         TIMEOUT,
