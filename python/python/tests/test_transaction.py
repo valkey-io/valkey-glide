@@ -91,6 +91,8 @@ async def transaction_test(
 
     transaction.exists([key2])
     args.append(1)
+    transaction.touch([key2])
+    args.append(1)
 
     transaction.delete([key2])
     args.append(1)
