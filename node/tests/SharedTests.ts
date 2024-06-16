@@ -3140,12 +3140,18 @@ export function runBaseTests<Context>(config: {
                     ),
                 ).toEqual("OK");
 
-                checkSimple(await client.objectEncoding(string_key)).toEqual("raw");
+                checkSimple(await client.objectEncoding(string_key)).toEqual(
+                    "raw",
+                );
 
                 checkSimple(await client.set(string_key, "2")).toEqual("OK");
-                checkSimple(await client.objectEncoding(string_key)).toEqual("int");
+                checkSimple(await client.objectEncoding(string_key)).toEqual(
+                    "int",
+                );
 
-                checkSimple(await client.set(string_key, "value")).toEqual("OK");
+                checkSimple(await client.set(string_key, "value")).toEqual(
+                    "OK",
+                );
                 checkSimple(await client.objectEncoding(string_key)).toEqual(
                     "embstr",
                 );
@@ -3199,9 +3205,9 @@ export function runBaseTests<Context>(config: {
                     ).toEqual(1);
                 }
 
-                checkSimple(await client.objectEncoding(hash_hashtable_key)).toEqual(
-                    "hashtable",
-                );
+                checkSimple(
+                    await client.objectEncoding(hash_hashtable_key),
+                ).toEqual("hashtable");
 
                 expect(
                     await client.hset(hash_listpack_key, { "1": "2" }),
