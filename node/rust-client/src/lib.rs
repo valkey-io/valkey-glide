@@ -166,10 +166,7 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
             .map(|val| val.into_unknown()),
         Value::Okay => js_env.create_string("OK").map(|val| val.into_unknown()),
         Value::Int(num) => js_env.create_int64(num).map(|val| val.into_unknown()),
-        Value::BulkString(data) => {
-            let str = to_js_result(std::str::from_utf8(data.as_ref()))?;
-            js_env.create_string(str).map(|val| val.into_unknown())
-        }
+        Value::BulkString(data) => Ok(js_env.create_buffer_with_data(data)?.into_unknown()),
         Value::Array(array) => {
             let mut js_array_view = js_env.create_array_with_length(array.len())?;
             for (index, item) in array.into_iter().enumerate() {
@@ -224,7 +221,9 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
     }
 }
 
-#[napi(ts_return_type = "null | string | number | {} | Boolean | BigInt | Set<any> | any[]")]
+#[napi(
+    ts_return_type = "null | string | Uint8Array | number | {} | Boolean | BigInt | Set<any> | any[]"
+)]
 pub fn value_from_split_pointer(js_env: Env, high_bits: u32, low_bits: u32) -> Result<JsUnknown> {
     let mut bytes = [0_u8; 8];
     (&mut bytes[..4])
