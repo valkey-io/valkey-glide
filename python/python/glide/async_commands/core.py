@@ -733,6 +733,36 @@ class CoreCommands(Protocol):
             parameters.extend(pair)
         return cast(TOK, await self._execute_command(RequestType.MSet, parameters))
 
+    async def msetnx(self, key_value_map: Mapping[str, str]) -> bool:
+        """
+        Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+        more keys already exist, the entire operation fails.
+
+        Note:
+            When in cluster mode, all keys in `key_value_map` must map to the same hash slot.
+
+        See https://valkey.io/commands/msetnx/ for more details.
+
+        Args:
+            key_value_map (Mapping[str, str]): A key-value map consisting of keys and their respective values to set.
+
+        Returns:
+            bool: True if all keys were set. False if no key was set.
+
+        Examples:
+            >>> await client.msetnx({"key1": "value1", "key2": "value2"})
+                True
+            >>> await client.msetnx({"key2": "value4", "key3": "value5"})
+                False
+        """
+        parameters: List[str] = []
+        for pair in key_value_map.items():
+            parameters.extend(pair)
+        return cast(
+            bool,
+            await self._execute_command(RequestType.MSetNX, parameters),
+        )
+
     async def mget(self, keys: List[str]) -> List[Optional[str]]:
         """
         Retrieve the values of multiple keys.
