@@ -739,7 +739,7 @@ class CoreCommands(Protocol):
         more keys already exist, the entire operation fails.
 
         Note:
-            When in cluster mode, all `keys` must map to the same hash slot.
+            When in cluster mode, all keys in `key_value_map` must map to the same hash slot.
 
         See https://valkey.io/commands/msetnx/ for more details.
 
