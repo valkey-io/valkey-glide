@@ -104,6 +104,8 @@ async def transaction_test(
 
     transaction.mset({key: value, key2: value2})
     args.append(OK)
+    transaction.msetnx({key: value, key2: value2})
+    args.append(False)
     transaction.mget([key, key2])
     args.append([value, value2])
 

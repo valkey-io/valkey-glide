@@ -546,6 +546,25 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_msetnx(self, redis_client: TRedisClient):
+        key1 = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        key3 = f"{{key}}-3{get_random_string(5)}"
+        non_existing = get_random_string(5)
+        value = get_random_string(5)
+        key_value_map1 = {key1: value, key2: value}
+        key_value_map2 = {key2: get_random_string(5), key3: value}
+
+        assert await redis_client.msetnx(key_value_map1) is True
+        mget_res = await redis_client.mget([key1, key2, non_existing])
+        assert mget_res == [value, value, None]
+
+        assert await redis_client.msetnx(key_value_map2) is False
+        assert await redis_client.get(key3) is None
+        assert await redis_client.get(key2) == value
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ping(self, redis_client: TRedisClient):
         assert await redis_client.ping() == "PONG"
         assert await redis_client.ping("HELLO") == "HELLO"
@@ -4221,6 +4240,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.blmove(
                 "abc", "zxy", ListDirection.LEFT, ListDirection.LEFT, 1
             ),
+            redis_client.msetnx({"abc": "abc", "zxy": "zyx"}),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
