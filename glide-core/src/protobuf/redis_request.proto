@@ -219,6 +219,7 @@ enum RequestType {
     LPos = 180;
     LCS = 181;
     GeoSearch = 182;
+    SUnion = 183;
 }
 
 message Command {
