@@ -2872,7 +2872,23 @@ class Transaction(BaseTransaction):
 
     """
 
-    # TODO: add MOVE, SLAVEOF and all SENTINEL commands
+    # TODO: add SLAVEOF and all SENTINEL commands
+    def move(self, key: str, db_index: int) -> "Transaction":
+        """
+        Move `key` from the currently selected database to the database specified by `db_index`.
+
+        See https://valkey.io/commands/move/ for more details.
+
+        Args:
+            key (str): The key to move.
+            db_index (int): The index of the database to move `key` to.
+
+        Commands response:
+            bool: True if `key` was moved, or False if the `key` already exists in the destination database
+                or does not exist in the source database.
+        """
+        return self.append_command(RequestType.Move, [key, str(db_index)])
+
     def select(self, index: int) -> "Transaction":
         """
         Change the currently selected Redis database.
