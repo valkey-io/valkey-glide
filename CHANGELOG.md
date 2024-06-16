@@ -24,6 +24,7 @@
 * Node: Added XLEN command ([#1555](https://github.com/aws/glide-for-redis/pull/1555))
 * Node: Added ZINTERCARD command ([#1553](https://github.com/aws/glide-for-redis/pull/1553))
 * Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
+* Python: Added MOVE command ([#1566](https://github.com/aws/glide-for-redis/pull/1566))
 * Node: Added OBJECT IDLETIME command ([#1567](https://github.com/aws/glide-for-redis/pull/1567))
 * Node: Added OBJECT REFCOUNT command ([#1568](https://github.com/aws/glide-for-redis/pull/1568))
 * Python: Added SETBIT command ([#1571](https://github.com/aws/glide-for-redis/pull/1571))
