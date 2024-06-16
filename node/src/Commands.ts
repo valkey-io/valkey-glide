@@ -9,7 +9,7 @@ import { redis_request } from "./ProtobufMessage";
 
 import RequestType = redis_request.RequestType;
 
-function isLargeCommand(args: string[]) {
+function isLargeCommand(args: BulkString[]) {
     let lenSum = 0;
 
     for (const arg of args) {
@@ -23,14 +23,20 @@ function isLargeCommand(args: string[]) {
     return false;
 }
 
+type BulkString = string | Uint8Array;
+
 /**
  * Convert a string array into Uint8Array[]
  */
-function toBuffersArray(args: string[]) {
+function toBuffersArray(args: BulkString[]) {
     const argsBytes: Uint8Array[] = [];
 
-    for (const str of args) {
-        argsBytes.push(Buffer.from(str));
+    for (const arg of args) {
+        if (typeof arg == "string") {
+            argsBytes.push(Buffer.from(arg));
+        } else {
+            argsBytes.push(arg);
+        }
     }
 
     return argsBytes;
@@ -56,7 +62,7 @@ export function parseInfoResponse(response: string): Record<string, string> {
 
 function createCommand(
     requestType: redis_request.RequestType,
-    args: string[],
+    args: BulkString[],
 ): redis_request.Command {
     const singleCommand = redis_request.Command.create({
         requestType,
@@ -137,8 +143,8 @@ export type SetOptions = {
  * @internal
  */
 export function createSet(
-    key: string,
-    value: string,
+    key: BulkString,
+    value: BulkString,
     options?: SetOptions,
 ): redis_request.Command {
     const args = [key, value];

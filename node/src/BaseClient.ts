@@ -504,8 +504,8 @@ export class BaseClient {
      * ```
      */
     public set(
-        key: string,
-        value: string,
+        key: string | Uint8Array,
+        value: string | Uint8Array,
         options?: SetOptions,
     ): Promise<"OK" | string | null> {
         return this.createWritePromise(createSet(key, value, options));

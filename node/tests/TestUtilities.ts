@@ -24,6 +24,61 @@ beforeAll(() => {
     Logger.init("info");
 });
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function intoArrayInternal(obj: any, builder: Array<string>) {
+    if (obj == null) {
+        builder.push("null");
+    } else if (typeof obj === "string") {
+        builder.push(obj);
+    } else if (obj instanceof Uint8Array) {
+        builder.push(obj.toString());
+    } else if (obj instanceof Array) {
+        for (const item of obj) {
+            intoArrayInternal(item, builder);
+        }
+    } else if (obj instanceof Set) {
+        const arr = Array.from(obj);
+        arr.sort();
+
+        for (const item of arr) {
+            intoArrayInternal(item, builder);
+        }
+    } else if (obj instanceof Map) {
+        for (const [key, value] of obj) {
+            intoArrayInternal(key, builder);
+            intoArrayInternal(value, builder);
+        }
+    } else if (typeof obj[Symbol.iterator] === "function") {
+        // iterable, recurse into children
+        for (const item of obj) {
+            intoArrayInternal(item, builder);
+        }
+    } else {
+        for (const [k, v] of Object.entries(obj)) {
+            intoArrayInternal(k, builder);
+            intoArrayInternal(v, builder);
+        }
+    }
+}
+
+/**
+ * accept any variable `v` and convert it into String, recursively
+ */
+export function intoString(v: any): string {
+    const builder: Array<string> = [];
+    intoArrayInternal(v, builder);
+    return builder.join("");
+}
+
+/**
+ * accept any variable `v` and convert it into array of string
+ */
+export function intoArray(v: any): Array<string> {
+    const result: Array<string> = [];
+    intoArrayInternal(v, result);
+    return result;
+}
+
 /**
  * Convert array of strings into array of `Uint8Array`
  */
@@ -37,6 +92,23 @@ export function convertStringArrayToBuffer(value: string[]): Uint8Array[] {
     return bytesarr;
 }
 
+export class Checker {
+    left: string;
+
+    constructor(left: any) {
+        this.left = intoString(left);
+    }
+
+    toEqual(right: any) {
+        right = intoString(right);
+        return expect(this.left).toEqual(right);
+    }
+}
+
+export function checkSimple(left: any): Checker {
+    return new Checker(left);
+}
+
 export type Client = {
     set: (key: string, value: string) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
@@ -47,9 +119,9 @@ export async function GetAndSetRandomValue(client: Client) {
     // Adding random repetition, to prevent the inputs from always having the same alignment.
     const value = uuidv4() + "0".repeat(Math.random() * 7);
     const setResult = await client.set(key, value);
-    expect(setResult).toEqual("OK");
+    expect(intoString(setResult)).toEqual("OK");
     const result = await client.get(key);
-    expect(result).toEqual(value);
+    expect(intoString(result)).toEqual(value);
 }
 
 export function flushallOnPort(port: number): Promise<void> {
