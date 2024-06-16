@@ -218,6 +218,7 @@ enum RequestType {
     MSetNX = 179;
     LPos = 180;
     LCS = 181;
+    GeoSearch = 182;
 }
 
 message Command {

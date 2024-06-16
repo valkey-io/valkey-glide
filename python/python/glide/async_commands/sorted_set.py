@@ -3,7 +3,7 @@
 from enum import Enum
 from typing import List, Optional, Tuple, Union
 
-from glide.async_commands.command_args import Limit
+from glide.async_commands.command_args import Limit, OrderBy
 
 
 class InfBound(Enum):
@@ -154,6 +154,129 @@ class RangeByLex:
         self.limit = limit
 
 
+class GeospatialData:
+    def __init__(self, longitude: float, latitude: float):
+        """
+        Represents a geographic position defined by longitude and latitude.
+
+        The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
+            - Valid longitudes are from -180 to 180 degrees.
+            - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
+
+        Args:
+            longitude (float): The longitude coordinate.
+            latitude (float): The latitude coordinate.
+        """
+        self.longitude = longitude
+        self.latitude = latitude
+
+
+class GeoUnit(Enum):
+    """
+    Enumeration representing distance units options for the `GEODIST` command.
+    """
+
+    METERS = "m"
+    """
+    Represents distance in meters.
+    """
+    KILOMETERS = "km"
+    """
+    Represents distance in kilometers.
+    """
+    MILES = "mi"
+    """
+    Represents distance in miles.
+    """
+    FEET = "ft"
+    """
+    Represents distance in feet.
+    """
+
+
+class GeoSearchByRadius:
+    """
+    Represents search criteria of searching within a certain radius from a specified point.
+
+    Args:
+        radius (float): Radius of the search area.
+        unit (GeoUnit): Unit of the radius. See `GeoUnit`.
+    """
+
+    def __init__(self, radius: float, unit: GeoUnit):
+        """
+        Initialize the search criteria.
+        """
+        self.radius = radius
+        self.unit = unit
+
+    def to_args(self) -> List[str]:
+        """
+        Convert the search criteria to the corresponding part of the Redis command.
+
+        Returns:
+            List[str]: List representation of the search criteria.
+        """
+        return ["BYRADIUS", str(self.radius), self.unit.value]
+
+
+class GeoSearchByBox:
+    """
+    Represents search criteria of searching within a specified rectangular area.
+
+    Args:
+        width (float): Width of the bounding box.
+        height (float): Height of the bounding box
+        unit (GeoUnit): Unit of the radius. See `GeoUnit`.
+    """
+
+    def __init__(self, width: float, height: float, unit: GeoUnit):
+        """
+        Initialize the search criteria.
+        """
+        self.width = width
+        self.height = height
+        self.unit = unit
+
+    def to_args(self) -> List[str]:
+        """
+        Convert the search criteria to the corresponding part of the Redis command.
+
+        Returns:
+            List[str]: List representation of the search criteria.
+        """
+        return ["BYBOX", str(self.width), str(self.height), self.unit.value]
+
+
+class GeoSearchCount:
+    """
+    Represents the count option for limiting the number of results in a GeoSearch.
+
+    Args:
+        count (int): The maximum number of results to return.
+        any_option (bool): Whether to allow returning as enough matches are found.
+        This means that the results returned may not be the ones closest to the specified point. Default to False.
+    """
+
+    def __init__(self, count: int, any_option: bool = False):
+        """
+        Initialize the count option.
+        """
+        self.count = count
+        self.any_option = any_option
+
+    def to_args(self) -> List[str]:
+        """
+        Convert the count option to the corresponding part of the Redis command.
+
+        Returns:
+            List[str]: List representation of the count option.
+        """
+        if self.any_option:
+            return ["COUNT", str(self.count), "ANY"]
+        return ["COUNT", str(self.count)]
+
+
 def _create_zrange_args(
     key: str,
     range_query: Union[RangeByLex, RangeByScore, RangeByIndex],
@@ -228,5 +351,42 @@ def _create_zinter_zunion_cmd_args(
     if aggregation_type:
         args.append("AGGREGATE")
         args.append(aggregation_type.value)
+
+    return args
+
+
+def _create_geosearch_args(
+    key: str,
+    search_from: Union[str, GeospatialData],
+    seach_by: Union[GeoSearchByRadius, GeoSearchByBox],
+    order_by: Optional[OrderBy] = None,
+    count: Optional[GeoSearchCount] = None,
+    with_coord: bool = False,
+    with_dist: bool = False,
+    with_hash: bool = False,
+) -> List[str]:
+    args = [key]
+    if isinstance(search_from, str):
+        args += ["FROMMEMBER", search_from]
+    else:
+        args += [
+            "FROMLONLAT",
+            str(search_from.longitude),
+            str(search_from.latitude),
+        ]
+
+    args += seach_by.to_args()
+
+    if order_by:
+        args.append(order_by.value)
+    if count:
+        args.extend(count.to_args())
+
+    if with_coord:
+        args.append("WITHCOORD")
+    if with_dist:
+        args.append("WITHDIST")
+    if with_hash:
+        args.append("WITHHASH")
 
     return args
