@@ -101,6 +101,8 @@ import {
     createSUnionStore,
     createXLen,
     createZInterCard,
+    createObjectIdletime,
+    createObjectRefcount,
 } from "./Commands";
 import {
     ClosingError,
@@ -2549,11 +2551,11 @@ export class BaseClient {
      *     Otherwise, returns None.
      * @example
      * ```typescript
-     * const result = await client.object_encoding("my_hash");
+     * const result = await client.objectEncoding("my_hash");
      * console.log(result); // Output: "listpack"
      * ```
      */
-    public object_encoding(key: string): Promise<string | null> {
+    public objectEncoding(key: string): Promise<string | null> {
         return this.createWritePromise(createObjectEncoding(key));
     }
 
@@ -2566,12 +2568,49 @@ export class BaseClient {
      *            stored at `key` as a `number`. Otherwise, returns `null`.
      * @example
      * ```typescript
-     * const result = await client.object_freq("my_hash");
+     * const result = await client.objectFreq("my_hash");
      * console.log(result); // Output: 2 - The logarithmic access frequency counter of "my_hash".
      * ```
      */
-    public object_freq(key: string): Promise<number | null> {
+    public objectFreq(key: string): Promise<number | null> {
         return this.createWritePromise(createObjectFreq(key));
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at `key`.
+     *
+     * See https://valkey.io/commands/object-idletime/ for more details.
+     *
+     * @param key - The key of the object to get the idle time of.
+     * @returns If `key` exists, returns the idle time in seconds. Otherwise, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.objectIdletime("my_hash");
+     * console.log(result); // Output: 13 - "my_hash" was last accessed 13 seconds ago.
+     * ```
+     */
+    public objectIdletime(key: string): Promise<number | null> {
+        return this.createWritePromise(createObjectIdletime(key));
+    }
+
+    /**
+     * Returns the reference count of the object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-refcount/ for more details.
+     *
+     * @param key - The `key` of the object to get the reference count of.
+     * @returns If `key` exists, returns the reference count of the object stored at `key` as a `number`.
+     * Otherwise, returns `null`.
+     *
+     * @example
+     * ```typescript
+     * const result = await client.objectRefcount("my_hash");
+     * console.log(result); // Output: 2 - "my_hash" has a reference count of 2.
+     * ```
+     */
+    public objectRefcount(key: string): Promise<number | null> {
+        return this.createWritePromise(createObjectRefcount(key));
     }
 
     /**

@@ -350,7 +350,7 @@ describe("RedisClusterClient", () => {
                     [maxmemoryPolicyKey]: "allkeys-lfu",
                 });
                 transaction.set(key, "foo");
-                transaction.object_freq(key);
+                transaction.objectFreq(key);
 
                 const response = await client.exec(transaction);
                 expect(response).not.toBeNull();
@@ -367,6 +367,76 @@ describe("RedisClusterClient", () => {
                         [maxmemoryPolicyKey]: maxmemoryPolicy,
                     }),
                 ).toEqual("OK");
+            }
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object idletime transaction test_%p",
+        async (protocol) => {
+            const client = await RedisClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+            const maxmemoryPolicyKey = "maxmemory-policy";
+            const config = await client.configGet([maxmemoryPolicyKey]);
+            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+
+            try {
+                const transaction = new ClusterTransaction();
+                transaction.configSet({
+                    // OBJECT IDLETIME requires a non-LFU maxmemory-policy
+                    [maxmemoryPolicyKey]: "allkeys-random",
+                });
+                transaction.set(key, "foo");
+                transaction.objectIdletime(key);
+
+                const response = await client.exec(transaction);
+                expect(response).not.toBeNull();
+
+                if (response != null) {
+                    expect(response.length).toEqual(3);
+                    // transaction.configSet({[maxmemoryPolicyKey]: "allkeys-random"});
+                    expect(response[0]).toEqual("OK");
+                    // transaction.set(key, "foo");
+                    expect(response[1]).toEqual("OK");
+                    // transaction.objectIdletime(key);
+                    expect(response[2]).toBeGreaterThanOrEqual(0);
+                }
+            } finally {
+                expect(
+                    await client.configSet({
+                        [maxmemoryPolicyKey]: maxmemoryPolicy,
+                    }),
+                ).toEqual("OK");
+            }
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object refcount transaction test_%p",
+        async (protocol) => {
+            const client = await RedisClusterClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+            const transaction = new ClusterTransaction();
+            transaction.set(key, "foo");
+            transaction.objectRefcount(key);
+
+            const response = await client.exec(transaction);
+            expect(response).not.toBeNull();
+
+            if (response != null) {
+                expect(response.length).toEqual(2);
+                expect(response[0]).toEqual("OK"); // transaction.set(key, "foo");
+                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount(key);
             }
 
             client.close();
