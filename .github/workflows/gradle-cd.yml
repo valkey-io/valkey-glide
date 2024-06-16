@@ -37,24 +37,24 @@ jobs:
               run: |
                echo "::set-output name=matrix::${{toJson( env.MATRIX )}}"
 
-    start-self-hosted-runner:
+    #start-self-hosted-runner:
         #if: github.repository_owner == 'aws'
-        runs-on: ubuntu-latest
-        steps:
-          - name: Checkout
-            uses: actions/checkout@v4
-            with:
-                fetch-depth: 0
+    #    runs-on: ubuntu-latest
+    #    steps:
+    #      - name: Checkout
+    #        uses: actions/checkout@v4
+    #        with:
+    #            fetch-depth: 0
 
-          - name: Start self hosted EC2 runner
-            uses: ./.github/workflows/start-self-hosted-runner
-            with:
-                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                aws-region: ${{ secrets.AWS_REGION }}
-                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+    #      - name: Start self hosted EC2 runner
+    #        uses: ./.github/workflows/start-self-hosted-runner
+    #        with:
+    #            role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+    #            aws-region: ${{ secrets.AWS_REGION }}
+    #            ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
 
     publish-binaries:
-        needs: [start-self-hosted-runner, output-matrix]
+        needs: [output-matrix] #[start-self-hosted-runner, output-matrix]
         #if: github.repository_owner == 'aws'
         name: Publish packages to Maven Central
         runs-on: ${{ matrix.build.RUNNER }}
