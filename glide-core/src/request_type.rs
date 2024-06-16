@@ -188,6 +188,7 @@ pub enum RequestType {
     MSetNX = 179,
     LPos = 180,
     LCS = 181,
+    GeoSearch = 182,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -379,6 +380,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::MSetNX => RequestType::MSetNX,
             ProtobufRequestType::LPos => RequestType::LPos,
             ProtobufRequestType::LCS => RequestType::LCS,
+            ProtobufRequestType::GeoSearch => RequestType::GeoSearch,
         }
     }
 }
@@ -566,6 +568,7 @@ impl RequestType {
             RequestType::MSetNX => Some(cmd("MSETNX")),
             RequestType::LPos => Some(cmd("LPOS")),
             RequestType::LCS => Some(cmd("LCS")),
+            RequestType::GeoSearch => Some(cmd("GEOSEARCH")),
         }
     }
 }
