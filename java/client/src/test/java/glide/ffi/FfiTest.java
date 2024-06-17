@@ -43,11 +43,14 @@ public class FfiTest {
 
     public static native long createLeakedLongSet(long[] value);
 
+    // This tests that panics do not cross the FFI boundary and an exception is thrown if a panic is caught
     public static native long handlePanics(
             boolean shouldPanic, boolean errorPresent, long value, long defaultValue);
 
+    // This tests that Rust errors are properly converted into Java exceptions and thrown
     public static native long handleErrors(boolean isSuccess, long value, long defaultValue);
 
+    // This tests that a Java exception is properly thrown across the FFI boundary
     public static native void throwException(
             boolean throwTwice, boolean isRuntimeException, String message);
 

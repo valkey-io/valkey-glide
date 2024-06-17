@@ -48,6 +48,7 @@ impl std::fmt::Display for ExceptionType {
     }
 }
 
+// This handles `FFIError`s by converting them to Java exceptions and throwing them.
 pub fn handle_errors<T>(env: &mut JNIEnv, result: Result<T, FFIError>) -> Option<T> {
     match result {
         Ok(value) => Some(value),
@@ -67,7 +68,9 @@ pub fn handle_errors<T>(env: &mut JNIEnv, result: Result<T, FFIError>) -> Option
     }
 }
 
-// `func` returns an `Option<T>` because this is intended to wrap the output of `handle_errors`
+// This function handles Rust panics by converting them into Java exceptions and throwing them.
+// `func` returns an `Option<T>` because this is intended to wrap the output of `handle_errors`.
+// When an exception is thrown, a value still need to be returned, so a `default_value` is used for this.
 pub fn handle_panics<T, F: std::panic::UnwindSafe + FnOnce() -> Option<T>>(
     func: F,
     ffi_func_name: &str,
