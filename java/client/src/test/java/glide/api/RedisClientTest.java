@@ -83,6 +83,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
@@ -5317,6 +5318,54 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Object> response = service.fcall(function);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcallReadOnly_with_keys_and_args_returns_success() {
+        // setup
+        String function = "func";
+        String[] keys = new String[] {"key1", "key2"};
+        String[] arguments = new String[] {"1", "2"};
+        String[] args = new String[] {function, "2", "key1", "key2", "1", "2"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCallReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcallReadOnly(function, keys, arguments);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcallReadOnly_returns_success() {
+        // setup
+        String function = "func";
+        String[] args = new String[] {function, "0"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCallReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcallReadOnly(function);
         Object payload = response.get();
 
         // verify
