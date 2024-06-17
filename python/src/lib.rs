@@ -151,7 +151,11 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
             }
             Value::Double(double) => Ok(PyFloat::new(py, double).into_py(py)),
             Value::Boolean(boolean) => Ok(PyBool::new(py, boolean).into_py(py)),
-            Value::VerbatimString { format: _, text } => Ok(text.into_py(py)),
+            Value::VerbatimString { format: _, text } => {
+                // TODO create MATCH on the format
+                let data_bytes = PyBytes::new(py, text.as_bytes());
+                Ok(data_bytes.into_py(py))
+            }
             Value::BigNumber(bigint) => Ok(bigint.into_py(py)),
             Value::Push { kind, data } => {
                 let dict = PyDict::new(py);
