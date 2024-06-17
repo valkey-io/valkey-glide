@@ -29,7 +29,11 @@ from glide.config import ProtocolVersion
 from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.conftest import create_client
-from tests.utils.utils import check_if_server_version_lt, get_random_string
+from tests.utils.utils import (
+    check_if_server_version_lt,
+    generate_lua_lib_code,
+    get_random_string,
+)
 
 
 async def transaction_test(
@@ -60,7 +64,16 @@ async def transaction_test(
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
     value3 = get_random_string(5)
+    lib_name = f"mylib1C{get_random_string(5)}"
+    func_name = f"myfunc1c{get_random_string(5)}"
+    code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
     args: List[TResult] = []
+
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.function_load(code)
+        args.append(lib_name)
+        transaction.function_load(code, True)
+        args.append(lib_name)
 
     transaction.dbsize()
     args.append(0)
