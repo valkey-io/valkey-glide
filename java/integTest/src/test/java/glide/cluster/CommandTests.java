@@ -664,7 +664,7 @@ public class CommandTests {
         // add a key, measure DB size, flush DB and measure again - with all arg combinations
         assertEquals(OK, clusterClient.set(key, "foo").get());
         assertEquals(1L, clusterClient.dbsize(route).get());
-        assertEquals(OK, clusterClient.flushdb(ASYNC).get());
+        assertEquals(OK, clusterClient.flushdb(SYNC).get());
         assertEquals(0L, clusterClient.dbsize().get());
 
         assertEquals(OK, clusterClient.set(key, "foo").get());

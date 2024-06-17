@@ -537,7 +537,7 @@ public class CommandTests {
         }
     }
 
-    // @Test
+    @Test
     @SneakyThrows
     public void functionStats_and_functionKill() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
