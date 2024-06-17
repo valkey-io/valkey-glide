@@ -350,6 +350,8 @@ async def transaction_test(
     args.append(0)
     transaction.setbit(key19, 1, 0)
     args.append(1)
+    transaction.getbit(key19, 1)
+    args.append(0)
 
     transaction.geoadd(
         key12,
