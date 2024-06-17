@@ -19,6 +19,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
@@ -570,6 +571,38 @@ public class RedisClusterClient extends BaseClient
         String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
         return commandManager.submitNewCommand(
                 FCall,
+                args,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(@NonNull String function) {
+        return fcallReadOnly(function, new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(
+            @NonNull String function, @NonNull Route route) {
+        return fcallReadOnly(function, new String[0], route);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(
+            @NonNull String function, @NonNull String[] arguments) {
+        String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
+        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(
+            @NonNull String function, @NonNull String[] arguments, @NonNull Route route) {
+        String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
+        return commandManager.submitNewCommand(
+                FCallReadOnly,
                 args,
                 route,
                 response ->

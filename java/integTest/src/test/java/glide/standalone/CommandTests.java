@@ -396,11 +396,14 @@ public class CommandTests {
         String libName = "mylib1c";
         String funcName = "myfunc1c";
         // function $funcName returns first argument
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
         assertEquals(libName, regularClient.functionLoad(code, false).get());
 
         var functionResult =
                 regularClient.fcall(funcName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals("one", functionResult);
+        functionResult =
+                regularClient.fcallReadOnly(funcName, new String[0], new String[] {"one", "two"}).get();
         assertEquals("one", functionResult);
 
         var flist = regularClient.functionList(false).get();
@@ -413,7 +416,7 @@ public class CommandTests {
         var expectedFlags =
                 new HashMap<String, Set<String>>() {
                     {
-                        put(funcName, Set.of());
+                        put(funcName, Set.of("no-writes"));
                     }
                 };
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
@@ -436,7 +439,7 @@ public class CommandTests {
         // function $newFuncName returns argument array len
         String newCode =
                 generateLuaLibCode(
-                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), false);
+                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), true);
         assertEquals(libName, regularClient.functionLoad(newCode, true).get());
 
         // load new lib and delete it - first lib remains loaded
@@ -453,7 +456,7 @@ public class CommandTests {
 
         flist = regularClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
-        expectedFlags.put(newFuncName, Set.of());
+        expectedFlags.put(newFuncName, Set.of("no-writes"));
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
         flist = regularClient.functionList(libName, true).get();
@@ -462,6 +465,9 @@ public class CommandTests {
 
         functionResult =
                 regularClient.fcall(newFuncName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals(2L, functionResult);
+        functionResult =
+                regularClient.fcallReadOnly(newFuncName, new String[0], new String[] {"one", "two"}).get();
         assertEquals(2L, functionResult);
 
         assertEquals(OK, regularClient.functionFlush(ASYNC).get());

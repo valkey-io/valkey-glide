@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
@@ -784,19 +785,15 @@ public class TransactionTestUtilities {
         final String libName = "mylib1T";
         final String funcName = "myfunc1T";
 
-        final String code =
-                "#!lua name="
-                        + libName
-                        + "\n redis.register_function('"
-                        + funcName
-                        + "', function(keys, args) return args[1] end)"; // function returns first argument
+        // function $funcName returns first argument
+        final String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
 
         var expectedFuncData =
                 new HashMap<String, Object>() {
                     {
-                        put("name", "myfunc1T");
+                        put("name", funcName);
                         put("description", null);
-                        put("flags", Set.of());
+                        put("flags", Set.of("no-writes"));
                     }
                 };
 
@@ -804,7 +801,7 @@ public class TransactionTestUtilities {
                 new Map[] {
                     Map.<String, Object>of(
                             "library_name",
-                            "mylib1T",
+                            libName,
                             "engine",
                             "LUA",
                             "functions",
@@ -834,25 +831,29 @@ public class TransactionTestUtilities {
                 .functionLoad(code, false)
                 .functionLoad(code, true)
                 .functionStats()
-                .fcall("myfunc1T", new String[0], new String[] {"a", "b"})
-                .fcall("myfunc1T", new String[] {"a", "b"})
+                .fcall(funcName, new String[0], new String[] {"a", "b"})
+                .fcall(funcName, new String[] {"a", "b"})
+                .fcallReadOnly(funcName, new String[0], new String[] {"a", "b"})
+                .fcallReadOnly(funcName, new String[] {"a", "b"})
                 .functionList("otherLib", false)
-                .functionList("mylib1T", true)
-                .functionDelete("mylib1T")
+                .functionList(libName, true)
+                .functionDelete(libName)
                 .functionList(true)
                 .functionStats();
 
         return new Object[] {
             OK, // functionFlush(SYNC)
             new Map[0], // functionList(false)
-            "mylib1T", // functionLoad(code, false)
-            "mylib1T", // functionLoad(code, true)
+            libName, // functionLoad(code, false)
+            libName, // functionLoad(code, true)
             expectedFunctionStatsNonEmpty, // functionStats()
-            "a", // fcall("myfunc1T", new String[0], new String[]{"a", "b"})
-            "a", // fcall("myfunc1T", new String[] {"a", "b"})
+            "a", // fcall(funcName, new String[0], new String[]{"a", "b"})
+            "a", // fcall(funcName, new String[] {"a", "b"})
+            "a", // fcallReadOnly(funcName, new String[0], new String[]{"a", "b"})
+            "a", // fcallReadOnly(funcName, new String[] {"a", "b"})
             new Map[0], // functionList("otherLib", false)
-            expectedLibData, // functionList("mylib1T", true)
-            OK, // functionDelete("mylib1T")
+            expectedLibData, // functionList(libName, true)
+            OK, // functionDelete(libName)
             new Map[0], // functionList(true)
             expectedFunctionStatsEmpty, // functionStats()
         };

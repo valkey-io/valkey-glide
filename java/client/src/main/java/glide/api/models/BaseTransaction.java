@@ -51,6 +51,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
@@ -3879,7 +3880,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys An <code>array</code> of key arguments accessed by the function. To ensure the
      *     correct execution of functions, both in standalone and clustered deployments, all names of
      *     keys that a function accesses must be explicitly provided as <code>keys</code>.
-     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
      * @return Command Response - The invoked function's return value.
      */
@@ -3893,17 +3894,54 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Invokes a previously loaded function.
+     * Invokes a previously loaded read-only function.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
      * @param function The function name.
-     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
      * @return Command Response - The invoked function's return value.
      */
     public T fcall(@NonNull String function, @NonNull String[] arguments) {
         return fcall(function, new String[0], arguments);
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param keys An <code>array</code> of key arguments accessed by the function. To ensure the
+     *     correct execution of functions, both in standalone and clustered deployments, all names of
+     *     keys that a function accesses must be explicitly provided as <code>keys</code>.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcallReadOnly(
+            @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {function, Long.toString(keys.length)}, keys, arguments));
+        protobufTransaction.addCommands(buildCommand(FCallReadOnly, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcallReadOnly(@NonNull String function, @NonNull String[] arguments) {
+        return fcallReadOnly(function, new String[0], arguments);
     }
 
     /**
