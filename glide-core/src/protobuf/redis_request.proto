@@ -202,6 +202,7 @@ enum RequestType {
     Sort = 160;
     FunctionKill = 161;
     FunctionStats = 162;
+    FlushDB = 164;
     LSet = 165;
     XDel = 166;
     XRange = 167;

@@ -20,6 +20,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
@@ -340,6 +341,30 @@ public class RedisClusterClient extends BaseClient
             @NonNull FlushMode mode, @NonNull SingleNodeRoute route) {
         return commandManager.submitNewCommand(
                 FlushAll, new String[] {mode.toString()}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb() {
+        return commandManager.submitNewCommand(FlushDB, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb(@NonNull FlushMode mode) {
+        return commandManager.submitNewCommand(
+                FlushDB, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb(@NonNull SingleNodeRoute route) {
+        return commandManager.submitNewCommand(
+                FlushDB, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb(
+            @NonNull FlushMode mode, @NonNull SingleNodeRoute route) {
+        return commandManager.submitNewCommand(
+                FlushDB, new String[] {mode.toString()}, route, this::handleStringResponse);
     }
 
     @Override

@@ -642,7 +642,7 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void dbsize() {
+    public void dbsize_and_flushdb() {
         assertEquals(OK, clusterClient.flushall().get());
         // dbsize should be 0 after flushall() because all keys have been deleted
         assertEquals(0L, clusterClient.dbsize().get());
@@ -655,11 +655,27 @@ public class CommandTests {
 
         // test dbsize with routing - flush the database first to ensure the set() call is directed to a
         // node with 0 keys.
-        assertEquals(OK, clusterClient.flushall().get());
+        assertEquals(OK, clusterClient.flushdb().get());
         assertEquals(0L, clusterClient.dbsize().get());
+
         String key = UUID.randomUUID().toString();
+        SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
+
+        // add a key, measure DB size, flush DB and measure again - with all arg combinations
         assertEquals(OK, clusterClient.set(key, "foo").get());
-        assertEquals(1L, clusterClient.dbsize(new SlotKeyRoute(key, PRIMARY)).get());
+        assertEquals(1L, clusterClient.dbsize(route).get());
+        assertEquals(OK, clusterClient.flushdb(ASYNC).get());
+        assertEquals(0L, clusterClient.dbsize().get());
+
+        assertEquals(OK, clusterClient.set(key, "foo").get());
+        assertEquals(1L, clusterClient.dbsize(route).get());
+        assertEquals(OK, clusterClient.flushdb(route).get());
+        assertEquals(0L, clusterClient.dbsize(route).get());
+
+        assertEquals(OK, clusterClient.set(key, "foo").get());
+        assertEquals(1L, clusterClient.dbsize(route).get());
+        assertEquals(OK, clusterClient.flushdb(SYNC, route).get());
+        assertEquals(0L, clusterClient.dbsize(route).get());
     }
 
     @Test

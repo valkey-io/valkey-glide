@@ -343,17 +343,33 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void dbsize() {
+    public void dbsize_and_flushdb() {
         assertEquals(OK, regularClient.flushall().get());
         assertEquals(OK, regularClient.select(0).get());
 
+        // fill DB and check size
         int numKeys = 10;
         for (int i = 0; i < numKeys; i++) {
             assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
         }
         assertEquals(10L, regularClient.dbsize().get());
 
+        // check another empty DB
         assertEquals(OK, regularClient.select(1).get());
+        assertEquals(0L, regularClient.dbsize().get());
+
+        // check non-empty
+        assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
+        assertEquals(1L, regularClient.dbsize().get());
+
+        // flush and check again
+        assertEquals(OK, regularClient.flushdb(SYNC).get());
+        assertEquals(0L, regularClient.dbsize().get());
+
+        // switch to DB 0 and flush and check
+        assertEquals(OK, regularClient.select(0).get());
+        assertEquals(10L, regularClient.dbsize().get());
+        assertEquals(OK, regularClient.flushdb().get());
         assertEquals(0L, regularClient.dbsize().get());
     }
 
