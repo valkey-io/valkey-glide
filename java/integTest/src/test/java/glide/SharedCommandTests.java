@@ -66,6 +66,7 @@ import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
 import glide.api.models.commands.stream.StreamReadOptions;
@@ -3415,6 +3416,75 @@ public class SharedCommandTests {
                                 client
                                         .xrevrange(key, InfRangeBound.MAX, IdBound.ofExclusive("not_a_stream_id"))
                                         .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xgroupCreate_xgroupDestroy(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String stringKey = UUID.randomUUID().toString();
+        String groupName = "group" + UUID.randomUUID();
+        String streamId = "0-1";
+
+        // Stream not created results in error
+        Exception executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xgroupCreate(key, groupName, streamId).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Stream with option to create creates stream & Group
+        assertEquals(
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, streamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
+
+        // ...and again results in BUSYGROUP error, because group names must be unique
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xgroupCreate(key, groupName, streamId).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("BUSYGROUP"));
+
+        // Stream Group can be destroyed returns: true
+        assertEquals(true, client.xgroupDestroy(key, groupName).get());
+
+        // ...and again results in: false
+        assertEquals(false, client.xgroupDestroy(key, groupName).get());
+
+        // ENTRIESREAD option was added in redis 7.0.0
+        StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead("10").build();
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(OK, client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
+        } else {
+            executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+        }
+
+        // key is a string and cannot be created as a stream
+        assertEquals(OK, client.set(stringKey, "not_a_stream").get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xgroupCreate(
+                                                stringKey,
+                                                groupName,
+                                                streamId,
+                                                StreamGroupOptions.builder().makeStream().build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xgroupDestroy(stringKey, groupName).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 

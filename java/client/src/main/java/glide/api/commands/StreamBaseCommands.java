@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
@@ -23,7 +24,7 @@ public interface StreamBaseCommands {
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
      * If the <code>key</code> doesn't exist, the stream is created.
      *
-     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @return The id of the added entry.
@@ -39,7 +40,7 @@ public interface StreamBaseCommands {
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
      * If the <code>key</code> doesn't exist, the stream is created.
      *
-     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @param options Stream add options {@link StreamAddOptions}.
@@ -63,7 +64,7 @@ public interface StreamBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
-     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
      * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
@@ -89,7 +90,7 @@ public interface StreamBaseCommands {
      *
      * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
      *     slot.
-     * @see <a href="https://redis.io/commands/xread/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
      * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
@@ -117,7 +118,7 @@ public interface StreamBaseCommands {
     /**
      * Trims the stream by evicting older entries.
      *
-     * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xtrim/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param options Stream trim options {@link StreamTrimOptions}.
      * @return The number of entries deleted from the stream.
@@ -169,6 +170,7 @@ public interface StreamBaseCommands {
     /**
      * Returns stream entries matching a given range of IDs.
      *
+     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
@@ -205,6 +207,7 @@ public interface StreamBaseCommands {
     /**
      * Returns stream entries matching a given range of IDs.
      *
+     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
@@ -242,6 +245,7 @@ public interface StreamBaseCommands {
      * Equivalent to {@link #xrange(String, StreamRange, StreamRange)} but returns the entries in
      * reverse order.
      *
+     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param end Ending stream ID bound for range.
      *     <ul>
@@ -281,6 +285,7 @@ public interface StreamBaseCommands {
      * Equivalent to {@link #xrange(String, StreamRange, StreamRange, long)} but returns the entries
      * in reverse order.
      *
+     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param end Ending stream ID bound for range.
      *     <ul>
@@ -312,4 +317,59 @@ public interface StreamBaseCommands {
      */
     CompletableFuture<Map<String, String[][]>> xrevrange(
             String key, StreamRange end, StreamRange start, long count);
+
+    /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Create the consumer group "mygroup", using zero as the starting ID:
+     * assert client.xgroupCreate("mystream", "mygroup", "0-0").get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupCreate(String key, String groupname, String id);
+
+    /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @param options The group options {@link StreamGroupOptions}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Create the consumer group "mygroup", and the stream if it does not exist, after the last ID
+     * assert client.xgroupCreate("mystream", "mygroup", "$", new StreamGroupOptions(true)).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupCreate(
+            String key, String groupname, String id, StreamGroupOptions options);
+
+    /**
+     * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @return <code>true</code> if the consumer group is destroyed. Otherwise, <code>false</code>.
+     * @example
+     *     <pre>{@code
+     * // Destroys the consumer group "mygroup"
+     * assert client.xgroupDestroy("mystream", "mygroup").get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<Boolean> xgroupDestroy(String key, String groupname);
 }
