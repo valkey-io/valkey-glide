@@ -21,6 +21,16 @@ Software Dependencies
 -   rustup
 -   Java 11
 
+**Install protobuf compiler (necessary for all systems)**
+```bash
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+curl -LO $PB_REL/download/v26.1/protoc-26.1-linux-x86_64.zip
+unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
+export PATH="$PATH:$HOME/.local/bin"
+# Check that the protobuf compiler version 26.1 or higher is installed
+protoc --version
+```
+
 **Dependencies installation for Ubuntu**
 
 ```bash
@@ -49,6 +59,13 @@ sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-deve
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 # Check that the protobuf compiler version 26.1 or higher is installed
 protoc --version
+# Install protobuf compiler
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+curl -LO $PB_REL/download/v26.1/protoc-26.1-linux-x86_64.zip
+unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
+export PATH="$PATH:$HOME/.local/bin"
+# Check that the protobuf compiler version 26.1 or higher is installed
+protoc --version
 ```
 **Dependencies installation for MacOS**
 
@@ -59,6 +76,15 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the protobuf compiler version 26.1 or higher is installed
 protoc --version
+# Install protobuf compiler
+# Install protobuf compiler
+PB_REL="https://github.com/protocolbuffers/protobuf/releases"
+curl -LO $PB_REL/download/v26.1/protoc-26.1-linux-x86_64.zip
+unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
+export PATH="$PATH:$HOME/.local/bin"
+# Check that the protobuf compiler version 26.1 or higher is installed
+protoc --version
+# will additionally need to add protoc to the PATH.
 ```
 
 #### Building and installation steps
@@ -179,6 +205,10 @@ Development on the Java wrapper may involve changes in either the Java or Rust c
     cargo clippy --all-features --all-targets -- -D warnings
     cargo fmt --manifest-path ./Cargo.toml --all
     ```
+
+# FFI and features
+- names of the FFI defined in lib.rs have to correspond to the paths of real Java classes that expose native functions.
+- lib.rs method names explicitly point to the native functions defined there.
 
 ### Recommended extensions for VS Code
 
