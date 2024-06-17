@@ -16,6 +16,7 @@ from typing import (
     get_args,
 )
 
+from glide.async_commands.bitmap import OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -4112,6 +4113,41 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.PfMerge, [destination] + source_keys
             ),
+        )
+
+    async def bitcount(self, key: str, options: Optional[OffsetOptions] = None) -> int:
+        """
+        Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
+        optionally be provided to count the number of bits in a specific string interval.
+
+        See https://valkey.io/commands/bitcount for more details.
+
+        Args:
+            key (str): The key for the string to count the set bits of.
+            options (Optional[OffsetOptions]): The offset options.
+
+        Returns:
+            int: If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+                If `options` is not provided, returns the number of set bits in the string stored at `key`.
+                Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+
+        Examples:
+            >>> await client.bitcount("my_key1")
+                2  # The string stored at "my_key1" contains 2 set bits.
+            >>> await client.bitcount("my_key2", OffsetOptions(1, 3))
+                2  # The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
+            >>> await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))
+                1  # Indicates that the second bit of the string stored at "my_key3" is set.
+            >>> await client.bitcount("my_key3", OffsetOptions(-1, -1, BitmapIndexType.BIT))
+                1  # Indicates that the last bit of the string stored at "my_key3" is set.
+        """
+        args = [key]
+        if options is not None:
+            args = args + options.to_args()
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.BitCount, args),
         )
 
     async def setbit(self, key: str, offset: int, value: int) -> int:
