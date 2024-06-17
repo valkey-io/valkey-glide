@@ -19,6 +19,9 @@ from glide.async_commands.core import (
 )
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByBox,
+    GeoSearchByRadius,
+    GeoSearchCount,
     InfBound,
     LexBoundary,
     RangeByIndex,
@@ -26,6 +29,7 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    _create_geosearch_args,
     _create_zinter_zunion_cmd_args,
     _create_zrange_args,
 )
@@ -308,6 +312,24 @@ class BaseTransaction:
         for pair in key_value_map.items():
             parameters.extend(pair)
         return self.append_command(RequestType.MSet, parameters)
+
+    def msetnx(self: TTransaction, key_value_map: Mapping[str, str]) -> TTransaction:
+        """
+        Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+        more keys already exist, the entire operation fails.
+
+        See https://valkey.io/commands/msetnx/ for more details.
+
+        Args:
+            key_value_map (Mapping[str, str]): A key-value map consisting of keys and their respective values to set.
+
+        Commands response:
+            bool: True if all keys were set. False if no key was set.
+        """
+        parameters: List[str] = []
+        for pair in key_value_map.items():
+            parameters.extend(pair)
+        return self.append_command(RequestType.MSetNX, parameters)
 
     def mget(self: TTransaction, keys: List[str]) -> TTransaction:
         """
@@ -1789,6 +1811,63 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.GeoPos, [key] + members)
 
+    def geosearch(
+        self: TTransaction,
+        key: str,
+        search_from: Union[str, GeospatialData],
+        seach_by: Union[GeoSearchByRadius, GeoSearchByBox],
+        order_by: Optional[OrderBy] = None,
+        count: Optional[GeoSearchCount] = None,
+        with_coord: bool = False,
+        with_dist: bool = False,
+        with_hash: bool = False,
+    ) -> TTransaction:
+        """
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area.
+
+        See https://valkey.io/commands/geosearch/ for more details.
+
+        Args:
+            key (str): The key of the sorted set representing geospatial data.
+            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
+                from the sorted set or as a geospatial data (see `GeospatialData`).
+            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                For circular area search, see `GeoSearchByRadius`.
+                For rectengal area search, see `GeoSearchByBox`.
+            order_by (Optional[OrderBy]): Specifies the order in which the results should be returned.
+                    - `ASC`: Sorts items from the nearest to the farthest, relative to the center point.
+                    - `DESC`: Sorts items from the farthest to the nearest, relative to the center point.
+                If not specified, the results would be unsorted.
+            count (Optional[GeoSearchCount]): Specifies the maximum number of results to return. See `GeoSearchCount`.
+                If not specified, return all results.
+            with_coord (bool): Whether to include coordinates of the returned items. Defaults to False.
+            with_dist (bool): Whether to include distance from the center in the returned items.
+                The distance is returned in the same unit as specified for the `search_by` arguments. Defaults to False.
+            with_hash (bool): Whether to include geohash of the returned items. Defaults to False.
+
+        Command Response:
+            List[Union[str, List[Union[str, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
+            If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, we're each sub array represents a single item in the following order:
+                (str): The member (location) name.
+                (float): The distance from the center as a floating point number, in the same unit specified in the radius, if `with_dist` is set to True.
+                (int): The Geohash integer, if `with_hash` is set to True.
+                List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
+
+        Since: Redis version 6.2.0.
+        """
+        args = _create_geosearch_args(
+            key,
+            search_from,
+            seach_by,
+            order_by,
+            count,
+            with_coord,
+            with_dist,
+            with_hash,
+        )
+
+        return self.append_command(RequestType.GeoSearch, args)
+
     def zadd(
         self: TTransaction,
         key: str,
@@ -2775,6 +2854,25 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.PfMerge, [destination] + source_keys)
 
+    def setbit(self: TTransaction, key: str, offset: int, value: int) -> TTransaction:
+        """
+        Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
+        with `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less
+        than `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to
+        `value` and the preceding bits are set to `0`.
+
+        See https://valkey.io/commands/setbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to be set.
+            value (int): The bit value to set at `offset`. The value must be `0` or `1`.
+
+        Command response:
+            int: The bit value that was previously stored at `offset`.
+        """
+        return self.append_command(RequestType.SetBit, [key, str(offset), str(value)])
+
     def object_encoding(self: TTransaction, key: str) -> TTransaction:
         """
         Returns the internal encoding for the Redis object stored at `key`.
@@ -2853,7 +2951,23 @@ class Transaction(BaseTransaction):
 
     """
 
-    # TODO: add MOVE, SLAVEOF and all SENTINEL commands
+    # TODO: add SLAVEOF and all SENTINEL commands
+    def move(self, key: str, db_index: int) -> "Transaction":
+        """
+        Move `key` from the currently selected database to the database specified by `db_index`.
+
+        See https://valkey.io/commands/move/ for more details.
+
+        Args:
+            key (str): The key to move.
+            db_index (int): The index of the database to move `key` to.
+
+        Commands response:
+            bool: True if `key` was moved, or False if the `key` already exists in the destination database
+                or does not exist in the source database.
+        """
+        return self.append_command(RequestType.Move, [key, str(db_index)])
+
     def select(self, index: int) -> "Transaction":
         """
         Change the currently selected Redis database.

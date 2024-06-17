@@ -32,6 +32,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     ZMPopReturnType,
     KeyWithMemberAndScore,
     FunctionStatsReturnType,
+    GeoSearchReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -370,6 +371,84 @@ pub(crate) fn convert_to_expected_type(
                 ErrorKind::TypeError,
                 "Response couldn't be converted to an array containing a key, member, and score",
                 format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
+        },
+        // Used by GEOSEARCH.
+        // When all options are specified (withcoord, withdist, withhash) , the response looks like this: [[name (str), [dist (str), hash (int), [lon (str), lat (str)]]]] for RESP2.
+        // RESP3 return type is: [[name (str), [dist (str), hash (int), [lon (float), lat (float)]]]].
+        // We also want to convert dist into float.
+        /* from this:
+        > GEOSEARCH Sicily FROMLONLAT 15 37 BYBOX 400 400 km ASC WITHCOORD WITHDIST WITHHASH
+        1) 1) "Catania"
+            2) "56.4413"
+            3) (integer) 3479447370796909
+            4) 1) "15.08726745843887329"
+                2) "37.50266842333162032"
+        to this:
+        > GEOSEARCH Sicily FROMLONLAT 15 37 BYBOX 400 400 km ASC WITHCOORD WITHDIST WITHHASH
+        1) 1) "Catania"
+            2) (double) 56.4413
+            3) (integer) 3479447370796909
+            4) 1) (double) 15.08726745843887329
+                2) (double) 37.50266842333162032
+         */
+        ExpectedReturnType::GeoSearchReturnType => match value {
+            Value::Array(array) => {
+                let mut converted_array = Vec::with_capacity(array.len());
+                for item in &array {
+                    if let Value::Array(inner_array) = item {
+                        if let Some((name, rest)) = inner_array.split_first() {
+                            let rest = rest.iter().map(|v| {
+                                match v {
+                                    Value::Array(coord) => {
+                                        // This is the [lon (str), lat (str)] that should be converted into [lon (float), lat (float)].
+                                        if coord.len() != 2 {
+                                            Err((
+                                                ErrorKind::TypeError,
+                                                "Inner Array must contain exactly two elements, longitude and latitude",
+                                            ).into())
+                                        } else {
+                                            coord.iter()
+                                                .map(|elem| convert_to_expected_type(elem.clone(), Some(ExpectedReturnType::Double)))
+                                                .collect::<Result<Vec<_>, _>>()
+                                                .map(Value::Array)
+                                        }
+                                    }
+                                    Value::BulkString(dist) => {
+                                        // This is the conversion of dist from string to float
+                                        convert_to_expected_type(
+                                            Value::BulkString(dist.clone()),
+                                            Some(ExpectedReturnType::Double),
+                                        )
+                                    }
+                                    _ => Ok(v.clone()), // Hash is both integer for RESP2/3
+                                }
+                            }).collect::<Result<Vec<Value>, _>>()?;
+
+                            converted_array
+                                .push(Value::Array(vec![name.clone(), Value::Array(rest)]));
+                        } else {
+                            return Err((
+                                ErrorKind::TypeError,
+                                "Response couldn't be converted to GeoSeatch return type, Inner Array must contain at least one element",
+                            )
+                                .into());
+                        }
+                    } else {
+                        return Err((
+                            ErrorKind::TypeError,
+                            "Response couldn't be converted to GeoSeatch return type, Expected an array as an inner element",
+                        )
+                            .into());
+                    }
+                }
+                Ok(Value::Array(converted_array))
+            }
+
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to GeoSeatch return type, Expected an array as the outer elemen.",
             )
                 .into()),
         },
@@ -823,6 +902,16 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             &ExpectedReturnType::ArrayOfMaps(&ExpectedReturnType::StringOrSet),
         )),
         b"FUNCTION STATS" => Some(ExpectedReturnType::FunctionStatsReturnType),
+        b"GEOSEARCH" => {
+            if cmd.position(b"WITHDIST").is_some()
+                || cmd.position(b"WITHHASH").is_some()
+                || cmd.position(b"WITHCOORD").is_some()
+            {
+                Some(ExpectedReturnType::GeoSearchReturnType)
+            } else {
+                None
+            }
+        }
         _ => None,
     }
 }
@@ -2173,5 +2262,83 @@ mod tests {
             Some(ExpectedReturnType::Set)
         ));
         assert!(expected_type_for_cmd(redis::cmd("SPOP").arg("key1")).is_none());
+    }
+    #[test]
+    fn test_convert_to_geo_search_return_type() {
+        let array = Value::Array(vec![
+            Value::Array(vec![
+                Value::BulkString(b"name1".to_vec()),
+                Value::BulkString(b"1.23".to_vec()), // dist (float)
+                Value::Int(123456),                  // hash (int)
+                Value::Array(vec![
+                    Value::BulkString(b"10.0".to_vec()), // lon (float)
+                    Value::BulkString(b"20.0".to_vec()), // lat (float)
+                ]),
+            ]),
+            Value::Array(vec![
+                Value::BulkString(b"name2".to_vec()),
+                Value::BulkString(b"2.34".to_vec()), // dist (float)
+                Value::Int(654321),                  // hash (int)
+                Value::Array(vec![
+                    Value::BulkString(b"30.0".to_vec()), // lon (float)
+                    Value::BulkString(b"40.0".to_vec()), // lat (float)
+                ]),
+            ]),
+        ]);
+
+        // Expected output value after conversion
+        let expected_result = Value::Array(vec![
+            Value::Array(vec![
+                Value::BulkString(b"name1".to_vec()),
+                Value::Array(vec![
+                    Value::Double(1.23), // dist (float)
+                    Value::Int(123456),  // hash (int)
+                    Value::Array(vec![
+                        Value::Double(10.0), // lon (float)
+                        Value::Double(20.0), // lat (float)
+                    ]),
+                ]),
+            ]),
+            Value::Array(vec![
+                Value::BulkString(b"name2".to_vec()),
+                Value::Array(vec![
+                    Value::Double(2.34), // dist (float)
+                    Value::Int(654321),  // hash (int)
+                    Value::Array(vec![
+                        Value::Double(30.0), // lon (float)
+                        Value::Double(40.0), // lat (float)
+                    ]),
+                ]),
+            ]),
+        ]);
+
+        let result =
+            convert_to_expected_type(array.clone(), Some(ExpectedReturnType::GeoSearchReturnType))
+                .unwrap();
+        assert_eq!(result, expected_result);
+    }
+    #[test]
+    fn test_geosearch_return_type() {
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("GEOSEARCH")
+                    .arg("WITHDIST")
+                    .arg("WITHHASH")
+                    .arg("WITHCOORD")
+            ),
+            Some(ExpectedReturnType::GeoSearchReturnType)
+        ));
+
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("WITHDIST").arg("WITHHASH")),
+            Some(ExpectedReturnType::GeoSearchReturnType)
+        ));
+
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("WITHDIST")),
+            Some(ExpectedReturnType::GeoSearchReturnType)
+        ));
+
+        assert!(expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("key")).is_none());
     }
 }

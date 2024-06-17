@@ -51,6 +51,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
@@ -91,6 +92,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -184,6 +186,7 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -906,6 +909,83 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lpop(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of the first occurrence of <code>element</code> inside the list specified by
+     * <code>key</code>. If no match is found, <code>null</code> is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @return Command Response - The index of the first occurrence of <code>element</code>, or <code>
+     *     null</code> if <code>element</code> is not in the list.
+     */
+    public T lpos(@NonNull String key, @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, element);
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of an occurrence of <code>element</code> within a list based on the given
+     * <code>options</code>. If no match is found, <code>null</code> is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param options The LPos options.
+     * @return Command Response - The index of <code>element</code>, or <code>null</code> if <code>
+     *     element</code> is not in the list.
+     */
+    public T lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addAll(new String[] {key, element}, options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns an <code>array</code> of indices of matching elements within a list.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param count The number of matches wanted.
+     * @return Command Response - An <code>array</code> that holds the indices of the matching
+     *     elements within the list.
+     */
+    public T lposCount(@NonNull String key, @NonNull String element, long count) {
+        ArgsArray commandArgs = buildArgs(key, element, COUNT_REDIS_API, Long.toString(count));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns an <code>array</code> of indices of matching elements within a list based on the given
+     * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param count The number of matches wanted.
+     * @param options The LPos options.
+     * @return Command Response - An <code>array</code> that holds the indices of the matching
+     *     elements within the list.
+     */
+    public T lposCount(
+            @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, element, COUNT_REDIS_API, Long.toString(count)},
+                                options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
         return getThis();
     }
 
@@ -3825,7 +3905,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keys An <code>array</code> of key arguments accessed by the function. To ensure the
      *     correct execution of functions, both in standalone and clustered deployments, all names of
      *     keys that a function accesses must be explicitly provided as <code>keys</code>.
-     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
      * @return Command Response - The invoked function's return value.
      */
@@ -3839,17 +3919,54 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Invokes a previously loaded function.
+     * Invokes a previously loaded read-only function.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
      * @param function The function name.
-     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
      * @return Command Response - The invoked function's return value.
      */
     public T fcall(@NonNull String function, @NonNull String[] arguments) {
         return fcall(function, new String[0], arguments);
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param keys An <code>array</code> of key arguments accessed by the function. To ensure the
+     *     correct execution of functions, both in standalone and clustered deployments, all names of
+     *     keys that a function accesses must be explicitly provided as <code>keys</code>.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcallReadOnly(
+            @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {function, Long.toString(keys.length)}, keys, arguments));
+        protobufTransaction.addCommands(buildCommand(FCallReadOnly, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcallReadOnly(@NonNull String function, @NonNull String[] arguments) {
+        return fcallReadOnly(function, new String[0], arguments);
     }
 
     /**

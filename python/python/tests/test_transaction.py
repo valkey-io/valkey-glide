@@ -7,16 +7,15 @@ from typing import List, Union, cast
 import pytest
 from glide import RequestError
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
-from glide.async_commands.core import (
-    GeospatialData,
-    InsertPosition,
-    StreamAddOptions,
-    TrimByMinId,
-)
+from glide.async_commands.core import InsertPosition, StreamAddOptions, TrimByMinId
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByRadius,
+    GeospatialData,
+    GeoUnit,
     InfBound,
     LexBoundary,
+    OrderBy,
     RangeByIndex,
     ScoreBoundary,
     ScoreFilter,
@@ -56,6 +55,7 @@ async def transaction_test(
     key16 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
     key17 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
+    key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -103,6 +103,8 @@ async def transaction_test(
 
     transaction.mset({key: value, key2: value2})
     args.append(OK)
+    transaction.msetnx({key: value, key2: value2})
+    args.append(False)
     transaction.mget([key, key2])
     args.append([value, value2])
 
@@ -344,6 +346,11 @@ async def transaction_test(
     transaction.pfcount([key10])
     args.append(3)
 
+    transaction.setbit(key19, 1, 1)
+    args.append(0)
+    transaction.setbit(key19, 1, 0)
+    args.append(1)
+
     transaction.geoadd(
         key12,
         {
@@ -366,6 +373,10 @@ async def transaction_test(
             None,
         ]
     )
+    transaction.geosearch(
+        key12, "Catania", GeoSearchByRadius(200, GeoUnit.KILOMETERS), OrderBy.ASC
+    )
+    args.append(["Catania", "Palermo"])
 
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-1"))
     args.append("0-1")
@@ -533,6 +544,7 @@ class TestTransaction:
         transaction = Transaction()
         transaction.info()
         transaction.select(1)
+        transaction.move(key, 0)
         transaction.set(key, value)
         transaction.get(key)
         transaction.hset("user:1", {"name": "Alice", "age": "30"})
@@ -560,9 +572,9 @@ class TestTransaction:
         assert isinstance(result, list)
         assert isinstance(result[0], str)
         assert "# Memory" in result[0]
-        assert result[1:4] == [OK, OK, value]
-        assert result[4:11] == [2, 2, 2, ["Bob", "Alice"], 2, OK, None]
-        assert result[11:] == expected
+        assert result[1:5] == [OK, False, OK, value]
+        assert result[5:12] == [2, 2, 2, ["Bob", "Alice"], 2, OK, None]
+        assert result[12:] == expected
 
     def test_transaction_clear(self):
         transaction = Transaction()

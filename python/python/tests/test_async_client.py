@@ -17,8 +17,6 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
-    GeospatialData,
-    GeoUnit,
     InfBound,
     InfoSection,
     InsertPosition,
@@ -29,9 +27,15 @@ from glide.async_commands.core import (
 )
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByBox,
+    GeoSearchByRadius,
+    GeoSearchCount,
+    GeospatialData,
+    GeoUnit,
     InfBound,
     LexBoundary,
     Limit,
+    OrderBy,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -379,6 +383,26 @@ class TestCommands:
         assert await redis_client.select(0) == OK
         assert await redis_client.get(key) == value
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_move(self, redis_client: RedisClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+
+        assert await redis_client.select(0) == OK
+        assert await redis_client.move(key, 1) is False
+
+        assert await redis_client.set(key, value) == OK
+        assert await redis_client.get(key) == value
+
+        assert await redis_client.move(key, 1) is True
+        assert await redis_client.get(key) is None
+        assert await redis_client.select(1) == OK
+        assert await redis_client.get(key) == value
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.move(key, -1)
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_delete(self, redis_client: TRedisClient):
@@ -523,6 +547,25 @@ class TestCommands:
         mget_res = await redis_client.mget(keys)
         keys[-1] = None
         assert mget_res == keys
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_msetnx(self, redis_client: TRedisClient):
+        key1 = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        key3 = f"{{key}}-3{get_random_string(5)}"
+        non_existing = get_random_string(5)
+        value = get_random_string(5)
+        key_value_map1 = {key1: value, key2: value}
+        key_value_map2 = {key2: get_random_string(5), key3: value}
+
+        assert await redis_client.msetnx(key_value_map1) is True
+        mget_res = await redis_client.mget([key1, key2, non_existing])
+        assert mget_res == [value, value, None]
+
+        assert await redis_client.msetnx(key_value_map2) is False
+        assert await redis_client.get(key3) is None
+        assert await redis_client.get(key2) == value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2001,6 +2044,252 @@ class TestCommands:
 
         with pytest.raises(RequestError):
             await redis_client.geoadd(key, {"Place": GeospatialData(0, -86)})
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geosearch_by_box(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members = ["Catania", "Palermo", "edge2", "edge1"]
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+            "edge1": GeospatialData(12.758489, 38.788135),
+            "edge2": GeospatialData(17.241510, 38.788135),
+        }
+        result = [
+            [
+                "Catania",
+                [56.4413, 3479447370796909, [15.087267458438873, 37.50266842333162]],
+            ],
+            [
+                "Palermo",
+                [190.4424, 3479099956230698, [13.361389338970184, 38.1155563954963]],
+            ],
+            [
+                "edge2",
+                [279.7403, 3481342659049484, [17.241510450839996, 38.78813451624225]],
+            ],
+            [
+                "edge1",
+                [279.7405, 3479273021651468, [12.75848776102066, 38.78813451624225]],
+            ],
+        ]
+        assert await redis_client.geoadd(key, members_coordinates) == 4
+
+        # Test search by box, unit: kilometers, from a geospatial data
+        assert (
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+                OrderBy.ASC,
+            )
+            == members
+        )
+
+        assert (
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+                OrderBy.DESC,
+                with_coord=True,
+                with_dist=True,
+                with_hash=True,
+            )
+            == result[::-1]
+        )
+
+        assert await redis_client.geosearch(
+            key,
+            GeospatialData(15, 37),
+            GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+            OrderBy.ASC,
+            count=GeoSearchCount(1),
+            with_dist=True,
+            with_hash=True,
+        ) == [["Catania", [56.4413, 3479447370796909]]]
+
+        # Test search by box, unit: meters, from a member, with distance
+        meters = 400 * 1000
+        assert await redis_client.geosearch(
+            key,
+            "Catania",
+            GeoSearchByBox(meters, meters, GeoUnit.METERS),
+            OrderBy.DESC,
+            with_dist=True,
+        ) == [["edge2", [236529.1799]], ["Palermo", [166274.1516]], ["Catania", [0.0]]]
+
+        # Test search by box, unit: feet, from a member, with limited count to 2, with hash
+        feet = 400 * 3280.8399
+        assert await redis_client.geosearch(
+            key,
+            "Palermo",
+            GeoSearchByBox(feet, feet, GeoUnit.FEET),
+            OrderBy.ASC,
+            count=GeoSearchCount(2),
+            with_hash=True,
+        ) == [["Palermo", [3479099956230698]], ["edge1", [3479273021651468]]]
+
+        # Test search by box, unit: miles, from a geospatial data, with limited ANY count to 1
+        assert (
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(250, 250, GeoUnit.MILES),
+                OrderBy.ASC,
+                count=GeoSearchCount(1, True),
+            )
+        )[0] in members
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geosearch_by_radius(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+            "edge1": GeospatialData(12.758489, 38.788135),
+            "edge2": GeospatialData(17.241510, 38.788135),
+        }
+        result = [
+            [
+                "Catania",
+                [56.4413, 3479447370796909, [15.087267458438873, 37.50266842333162]],
+            ],
+            [
+                "Palermo",
+                [190.4424, 3479099956230698, [13.361389338970184, 38.1155563954963]],
+            ],
+        ]
+        members = ["Catania", "Palermo", "edge2", "edge1"]
+        assert await redis_client.geoadd(key, members_coordinates) == 4
+
+        # Test search by radius, units: feet, from a member
+        feet = 200 * 3280.8399
+        assert (
+            await redis_client.geosearch(
+                key,
+                "Catania",
+                GeoSearchByRadius(feet, GeoUnit.FEET),
+                OrderBy.ASC,
+            )
+            == members[:2]
+        )
+
+        # Test search by radius, units: meters, from a member
+        meters = 200 * 1000
+        assert (
+            await redis_client.geosearch(
+                key,
+                "Catania",
+                GeoSearchByRadius(meters, GeoUnit.METERS),
+                OrderBy.DESC,
+            )
+            == members[:2][::-1]
+        )
+
+        # Test search by radius, unit: miles, from a geospatial data, with limited count to 1
+        assert (
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByRadius(175, GeoUnit.MILES),
+                OrderBy.DESC,
+            )
+            == members[::-1]
+        )
+
+        # Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
+        assert (
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByRadius(200, GeoUnit.KILOMETERS),
+                OrderBy.ASC,
+                count=GeoSearchCount(2),
+                with_coord=True,
+                with_dist=True,
+                with_hash=True,
+            )
+            == result[:2]
+        )
+
+        # Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
+        assert (
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByRadius(200, GeoUnit.KILOMETERS),
+                OrderBy.ASC,
+                count=GeoSearchCount(1, True),
+                with_coord=True,
+                with_dist=True,
+                with_hash=True,
+            )
+        )[0] in result
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geosearch_no_result(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+            "edge1": GeospatialData(12.758489, 38.788135),
+            "edge2": GeospatialData(17.241510, 38.788135),
+        }
+        assert await redis_client.geoadd(key, members_coordinates) == 4
+
+        # No membes within the aea
+        assert (
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(50, 50, GeoUnit.METERS),
+                OrderBy.ASC,
+            )
+            == []
+        )
+
+        assert (
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByRadius(10, GeoUnit.METERS),
+                OrderBy.ASC,
+            )
+            == []
+        )
+
+        # No members in the area (apart from the member we seach fom itself)
+        assert await redis_client.geosearch(
+            key,
+            "Catania",
+            GeoSearchByBox(10, 10, GeoUnit.KILOMETERS),
+        ) == ["Catania"]
+
+        assert await redis_client.geosearch(
+            key,
+            "Catania",
+            GeoSearchByRadius(10, GeoUnit.METERS),
+        ) == ["Catania"]
+
+        # Search from non exiting memeber
+        with pytest.raises(RequestError):
+            await redis_client.geosearch(
+                key,
+                "non_existing_member",
+                GeoSearchByBox(10, 10, GeoUnit.MILES),
+            )
+
+        assert await redis_client.set(key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.geosearch(
+                key,
+                "Catania",
+                GeoSearchByBox(10, 10, GeoUnit.MILES),
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4031,6 +4320,24 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_setbit(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        set_key = get_random_string(10)
+
+        assert await redis_client.setbit(key, 0, 1) == 0
+        assert await redis_client.setbit(key, 0, 0) == 1
+
+        # invalid argument - offset can't be negative
+        with pytest.raises(RequestError):
+            assert await redis_client.setbit(key, -1, 0) == 1
+
+        # key exists, but it is not a string
+        assert await redis_client.sadd(set_key, ["foo"]) == 1
+        with pytest.raises(RequestError):
+            await redis_client.setbit(set_key, 0, 0)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_object_encoding(self, redis_client: TRedisClient):
         string_key = get_random_string(10)
         list_key = get_random_string(10)
@@ -4183,6 +4490,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.blmove(
                 "abc", "zxy", ListDirection.LEFT, ListDirection.LEFT, 1
             ),
+            redis_client.msetnx({"abc": "abc", "zxy": "zyx"}),
         ]
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):

@@ -31,7 +31,11 @@ class Limit:
 
 class OrderBy(Enum):
     """
-    SORT order options: options for sorting elements.
+    Enumeration representing sorting order options.
+
+    This enum is used for the following commands:
+    - `SORT`: General sorting in ascending or descending order.
+    - `GEOSEARCH`: Sorting items based on their proximity to a center point.
     """
 
     ASC = "ASC"

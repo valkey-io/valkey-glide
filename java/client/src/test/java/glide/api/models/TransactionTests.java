@@ -63,6 +63,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
@@ -103,6 +104,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -193,6 +195,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 import com.google.protobuf.ByteString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -361,6 +364,18 @@ public class TransactionTests {
 
         transaction.lpush("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPush, buildArgs("key", "element1", "element2")));
+
+        transaction.lpos("key", "element1");
+        results.add(Pair.of(LPos, buildArgs("key", "element1")));
+
+        transaction.lpos("key", "element1", LPosOptions.builder().rank(1L).build());
+        results.add(Pair.of(LPos, buildArgs("key", "element1", "RANK", "1")));
+
+        transaction.lposCount("key", "element1", 1L);
+        results.add(Pair.of(LPos, buildArgs("key", "element1", "COUNT", "1")));
+
+        transaction.lposCount("key", "element1", 1L, LPosOptions.builder().rank(1L).build());
+        results.add(Pair.of(LPos, buildArgs("key", "element1", "COUNT", "1", "RANK", "1")));
 
         transaction.lpop("key");
         results.add(Pair.of(LPop, buildArgs("key")));
@@ -880,6 +895,11 @@ public class TransactionTests {
         results.add(Pair.of(FCall, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
         transaction.fcall("func", new String[] {"arg1", "arg2"});
         results.add(Pair.of(FCall, buildArgs("func", "0", "arg1", "arg2")));
+
+        transaction.fcallReadOnly("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
+        results.add(Pair.of(FCallReadOnly, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
+        transaction.fcallReadOnly("func", new String[] {"arg1", "arg2"});
+        results.add(Pair.of(FCallReadOnly, buildArgs("func", "0", "arg1", "arg2")));
 
         transaction.functionStats();
         results.add(Pair.of(FunctionStats, buildArgs()));

@@ -33,6 +33,7 @@ import glide.api.RedisClusterClient;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -1031,6 +1032,100 @@ public class SharedCommandTests {
         assertEquals(1, client.lrem(key, 0, "value2").get());
         assertArrayEquals(new String[] {"value1"}, client.lrange(key, 0, -1).get());
         assertEquals(0, client.lrem("non_existing_key", 0, "value").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lpos(BaseClient client) {
+        String key = "{ListKey}-1-" + UUID.randomUUID();
+        String[] valueArray = new String[] {"a", "a", "b", "c", "a", "b"};
+        assertEquals(6L, client.rpush(key, valueArray).get());
+
+        // simplest case
+        assertEquals(0L, client.lpos(key, "a").get());
+        assertEquals(5L, client.lpos(key, "b", LPosOptions.builder().rank(2L).build()).get());
+
+        // element doesn't exist
+        assertNull(client.lpos(key, "e").get());
+
+        // reverse traversal
+        assertEquals(2L, client.lpos(key, "b", LPosOptions.builder().rank(-2L).build()).get());
+
+        // unlimited comparisons
+        assertEquals(
+                0L, client.lpos(key, "a", LPosOptions.builder().rank(1L).maxLength(0L).build()).get());
+
+        // limited comparisons
+        assertNull(client.lpos(key, "c", LPosOptions.builder().rank(1L).maxLength(2L).build()).get());
+
+        // invalid rank value
+        ExecutionException lposException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lpos(key, "a", LPosOptions.builder().rank(0L).build()).get());
+        assertTrue(lposException.getCause() instanceof RequestException);
+
+        // invalid maxlen value
+        ExecutionException lposMaxlenException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lpos(key, "a", LPosOptions.builder().maxLength(-1L).build()).get());
+        assertTrue(lposMaxlenException.getCause() instanceof RequestException);
+
+        // non-existent key
+        assertNull(client.lpos("non-existent_key", "a").get());
+
+        // wrong key data type
+        String wrong_data_type = "key" + UUID.randomUUID();
+        assertEquals(2L, client.sadd(wrong_data_type, new String[] {"a", "b"}).get());
+        ExecutionException lposWrongKeyDataTypeException =
+                assertThrows(ExecutionException.class, () -> client.lpos(wrong_data_type, "a").get());
+        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lposCount(BaseClient client) {
+        String key = "{ListKey}-1-" + UUID.randomUUID();
+        String[] valueArray = new String[] {"a", "a", "b", "c", "a", "b"};
+        assertEquals(6L, client.rpush(key, valueArray).get());
+
+        assertArrayEquals(new Long[] {0L, 1L}, client.lposCount(key, "a", 2L).get());
+        assertArrayEquals(new Long[] {0L, 1L, 4L}, client.lposCount(key, "a", 0L).get());
+
+        // invalid count value
+        ExecutionException lposCountException =
+                assertThrows(ExecutionException.class, () -> client.lposCount(key, "a", -1L).get());
+        assertTrue(lposCountException.getCause() instanceof RequestException);
+
+        // with option
+        assertArrayEquals(
+                new Long[] {0L, 1L, 4L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(1L).build()).get());
+        assertArrayEquals(
+                new Long[] {1L, 4L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(2L).build()).get());
+        assertArrayEquals(
+                new Long[] {4L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(3L).build()).get());
+
+        // reverse traversal
+        assertArrayEquals(
+                new Long[] {4L, 1L, 0L},
+                client.lposCount(key, "a", 0L, LPosOptions.builder().rank(-1L).build()).get());
+
+        // non-existent key
+        assertArrayEquals(new Long[] {}, client.lposCount("non-existent_key", "a", 1L).get());
+
+        // wrong key data type
+        String wrong_data_type = "key" + UUID.randomUUID();
+        assertEquals(2L, client.sadd(wrong_data_type, new String[] {"a", "b"}).get());
+        ExecutionException lposWrongKeyDataTypeException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lposCount(wrong_data_type, "a", 1L).get());
+        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
     }
 
     @SneakyThrows
