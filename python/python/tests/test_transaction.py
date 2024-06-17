@@ -15,7 +15,6 @@ from glide.async_commands.core import (
     StreamAddOptions,
     TrimByMinId,
 )
-from glide.async_commands.core import InsertPosition, StreamAddOptions, TrimByMinId
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
