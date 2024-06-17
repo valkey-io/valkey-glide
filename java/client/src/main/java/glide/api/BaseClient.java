@@ -35,6 +35,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -1828,6 +1829,14 @@ public abstract class BaseClient
         String[] args =
                 concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
         return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(
+            @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        String[] args =
+                concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
+        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
     }
 
     @Override
