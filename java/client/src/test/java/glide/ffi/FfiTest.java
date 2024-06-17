@@ -43,7 +43,8 @@ public class FfiTest {
 
     public static native long createLeakedLongSet(long[] value);
 
-    // This tests that panics do not cross the FFI boundary and an exception is thrown if a panic is caught
+    // This tests that panics do not cross the FFI boundary and an exception is thrown if a panic is
+    // caught
     public static native long handlePanics(
             boolean shouldPanic, boolean errorPresent, long value, long defaultValue);
 
