@@ -2878,9 +2878,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupname The newly created consumer group name.
-     * @param id Stream ID that specifies the last delivered entry in the stream from the new group’s
-     *     perspective. The special ID <code>"$"</code> can be used to specify the last entry in the
-     *     stream.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
      * @return Command Response - <code>OK</code>.
      */
     public T xgroupCreate(@NonNull String key, @NonNull String groupname, @NonNull String id) {
@@ -2895,9 +2895,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupname The newly created consumer group name.
-     * @param id Stream ID that specifies the last delivered entry in the stream from the new group’s
-     *     perspective. The special ID <code>"$"</code> can be used to specify the last entry in the
-     *     stream.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
      * @param options The group options {@link StreamGroupOptions}.
      * @return Command Response - <code>OK</code>.
      */
