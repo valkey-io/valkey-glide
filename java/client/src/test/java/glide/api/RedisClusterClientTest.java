@@ -1793,7 +1793,7 @@ public class RedisClusterClientTest {
         when(commandManager.<String>submitNewCommand(
                         eq(RandomKey), eq(new String[0]), eq(route), any()))
                 .thenReturn(testResponse);
-        CompletableFuture<String> response = service.randomKey();
+        CompletableFuture<String> response = service.randomKey(route);
 
         // verify
         assertEquals(testResponse, response);
