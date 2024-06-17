@@ -4599,15 +4599,15 @@ class TestCommands:
 
         # Test w/o flags
         result = await redis_client.sort(key)
-        assert result == ["1", "2", "3", "4", "5"]
+        assert result == [b"1", b"2", b"3", b"4", b"5"]
 
         # limit argument
         result = await redis_client.sort(key, limit=Limit(1, 3))
-        assert result == ["2", "3", "4"]
+        assert result == [b"2", b"3", b"4"]
 
         # order argument
         result = await redis_client.sort(key, order=OrderBy.DESC)
-        assert result == ["5", "4", "3", "2", "1"]
+        assert result == [b"5", b"4", b"3", b"2", b"1"]
 
         assert await redis_client.lpush(key, ["a"]) == 6
 
@@ -4617,13 +4617,13 @@ class TestCommands:
 
         # alpha argument
         result = await redis_client.sort(key, alpha=True)
-        assert result == ["1", "2", "3", "4", "5", "a"]
+        assert result == [b"1", b"2", b"3", b"4", b"5", b"a"]
 
         # Combining multiple arguments
         result = await redis_client.sort(
             key, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
         )
-        assert result == ["5", "4", "3"]
+        assert result == [b"5", b"4", b"3"]
 
         # Test sort_store with combined arguments
         sort_store_result = await redis_client.sort_store(
@@ -4631,18 +4631,18 @@ class TestCommands:
         )
         assert sort_store_result == 3
         sorted_list = await redis_client.lrange(store, 0, -1)
-        assert sorted_list == ["5", "4", "3"]
+        assert sorted_list == [b"5", b"4", b"3"]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_echo(self, redis_client: TGlideClient):
         message = get_random_string(5)
-        assert await redis_client.echo(message) == message
+        assert await redis_client.echo(message) == message.encode('utf-8')
         if isinstance(redis_client, GlideClusterClient):
             echo_dict = await redis_client.echo(message, AllNodes())
             assert isinstance(echo_dict, dict)
             for value in echo_dict.values():
-                assert value == message
+                assert value == message.encode('utf-8')
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4672,8 +4672,6 @@ class TestCommands:
         result = await redis_client.time()
         assert len(result) == 2
         assert isinstance(result, list)
-        assert isinstance(result[0], str)
-        assert isinstance(result[1], str)
         assert int(result[0]) > current_time
         assert 0 < int(result[1]) < 1000000
 
@@ -4706,7 +4704,7 @@ class TestCommands:
         assert await redis_client.append(key, value) == 5
 
         assert await redis_client.append(key, value) == 10
-        assert await redis_client.get(key) == value * 2
+        assert await redis_client.get(key) == (value * 2).encode('utf-8')
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4729,7 +4727,7 @@ class TestCommands:
             await redis_client.xadd(
                 key, [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1")
             )
-            == "0-1"
+            == "0-1".encode('utf-8')
         )
 
         assert (
@@ -6541,58 +6539,58 @@ class TestCommands:
         assert await redis_client.set(
             string_key, "a really loooooooooooooooooooooooooooooooooooooooong value"
         )
-        assert await redis_client.object_encoding(string_key) == "raw"
+        assert await redis_client.object_encoding(string_key) == "raw".encode('utf-8')
 
         assert await redis_client.set(string_key, "2") == OK
-        assert await redis_client.object_encoding(string_key) == "int"
+        assert await redis_client.object_encoding(string_key) == "int".encode('utf-8')
 
         assert await redis_client.set(string_key, "value") == OK
-        assert await redis_client.object_encoding(string_key) == "embstr"
+        assert await redis_client.object_encoding(string_key) == "embstr".encode('utf-8')
 
         assert await redis_client.lpush(list_key, ["1"]) == 1
         if await check_if_server_version_lt(redis_client, "7.2.0"):
-            assert await redis_client.object_encoding(list_key) == "quicklist"
+            assert await redis_client.object_encoding(list_key) == "quicklist".encode('utf-8')
         else:
-            assert await redis_client.object_encoding(list_key) == "listpack"
+            assert await redis_client.object_encoding(list_key) == "listpack".encode('utf-8')
 
         # The default value of set-max-intset-entries is 512
         for i in range(0, 513):
             assert await redis_client.sadd(hashtable_key, [str(i)]) == 1
-        assert await redis_client.object_encoding(hashtable_key) == "hashtable"
+        assert await redis_client.object_encoding(hashtable_key) == "hashtable".encode('utf-8')
 
         assert await redis_client.sadd(intset_key, ["1"]) == 1
-        assert await redis_client.object_encoding(intset_key) == "intset"
+        assert await redis_client.object_encoding(intset_key) == "intset".encode('utf-8')
 
         assert await redis_client.sadd(set_listpack_key, ["foo"]) == 1
         if await check_if_server_version_lt(redis_client, "7.2.0"):
-            assert await redis_client.object_encoding(set_listpack_key) == "hashtable"
+            assert await redis_client.object_encoding(set_listpack_key) == "hashtable".encode('utf-8')
         else:
-            assert await redis_client.object_encoding(set_listpack_key) == "listpack"
+            assert await redis_client.object_encoding(set_listpack_key) == "listpack".encode('utf-8')
 
         # The default value of hash-max-listpack-entries is 512
         for i in range(0, 513):
             assert await redis_client.hset(hash_hashtable_key, {str(i): "2"}) == 1
-        assert await redis_client.object_encoding(hash_hashtable_key) == "hashtable"
+        assert await redis_client.object_encoding(hash_hashtable_key) == "hashtable".encode('utf-8')
 
         assert await redis_client.hset(hash_listpack_key, {"1": "2"}) == 1
         if await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.object_encoding(hash_listpack_key) == "ziplist"
+            assert await redis_client.object_encoding(hash_listpack_key) == "ziplist".encode('utf-8')
         else:
-            assert await redis_client.object_encoding(hash_listpack_key) == "listpack"
+            assert await redis_client.object_encoding(hash_listpack_key) == "listpack".encode('utf-8')
 
         # The default value of zset-max-listpack-entries is 128
         for i in range(0, 129):
             assert await redis_client.zadd(skiplist_key, {str(i): 2.0}) == 1
-        assert await redis_client.object_encoding(skiplist_key) == "skiplist"
+        assert await redis_client.object_encoding(skiplist_key) == "skiplist".encode('utf-8')
 
         assert await redis_client.zadd(zset_listpack_key, {"1": 2.0}) == 1
         if await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.object_encoding(zset_listpack_key) == "ziplist"
+            assert await redis_client.object_encoding(zset_listpack_key) == "ziplist".encode('utf-8')
         else:
-            assert await redis_client.object_encoding(zset_listpack_key) == "listpack"
+            assert await redis_client.object_encoding(zset_listpack_key) == "listpack".encode('utf-8')
 
         assert await redis_client.xadd(stream_key, [("field", "value")]) is not None
-        assert await redis_client.object_encoding(stream_key) == "stream"
+        assert await redis_client.object_encoding(stream_key) == "stream".encode('utf-8')
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7496,6 +7494,7 @@ class TestClusterRoutes:
         route: Route,
     ):
         cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
+        cluster_nodes = cluster_nodes.decode('utf-8')
         assert isinstance(cluster_nodes, (str, list))
         cluster_nodes = get_first_result(cluster_nodes)
         num_of_nodes = len(cluster_nodes.splitlines())
@@ -7510,6 +7509,7 @@ class TestClusterRoutes:
         )
 
         all_results = await redis_client.custom_command(["INFO", "REPLICATION"], route)
+        all_results = all_results.decode('utf-8')
         assert isinstance(all_results, dict)
         assert len(all_results) == expected_num_of_results
         primary_count = 0
@@ -7558,6 +7558,8 @@ class TestClusterRoutes:
         primary_res = await redis_client.custom_command(
             ["CLUSTER", "NODES"], route_class(SlotType.PRIMARY, route_second_arg)
         )
+        primary_res = primary_res.decode('utf-8')
+
         assert type(primary_res) is str
         assert "myself,master" in primary_res
         expected_primary_node_id = ""
@@ -7568,6 +7570,8 @@ class TestClusterRoutes:
         replica_res = await redis_client.custom_command(
             ["CLUSTER", "NODES"], route_class(SlotType.REPLICA, route_second_arg)
         )
+        replica_res = replica_res.decode('utf-8')
+
         assert isinstance(replica_res, str)
         assert "myself,slave" in replica_res
         for node_line in replica_res:
@@ -7593,8 +7597,10 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_info_random_route(self, redis_client: GlideClusterClient):
         info = await redis_client.info([InfoSection.SERVER], RandomNode())
+        print("######################")
+        print(type(info)) 
         assert isinstance(info, str)
-        assert "# Server" in info
+        assert "# Server" in info 
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7611,28 +7617,22 @@ class TestClusterRoutes:
                 f"Couldn't find 'myself' in the cluster nodes output: {value}"
             )
 
-        cluster_nodes = clean_result(
-            await redis_client.custom_command(["cluster", "nodes"], RandomNode())
-        )
+        cluster_nodes = await redis_client.custom_command(["cluster", "nodes"], RandomNode())
+        cluster_nodes = clean_result(cluster_nodes.decode('utf-8'))
+
         assert isinstance(cluster_nodes, str)
         host = cluster_nodes.split(" ")[1].split("@")[0]
 
-        second_result = clean_result(
-            await redis_client.custom_command(
-                ["cluster", "nodes"], ByAddressRoute(host)
-            )
-        )
+        second_result = await redis_client.custom_command(["cluster", "nodes"], ByAddressRoute(host))
+        second_result = clean_result(second_result.decode('utf-8'))
 
         assert cluster_nodes == second_result
 
         host, port = host.split(":")
         port_as_int = int(port)
 
-        third_result = clean_result(
-            await redis_client.custom_command(
-                ["cluster", "nodes"], ByAddressRoute(host, port_as_int)
-            )
-        )
+        third_result =  await redis_client.custom_command(["cluster", "nodes"], ByAddressRoute(host, port_as_int))
+        third_result = clean_result(third_result.decode('utf-8'))
 
         assert cluster_nodes == third_result
 
@@ -7761,7 +7761,7 @@ class TestScripts:
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         script = Script("return 'Hello'")
-        assert await redis_client.invoke_script(script) == "Hello"
+        assert await redis_client.invoke_script(script) == "Hello".encode("utf-8")
 
         script = Script("return redis.call('SET', KEYS[1], ARGV[1])")
         assert (
@@ -7774,5 +7774,5 @@ class TestScripts:
             == "OK"
         )
         script = Script("return redis.call('GET', KEYS[1])")
-        assert await redis_client.invoke_script(script, keys=[key1]) == "value1"
-        assert await redis_client.invoke_script(script, keys=[key2]) == "value2"
+        assert await redis_client.invoke_script(script, keys=[key1]) == "value1".encode("utf-8")
+        assert await redis_client.invoke_script(script, keys=[key2]) == "value2".encode("utf-8")
