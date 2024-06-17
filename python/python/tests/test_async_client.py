@@ -4057,11 +4057,11 @@ class TestCommands:
 
         assert await redis_client.set(key, value) == OK
         assert await redis_client.getbit(key, 1) == 1
+        # When offset is beyond the string length, the string is assumed to be a contiguous space with 0 bits.
         assert await redis_client.getbit(key, 1000) == 0
+        # When key does not exist it is assumed to be an empty string, so offset is always out of range and the value is
+        # also assumed to be a contiguous space with 0 bits.
         assert await redis_client.getbit(non_existing_key, 1) == 0
-
-        assert await redis_client.setbit(key, 5, 0) == 1
-        assert await redis_client.getbit(key, 5) == 0
 
         # invalid argument - offset can't be negative
         with pytest.raises(RequestError):

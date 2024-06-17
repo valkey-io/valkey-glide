@@ -4073,8 +4073,8 @@ class CoreCommands(Protocol):
             offset (int): The index of the bit to return.
 
         Returns:
-            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the positive
-                `offset` exceeds the length of the string.
+            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+            the length of the string.
 
         Examples:
             >>> await client.getbit("my_key", 1)

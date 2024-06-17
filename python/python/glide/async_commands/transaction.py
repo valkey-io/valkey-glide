@@ -2806,8 +2806,8 @@ class BaseTransaction:
             offset (int): The index of the bit to return.
 
         Command response:
-            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the positive
-                `offset` exceeds the length of the string.
+            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+                the length of the string.
         """
         return self.append_command(RequestType.GetBit, [key, str(offset)])
 
