@@ -36,7 +36,7 @@ PB_REL="https://github.com/protocolbuffers/protobuf/releases"
 curl -LO $PB_REL/download/v26.1/protoc-26.1-linux-x86_64.zip
 unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler is installed
+# Check that the protobuf compiler version 26.1 or higher is installed
 protoc --version
 ```
 
@@ -47,6 +47,8 @@ sudo yum update -y
 sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-devel unzip
 # Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+# Check that the protobuf compiler version 26.1 or higher is installed
+protoc --version
 ```
 **Dependencies installation for MacOS**
 
@@ -55,17 +57,19 @@ brew update
 brew install openjdk@11 git gcc pkgconfig protobuf openssl
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
+# Check that the protobuf compiler version 26.1 or higher is installed
+protoc --version
 ```
 
 #### Building and installation steps
 
-Before starting this step, make sure you've installed all software requirments.
+Before starting this step, make sure you've installed all software dependencies.
 
 1. Clone the repository:
     ```bash
     VERSION=0.1.0 # You can modify this to other released version or set it to "main" to get the unstable branch
     git clone --branch ${VERSION} https://github.com/aws/glide-for-redis.git
-    cd glide-for-redis
+    cd glide-for-redis/java
     ```
 2. Initialize git submodule:
     ```bash
@@ -73,17 +77,30 @@ Before starting this step, make sure you've installed all software requirments.
     ```
 3. Build the Java wrapper (Choose a build option from the following and run it from the `java` folder):
 
-    1. Build in debug mode:
+    1. Enter the 'java' directory:
+    ```bash
+    cd java
+    `
+    2. Build in debug mode:
 
     ```bash
     ./gradlew :client:buildAll
     ```
 
-    2. Build in release mode:
+    3. Build in release mode:
 
     ```bash
     ./gradlew :client:buildAllRelease
     ```
+
+### Troubleshooting
+
+Some troubleshooting issues:
+
+Failed to find cargo after rustup: gradlew may need to be restarted to recognize the new path. If clearing the gradle cache doesn't work, you may need to restart your machine.
+If build fails because cargo build compiler fails, make sure submodules are updated using git submodule update.
+If protobuf 26.0 or earlier is detected, upgrade to the latest protobuf release.
+
 
 ### Test
 
@@ -99,16 +116,16 @@ To run a unit test, use the following command:
 ./gradlew :client:test
 ```
 
-To run an integration test, use the following command:
-
-```bash
-./gradlew :integTest:test
-```
-
-To run FFI tests, use the following command:
+To run FFI tests between Java and Rust, use the following command:
 
 ```bash
 ./gradlew :client:testFfi
+```
+
+To run end-to-end tests, use the following command:
+
+```bash
+./gradlew :integTest:test
 ```
 
 To run a single test, use the following command:
@@ -122,7 +139,7 @@ To run one class, use the following command:
 ```
 
 ### Generate files
-To (re)generate files, use the following command:
+To (re)generate protobuf code, use the following command:
 
 ```bash
 ./gradlew protobuf
@@ -145,12 +162,6 @@ Development on the Java wrapper may involve changes in either the Java or Rust c
 **Java:**
 
 -   Spotless
-
-**Rust:**
-
--   clippy
--   rustfmt
--   doc
 
 #### Running the linters
 
