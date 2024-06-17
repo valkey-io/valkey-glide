@@ -1,12 +1,12 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
+from glide.async_commands.bitmap import BitmapIndexType, OffsetOptions
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
     ExpirySet,
     ExpiryType,
-    GeospatialData,
-    GeoUnit,
     InfoSection,
     InsertPosition,
     StreamAddOptions,
@@ -18,9 +18,13 @@ from glide.async_commands.core import (
 from glide.async_commands.redis_modules import json
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByBox,
+    GeoSearchByRadius,
+    GeoSearchCount,
+    GeospatialData,
+    GeoUnit,
     InfBound,
     LexBoundary,
-    Limit,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -89,6 +93,9 @@ __all__ = [
     "ExpireOptions",
     "ExpirySet",
     "ExpiryType",
+    "GeoSearchByBox",
+    "GeoSearchByRadius",
+    "GeoSearchCount",
     "GeoUnit",
     "GeospatialData",
     "AggregationType",
@@ -98,10 +105,12 @@ __all__ = [
     "json",
     "LexBoundary",
     "Limit",
+    "ListDirection",
     "RangeByIndex",
     "RangeByLex",
     "RangeByScore",
     "ScoreFilter",
+    "OrderBy",
     "StreamAddOptions",
     "StreamTrimOptions",
     "TrimByMaxLen",

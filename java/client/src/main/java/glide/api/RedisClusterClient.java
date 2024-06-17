@@ -2,6 +2,9 @@
 package glide.api;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
@@ -13,30 +16,40 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
+import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
+import glide.api.commands.TransactionsClusterCommands;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -51,7 +64,8 @@ public class RedisClusterClient extends BaseClient
         implements ConnectionManagementClusterCommands,
                 GenericClusterCommands,
                 ServerManagementClusterCommands,
-                ScriptingAndFunctionsClusterCommands {
+                ScriptingAndFunctionsClusterCommands,
+                TransactionsClusterCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -418,32 +432,232 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> functionLoad(@NonNull String libraryCode) {
-        return commandManager.submitNewCommand(
-                FunctionLoad, new String[] {libraryCode}, this::handleStringResponse);
+    public CompletableFuture<Long> dbsize() {
+        return commandManager.submitNewCommand(DBSize, new String[0], this::handleLongResponse);
     }
 
     @Override
-    public CompletableFuture<String> functionLoadReplace(@NonNull String libraryCode) {
-        return commandManager.submitNewCommand(
-                FunctionLoad,
-                new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
-                this::handleStringResponse);
+    public CompletableFuture<Long> dbsize(@NonNull Route route) {
+        return commandManager.submitNewCommand(DBSize, new String[0], route, this::handleLongResponse);
     }
 
     @Override
-    public CompletableFuture<String> functionLoad(@NonNull String libraryCode, @NonNull Route route) {
-        return commandManager.submitNewCommand(
-                FunctionLoad, new String[] {libraryCode}, route, this::handleStringResponse);
+    public CompletableFuture<String> functionLoad(@NonNull String libraryCode, boolean replace) {
+        String[] arguments =
+                replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
+        return commandManager.submitNewCommand(FunctionLoad, arguments, this::handleStringResponse);
     }
 
     @Override
-    public CompletableFuture<String> functionLoadReplace(
-            @NonNull String libraryCode, @NonNull Route route) {
+    public CompletableFuture<String> functionLoad(
+            @NonNull String libraryCode, boolean replace, @NonNull Route route) {
+        String[] arguments =
+                replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
         return commandManager.submitNewCommand(
-                FunctionLoad,
-                new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
+                FunctionLoad, arguments, route, this::handleStringResponse);
+    }
+
+    /** Process a <code>FUNCTION LIST</code> cluster response. */
+    protected ClusterValue<Map<String, Object>[]> handleFunctionListResponse(
+            Response response, Route route) {
+        if (route instanceof SingleNodeRoute) {
+            Map<String, Object>[] data = handleFunctionListResponse(handleArrayResponse(response));
+            return ClusterValue.ofSingleValue(data);
+        } else {
+            // each `Object` is a `Map<String, Object>[]` actually
+            Map<String, Object> info = handleMapResponse(response);
+            Map<String, Map<String, Object>[]> data = new HashMap<>();
+            for (var nodeInfo : info.entrySet()) {
+                data.put(nodeInfo.getKey(), handleFunctionListResponse((Object[]) nodeInfo.getValue()));
+            }
+            return ClusterValue.ofMultiValue(data);
+        }
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>[]> functionList(
+            @NonNull String libNamePattern, boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode
+                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
+                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
+            boolean withCode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
                 route,
-                this::handleStringResponse);
+                response -> handleFunctionListResponse(response, route));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
+            @NonNull String libNamePattern, boolean withCode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode
+                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
+                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                route,
+                response -> handleFunctionListResponse(response, route));
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush() {
+        return commandManager.submitNewCommand(
+                FunctionFlush, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush(@NonNull FlushMode mode) {
+        return commandManager.submitNewCommand(
+                FunctionFlush, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionFlush, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush(@NonNull FlushMode mode, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionFlush, new String[] {mode.toString()}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionDelete(@NonNull String libName) {
+        return commandManager.submitNewCommand(
+                FunctionDelete, new String[] {libName}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionDelete(@NonNull String libName, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionDelete, new String[] {libName}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcall(@NonNull String function) {
+        return fcall(function, new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> fcall(
+            @NonNull String function, @NonNull Route route) {
+        return fcall(function, new String[0], route);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcall(@NonNull String function, @NonNull String[] arguments) {
+        String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
+        return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> fcall(
+            @NonNull String function, @NonNull String[] arguments, @NonNull Route route) {
+        String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
+        return commandManager.submitNewCommand(
+                FCall,
+                args,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(@NonNull String function) {
+        return fcallReadOnly(function, new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(
+            @NonNull String function, @NonNull Route route) {
+        return fcallReadOnly(function, new String[0], route);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(
+            @NonNull String function, @NonNull String[] arguments) {
+        String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
+        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Object>> fcallReadOnly(
+            @NonNull String function, @NonNull String[] arguments, @NonNull Route route) {
+        String[] args = concatenateArrays(new String[] {function, "0"}, arguments); // 0 - key count
+        return commandManager.submitNewCommand(
+                FCallReadOnly,
+                args,
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
+                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> functionKill() {
+        return commandManager.submitNewCommand(FunctionKill, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionKill(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionKill, new String[0], route, this::handleStringResponse);
+    }
+
+    /** Process a <code>FUNCTION STATS</code> cluster response. */
+    protected ClusterValue<Map<String, Map<String, Object>>> handleFunctionStatsResponse(
+            Response response, boolean isSingleValue) {
+        if (isSingleValue) {
+            return ClusterValue.ofSingleValue(handleFunctionStatsResponse(handleMapResponse(response)));
+        } else {
+            Map<String, Map<String, Map<String, Object>>> data = handleMapResponse(response);
+            for (var nodeInfo : data.entrySet()) {
+                nodeInfo.setValue(handleFunctionStatsResponse(nodeInfo.getValue()));
+            }
+            return ClusterValue.ofMultiValue(data);
+        }
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats() {
+        return commandManager.submitNewCommand(
+                FunctionStats, new String[0], response -> handleFunctionStatsResponse(response, false));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> functionStats(
+            @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionStats,
+                new String[0],
+                route,
+                response -> handleFunctionStatsResponse(response, route instanceof SingleNodeRoute));
+    }
+
+    @Override
+    public CompletableFuture<String> unwatch(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                UnWatch, new String[0], route, this::handleStringResponse);
     }
 }

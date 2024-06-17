@@ -560,4 +560,36 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<String>> lolwut(int version, int[] parameters, Route route);
+
+    /**
+     * Returns the number of keys in the database.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @return The total number of keys across the primary nodes.
+     * @example
+     *     <pre>{@code
+     * Long numKeys = client.dbsize().get();
+     * System.out.printf("Number of keys across the primary nodes: %d%n", numKeys);
+     * }</pre>
+     */
+    CompletableFuture<Long> dbsize();
+
+    /**
+     * Returns the number of keys in the database.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The number of keys in the database.<br>
+     *     If the query is routed to multiple nodes, returns the sum of the number of keys across all
+     *     routed nodes.
+     * @example
+     *     <pre>{@code
+     * Route route = new ByAddressRoute("localhost", 8000);
+     * Long numKeys = client.dbsize(route).get();
+     * System.out.printf("Number of keys for node at port 8000: %d%n", numKeys);
+     * }</pre>
+     */
+    CompletableFuture<Long> dbsize(Route route);
 }

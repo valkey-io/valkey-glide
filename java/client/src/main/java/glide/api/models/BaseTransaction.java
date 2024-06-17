@@ -1,25 +1,36 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SetBaseCommands.SET_LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
+import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.BLMove;
 import static redis_request.RedisRequestOuterClass.RequestType.BLPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BRPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMax;
 import static redis_request.RedisRequestOuterClass.RequestType.BZPopMin;
 import static redis_request.RedisRequestOuterClass.RequestType.BitCount;
+import static redis_request.RedisRequestOuterClass.RequestType.BitField;
+import static redis_request.RedisRequestOuterClass.RequestType.BitFieldReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.BitOp;
 import static redis_request.RedisRequestOuterClass.RequestType.BitPos;
 import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
@@ -28,7 +39,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
@@ -36,14 +49,22 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
+import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
+import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -57,31 +78,38 @@ import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
+import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
 import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LCS;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
 import static redis_request.RedisRequestOuterClass.RequestType.LRem;
+import static redis_request.RedisRequestOuterClass.RequestType.LSet;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectRefCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpire;
 import static redis_request.RedisRequestOuterClass.RequestType.PExpireAt;
+import static redis_request.RedisRequestOuterClass.RequestType.PExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.PTTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
@@ -91,17 +119,21 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiffStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SInter;
+import static redis_request.RedisRequestOuterClass.RequestType.SInterCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SInterStore;
 import static redis_request.RedisRequestOuterClass.RequestType.SIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMIsMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SMembers;
 import static redis_request.RedisRequestOuterClass.RequestType.SMove;
+import static redis_request.RedisRequestOuterClass.RequestType.SPop;
+import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -114,6 +146,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XDel;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XLen;
+import static redis_request.RedisRequestOuterClass.RequestType.XRange;
+import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -142,12 +181,14 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
+import com.google.protobuf.ByteString;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
-import glide.api.models.commands.PopDirection;
+import glide.api.models.commands.LPosOptions;
+import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -170,15 +211,26 @@ import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSet;
+import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
+import glide.api.models.commands.bitmap.BitFieldOptions.Offset;
+import glide.api.models.commands.bitmap.BitFieldOptions.OffsetMultiplier;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
-import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
+import glide.api.models.configuration.ReadFrom;
 import java.util.Arrays;
 import java.util.Map;
 import lombok.Getter;
@@ -320,6 +372,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Gets a string value associated with the given <code>key</code> and deletes the key.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return Command Response - If <code>key</code> exists, returns the <code>value</code> of <code>
+     *     key</code>. Otherwise, return <code>null</code>.
+     */
+    public T getdel(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(GetDel, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Sets the given key with the given value.
      *
      * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
@@ -355,6 +421,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
+     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
+     * this special case.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param value The value to append.
+     * @return Command Response - The length of the string after appending the value.
+     */
+    public T append(@NonNull String key, @NonNull String value) {
+        ArgsArray commandArgs = buildArgs(key, value);
+        protobufTransaction.addCommands(buildCommand(Append, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Retrieves the values of multiple <code>keys</code>.
      *
      * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
@@ -382,6 +464,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(args);
 
         protobufTransaction.addCommands(buildCommand(MSet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets multiple keys to multiple values in a single operation. Performs no operation at all even
+     * if just a single key already exists.
+     *
+     * @see <a href="https://redis.io/commands/msetnx/">redis.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return Command Response - <code>true</code> if all keys were set, <code>false</code> if no key
+     *     was set.
+     */
+    public T msetnx(@NonNull Map<String, String> keyValueMap) {
+        String[] args = convertMapToKeyValueStringArray(keyValueMap);
+        ArgsArray commandArgs = buildArgs(args);
+
+        protobufTransaction.addCommands(buildCommand(MSetNX, commandArgs));
         return getThis();
     }
 
@@ -716,6 +815,21 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the string length of the value associated with <code>field</code> in the hash stored at
+     * <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/hstrlen/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash.
+     * @return Command Response - The string length or <code>0</code> if <code>field</code> or <code>
+     *     key</code> does not exist.
+     */
+    public T hstrlen(@NonNull String key, @NonNull String field) {
+        protobufTransaction.addCommands(buildCommand(HStrlen, buildArgs(key, field)));
+        return getThis();
+    }
+
+    /**
      * Returns a random field name from the hash value stored at <code>key</code>.
      *
      * @since Redis 6.2 and above.
@@ -797,6 +911,83 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lpop(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of the first occurrence of <code>element</code> inside the list specified by
+     * <code>key</code>. If no match is found, <code>null</code> is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @return Command Response - The index of the first occurrence of <code>element</code>, or <code>
+     *     null</code> if <code>element</code> is not in the list.
+     */
+    public T lpos(@NonNull String key, @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, element);
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the index of an occurrence of <code>element</code> within a list based on the given
+     * <code>options</code>. If no match is found, <code>null</code> is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param options The LPos options.
+     * @return Command Response - The index of <code>element</code>, or <code>null</code> if <code>
+     *     element</code> is not in the list.
+     */
+    public T lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addAll(new String[] {key, element}, options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns an <code>array</code> of indices of matching elements within a list.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param count The number of matches wanted.
+     * @return Command Response - An <code>array</code> that holds the indices of the matching
+     *     elements within the list.
+     */
+    public T lposCount(@NonNull String key, @NonNull String element, long count) {
+        ArgsArray commandArgs = buildArgs(key, element, COUNT_REDIS_API, Long.toString(count));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns an <code>array</code> of indices of matching elements within a list based on the given
+     * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param count The number of matches wanted.
+     * @param options The LPos options.
+     * @return Command Response - An <code>array</code> that holds the indices of the matching
+     *     elements within the list.
+     */
+    public T lposCount(
+            @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        ArrayUtils.addAll(
+                                new String[] {key, element, COUNT_REDIS_API, Long.toString(count)},
+                                options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
         return getThis();
     }
 
@@ -1151,6 +1342,44 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return Command Response - The cardinality of the intersection result. If one or more sets do
+     *     not exist, <code>0</code> is returned.
+     */
+    public T sintercard(@NonNull String[] keys) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {Long.toString(keys.length)}, keys));
+        protobufTransaction.addCommands(buildCommand(SInterCard, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @param limit The limit for the intersection cardinality value.
+     * @return Command Response - The cardinality of the intersection result. If one or more sets do
+     *     not exist, <code>0</code> is returned. If the intersection cardinality reaches <code>limit
+     *     </code> partway through the computation, returns <code>limit</code> as the cardinality.
+     */
+    public T sintercard(@NonNull String[] keys, long limit) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Long.toString(keys.length)},
+                                keys,
+                                new String[] {SET_LIMIT_REDIS_API, Long.toString(limit)}));
+        protobufTransaction.addCommands(buildCommand(SInterCard, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
      * at <code>destination</code>.
      *
@@ -1438,6 +1667,40 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs = buildArgs(key);
 
         protobufTransaction.addCommands(buildCommand(TTL, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire, in seconds.<br>
+     * To get the expiration with millisecond precision, use {@link #pexpiretime(String)}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/expiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to determine the expiration value of.
+     * @return Command response - The expiration Unix timestamp in seconds, <code>-2</code> if <code>
+     *     key</code> does not exist, or <code>-1</code> if <code>key</code> exists but has no
+     *     associated expiration.
+     */
+    public T expiretime(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(ExpireTime, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire, in milliseconds.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/pexpiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to determine the expiration value of.
+     * @return Command response - The expiration Unix timestamp in milliseconds, <code>-2</code> if
+     *     <code>key
+     *     </code> does not exist, or <code>-1</code> if <code>key</code> exists but has no associated
+     *     expiration.
+     */
+    public T pexpiretime(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(PExpireTime, buildArgs(key)));
         return getThis();
     }
 
@@ -1953,6 +2216,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the difference between the first sorted set and all the successive sorted sets.<br>
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - An <code>array</code> of elements representing the difference
@@ -1969,6 +2233,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Returns the difference between the first sorted set and all the successive sorted sets.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiff/">redis.io</a> for more details.
      * @param keys The keys of the sorted sets.
      * @return Command Response - A <code>Map</code> of elements and their scores representing the
@@ -1989,6 +2254,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
      * overwriting it if it already exists. Non-existent keys are treated as empty sets.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
      * @param destination The key for the resulting sorted set.
      * @param keys The keys of the sorted sets to compare.
@@ -2321,46 +2587,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
-     * </code>.<br>
+     * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
      * To get the elements with their scores, see {@link #zunionWithScores}.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
-     *     elements.
+     * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the union.
      */
-    public T zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        ArgsArray commandArgs =
-                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
-        protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Returns the union of members from sorted sets specified by the given <code>keysOrWeightedKeys
-     * </code>.<br>
-     * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
-     * #zunion(KeysOrWeightedKeys, Aggregate)}.<br>
-     * To get the elements with their scores, see {@link #zunionWithScores}.
-     *
-     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @return Command Response - The resulting sorted set from the union.
-     */
-    public T zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
+    public T zunion(@NonNull KeyArray keys) {
+        ArgsArray commandArgs = buildArgs(keys.toArgs());
         protobufTransaction.addCommands(buildCommand(ZUnion, commandArgs));
         return getThis();
     }
@@ -2369,6 +2605,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      * keysOrWeightedKeys</code>.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2398,6 +2635,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * To perform a <code>zunion</code> operation while specifying aggregation settings, use {@link
      * #zunionWithScores(KeysOrWeightedKeys, Aggregate)}.
      *
+     * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
      * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
      *     <ul>
@@ -2416,48 +2654,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Returns the intersection of members from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>.<br>
-     * To perform a <code>zinter</code> operation while specifying aggregation settings, use {@link
-     * #zinter(KeysOrWeightedKeys, Aggregate)}.<br>
+     * Returns the intersection of members from sorted sets specified by the given <code>keys</code>.
+     * <br>
      * To get the elements with their scores, see {@link #zinterWithScores}.
      *
      * @since Redis 6.2 and above.
      * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys only.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
+     * @param keys The keys of the sorted sets.
      * @return Command Response - The resulting sorted set from the intersection.
      */
-    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        ArgsArray commandArgs = buildArgs(keysOrWeightedKeys.toArgs());
-        protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Returns the intersection of members from sorted sets specified by the given <code>
-     * keysOrWeightedKeys</code>. To get the elements with their scores, see {@link
-     * #zinterWithScores}.
-     *
-     * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/zinter/">redis.io</a> for more details.
-     * @param keysOrWeightedKeys The keys of the sorted sets with possible formats:
-     *     <ul>
-     *       <li>Use {@link KeyArray} for keys intersection.
-     *       <li>Use {@link WeightedKeys} for weighted keys with score multipliers.
-     *     </ul>
-     *
-     * @param aggregate Specifies the aggregation strategy to apply when combining the scores of
-     *     elements.
-     * @return Command Response - The resulting sorted set from the intersection.
-     */
-    public T zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        ArgsArray commandArgs =
-                buildArgs(concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs()));
+    public T zinter(@NonNull KeyArray keys) {
+        ArgsArray commandArgs = buildArgs(keys.toArgs());
         protobufTransaction.addCommands(buildCommand(ZInter, commandArgs));
         return getThis();
     }
@@ -2517,7 +2724,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
      * If the <code>key</code> doesn't exist, the stream is created.
      *
-     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
      * @return Command Response - The id of the added entry.
@@ -2530,10 +2737,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Adds an entry to the specified stream stored at <code>key</code>.<br>
      * If the <code>key</code> doesn't exist, the stream is created.
      *
-     * @see <a href="https://redis.io/commands/xadd/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param values Field-value pairs to be added to the entry.
-     * @param options Stream add options.
+     * @param options Stream add options {@link StreamAddOptions}.
      * @return Command Response - The id of the added entry, or <code>null</code> if {@link
      *     StreamAddOptionsBuilder#makeStream(Boolean)} is set to <code>false</code> and no stream
      *     with the matching <code>key</code> exists.
@@ -2549,16 +2756,256 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Reads entries from the given streams.
+     *
+     * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
+     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
+     *     pair</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xread(@NonNull Map<String, String> keysAndIds) {
+        return xread(keysAndIds, StreamReadOptions.builder().build());
+    }
+
+    /**
+     * Reads entries from the given streams.
+     *
+     * @see <a href="https://valkey.io/commands/xread/">valkey.io</a> for details.
+     * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
+     *     pair</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read.
+     * @param options options detailing how to read the stream {@link StreamReadOptions}.
+     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xread(@NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
+        protobufTransaction.addCommands(buildCommand(XRead, buildArgs(options.toArgs(keysAndIds))));
+        return getThis();
+    }
+
+    /**
      * Trims the stream by evicting older entries.
      *
-     * @see <a href="https://redis.io/commands/xtrim/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/xtrim/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param options Stream trim options.
+     * @param options Stream trim options {@link StreamTrimOptions}.
      * @return Command Response - The number of entries deleted from the stream.
      */
     public T xtrim(@NonNull String key, @NonNull StreamTrimOptions options) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(options.toArgs(), key));
         protobufTransaction.addCommands(buildCommand(XTrim, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of entries in the stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xlen/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - The number of entries in the stream. If <code>key</code> does not
+     *     exist, return <code>0</code>.
+     */
+    public T xlen(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(XLen, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * @see <a href="https://valkey.io/commands/xdel/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param ids An array of entry ids.
+     * @return Command Response - The number of entries removed from the stream. This number may be
+     *     less than the number of entries in <code>ids</code>, if the specified <code>ids</code>
+     *     don't exist in the stream.
+     */
+    public T xdel(@NonNull String key, @NonNull String[] ids) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(ids, key));
+        protobufTransaction.addCommands(buildCommand(XDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs.
+     *
+     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xrange(@NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end), key));
+        protobufTransaction.addCommands(buildCommand(XRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs.
+     *
+     * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param count Maximum count of stream entries to return.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xrange(
+            @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key));
+        protobufTransaction.addCommands(buildCommand(XRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs in reverse order.<br>
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange)} but returns the entries in
+     * reverse order.
+     *
+     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xrevrange(@NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(end, start), key));
+        protobufTransaction.addCommands(buildCommand(XRevRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns stream entries matching a given range of IDs in reverse order.<br>
+     * Equivalent to {@link #xrange(String, StreamRange, StreamRange, long)} but returns the entries
+     * in reverse order.
+     *
+     * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
+     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *           ID.
+     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param count Maximum count of stream entries to return.
+     * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     */
+    public T xrevrange(
+            @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
+        ArgsArray commandArgs =
+                buildArgs(ArrayUtils.addFirst(StreamRange.toArgs(end, start, count), key));
+        protobufTransaction.addCommands(buildCommand(XRevRange, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T xgroupCreate(@NonNull String key, @NonNull String groupname, @NonNull String id) {
+        protobufTransaction.addCommands(buildCommand(XGroupCreate, buildArgs(key, groupname, id)));
+        return getThis();
+    }
+
+    /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @param options The group options {@link StreamGroupOptions}.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T xgroupCreate(
+            @NonNull String key,
+            @NonNull String groupname,
+            @NonNull String id,
+            @NonNull StreamGroupOptions options) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {key, groupname, id}, options.toArgs()));
+        protobufTransaction.addCommands(buildCommand(XGroupCreate, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @return Command Response - <code>true</code> if the consumer group is destroyed. Otherwise,
+     *     <code>false</code>.
+     */
+    public T xgroupDestroy(@NonNull String key, @NonNull String groupname) {
+        protobufTransaction.addCommands(buildCommand(XGroupDestroy, buildArgs(key, groupname)));
         return getThis();
     }
 
@@ -2717,6 +3164,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @return Command Response - The number of keys in the currently selected database.
+     */
+    public T dbsize() {
+        protobufTransaction.addCommands(buildCommand(DBSize));
+        return getThis();
+    }
+
+    /**
      * Returns the string representation of the type of the value stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/type/>redis.io</a> for details.
@@ -2727,6 +3185,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T type(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Type, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Renames <code>key</code> to <code>newKey</code>.<br>
+     * If <code>newKey</code> already exists it is overwritten.
+     *
+     * @see <a href="https://redis.io/commands/rename/">redis.io</a> for details.
+     * @param key The <code>key</code> to rename.
+     * @param newKey The new name of the <code>key</code>.
+     * @return Command Response - If the <code>key</code> was successfully renamed, return <code>"OK"
+     *     </code>. If <code>key</code> does not exist, the transaction fails with an error.
+     */
+    public T rename(@NonNull String key, @NonNull String newKey) {
+        ArgsArray commandArgs = buildArgs(key, newKey);
+        protobufTransaction.addCommands(buildCommand(Rename, commandArgs));
         return getThis();
     }
 
@@ -3189,9 +3663,47 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key. When
+     * <code>replace</code> is true, removes the <code>destination</code> key first if it already
+     * exists, otherwise performs no action.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return Command Response - <code>1L</code> if <code>source</code> was copied, <code>0L</code>
+     *     if <code>source</code> was not copied.
+     */
+    public T copy(@NonNull String source, @NonNull String destination, boolean replace) {
+        String[] args = new String[] {source, destination};
+        if (replace) {
+            args = ArrayUtils.add(args, REPLACE_REDIS_API);
+        }
+        ArgsArray commandArgs = buildArgs(args);
+        protobufTransaction.addCommands(buildCommand(Copy, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
+     * <code>destination</code> key does not yet exist.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public T copy(@NonNull String source, @NonNull String destination) {
+        return copy(source, destination, false);
+    }
+
+    /**
      * Counts the number of set bits (population counting) in a string stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @return Command Response - The number of set bits in the string. Returns zero if the key is
      *     missing as it is treated as an empty string.
@@ -3210,7 +3722,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and
      * so on.
      *
-     * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting byte offset.
      * @param end The ending byte offset.
@@ -3234,7 +3746,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * so on.
      *
      * @since Redis 7.0 and above
-     * @see <a href="https://redis.io/commands/bitcount/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitcount/">valkey.io</a> for details.
      * @param key The key for the string to count the set bits of.
      * @param start The starting offset.
      * @param end The ending offset.
@@ -3373,31 +3885,141 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Loads a library to Redis unless a library with the same name exists. Use {@link
-     * #functionLoadReplace} to replace existing libraries.
+     * Loads a library to Redis.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
      * @param libraryCode The source code that implements the library.
+     * @param replace Whether the given library should overwrite a library with the same name if it
+     *     already exists.
      * @return Command Response - The library name that was loaded.
      */
-    public T functionLoad(@NonNull String libraryCode) {
-        ArgsArray commandArgs = buildArgs(libraryCode);
+    public T functionLoad(@NonNull String libraryCode, boolean replace) {
+        ArgsArray commandArgs =
+                replace ? buildArgs(REPLACE.toString(), libraryCode) : buildArgs(libraryCode);
         protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
         return getThis();
     }
 
     /**
-     * Loads a library to Redis and overwrites a library with the same name if it exists.
+     * Returns information about the functions and libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
-     * @param libraryCode The source code that implements the library.
-     * @return Command Response - The library name that was loaded.
+     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Command Response - Info about all libraries and their functions.
      */
-    public T functionLoadReplace(@NonNull String libraryCode) {
-        ArgsArray commandArgs = buildArgs(FunctionLoadOptions.REPLACE.toString(), libraryCode);
-        protobufTransaction.addCommands(buildCommand(FunctionLoad, commandArgs));
+    public T functionList(boolean withCode) {
+        ArgsArray commandArgs = withCode ? buildArgs(WITH_CODE_REDIS_API) : buildArgs();
+        protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @param libNamePattern A wildcard pattern for matching library names.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Command Response - Info about queried libraries and their functions.
+     */
+    public T functionList(@NonNull String libNamePattern, boolean withCode) {
+        ArgsArray commandArgs =
+                withCode
+                        ? buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API)
+                        : buildArgs(LIBRARY_NAME_REDIS_API, libNamePattern);
+        protobufTransaction.addCommands(buildCommand(FunctionList, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param keys An <code>array</code> of key arguments accessed by the function. To ensure the
+     *     correct execution of functions, both in standalone and clustered deployments, all names of
+     *     keys that a function accesses must be explicitly provided as <code>keys</code>.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcall(@NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {function, Long.toString(keys.length)}, keys, arguments));
+        protobufTransaction.addCommands(buildCommand(FCall, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcall(@NonNull String function, @NonNull String[] arguments) {
+        return fcall(function, new String[0], arguments);
+    }
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param keys An <code>array</code> of key arguments accessed by the function. To ensure the
+     *     correct execution of functions, both in standalone and clustered deployments, all names of
+     *     keys that a function accesses must be explicitly provided as <code>keys</code>.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcallReadOnly(
+            @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {function, Long.toString(keys.length)}, keys, arguments));
+        protobufTransaction.addCommands(buildCommand(FCallReadOnly, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return Command Response - The invoked function's return value.
+     */
+    public T fcallReadOnly(@NonNull String function, @NonNull String[] arguments) {
+        return fcallReadOnly(function, new String[0], arguments);
+    }
+
+    /**
+     * Returns information about the function that's currently running and information about the
+     * available execution engines.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @return Command Response - A <code>Map</code> with two keys:
+     *     <ul>
+     *       <li><code>running_script</code> with information about the running script.
+     *       <li><code>engines</code> with information about available engines and their stats.
+     *     </ul>
+     */
+    public T functionStats() {
+        protobufTransaction.addCommands(buildCommand(FunctionStats));
         return getThis();
     }
 
@@ -3409,7 +4031,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * non-existent then the bit at <code>offset</code> is set to <code>value</code> and the preceding
      * bits are set to <code>0</code>.
      *
-     * @see <a href="https://redis.io/commands/setbit/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/setbit/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param offset The index of the bit to be set.
      * @param value The bit value to set at <code>offset</code>. The value must be <code>0</code> or
@@ -3426,7 +4048,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
      * <code>offset</code> should be greater than or equal to zero.
      *
-     * @see <a href="https://redis.io/commands/getbit/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/getbit/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param offset The index of the bit to return.
      * @return Command Response - The bit at offset of the string. Returns zero if the key is empty or
@@ -3439,9 +4061,76 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Blocks the connection until it pops one or more elements from the first non-empty list from the
+     * provided <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link
+     * #lmpop(String[], ListDirection, Long)}.
+     *
+     * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/blmpop/">valkey.io</a> for details.
+     * @param keys The list of provided <code>key</code> names.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     ListDirection}.
+     * @param count The maximum number of popped elements.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A <code>Map</code> of <code>key</code> names arrays of popped
+     *     elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     */
+    public T blmpop(
+            @NonNull String[] keys,
+            @NonNull ListDirection direction,
+            @NonNull Long count,
+            double timeout) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Double.toString(timeout), Long.toString(keys.length)},
+                                keys,
+                                new String[] {
+                                    direction.toString(), COUNT_FOR_LIST_REDIS_API, Long.toString(count)
+                                }));
+        protobufTransaction.addCommands(buildCommand(BLMPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Blocks the connection until it pops one element from the first non-empty list from the provided
+     * <code>keys</code>. <code>BLMPOP</code> is the blocking variant of {@link #lmpop(String[],
+     * ListDirection)}.
+     *
+     * @apiNote <code>BLMPOP</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
+     * @param keys The list of provided <code>key</code> names.
+     * @param direction The direction based on which elements are popped from - see {@link
+     *     ListDirection}.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - A <code>Map</code> of <code>key</code> names arrays of popped
+     *     elements.<br>
+     *     If no member could be popped and the timeout expired, returns <code>null</code>.
+     */
+    public T blmpop(@NonNull String[] keys, @NonNull ListDirection direction, double timeout) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        concatenateArrays(
+                                new String[] {Double.toString(timeout), Long.toString(keys.length)},
+                                keys,
+                                new String[] {direction.toString()}));
+        protobufTransaction.addCommands(buildCommand(BLMPop, commandArgs));
+        return getThis();
+    }
+
+    /**
      * Returns the position of the first bit matching the given <code>bit</code> value.
      *
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @return Command Response - The position of the first occurrence matching <code>bit</code> in
@@ -3461,7 +4150,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * indicating offsets starting at the end of the list, with <code>-1</code> being the last byte of
      * the list, <code>-2</code> being the penultimate, and so on.
      *
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @param start The starting offset.
@@ -3482,7 +4171,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * negative numbers indicating offsets starting at the end of the list, with <code>-1</code> being
      * the last byte of the list, <code>-2</code> being the penultimate, and so on.
      *
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @param start The starting offset.
@@ -3509,7 +4198,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * list, <code>-2</code> being the penultimate, and so on.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/commands/bitpos/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitpos/">valkey.io</a> for details.
      * @param key The key of the string.
      * @param bit The bit value to match. The value must be <code>0</code> or <code>1</code>.
      * @param start The starting offset.
@@ -3538,7 +4227,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Perform a bitwise operation between multiple keys (containing string values) and store the
      * result in the <code>destination</code>.
      *
-     * @see <a href="https://redis.io/commands/bitop/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/bitop/">valkey.io</a> for details.
      * @param bitwiseOperation The bitwise operation to perform.
      * @param destination The key that will store the resulting string.
      * @param keys The list of keys to perform the bitwise operation on.
@@ -3563,12 +4252,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @param count The maximum number of popped elements.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped arrays of popped
      *     elements.
      */
-    public T lmpop(@NonNull String[] keys, @NonNull PopDirection direction, @NonNull Long count) {
+    public T lmpop(@NonNull String[] keys, @NonNull ListDirection direction, @NonNull Long count) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
@@ -3588,11 +4277,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/lmpop/">valkey.io</a> for details.
      * @param keys An array of keys to lists.
      * @param direction The direction based on which elements are popped from - see {@link
-     *     PopDirection}.
+     *     ListDirection}.
      * @return Command Response - A <code>Map</code> of <code>key</code> name mapped array of the
      *     popped element.
      */
-    public T lmpop(@NonNull String[] keys, @NonNull PopDirection direction) {
+    public T lmpop(@NonNull String[] keys, @NonNull ListDirection direction) {
         ArgsArray commandArgs =
                 buildArgs(
                         concatenateArrays(
@@ -3600,6 +4289,275 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 keys,
                                 new String[] {direction.toString()}));
         protobufTransaction.addCommands(buildCommand(LMPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sets the list element at <code>index</code> to <code>element</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to be set.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T lset(@NonNull String key, long index, @NonNull String element) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(index), element);
+        protobufTransaction.addCommands(buildCommand(LSet, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Atomically pops and removes the left/right-most element to the list stored at <code>source
+     * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
+     * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
+     * @param source The key to the source list.
+     * @param destination The key to the destination list.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
+     * @return Command Response - The popped element or <code>null</code> if <code>source</code> does
+     *     not exist.
+     */
+    public T lmove(
+            @NonNull String source,
+            @NonNull String destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto) {
+        ArgsArray commandArgs =
+                buildArgs(source, destination, wherefrom.toString(), whereto.toString());
+        protobufTransaction.addCommands(buildCommand(LMove, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Blocks the connection until it atomically pops and removes the left/right-most element to the
+     * list stored at <code>source</code> depending on <code>wherefrom</code>, and pushes the element
+     * at the first/last element of the list stored at <code>destination</code> depending on <code>
+     * wherefrom</code>.<br>
+     * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
+     * ListDirection)}.
+     *
+     * @since Redis 6.2.0 and above.
+     * @apiNote <code>BLMove</code> is a client blocking command, see <a
+     *     href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *     Commands</a> for more details and best practices.
+     * @see <a href="https://valkey.io/commands/blmove/">valkey.io</a> for details.
+     * @param source The key to the source list.
+     * @param destination The key to the destination list.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return Command Response - The popped element or <code>null</code> if <code>source</code> does
+     *     not exist or if the operation timed-out.
+     */
+    public T blmove(
+            @NonNull String source,
+            @NonNull String destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto,
+            double timeout) {
+        ArgsArray commandArgs =
+                buildArgs(
+                        source,
+                        destination,
+                        wherefrom.toString(),
+                        whereto.toString(),
+                        Double.toString(timeout));
+        protobufTransaction.addCommands(buildCommand(BLMove, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns a random element from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set member.
+     * @return Command Response - A random element from the set, or <code>null</code> if <code>key
+     *     </code> does not exist.
+     */
+    public T srandmember(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns random elements from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set members.
+     * @param count The number of elements to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.<br>
+     * @return Command Response - An <code>array</code> of elements from the set, or an empty <code>
+     *     array</code> if <code>key</code> does not exist.
+     */
+    public T srandmember(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+        protobufTransaction.addCommands(buildCommand(SRandMember, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns one random member from the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @return Command Response - The value of the popped member.<br>
+     *     If <code>key</code> does not exist, <code>null</code> will be returned.
+     */
+    public T spop(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(SPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Removes and returns up to <code>count</code> random members from the set stored at <code>key
+     * </code>, depending on the set's length.
+     *
+     * @see <a href="https://redis.io/commands/spop/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @param count The count of the elements to pop from the set.
+     * @return Command Response - A set of popped elements will be returned depending on the set's
+     *     length.<br>
+     *     If <code>key</code> does not exist, an empty <code>Set</code> will be returned.
+     */
+    public T spopCount(@NonNull String key, long count) {
+        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
+        protobufTransaction.addCommands(buildCommand(SPop, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Reads or modifies the array of bits representing the string that is held at <code>key</code>
+     * based on the specified <code>subCommands</code>.
+     *
+     * @see <a href="https://valkey.io/commands/bitfield/">valkey.io</a> for details.
+     * @param key The key of the string.
+     * @param subCommands The subCommands to be performed on the binary value of the string at <code>
+     *     key</code>, which could be any of the following:
+     *     <ul>
+     *       <li>{@link BitFieldGet}.
+     *       <li>{@link BitFieldSet}.
+     *       <li>{@link BitFieldIncrby}.
+     *       <li>{@link BitFieldOverflow}.
+     *     </ul>
+     *
+     * @return Command Response - An <code>array</code> of results from the executed subcommands.
+     *     <ul>
+     *       <li>{@link BitFieldGet} returns the value in {@link Offset} or {@link OffsetMultiplier}.
+     *       <li>{@link BitFieldSet} returns the old value in {@link Offset} or {@link
+     *           OffsetMultiplier}.
+     *       <li>{@link BitFieldIncrby} returns the new value in {@link Offset} or {@link
+     *           OffsetMultiplier}.
+     *       <li>{@link BitFieldOverflow} determines the behaviour of <code>SET</code> and <code>
+     *           INCRBY</code> when an overflow occurs. <code>OVERFLOW</code> does not return a value
+     *           and does not contribute a value to the array response.
+     *     </ul>
+     */
+    public T bitfield(@NonNull String key, @NonNull BitFieldSubCommands[] subCommands) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(createBitFieldArgs(subCommands), key));
+        protobufTransaction.addCommands(buildCommand(BitField, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Reads the array of bits representing the string that is held at <code>key</code> based on the
+     * specified <code>subCommands</code>.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 6.0 and above
+     * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
+     * @param key The key of the string.
+     * @param subCommands The <code>GET</code> subCommands to be performed.
+     * @return Command Response - An array of results from the <code>GET</code> subcommands.
+     */
+    public T bitfieldReadOnly(
+            @NonNull String key, @NonNull BitFieldReadOnlySubCommands[] subCommands) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(createBitFieldArgs(subCommands), key));
+        protobufTransaction.addCommands(buildCommand(BitFieldReadOnly, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionFlush() {
+        protobufTransaction.addCommands(buildCommand(FunctionFlush));
+        return getThis();
+    }
+
+    /**
+     * Deletes all function libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionFlush(@NonNull FlushMode mode) {
+        protobufTransaction.addCommands(buildCommand(FunctionFlush, buildArgs(mode.toString())));
+        return getThis();
+    }
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @param libName The library name to delete.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T functionDelete(@NonNull String libName) {
+        protobufTransaction.addCommands(buildCommand(FunctionDelete, buildArgs(libName)));
+        return getThis();
+    }
+
+    /**
+     * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
+     * key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return Command Response - A <code>String</code> containing the longest common subsequence
+     *     between the 2 strings. An empty <code>String</code> is returned if the keys do not exist or
+     *     have no common subsequences.
+     */
+    public T lcs(@NonNull String key1, @NonNull String key2) {
+        protobufTransaction.addCommands(buildCommand(LCS, buildArgs(key1, key2)));
+        return getThis();
+    }
+
+    /**
+     * Returns the length of the longest common subsequence between strings stored at <code>key1
+     * </code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return Command Response - The length of the longest common subsequence between the 2 strings.
+     */
+    public T lcsLen(@NonNull String key1, @NonNull String key2) {
+        ArgsArray args = buildArgs(key1, key2, LEN_REDIS_API);
+        protobufTransaction.addCommands(buildCommand(LCS, args));
         return getThis();
     }
 
@@ -3618,25 +4576,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
 
         for (String string : stringArgs) {
-            commandArgs.addArgs(string);
+            commandArgs.addArgs(ByteString.copyFromUtf8(string));
         }
 
         return commandArgs.build();
-    }
-
-    /**
-     * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
-     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
-     * this special case.
-     *
-     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
-     * @param key The key of the string.
-     * @param value The value to append.
-     * @return Command Response - The length of the string after appending the value.
-     */
-    public T append(@NonNull String key, @NonNull String value) {
-        ArgsArray commandArgs = buildArgs(key, value);
-        protobufTransaction.addCommands(buildCommand(Append, commandArgs));
-        return getThis();
     }
 }

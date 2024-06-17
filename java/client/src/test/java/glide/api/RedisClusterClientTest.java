@@ -3,7 +3,10 @@ package glide.api;
 
 import static glide.api.BaseClient.OK;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -21,17 +24,27 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
+import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
+import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -39,6 +52,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -138,7 +152,8 @@ public class RedisClusterClientTest {
         }
 
         @Override
-        protected <T> T handleRedisResponse(Class<T> classType, boolean isNullable, Response response) {
+        protected <T> T handleRedisResponse(
+                Class<T> classType, EnumSet<ResponseFlags> flags, Response response) {
             @SuppressWarnings("unchecked")
             T returnValue = (T) object;
             return returnValue;
@@ -1080,6 +1095,47 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void dbsize_returns_success() {
+        // setup
+        Long value = 10L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(DBSize), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.dbsize();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void dbsize_with_route_returns_success() {
+        // setup
+        Long value = 10L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(DBSize), eq(new String[0]), eq(ALL_PRIMARIES), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.dbsize(ALL_PRIMARIES);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void functionLoad_returns_success() {
         // setup
         String code = "The best code ever";
@@ -1093,7 +1149,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoad(code);
+        CompletableFuture<String> response = service.functionLoad(code, false);
         String payload = response.get();
 
         // verify
@@ -1103,7 +1159,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadReplace_returns_success() {
+    public void functionLoad_with_replace_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -1116,7 +1172,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadReplace(code);
+        CompletableFuture<String> response = service.functionLoad(code, true);
         String payload = response.get();
 
         // verify
@@ -1126,7 +1182,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadWithRoute_returns_success() {
+    public void functionLoad_with_route_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {code};
@@ -1139,7 +1195,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoad(code, RANDOM);
+        CompletableFuture<String> response = service.functionLoad(code, false, RANDOM);
         String payload = response.get();
 
         // verify
@@ -1149,7 +1205,7 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
-    public void functionLoadReplaceRoute_returns_success() {
+    public void functionLoad_with_replace_with_route_returns_success() {
         // setup
         String code = "The best code ever";
         String[] args = new String[] {FunctionLoadOptions.REPLACE.toString(), code};
@@ -1162,8 +1218,561 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.functionLoadReplace(code, RANDOM);
+        CompletableFuture<String> response = service.functionLoad(code, true, RANDOM);
         String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionList_returns_success() {
+        // setup
+        String[] args = new String[0];
+        @SuppressWarnings("unchecked")
+        Map<String, Object>[] value = new Map[0];
+        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>[]>submitNewCommand(eq(FunctionList), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>[]> response = service.functionList(false);
+        Map<String, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionList_with_pattern_returns_success() {
+        // setup
+        String pattern = "*";
+        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern, WITH_CODE_REDIS_API};
+        @SuppressWarnings("unchecked")
+        Map<String, Object>[] value = new Map[0];
+        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>[]>submitNewCommand(eq(FunctionList), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>[]> response = service.functionList(pattern, true);
+        Map<String, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionList_with_route_returns_success() {
+        // setup
+        String[] args = new String[] {WITH_CODE_REDIS_API};
+        @SuppressWarnings("unchecked")
+        Map<String, Object>[] value = new Map[0];
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Object>[]>>submitNewCommand(
+                        eq(FunctionList), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
+                service.functionList(true, RANDOM);
+        ClusterValue<Map<String, Object>[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload.getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionList_with_pattern_and_route_returns_success() {
+        // setup
+        String pattern = "*";
+        String[] args = new String[] {LIBRARY_NAME_REDIS_API, pattern};
+        @SuppressWarnings("unchecked")
+        Map<String, Object>[] value = new Map[0];
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(ClusterValue.ofSingleValue(value));
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Object>[]>>submitNewCommand(
+                        eq(FunctionList), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Object>[]>> response =
+                service.functionList(pattern, false, RANDOM);
+        ClusterValue<Map<String, Object>[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload.getSingleValue());
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionFlush_returns_success() {
+        // setup
+        String[] args = new String[0];
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionFlush), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionFlush();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionFlush_with_mode_returns_success() {
+        // setup
+        FlushMode mode = ASYNC;
+        String[] args = new String[] {mode.toString()};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionFlush), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionFlush(mode);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionFlush_with_route_returns_success() {
+        // setup
+        String[] args = new String[0];
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionFlush), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionFlush(RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionFlush_with_mode_and_route_returns_success() {
+        // setup
+        FlushMode mode = ASYNC;
+        String[] args = new String[] {mode.toString()};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionFlush), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionFlush(mode, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionDelete_returns_success() {
+        // setup
+        String libName = "GLIDE";
+        String[] args = new String[] {libName};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionDelete), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionDelete(libName);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionDelete_with_route_returns_success() {
+        // setup
+        String libName = "GLIDE";
+        String[] args = new String[] {libName};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionDelete), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionDelete(libName, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void unwatch_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(UnWatch), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.unwatch();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void unwatch_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(UnWatch), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.unwatch(RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_without_keys_and_without_args_returns_success() {
+        // setup
+        String function = "func";
+        String[] args = new String[] {function, "0"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCall), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcall(function);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_without_keys_and_without_args_but_with_route_returns_success() {
+        // setup
+        String function = "func";
+        String[] args = new String[] {function, "0"};
+        ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object>>submitNewCommand(
+                        eq(FCall), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object>> response = service.fcall(function, RANDOM);
+        ClusterValue<Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_without_keys_returns_success() {
+        // setup
+        String function = "func";
+        String[] arguments = new String[] {"1", "2"};
+        String[] args = new String[] {function, "0", "1", "2"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCall), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcall(function, arguments);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_without_keys_and_with_route_returns_success() {
+        // setup
+        String function = "func";
+        String[] arguments = new String[] {"1", "2"};
+        String[] args = new String[] {function, "0", "1", "2"};
+        ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object>>submitNewCommand(
+                        eq(FCall), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object>> response = service.fcall(function, arguments, RANDOM);
+        ClusterValue<Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcallReadOnly_without_keys_and_without_args_returns_success() {
+        // setup
+        String function = "func";
+        String[] args = new String[] {function, "0"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCallReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcallReadOnly(function);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionKill_returns_success() {
+        // setup
+        String[] args = new String[0];
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionKill), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionKill();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionKill_with_route_returns_success() {
+        // setup
+        String[] args = new String[0];
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionKill), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionKill(RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionStats_returns_success() {
+        // setup
+        String[] args = new String[0];
+        ClusterValue<Map<String, Map<String, Object>>> value =
+                ClusterValue.ofSingleValue(Map.of("1", Map.of("2", 2)));
+        CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Map<String, Object>>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> response =
+                service.functionStats();
+        ClusterValue<Map<String, Map<String, Object>>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcallReadOnly_without_keys_and_without_args_but_with_route_returns_success() {
+        // setup
+        String function = "func";
+        String[] args = new String[] {function, "0"};
+        ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object>>submitNewCommand(
+                        eq(FCallReadOnly), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object>> response = service.fcallReadOnly(function, RANDOM);
+        ClusterValue<Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcallReadOnly_without_keys_returns_success() {
+        // setup
+        String function = "func";
+        String[] arguments = new String[] {"1", "2"};
+        String[] args = new String[] {function, "0", "1", "2"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCallReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcallReadOnly(function, arguments);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcallReadOnly_without_keys_and_with_route_returns_success() {
+        // setup
+        String function = "func";
+        String[] arguments = new String[] {"1", "2"};
+        String[] args = new String[] {function, "0", "1", "2"};
+        ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object>>submitNewCommand(
+                        eq(FCallReadOnly), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object>> response =
+                service.fcallReadOnly(function, arguments, RANDOM);
+        ClusterValue<Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionStats_with_route_returns_success() {
+        // setup
+        String[] args = new String[0];
+        ClusterValue<Map<String, Map<String, Object>>> value =
+                ClusterValue.ofSingleValue(Map.of("1", Map.of("2", 2)));
+        CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Map<String, Map<String, Object>>>>submitNewCommand(
+                        eq(FunctionStats), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Map<String, Map<String, Object>>>> response =
+                service.functionStats(RANDOM);
+        ClusterValue<Map<String, Map<String, Object>>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

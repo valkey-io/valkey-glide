@@ -3,6 +3,8 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
+from glide.async_commands.bitmap import OffsetOptions
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -14,9 +16,13 @@ from glide.async_commands.core import (
     StreamAddOptions,
     StreamTrimOptions,
     UpdateOptions,
+    _build_sort_args,
 )
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByBox,
+    GeoSearchByRadius,
+    GeoSearchCount,
     InfBound,
     LexBoundary,
     RangeByIndex,
@@ -24,9 +30,9 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
-    _create_z_cmd_store_args,
+    _create_geosearch_args,
+    _create_zinter_zunion_cmd_args,
     _create_zrange_args,
-    _create_zrangestore_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -78,6 +84,20 @@ class BaseTransaction:
             Optional[str]: If the key exists, returns the value of the key as a string. Otherwise, return None.
         """
         return self.append_command(RequestType.Get, [key])
+
+    def getdel(self: TTransaction, key: str) -> TTransaction:
+        """
+        Gets a string value associated with the given `key` and deletes the key.
+
+        See https://valkey.io/commands/getdel for more details.
+
+        Args:
+            key (str): The `key` to retrieve from the database.
+
+        Command response:
+            Optional[str]: If `key` exists, returns the `value` of `key`. Otherwise, returns `None`.
+        """
+        return self.append_command(RequestType.GetDel, [key])
 
     def set(
         self: TTransaction,
@@ -154,6 +174,21 @@ class BaseTransaction:
             OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, the transaction fails with an error.
         """
         return self.append_command(RequestType.Rename, [key, new_key])
+
+    def renamenx(self: TTransaction, key: str, new_key: str) -> TTransaction:
+        """
+        Renames `key` to `new_key` if `new_key` does not yet exist.
+
+        See https://valkey.io/commands/renamenx for more details.
+
+        Args:
+            key (str): The key to rename.
+            new_key (str): The new key name.
+
+        Command response:
+            bool: True if `key` was renamed to `new_key`, or False if `new_key` already exists.
+        """
+        return self.append_command(RequestType.RenameNX, [key, new_key])
 
     def custom_command(self: TTransaction, command_args: List[str]) -> TTransaction:
         """
@@ -278,6 +313,24 @@ class BaseTransaction:
         for pair in key_value_map.items():
             parameters.extend(pair)
         return self.append_command(RequestType.MSet, parameters)
+
+    def msetnx(self: TTransaction, key_value_map: Mapping[str, str]) -> TTransaction:
+        """
+        Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+        more keys already exist, the entire operation fails.
+
+        See https://valkey.io/commands/msetnx/ for more details.
+
+        Args:
+            key_value_map (Mapping[str, str]): A key-value map consisting of keys and their respective values to set.
+
+        Commands response:
+            bool: True if all keys were set. False if no key was set.
+        """
+        parameters: List[str] = []
+        for pair in key_value_map.items():
+            parameters.extend(pair)
+        return self.append_command(RequestType.MSetNX, parameters)
 
     def mget(self: TTransaction, keys: List[str]) -> TTransaction:
         """
@@ -769,6 +822,64 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.BLPop, keys + [str(timeout)])
 
+    def lmpop(
+        self: TTransaction,
+        keys: List[str],
+        direction: ListDirection,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Pops one or more elements from the first non-empty list from the provided `keys`.
+
+        See https://valkey.io/commands/lmpop/ for details.
+
+        Args:
+            keys (List[str]): An array of keys of lists.
+            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+
+        Command response:
+            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(len(keys)), *keys, direction.value]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return self.append_command(RequestType.LMPop, args)
+
+    def blmpop(
+        self: TTransaction,
+        keys: List[str],
+        direction: ListDirection,
+        timeout: float,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Blocks the connection until it pops one or more elements from the first non-empty list from the provided `keys`.
+
+        `BLMPOP` is the blocking variant of `LMPOP`.
+
+        See https://valkey.io/commands/blmpop/ for details.
+
+        Args:
+            keys (List[str]): An array of keys of lists.
+            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+
+        Command response:
+            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(timeout), str(len(keys)), *keys, direction.value]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return self.append_command(RequestType.BLMPop, args)
+
     def lrange(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
         """
         Retrieve the specified elements of the list stored at `key` within the given range.
@@ -901,7 +1012,7 @@ class BaseTransaction:
         """
         Inserts `element` in the list at `key` either before or after the `pivot`.
 
-        See https://redis.io/commands/linsert/ for details.
+        See https://valkey.io/commands/linsert/ for details.
 
         Args:
             key (str): The key of the list.
@@ -917,6 +1028,68 @@ class BaseTransaction:
         """
         return self.append_command(
             RequestType.LInsert, [key, position.value, pivot, element]
+        )
+
+    def lmove(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        where_from: ListDirection,
+        where_to: ListDirection,
+    ) -> TTransaction:
+        """
+        Atomically pops and removes the left/right-most element to the list stored at `source`
+        depending on `where_from`, and pushes the element at the first/last element of the list
+        stored at `destination` depending on `where_to`.
+
+        See https://valkey.io/commands/lmove/ for details.
+
+        Args:
+            source (str): The key to the source list.
+            destination (str): The key to the destination list.
+            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+
+        Command response:
+            Optional[str]: The popped element, or `None` if `source` does not exist.
+
+        Since: Redis version 6.2.0.
+        """
+        return self.append_command(
+            RequestType.LMove, [source, destination, where_from.value, where_to.value]
+        )
+
+    def blmove(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        where_from: ListDirection,
+        where_to: ListDirection,
+        timeout: float,
+    ) -> TTransaction:
+        """
+        Blocks the connection until it pops atomically and removes the left/right-most element to the
+        list stored at `source` depending on `where_from`, and pushes the element at the first/last element
+        of the list stored at `destination` depending on `where_to`.
+        `blmove` is the blocking variant of `lmove`.
+
+        See https://valkey.io/commands/blmove/ for details.
+
+        Args:
+            source (str): The key to the source list.
+            destination (str): The key to the destination list.
+            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+
+        Command response:
+            Optional[str]: The popped element, or `None` if `source` does not exist or if the operation timed-out.
+
+        Since: Redis version 6.2.0.
+        """
+        return self.append_command(
+            RequestType.BLMove,
+            [source, destination, where_from.value, where_to.value, str(timeout)],
         )
 
     def sadd(self: TTransaction, key: str, members: List[str]) -> TTransaction:
@@ -1103,6 +1276,29 @@ class BaseTransaction:
             int: The number of elements in the resulting set.
         """
         return self.append_command(RequestType.SInterStore, [destination] + keys)
+
+    def sintercard(
+        self: TTransaction, keys: List[str], limit: Optional[int] = None
+    ) -> TTransaction:
+        """
+        Gets the cardinality of the intersection of all the given sets.
+        Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
+
+        See https://valkey.io/commands/sintercard for more details.
+
+        Args:
+            keys (List[str]): A list of keys representing the sets to intersect.
+            limit (Optional[int]): An optional limit to the maximum number of intersecting elements to count.
+                If specified, the computation stops as soon as the cardinality reaches this limit.
+
+        Command response:
+            int: The number of elements in the resulting set of the intersection.
+        """
+        args = [str(len(keys))]
+        args += keys
+        if limit is not None:
+            args += ["LIMIT", str(limit)]
+        return self.append_command(RequestType.SInterCard, args)
 
     def sdiff(self: TTransaction, keys: List[str]) -> TTransaction:
         """
@@ -1418,6 +1614,17 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Echo, [message])
 
+    def lastsave(self: TTransaction) -> TTransaction:
+        """
+        Returns the Unix time of the last DB save timestamp or startup timestamp if no save was made since then.
+
+        See https://valkey.io/commands/lastsave for more details.
+
+        Command response:
+            int: The Unix time of the last successful DB save.
+        """
+        return self.append_command(RequestType.LastSave, [])
+
     def type(self: TTransaction, key: str) -> TTransaction:
         """
          Returns the string representation of the type of the value stored at `key`.
@@ -1481,6 +1688,20 @@ class BaseTransaction:
             args.extend(options.to_args())
 
         return self.append_command(RequestType.XTrim, args)
+
+    def xlen(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the number of entries in the stream stored at `key`.
+
+        See https://valkey.io/commands/xlen for more details.
+
+        Args:
+            key (str): The key of the stream.
+
+        Command response:
+            int: The number of entries in the stream. If `key` does not exist, returns 0.
+        """
+        return self.append_command(RequestType.XLen, [key])
 
     def geoadd(
         self: TTransaction,
@@ -1590,6 +1811,63 @@ class BaseTransaction:
             If a member does not exist, its position will be None.
         """
         return self.append_command(RequestType.GeoPos, [key] + members)
+
+    def geosearch(
+        self: TTransaction,
+        key: str,
+        search_from: Union[str, GeospatialData],
+        seach_by: Union[GeoSearchByRadius, GeoSearchByBox],
+        order_by: Optional[OrderBy] = None,
+        count: Optional[GeoSearchCount] = None,
+        with_coord: bool = False,
+        with_dist: bool = False,
+        with_hash: bool = False,
+    ) -> TTransaction:
+        """
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area.
+
+        See https://valkey.io/commands/geosearch/ for more details.
+
+        Args:
+            key (str): The key of the sorted set representing geospatial data.
+            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
+                from the sorted set or as a geospatial data (see `GeospatialData`).
+            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                For circular area search, see `GeoSearchByRadius`.
+                For rectengal area search, see `GeoSearchByBox`.
+            order_by (Optional[OrderBy]): Specifies the order in which the results should be returned.
+                    - `ASC`: Sorts items from the nearest to the farthest, relative to the center point.
+                    - `DESC`: Sorts items from the farthest to the nearest, relative to the center point.
+                If not specified, the results would be unsorted.
+            count (Optional[GeoSearchCount]): Specifies the maximum number of results to return. See `GeoSearchCount`.
+                If not specified, return all results.
+            with_coord (bool): Whether to include coordinates of the returned items. Defaults to False.
+            with_dist (bool): Whether to include distance from the center in the returned items.
+                The distance is returned in the same unit as specified for the `search_by` arguments. Defaults to False.
+            with_hash (bool): Whether to include geohash of the returned items. Defaults to False.
+
+        Command Response:
+            List[Union[str, List[Union[str, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
+            If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, we're each sub array represents a single item in the following order:
+                (str): The member (location) name.
+                (float): The distance from the center as a floating point number, in the same unit specified in the radius, if `with_dist` is set to True.
+                (int): The Geohash integer, if `with_hash` is set to True.
+                List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
+
+        Since: Redis version 6.2.0.
+        """
+        args = _create_geosearch_args(
+            key,
+            search_from,
+            seach_by,
+            order_by,
+            count,
+            with_coord,
+            with_dist,
+            with_hash,
+        )
+
+        return self.append_command(RequestType.GeoSearch, args)
 
     def zadd(
         self: TTransaction,
@@ -1921,7 +2199,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set.
         """
-        args = _create_zrangestore_args(destination, source, range_query, reverse)
+        args = _create_zrange_args(source, range_query, reverse, False, destination)
 
         return self.append_command(RequestType.ZRangeStore, args)
 
@@ -2066,6 +2344,34 @@ class BaseTransaction:
             RequestType.ZRemRangeByLex, [key, min_lex_arg, max_lex_arg]
         )
 
+    def zremrangebyrank(
+        self: TTransaction,
+        key: str,
+        start: int,
+        end: int,
+    ) -> TTransaction:
+        """
+        Removes all elements in the sorted set stored at `key` with rank between `start` and `end`.
+        Both `start` and `end` are zero-based indexes with 0 being the element with the lowest score.
+        These indexes can be negative numbers, where they indicate offsets starting at the element with the highest score.
+
+        See https://valkey.io/commands/zremrangebyrank/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            start (int): The starting point of the range.
+            end (int): The end of the range.
+
+        Command response:
+            int: The number of elements that were removed.
+                If `start` exceeds the end of the sorted set, or if `start` is greater than `end`, `0` is returned.
+                If `end` exceeds the actual end of the sorted set, the range will stop at the actual end of the sorted set.
+                If `key` does not exist, `0` is returned.
+        """
+        return self.append_command(
+            RequestType.ZRemRangeByRank, [key, str(start), str(end)]
+        )
+
     def zlexcount(
         self: TTransaction,
         key: str,
@@ -2191,6 +2497,47 @@ class BaseTransaction:
             RequestType.ZDiffStore, [destination, str(len(keys))] + keys
         )
 
+    def zinter(
+        self: TTransaction,
+        keys: List[str],
+    ) -> TTransaction:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            List[str]: The resulting array of intersecting elements.
+        """
+        return self.append_command(RequestType.ZInter, [str(len(keys))] + keys)
+
+    def zinter_withscores(
+        self: TTransaction,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> TTransaction:
+        """
+        Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
+
+        See https://valkey.io/commands/zinter/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Command response:
+            Mapping[str, float]: The resulting sorted set with scores.
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return self.append_command(RequestType.ZInter, args)
+
     def zinterstore(
         self: TTransaction,
         destination: str,
@@ -2216,8 +2563,49 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return self.append_command(RequestType.ZInterStore, args)
+
+    def zunion(
+        self: TTransaction,
+        keys: List[str],
+    ) -> TTransaction:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (List[str]): The keys of the sorted sets.
+
+        Command response:
+            List[str]: The resulting array of union elements.
+        """
+        return self.append_command(RequestType.ZUnion, [str(len(keys))] + keys)
+
+    def zunion_withscores(
+        self: TTransaction,
+        keys: Union[List[str], List[Tuple[str, float]]],
+        aggregation_type: Optional[AggregationType] = None,
+    ) -> TTransaction:
+        """
+        Computes the union of sorted sets given by the specified `keys` and returns a sorted set of union elements with scores.
+
+        See https://valkey.io/commands/zunion/ for more details.
+
+        Args:
+            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+                List[str] - for keys only.
+                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
+                when combining the scores of elements. See `AggregationType`.
+
+        Command response:
+            Mapping[str, float]: The resulting sorted set with scores.
+        """
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
+        args.append("WITHSCORES")
+        return self.append_command(RequestType.ZUnion, args)
 
     def zunionstore(
         self: TTransaction,
@@ -2244,7 +2632,7 @@ class BaseTransaction:
         Command response:
             int: The number of elements in the resulting sorted set stored at `destination`.
         """
-        args = _create_z_cmd_store_args(destination, keys, aggregation_type)
+        args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return self.append_command(RequestType.ZUnionStore, args)
 
     def zrandmember(self: TTransaction, key: str) -> TTransaction:
@@ -2433,6 +2821,159 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.PfAdd, [key] + elements)
 
+    def pfcount(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+        calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+
+        See https://valkey.io/commands/pfcount for more details.
+
+        Args:
+            keys (List[str]): The keys of the HyperLogLog data structures to be analyzed.
+
+        Command response:
+            int: The approximated cardinality of given HyperLogLog data structures.
+                The cardinality of a key that does not exist is 0.
+        """
+        return self.append_command(RequestType.PfCount, keys)
+
+    def pfmerge(
+        self: TTransaction, destination: str, source_keys: List[str]
+    ) -> TTransaction:
+        """
+        Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
+        of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
+
+        See https://valkey.io/commands/pfmerge for more details.
+
+        Args:
+            destination (str): The key of the destination HyperLogLog where the merged data sets will be stored.
+            source_keys (List[str]): The keys of the HyperLogLog structures to be merged.
+
+        Command response:
+            OK: A simple OK response.
+        """
+        return self.append_command(RequestType.PfMerge, [destination] + source_keys)
+
+    def bitcount(
+        self: TTransaction, key: str, options: Optional[OffsetOptions] = None
+    ) -> TTransaction:
+        """
+        Counts the number of set bits (population counting) in a string stored at `key`. The `options` argument can
+        optionally be provided to count the number of bits in a specific string interval.
+
+        See https://valkey.io/commands/bitcount for more details.
+
+        Args:
+            key (str): The key for the string to count the set bits of.
+            options (Optional[OffsetOptions]): The offset options.
+
+        Command response:
+            int: If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+                If `options` is not provided, returns the number of set bits in the string stored at `key`.
+                Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+        """
+        args = [key]
+        if options is not None:
+            args = args + options.to_args()
+
+        return self.append_command(RequestType.BitCount, args)
+
+    def setbit(self: TTransaction, key: str, offset: int, value: int) -> TTransaction:
+        """
+        Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
+        with `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less
+        than `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to
+        `value` and the preceding bits are set to `0`.
+
+        See https://valkey.io/commands/setbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to be set.
+            value (int): The bit value to set at `offset`. The value must be `0` or `1`.
+
+        Command response:
+            int: The bit value that was previously stored at `offset`.
+        """
+        return self.append_command(RequestType.SetBit, [key, str(offset), str(value)])
+
+    def getbit(self: TTransaction, key: str, offset: int) -> TTransaction:
+        """
+        Returns the bit value at `offset` in the string value stored at `key`.
+        `offset` should be greater than or equal to zero.
+
+        See https://valkey.io/commands/getbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to return.
+
+        Command response:
+            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+                the length of the string.
+        """
+        return self.append_command(RequestType.GetBit, [key, str(offset)])
+
+    def object_encoding(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the internal encoding for the Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-encoding for more details.
+
+        Args:
+            key (str): The `key` of the object to get the internal encoding of.
+
+        Command response:
+            Optional[str]: If `key` exists, returns the internal encoding of the object stored at
+                `key` as a string. Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectEncoding, [key])
+
+    def object_freq(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+
+        See https://valkey.io/commands/object-freq for more details.
+
+        Args:
+            key (str): The key of the object to get the logarithmic access frequency counter of.
+
+        Command response:
+            Optional[int]: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
+                integer. Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectFreq, [key])
+
+    def object_idletime(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the time in seconds since the last access to the value stored at `key`.
+
+        See https://valkey.io/commands/object-idletime for more details.
+
+        Args:
+            key (str): The key of the object to get the idle time of.
+
+        Command response:
+            Optional[int]: If `key` exists, returns the idle time in seconds. Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectIdleTime, [key])
+
+    def object_refcount(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the reference count of the object stored at `key`.
+
+        See https://valkey.io/commands/object-refcount for more details.
+
+        Args:
+            key (str): The key of the object to get the reference count of.
+
+        Command response:
+            Optional[int]: If `key` exists, returns the reference count of the object stored at `key` as an integer.
+                Otherwise, returns None.
+        """
+        return self.append_command(RequestType.ObjectRefCount, [key])
+
 
 class Transaction(BaseTransaction):
     """
@@ -2452,7 +2993,23 @@ class Transaction(BaseTransaction):
 
     """
 
-    # TODO: add MOVE, SLAVEOF and all SENTINEL commands
+    # TODO: add SLAVEOF and all SENTINEL commands
+    def move(self, key: str, db_index: int) -> "Transaction":
+        """
+        Move `key` from the currently selected database to the database specified by `db_index`.
+
+        See https://valkey.io/commands/move/ for more details.
+
+        Args:
+            key (str): The key to move.
+            db_index (int): The index of the database to move `key` to.
+
+        Commands response:
+            bool: True if `key` was moved, or False if the `key` already exists in the destination database
+                or does not exist in the source database.
+        """
+        return self.append_command(RequestType.Move, [key, str(db_index)])
+
     def select(self, index: int) -> "Transaction":
         """
         Change the currently selected Redis database.
@@ -2466,6 +3023,104 @@ class Transaction(BaseTransaction):
         """
         return self.append_command(RequestType.Select, [str(index)])
 
+    def sort(
+        self: TTransaction,
+        key: str,
+        by_pattern: Optional[str] = None,
+        limit: Optional[Limit] = None,
+        get_patterns: Optional[List[str]] = None,
+        order: Optional[OrderBy] = None,
+        alpha: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        To store the result into a new key, see `sort_store`.
+
+        See https://valkey.io/commands/sort for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+                The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
+                from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
+                `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
+                timestamps.
+                E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
+                keys `weight_<element>`.
+                If not provided, elements are sorted by their value.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
+            get_pattern (Optional[str]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+                The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
+                from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
+                transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
+                can be used to retrieve specific attributes of these users, such as their names or email addresses.
+                E.g., if `get_pattern` is `name_*`, the command will return the values of the keys `name_<element>`
+                for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
+                The special value `#` can be used to include the actual element from `key` being sorted.
+                If not provided, only the sorted elements themselves are returned.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+
+        Command response:
+            List[Optional[str]]: Returns a list of sorted elements.
+        """
+        args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
+        return self.append_command(RequestType.Sort, args)
+
+    def sort_store(
+        self: TTransaction,
+        key: str,
+        destination: str,
+        by_pattern: Optional[str] = None,
+        limit: Optional[Limit] = None,
+        get_patterns: Optional[List[str]] = None,
+        order: Optional[OrderBy] = None,
+        alpha: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
+        The `sort` command can be used to sort elements based on different criteria, apply transformations on sorted elements, and store the result in a new key.
+        To get the sort result without storing it into a key, see `sort`.
+
+        See https://valkey.io/commands/sort for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            destination (str): The key where the sorted result will be stored.
+            by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+                The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
+                from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
+                `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
+                timestamps.
+                E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
+                keys `weight_<element>`.
+                If not provided, elements are sorted by their value.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
+            get_pattern (Optional[str]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+                The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
+                from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
+                transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
+                can be used to retrieve specific attributes of these users, such as their names or email addresses.
+                E.g., if `get_pattern` is `name_*`, the command will return the values of the keys `name_<element>`
+                for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
+                The special value `#` can be used to include the actual element from `key` being sorted.
+                If not provided, only the sorted elements themselves are returned.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+
+        Command response:
+            int: The number of elements in the sorted key stored at `store`.
+        """
+        args = _build_sort_args(
+            key, by_pattern, limit, get_patterns, order, alpha, store=destination
+        )
+        return self.append_command(RequestType.Sort, args)
+
 
 class ClusterTransaction(BaseTransaction):
     """
@@ -2476,5 +3131,61 @@ class ClusterTransaction(BaseTransaction):
         are documented alongside each method.
     """
 
+    def sort(
+        self: TTransaction,
+        key: str,
+        limit: Optional[Limit] = None,
+        order: Optional[OrderBy] = None,
+        alpha: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        To store the result into a new key, see `sort_store`.
+
+        See https://valkey.io/commands/sort for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+
+        Command response:
+            List[str]: A list of sorted elements.
+        """
+        args = _build_sort_args(key, None, limit, None, order, alpha)
+        return self.append_command(RequestType.Sort, args)
+
+    def sort_store(
+        self: TTransaction,
+        key: str,
+        destination: str,
+        limit: Optional[Limit] = None,
+        order: Optional[OrderBy] = None,
+        alpha: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and stores the result in `store`.
+        When in cluster mode, `key` and `store` must map to the same hash slot.
+        To get the sort result without storing it into a key, see `sort`.
+
+        See https://valkey.io/commands/sort for more details.
+
+        Args:
+            key (str): The key of the list, set, or sorted set to be sorted.
+            destination (str): The key where the sorted result will be stored.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+
+        Command response:
+            int: The number of elements in the sorted key stored at `store`.
+        """
+        args = _build_sort_args(key, None, limit, None, order, alpha, store=destination)
+        return self.append_command(RequestType.Sort, args)
+
     # TODO: add all CLUSTER commands
-    pass

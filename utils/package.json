@@ -1,0 +1,22 @@
+{
+    "name": "utils",
+    "version": "1.0.0",
+    "description": "Test utils",
+    "main": "TestUtils.js",
+    "type": "commonjs",
+    "scripts": {
+        "build": "tsc",
+        "prettier:check:ci": "./node_modules/.bin/prettier --check .",
+        "prettier:format": "./node_modules/.bin/prettier --write . "
+    },
+    "author": "",
+    "license": "Apache-2.0",
+    "devDependencies": {
+        "@types/node": "^20.12.12",
+        "prettier": "^2.8.8"
+    },
+    "dependencies": {
+        "child_process": "^1.0.2",
+        "typescript": "^5.4.5"
+    }
+}

@@ -1,20 +1,22 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
-from datetime import datetime, timezone
-from typing import List, Union
+import time
+from datetime import date, datetime, timedelta, timezone
+from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
-from glide.async_commands.core import (
-    GeospatialData,
-    InsertPosition,
-    StreamAddOptions,
-    TrimByMinId,
-)
+from glide.async_commands.bitmap import BitmapIndexType, OffsetOptions
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
+from glide.async_commands.core import InsertPosition, StreamAddOptions, TrimByMinId
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByRadius,
+    GeospatialData,
+    GeoUnit,
     InfBound,
     LexBoundary,
+    OrderBy,
     RangeByIndex,
     ScoreBoundary,
     ScoreFilter,
@@ -52,6 +54,10 @@ async def transaction_test(
     key14 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
     key15 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
     key16 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sorted set
+    key17 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
+    key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
+    key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
+    key20 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -90,10 +96,22 @@ async def transaction_test(
     transaction.get(key2)
     args.append(None)
 
+    transaction.set(key, value)
+    args.append(OK)
+    transaction.getdel(key)
+    args.append(value)
+    transaction.getdel(key)
+    args.append(None)
+
     transaction.mset({key: value, key2: value2})
     args.append(OK)
+    transaction.msetnx({key: value, key2: value2})
+    args.append(False)
     transaction.mget([key, key2])
     args.append([value, value2])
+
+    transaction.renamenx(key, key2)
+    args.append(False)
 
     transaction.incr(key3)
     args.append(1)
@@ -168,10 +186,21 @@ async def transaction_test(
     args.append(OK)
     transaction.lrange(key5, 0, -1)
     args.append([value2, value])
+    transaction.lmove(key5, key6, ListDirection.LEFT, ListDirection.LEFT)
+    args.append(value2)
+    transaction.blmove(key6, key5, ListDirection.LEFT, ListDirection.LEFT, 1)
+    args.append(value2)
     transaction.lpop_count(key5, 2)
     args.append([value2, value])
     transaction.linsert(key5, InsertPosition.BEFORE, "non_existing_pivot", "element")
     args.append(0)
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.lpush(key5, [value, value2])
+        args.append(2)
+        transaction.lmpop([key5], ListDirection.LEFT)
+        args.append({key5: [value2]})
+        transaction.blmpop([key5], ListDirection.LEFT, 0.1)
+        args.append({key5: [value]})
 
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
@@ -215,6 +244,11 @@ async def transaction_test(
     args.append({"foo", "bar"})
     transaction.sinterstore(key7, [key7, key7])
     args.append(2)
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.sintercard([key7, key7])
+        args.append(2)
+        transaction.sintercard([key7, key7], 1)
+        args.append(1)
     transaction.sdiff([key7, key7])
     args.append(set())
     transaction.spop_count(key7, 4)
@@ -268,6 +302,8 @@ async def transaction_test(
     args.append(0)
     transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(0)
+    transaction.zremrangebyrank(key8, 0, 10)
+    args.append(0)
     transaction.zdiffstore(key8, [key8, key8])
     args.append(0)
     if not await check_if_server_version_lt(redis_client, "7.0.0"):
@@ -292,13 +328,43 @@ async def transaction_test(
     args.append(2)
     transaction.zadd(key15, {"one": 1.0, "two": 2.0, "three": 3.5})
     args.append(3)
+    transaction.zinter([key14, key15])
+    args.append(["one", "two"])
+    transaction.zinter_withscores([key14, key15])
+    args.append({"one": 2.0, "two": 4.0})
     transaction.zinterstore(key8, [key14, key15])
     args.append(2)
+    transaction.zunion([key14, key15])
+    args.append(["one", "three", "two"])
+    transaction.zunion_withscores([key14, key15])
+    args.append({"one": 2.0, "two": 4.0, "three": 3.5})
     transaction.zunionstore(key8, [key14, key15], AggregationType.MAX)
     args.append(3)
 
     transaction.pfadd(key10, ["a", "b", "c"])
     args.append(1)
+    transaction.pfmerge(key10, [])
+    args.append(OK)
+    transaction.pfcount([key10])
+    args.append(3)
+
+    transaction.setbit(key19, 1, 1)
+    args.append(0)
+    transaction.setbit(key19, 1, 0)
+    args.append(1)
+    transaction.getbit(key19, 1)
+    args.append(0)
+
+    transaction.set(key20, "foobar")
+    args.append(OK)
+    transaction.bitcount(key20)
+    args.append(26)
+    transaction.bitcount(key20, OffsetOptions(1, 1))
+    args.append(6)
+
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
+        args.append(17)
 
     transaction.geoadd(
         key12,
@@ -322,13 +388,37 @@ async def transaction_test(
             None,
         ]
     )
+    transaction.geosearch(
+        key12, "Catania", GeoSearchByRadius(200, GeoUnit.KILOMETERS), OrderBy.ASC
+    )
+    args.append(["Catania", "Palermo"])
 
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-1"))
     args.append("0-1")
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-2"))
     args.append("0-2")
+    transaction.xlen(key11)
+    args.append(2)
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
+
+    transaction.lpush(key17, ["2", "1", "4", "3", "a"])
+    args.append(5)
+    transaction.sort(
+        key17,
+        limit=Limit(1, 4),
+        order=OrderBy.ASC,
+        alpha=True,
+    )
+    args.append(["2", "3", "4", "a"])
+    transaction.sort_store(
+        key17,
+        key18,
+        limit=Limit(1, 4),
+        order=OrderBy.ASC,
+        alpha=True,
+    )
+    args.append(4)
 
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):
@@ -464,12 +554,32 @@ class TestTransaction:
         assert await redis_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
         value = get_random_string(5)
         transaction = Transaction()
         transaction.info()
         transaction.select(1)
+        transaction.move(key, 0)
         transaction.set(key, value)
         transaction.get(key)
+        transaction.hset("user:1", {"name": "Alice", "age": "30"})
+        transaction.hset("user:2", {"name": "Bob", "age": "25"})
+        transaction.lpush(key1, ["2", "1"])
+        transaction.sort(
+            key1,
+            by_pattern="user:*->age",
+            get_patterns=["user:*->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        transaction.sort_store(
+            key1,
+            "newSortedKey",
+            by_pattern="user:*->age",
+            get_patterns=["user:*->name"],
+            order=OrderBy.ASC,
+            alpha=True,
+        )
         transaction.select(0)
         transaction.get(key)
         expected = await transaction_test(transaction, keyslot, redis_client)
@@ -477,8 +587,9 @@ class TestTransaction:
         assert isinstance(result, list)
         assert isinstance(result[0], str)
         assert "# Memory" in result[0]
-        assert result[1:6] == [OK, OK, value, OK, None]
-        assert result[6:] == expected
+        assert result[1:5] == [OK, False, OK, value]
+        assert result[5:12] == [2, 2, 2, ["Bob", "Alice"], 2, OK, None]
+        assert result[12:] == expected
 
     def test_transaction_clear(self):
         transaction = Transaction()
@@ -497,3 +608,60 @@ class TestTransaction:
         transaction.set(key, "value").get(key).delete([key])
 
         assert await redis_client.exec(transaction) == [OK, "value", 1]
+
+    # The object commands are tested here instead of transaction_test because they have special requirements:
+    # - OBJECT FREQ and OBJECT IDLETIME require specific maxmemory policies to be set on the config
+    # - we cannot reliably predict the exact response values for OBJECT FREQ, OBJECT IDLETIME, and OBJECT REFCOUNT
+    # - OBJECT ENCODING is tested here since all the other OBJECT commands are tested here
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_object_commands(
+        self, redis_client: TRedisClient, cluster_mode: bool
+    ):
+        string_key = get_random_string(10)
+        maxmemory_policy_key = "maxmemory-policy"
+        config = await redis_client.config_get([maxmemory_policy_key])
+        maxmemory_policy = cast(str, config.get(maxmemory_policy_key))
+
+        try:
+            transaction = ClusterTransaction() if cluster_mode else Transaction()
+            transaction.set(string_key, "foo")
+            transaction.object_encoding(string_key)
+            transaction.object_refcount(string_key)
+            # OBJECT FREQ requires a LFU maxmemory-policy
+            transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
+            transaction.object_freq(string_key)
+            # OBJECT IDLETIME requires a non-LFU maxmemory-policy
+            transaction.config_set({maxmemory_policy_key: "allkeys-random"})
+            transaction.object_idletime(string_key)
+
+            response = await redis_client.exec(transaction)
+            assert response is not None
+            assert response[0] == OK  # transaction.set(string_key, "foo")
+            assert response[1] == "embstr"  # transaction.object_encoding(string_key)
+            # transaction.object_refcount(string_key)
+            assert cast(int, response[2]) >= 0
+            # transaction.config_set({maxmemory_policy_key: "allkeys-lfu"})
+            assert response[3] == OK
+            assert cast(int, response[4]) >= 0  # transaction.object_freq(string_key)
+            # transaction.config_set({maxmemory_policy_key: "allkeys-random"})
+            assert response[5] == OK
+            # transaction.object_idletime(string_key)
+            assert cast(int, response[6]) >= 0
+        finally:
+            await redis_client.config_set({maxmemory_policy_key: maxmemory_policy})
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_lastsave(
+        self, redis_client: TRedisClient, cluster_mode: bool
+    ):
+        yesterday = date.today() - timedelta(1)
+        yesterday_unix_time = time.mktime(yesterday.timetuple())
+        transaction = ClusterTransaction() if cluster_mode else Transaction()
+        transaction.lastsave()
+        response = await redis_client.exec(transaction)
+        assert isinstance(response, list)
+        lastsave_time = response[0]
+        assert isinstance(lastsave_time, int)
+        assert lastsave_time > yesterday_unix_time

@@ -1,4 +1,49 @@
 #### Changes
+* Node: Added ZINTERSTORE command ([#1513](https://github.com/aws/glide-for-redis/pull/1513))
+* Python: Added OBJECT ENCODING command ([#1471](https://github.com/aws/glide-for-redis/pull/1471))
+* Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
+* Python: Added OBJECT IDLETIME command ([#1474](https://github.com/aws/glide-for-redis/pull/1474))
+* Python: Added GEOSEARCH command ([#1482](https://github.com/aws/glide-for-redis/pull/1482))
+* Node: Added RENAMENX command ([#1483](https://github.com/aws/glide-for-redis/pull/1483))
+* Python: Added OBJECT REFCOUNT command ([#1485](https://github.com/aws/glide-for-redis/pull/1485))
+* Python: Added RENAMENX command ([#1492](https://github.com/aws/glide-for-redis/pull/1492))
+* Python: Added PFCOUNT command ([#1493](https://github.com/aws/glide-for-redis/pull/1493))
+* Python: Added PFMERGE command ([#1497](https://github.com/aws/glide-for-redis/pull/1497))
+* Node: Added SINTER command ([#1500](https://github.com/aws/glide-for-redis/pull/1500))
+* Python: Added XLEN command ([#1503](https://github.com/aws/glide-for-redis/pull/1503))
+* Python: Added LASTSAVE command ([#1509](https://github.com/aws/glide-for-redis/pull/1509))
+* Python: Added GETDEL command ([#1514](https://github.com/aws/glide-for-redis/pull/1514))
+* Python: Added ZINTER, ZUNION commands ([#1478](https://github.com/aws/glide-for-redis/pull/1478))
+* Python: Added SINTERCARD command ([#1511](https://github.com/aws/glide-for-redis/pull/1511))
+* Python: Added SORT command ([#1439](https://github.com/aws/glide-for-redis/pull/1439))
+* Node: Added OBJECT ENCODING command ([#1518](https://github.com/aws/glide-for-redis/pull/1518), [#1559](https://github.com/aws/glide-for-redis/pull/1559))
+* Python: Added LMOVE and BLMOVE commands ([#1536](https://github.com/aws/glide-for-redis/pull/1536))
+* Node: Added SUNIONSTORE command ([#1549](https://github.com/aws/glide-for-redis/pull/1549))
+* Node: Added PFCOUNT command ([#1545](https://github.com/aws/glide-for-redis/pull/1545))
+* Node: Added OBJECT FREQ command ([#1542](https://github.com/aws/glide-for-redis/pull/1542), [#1559](https://github.com/aws/glide-for-redis/pull/1559))
+* Node: Added LINSERT command ([#1544](https://github.com/aws/glide-for-redis/pull/1544))
+* Node: Added XLEN command ([#1555](https://github.com/aws/glide-for-redis/pull/1555))
+* Node: Added ZINTERCARD command ([#1553](https://github.com/aws/glide-for-redis/pull/1553))
+* Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
+* Python: Added MSETNX command ([#1565](https://github.com/aws/glide-for-redis/pull/1565))
+* Python: Added MOVE command ([#1566](https://github.com/aws/glide-for-redis/pull/1566))
+* Node: Added OBJECT IDLETIME command ([#1567](https://github.com/aws/glide-for-redis/pull/1567))
+* Node: Added OBJECT REFCOUNT command ([#1568](https://github.com/aws/glide-for-redis/pull/1568))
+* Python: Added SETBIT command ([#1571](https://github.com/aws/glide-for-redis/pull/1571))
+* Python: Added GETBIT command ([#1575](https://github.com/aws/glide-for-redis/pull/1575))
+* Python: Added BITCOUNT command ([#1592](https://github.com/aws/glide-for-redis/pull/1592))
+
+### Breaking Changes
+* Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
+
+## 0.4.1 (2024-02-06)
+
+#### Fixes
+* Node: Fix set command bug with expiry option ([#1508](https://github.com/aws/glide-for-redis/pull/1508))
+
+## 0.4.0 (2024-05-26)
+
+#### Changes
 * Python: Added JSON.DEL JSON.FORGET commands  ([#1146](https://github.com/aws/glide-for-redis/pull/1146))
 * Python: Added STRLEN command ([#1230](https://github.com/aws/glide-for-redis/pull/1230))
 * Python: Added HKEYS command ([#1228](https://github.com/aws/glide-for-redis/pull/1228))
@@ -38,7 +83,7 @@
 * Python: Added SDIFFSTORE command ([#1449](https://github.com/aws/glide-for-redis/pull/1449))
 * Python: Added SINTERSTORE command ([#1459](https://github.com/aws/glide-for-redis/pull/1459))
 * Python: Added SMISMEMBER command ([#1461](https://github.com/aws/glide-for-redis/pull/1461))
-* Python: Added SETRANGE command ([#1453](https://github.com/aws/glide-for-redis/pull/1453)
+* Python: Added SETRANGE command ([#1453](https://github.com/aws/glide-for-redis/pull/1453))
 
 #### Fixes
 * Python: Fix typing error "‘type’ object is not subscriptable" ([#1203](https://github.com/aws/glide-for-redis/pull/1203))

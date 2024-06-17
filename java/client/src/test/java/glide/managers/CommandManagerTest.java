@@ -17,6 +17,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 
+import com.google.protobuf.ByteString;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
@@ -298,14 +299,14 @@ public class CommandManagerTest {
         assertTrue(requestBuilder.hasTransaction());
         assertEquals(3, requestBuilder.getTransaction().getCommandsCount());
 
-        LinkedList<String> resultPayloads = new LinkedList<>();
-        resultPayloads.add("one");
-        resultPayloads.add("two");
-        resultPayloads.add("three");
+        LinkedList<ByteString> resultPayloads = new LinkedList<>();
+        resultPayloads.add(ByteString.copyFromUtf8("one"));
+        resultPayloads.add(ByteString.copyFromUtf8("two"));
+        resultPayloads.add(ByteString.copyFromUtf8("three"));
         for (redis_request.RedisRequestOuterClass.Command command :
                 requestBuilder.getTransaction().getCommandsList()) {
             assertEquals(CustomCommand, command.getRequestType());
-            assertEquals("GETSTRING", command.getArgsArray().getArgs(0));
+            assertEquals(ByteString.copyFromUtf8("GETSTRING"), command.getArgsArray().getArgs(0));
             assertEquals(resultPayloads.pop(), command.getArgsArray().getArgs(1));
         }
     }

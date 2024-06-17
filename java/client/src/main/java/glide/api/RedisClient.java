@@ -1,6 +1,9 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
+import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
@@ -10,13 +13,21 @@ import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
 import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
+import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -28,7 +39,6 @@ import glide.api.commands.ServerManagementCommands;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -36,6 +46,7 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
+import org.apache.commons.lang3.ArrayUtils;
 
 /**
  * Async (non-blocking) client for Redis in Standalone mode. Use {@link #CreateClient} to request a
@@ -191,16 +202,99 @@ public class RedisClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> functionLoad(@NonNull String libraryCode) {
-        return commandManager.submitNewCommand(
-                FunctionLoad, new String[] {libraryCode}, this::handleStringResponse);
+    public CompletableFuture<Long> dbsize() {
+        return commandManager.submitNewCommand(DBSize, new String[0], this::handleLongResponse);
     }
 
     @Override
-    public CompletableFuture<String> functionLoadReplace(@NonNull String libraryCode) {
+    public CompletableFuture<String> functionLoad(@NonNull String libraryCode, boolean replace) {
+        String[] arguments =
+                replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
+        return commandManager.submitNewCommand(FunctionLoad, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
         return commandManager.submitNewCommand(
-                FunctionLoad,
-                new String[] {FunctionLoadOptions.REPLACE.toString(), libraryCode},
-                this::handleStringResponse);
+                Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode ? new String[] {WITH_CODE_REDIS_API} : new String[0],
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>[]> functionList(
+            @NonNull String libNamePattern, boolean withCode) {
+        return commandManager.submitNewCommand(
+                FunctionList,
+                withCode
+                        ? new String[] {LIBRARY_NAME_REDIS_API, libNamePattern, WITH_CODE_REDIS_API}
+                        : new String[] {LIBRARY_NAME_REDIS_API, libNamePattern},
+                response -> handleFunctionListResponse(handleArrayResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush() {
+        return commandManager.submitNewCommand(
+                FunctionFlush, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionFlush(@NonNull FlushMode mode) {
+        return commandManager.submitNewCommand(
+                FunctionFlush, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionDelete(@NonNull String libName) {
+        return commandManager.submitNewCommand(
+                FunctionDelete, new String[] {libName}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcall(@NonNull String function) {
+        return fcall(function, new String[0], new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(@NonNull String function) {
+        return fcallReadOnly(function, new String[0], new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, long destinationDB) {
+        String[] arguments =
+                new String[] {source, destination, DB_REDIS_API, Long.toString(destinationDB)};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
+        String[] arguments =
+                new String[] {source, destination, DB_REDIS_API, Long.toString(destinationDB)};
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, REPLACE_REDIS_API);
+        }
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionKill() {
+        return commandManager.submitNewCommand(FunctionKill, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, Object>>> functionStats() {
+        return commandManager.submitNewCommand(
+                FunctionStats,
+                new String[0],
+                response -> handleFunctionStatsResponse(handleMapResponse(response)));
     }
 }

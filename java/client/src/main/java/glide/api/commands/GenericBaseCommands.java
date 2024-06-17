@@ -13,6 +13,8 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericBaseCommands {
+    /** Redis API keyword used to replace the destination key. */
+    String REPLACE_REDIS_API = "REPLACE";
 
     /**
      * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
@@ -266,7 +268,7 @@ public interface GenericBaseCommands {
      * @see <a href="https://redis.io/commands/ttl/">redis.io</a> for details.
      * @param key The <code>key</code> to return its timeout.
      * @return TTL in seconds, <code>-2</code> if <code>key</code> does not exist, or <code>-1</code>
-     *     if <code>key</code> exists but has no associated expire.
+     *     if <code>key</code> exists but has no associated expiration.
      * @example
      *     <pre>{@code
      * Long timeRemaining = client.ttl("my_key").get();
@@ -278,8 +280,43 @@ public interface GenericBaseCommands {
      */
     CompletableFuture<Long> ttl(String key);
 
-    // TODO move ScriptingAndFunctionsBaseCommands
-    // TODO add note about routing on cluster client
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire, in seconds.<br>
+     * To get the expiration with millisecond precision, use {@link #pexpiretime(String)}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/expiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to determine the expiration value of.
+     * @return The expiration Unix timestamp in seconds. <code>-2</code> if <code>key</code> does not
+     *     exist, or <code>-1</code> if <code>key</code> exists but has no associated expiration.
+     * @example
+     *     <pre>{@code
+     * Long expiration = client.expiretime("my_key").get();
+     * System.out.printf("The key expires at %d epoch time", expiration);
+     * }</pre>
+     */
+    CompletableFuture<Long> expiretime(String key);
+
+    /**
+     * Returns the absolute Unix timestamp (since January 1, 1970) at which the given <code>key</code>
+     * will expire, in milliseconds.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/pexpiretime/">redis.io</a> for details.
+     * @param key The <code>key</code> to determine the expiration value of.
+     * @return The expiration Unix timestamp in milliseconds. <code>-2</code> if <code>key</code> does
+     *     not exist, or <code>-1</code> if <code>key</code> exists but has no associated expiration.
+     * @example
+     *     <pre>{@code
+     * Long expiration = client.pexpiretime("my_key").get();
+     * System.out.printf("The key expires at %d epoch time (ms)", expiration);
+     * }</pre>
+     */
+    CompletableFuture<Long> pexpiretime(String key);
+
+    // TODO move invokeScript to ScriptingAndFunctionsBaseCommands
+    // TODO add note to invokeScript about routing on cluster client
     /**
      * Invokes a Lua script.<br>
      * This method simplifies the process of invoking scripts on a Redis server by using an object
@@ -365,7 +402,7 @@ public interface GenericBaseCommands {
     /**
      * Returns the string representation of the type of the value stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/type/>redis.io</a> for details.
+     * @see <a href="https://redis.io/commands/type/">redis.io</a> for details.
      * @param key The <code>key</code> to check its data type.
      * @return If the <code>key</code> exists, the type of the stored value is returned. Otherwise, a
      *     "none" string is returned.
@@ -455,6 +492,26 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> objectRefcount(String key);
 
     /**
+     * Renames <code>key</code> to <code>newKey</code>.<br>
+     * If <code>newKey</code> already exists it is overwritten.
+     *
+     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://redis.io/commands/rename/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new name of the key.
+     * @return If the <code>key</code> was successfully renamed, return <code>"OK"</code>. If <code>
+     *     key</code> does not exist, an error is thrown.
+     * @example
+     *     <pre>{@code
+     * String value = client.set("key", "value").get();
+     * value = client.rename("key", "newKeyName").get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> rename(String key, String newKey);
+
+    /**
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
      * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
@@ -487,4 +544,50 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> touch(String[] keys);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
+     * <code>destination</code> key does not yet exist.
+     *
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set("test1", "one").get();
+     * client.set("test2", "two").get();
+     * assert !client.copy("test1", "test2").get();
+     * assert client.copy("test1", "test2").get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(String source, String destination);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key. When
+     * <code>replace</code> is true, removes the <code>destination</code> key first if it already
+     * exists, otherwise performs no action.
+     *
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set("test1", "one").get();
+     * client.set("test2", "two").get();
+     * assert !client.copy("test1", "test2", false).get();
+     * assert client.copy("test1", "test2", true).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(String source, String destination, boolean replace);
 }

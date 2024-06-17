@@ -3,8 +3,11 @@
  */
 
 import {
+    AggregationType,
     ExpireOptions,
     InfoOptions,
+    InsertPosition,
+    KeyWeight,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
@@ -47,6 +50,7 @@ import {
     createIncrByFloat,
     createInfo,
     createLIndex,
+    createLInsert,
     createLLen,
     createLPop,
     createLPush,
@@ -55,19 +59,25 @@ import {
     createLTrim,
     createMGet,
     createMSet,
+    createObjectEncoding,
+    createObjectFreq,
     createPExpire,
     createPExpireAt,
     createPTTL,
     createPersist,
     createPfAdd,
+    createPfCount,
     createPing,
     createRPop,
     createRPush,
     createRename,
+    createRenameNX,
     createSAdd,
     createSCard,
+    createSInter,
     createSIsMember,
     createSMembers,
+    createSMove,
     createSPop,
     createSRem,
     createSelect,
@@ -83,6 +93,7 @@ import {
     createZAdd,
     createZCard,
     createZCount,
+    createZInterstore,
     createZPopMax,
     createZPopMin,
     createZRange,
@@ -92,6 +103,11 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
+    createSUnionStore,
+    createXLen,
+    createZInterCard,
+    createObjectIdletime,
+    createObjectRefcount,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 
@@ -678,6 +694,20 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createSMembers(key), true);
     }
 
+    /** Moves `member` from the set at `source` to the set at `destination`, removing it from the source set.
+     * Creates a new destination set if needed. The operation is atomic.
+     * See https://valkey.io/commands/smove for more details.
+     *
+     * @param source - The key of the set to remove the element from.
+     * @param destination - The key of the set to add the element to.
+     * @param member - The set element to move.
+     *
+     * Command Response - `true` on success, or `false` if the `source` set does not exist or the element is not a member of the source set.
+     */
+    public smove(source: string, destination: string, member: string): T {
+        return this.addAndReturn(createSMove(source, destination, member));
+    }
+
     /** Returns the set cardinality (number of elements) of the set stored at `key`.
      * See https://redis.io/commands/scard/ for details.
      *
@@ -687,6 +717,34 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public scard(key: string): T {
         return this.addAndReturn(createSCard(key));
+    }
+
+    /** Gets the intersection of all the given sets.
+     * When in cluster mode, all `keys` must map to the same hash slot.
+     * See https://valkey.io/docs/latest/commands/sinter/ for more details.
+     *
+     * @param keys - The `keys` of the sets to get the intersection.
+     *
+     * Command Response - A set of members which are present in all given sets.
+     * If one or more sets do not exist, an empty set will be returned.
+     */
+    public sinter(keys: string[]): T {
+        return this.addAndReturn(createSInter(keys), true);
+    }
+
+    /**
+     * Stores the members of the union of all given sets specified by `keys` into a new set
+     * at `destination`.
+     *
+     * See https://valkey.io/commands/sunionstore/ for details.
+     *
+     * @param destination - The key of the destination set.
+     * @param keys - The keys from which to retrieve the set members.
+     *
+     * Command Response - The number of elements in the resulting set.
+     */
+    public sunionstore(destination: string, keys: string[]): T {
+        return this.addAndReturn(createSUnionStore(destination, keys));
     }
 
     /** Returns if `member` is a member of the set stored at `key`.
@@ -924,6 +982,23 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
         return this.addAndReturn(createZCard(key));
     }
 
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by `keys`.
+     *
+     * See https://valkey.io/commands/zintercard/ for more details.
+     *
+     * @param keys - The keys of the sorted sets to intersect.
+     * @param limit - An optional argument that can be used to specify a maximum number for the
+     * intersection cardinality. If limit is not supplied, or if it is set to `0`, there will be no limit.
+     *
+     * Command Response - The cardinality of the intersection of the given sorted sets.
+     *
+     * since - Redis version 7.0.0.
+     */
+    public zintercard(keys: string[], limit?: number): T {
+        return this.addAndReturn(createZInterCard(keys, limit));
+    }
+
     /** Returns the score of `member` in the sorted set stored at `key`.
      * See https://redis.io/commands/zscore/ for more details.
      *
@@ -1002,6 +1077,31 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     ): T {
         return this.addAndReturn(
             createZRangeWithScores(key, rangeQuery, reverse),
+        );
+    }
+
+    /**
+     * Computes the intersection of sorted sets given by the specified `keys` and stores the result in `destination`.
+     * If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+     *
+     * When in cluster mode, `destination` and all keys in `keys` must map to the same hash slot.
+     *
+     * See https://valkey.io/commands/zinterstore/ for more details.
+     *
+     * @param destination - The key of the destination sorted set.
+     * @param keys - The keys of the sorted sets with possible formats:
+     *  string[] - for keys only.
+     *  KeyWeight[] - for weighted keys with score multipliers.
+     * @param aggregationType - Specifies the aggregation strategy to apply when combining the scores of elements. See `AggregationType`.
+     * Command Response - The number of elements in the resulting sorted set stored at `destination`.
+     */
+    public zinterstore(
+        destination: string,
+        keys: string[] | KeyWeight[],
+        aggregationType?: AggregationType,
+    ): T {
+        return this.addAndReturn(
+            createZInterstore(destination, keys, aggregationType),
         );
     }
 
@@ -1190,6 +1290,30 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Inserts `element` in the list at `key` either before or after the `pivot`.
+     *
+     * See https://valkey.io/commands/linsert/ for more details.
+     *
+     * @param key - The key of the list.
+     * @param position - The relative position to insert into - either `InsertPosition.Before` or
+     *     `InsertPosition.After` the `pivot`.
+     * @param pivot - An element of the list.
+     * @param element - The new element to insert.
+     *
+     * Command Response - The list length after a successful insert operation.
+     * If the `key` doesn't exist returns `-1`.
+     * If the `pivot` wasn't found, returns `0`.
+     */
+    public linsert(
+        key: string,
+        position: InsertPosition,
+        pivot: string,
+        element: string,
+    ): T {
+        return this.addAndReturn(createLInsert(key, position, pivot, element));
+    }
+
+    /**
      * Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
      * See https://redis.io/commands/xadd/ for more details.
      *
@@ -1244,6 +1368,19 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
+     * Returns the number of entries in the stream stored at `key`.
+     *
+     * See https://valkey.io/commands/xlen/ for more details.
+     *
+     * @param key - The key of the stream.
+     *
+     * Command Response - The number of entries in the stream. If `key` does not exist, returns `0`.
+     */
+    public xlen(key: string): T {
+        return this.addAndReturn(createXLen(key));
+    }
+
+    /**
      * Renames `key` to `newkey`.
      * If `newkey` already exists it is overwritten.
      * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
@@ -1256,6 +1393,21 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public rename(key: string, newKey: string): T {
         return this.addAndReturn(createRename(key, newKey));
+    }
+
+    /**
+     * Renames `key` to `newkey` if `newkey` does not yet exist.
+     * In Cluster mode, both `key` and `newkey` must be in the same hash slot,
+     * meaning that in practice only keys that have the same hash tag can be reliably renamed in cluster.
+     * See https://redis.io/commands/renamenx/ for more details.
+     *
+     * @param key - The key to rename.
+     * @param newKey - The new name of the key.
+     * Command Response - If the `key` was successfully renamed, returns `true`. Otherwise, returns `false`.
+     * If `key` does not exist, an error is thrown.
+     */
+    public renamenx(key: string, newKey: string): T {
+        return this.addAndReturn(createRenameNX(key, newKey));
     }
 
     /** Blocking list pop primitive.
@@ -1305,6 +1457,70 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public pfadd(key: string, elements: string[]): T {
         return this.addAndReturn(createPfAdd(key, elements));
+    }
+
+    /** Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
+     * calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
+     *
+     * See https://valkey.io/commands/pfcount/ for more details.
+     *
+     * @param keys - The keys of the HyperLogLog data structures to be analyzed.
+     * Command Response - The approximated cardinality of given HyperLogLog data structures.
+     *     The cardinality of a key that does not exist is `0`.
+     */
+    public pfcount(keys: string[]): T {
+        return this.addAndReturn(createPfCount(keys));
+    }
+
+    /** Returns the internal encoding for the Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-encoding for more details.
+     *
+     * @param key - The `key` of the object to get the internal encoding of.
+     * Command Response - If `key` exists, returns the internal encoding of the object stored at `key` as a string.
+     *     Otherwise, returns None.
+     */
+    public objectEncoding(key: string): T {
+        return this.addAndReturn(createObjectEncoding(key));
+    }
+
+    /** Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-freq for more details.
+     *
+     * @param key - The `key` of the object to get the logarithmic access frequency counter of.
+     * Command Response - If `key` exists, returns the logarithmic access frequency counter of
+     *     the object stored at `key` as a `number`. Otherwise, returns `null`.
+     */
+    public objectFreq(key: string): T {
+        return this.addAndReturn(createObjectFreq(key));
+    }
+
+    /**
+     * Returns the time in seconds since the last access to the value stored at `key`.
+     *
+     * See https://valkey.io/commands/object-idletime/ for more details.
+     *
+     * @param key - The key of the object to get the idle time of.
+     *
+     * Command Response - If `key` exists, returns the idle time in seconds. Otherwise, returns `null`.
+     */
+    public objectIdletime(key: string): T {
+        return this.addAndReturn(createObjectIdletime(key));
+    }
+
+    /**
+     * Returns the reference count of the object stored at `key`.
+     *
+     * See https://valkey.io/commands/object-refcount/ for more details.
+     *
+     * @param key - The `key` of the object to get the reference count of.
+     *
+     * Command Response - If `key` exists, returns the reference count of the object stored at `key` as a `number`.
+     * Otherwise, returns `null`.
+     */
+    public objectRefcount(key: string): T {
+        return this.addAndReturn(createObjectRefcount(key));
     }
 }
 

@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.managers;
 
+import com.google.protobuf.ByteString;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.Script;
 import glide.api.models.Transaction;
@@ -61,6 +62,23 @@ public class CommandManager {
      *
      * @param requestType Redis command type
      * @param arguments Redis command arguments
+     * @param responseHandler The handler for the response object
+     * @return A result promise of type T
+     */
+    public <T> CompletableFuture<T> submitNewCommand(
+            RequestType requestType,
+            List<byte[]> arguments,
+            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+
+        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
+     * Build a command and send.
+     *
+     * @param requestType Redis command type
+     * @param arguments Redis command arguments
      * @param route Command routing parameters
      * @param responseHandler The handler for the response object
      * @return A result promise of type T
@@ -68,6 +86,25 @@ public class CommandManager {
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
             String[] arguments,
+            Route route,
+            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+
+        RedisRequest.Builder command = prepareRedisRequest(requestType, arguments, route);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
+     * Build a command and send.
+     *
+     * @param requestType Redis command type
+     * @param arguments Redis command arguments
+     * @param route Command routing parameters
+     * @param responseHandler The handler for the response object
+     * @return A result promise of type T
+     */
+    public <T> CompletableFuture<T> submitNewCommand(
+            RequestType requestType,
+            List<byte[]> arguments,
             Route route,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
@@ -162,7 +199,34 @@ public class CommandManager {
             RequestType requestType, String[] arguments, Route route) {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
         for (var arg : arguments) {
-            commandArgs.addArgs(arg);
+            commandArgs.addArgs(ByteString.copyFromUtf8(arg));
+        }
+
+        var builder =
+                RedisRequest.newBuilder()
+                        .setSingleCommand(
+                                Command.newBuilder()
+                                        .setRequestType(requestType)
+                                        .setArgsArray(commandArgs.build())
+                                        .build());
+
+        return prepareRedisRequestRoute(builder, route);
+    }
+
+    /**
+     * Build a protobuf command request object with routing options.
+     *
+     * @param requestType Redis command type
+     * @param arguments Redis command arguments
+     * @param route Command routing parameters
+     * @return An incomplete request. {@link CallbackDispatcher} is responsible to complete it by
+     *     adding a callback id.
+     */
+    protected RedisRequest.Builder prepareRedisRequest(
+            RequestType requestType, List<byte[]> arguments, Route route) {
+        ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
+        for (var arg : arguments) {
+            commandArgs.addArgs(ByteString.copyFrom(arg));
         }
 
         var builder =
@@ -235,7 +299,30 @@ public class CommandManager {
     protected RedisRequest.Builder prepareRedisRequest(RequestType requestType, String[] arguments) {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
         for (var arg : arguments) {
-            commandArgs.addArgs(arg);
+            commandArgs.addArgs(ByteString.copyFromUtf8(arg));
+        }
+
+        return RedisRequest.newBuilder()
+                .setSingleCommand(
+                        Command.newBuilder()
+                                .setRequestType(requestType)
+                                .setArgsArray(commandArgs.build())
+                                .build());
+    }
+
+    /**
+     * Build a protobuf command request object.
+     *
+     * @param requestType Redis command type
+     * @param arguments Redis command arguments
+     * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
+     *     adding a callback id.
+     */
+    protected RedisRequest.Builder prepareRedisRequest(
+            RequestType requestType, List<byte[]> arguments) {
+        ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
+        for (var arg : arguments) {
+            commandArgs.addArgs(ByteString.copyFrom(arg));
         }
 
         return RedisRequest.newBuilder()

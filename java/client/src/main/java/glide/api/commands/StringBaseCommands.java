@@ -15,6 +15,9 @@ import java.util.concurrent.CompletableFuture;
  */
 public interface StringBaseCommands {
 
+    /** Redis API keyword used to indicate that the length of the lcs should be returned. */
+    public static final String LEN_REDIS_API = "LEN";
+
     /**
      * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
      * value exists.
@@ -35,6 +38,43 @@ public interface StringBaseCommands {
     CompletableFuture<String> get(String key);
 
     /**
+     * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
+     * value exists.
+     *
+     * @see <a href="https://redis.io/commands/get/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
+     *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * byte[] value = client.get("key").get();
+     * assert Arrays.equals(value, "value".getBytes());
+     *
+     * String value = client.get("non_existing_key").get();
+     * assert value.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<byte[]> get(byte[] key);
+
+    /**
+     * Gets a string value associated with the given <code>key</code> and deletes the key.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code>.
+     *     Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String value = client.getdel("key").get();
+     * assert value.equals("value");
+     *
+     * String value = client.getdel("key").get();
+     * assert value.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<String> getdel(String key);
+
+    /**
      * Sets the given <code>key</code> with the given value.
      *
      * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
@@ -48,6 +88,21 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> set(String key, String value);
+
+    /**
+     * Sets the given <code>key</code> with the given value.
+     *
+     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @param key The <code>key</code> to store.
+     * @param value The value to store with the given <code>key</code>.
+     * @return Response from Redis containing <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * String value = client.set("key".getBytes(), "value".getBytes()).get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> set(byte[] key, byte[] value);
 
     /**
      * Sets the given key with the given value. Return value is dependent on the passed options.
@@ -103,6 +158,23 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> mset(Map<String, String> keyValueMap);
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://redis.io/commands/msetnx/">redis.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
+     * @example
+     *     <pre>{@code
+     * Boolean result = client.msetnx(Map.of("key1", "value1", "key2", "value2"}).get();
+     * assert result;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> msetnx(Map<String, String> keyValueMap);
 
     /**
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
@@ -264,4 +336,46 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> append(String key, String value);
+
+    /**
+     * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
+     * key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return A <code>String</code> containing the longest common subsequence between the 2 strings.
+     *     An empty <code>String</code> is returned if the keys do not exist or have no common
+     *     subsequences.
+     * @example
+     *     <pre>{@code
+     * // testKey1 = abcd, testKey2 = axcd
+     * String result = client.lcs("testKey1", "testKey2").get();
+     * assert result.equals("acd");
+     * }</pre>
+     */
+    CompletableFuture<String> lcs(String key1, String key2);
+
+    /**
+     * Returns the length of the longest common subsequence between strings stored at <code>key1
+     * </code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return The length of the longest common subsequence between the 2 strings.
+     * @example
+     *     <pre>{@code
+     * // testKey1 = abcd, testKey2 = axcd
+     * Long result = client.lcs("testKey1", "testKey2").get();
+     * assert result.equals(3L);
+     * }</pre>
+     */
+    CompletableFuture<Long> lcsLen(String key1, String key2);
 }
