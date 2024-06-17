@@ -4338,6 +4338,31 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_getbit(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        set_key = get_random_string(10)
+        value = "foobar"
+
+        assert await redis_client.set(key, value) == OK
+        assert await redis_client.getbit(key, 1) == 1
+        # When offset is beyond the string length, the string is assumed to be a contiguous space with 0 bits.
+        assert await redis_client.getbit(key, 1000) == 0
+        # When key does not exist it is assumed to be an empty string, so offset is always out of range and the value is
+        # also assumed to be a contiguous space with 0 bits.
+        assert await redis_client.getbit(non_existing_key, 1) == 0
+
+        # invalid argument - offset can't be negative
+        with pytest.raises(RequestError):
+            assert await redis_client.getbit(key, -1) == 1
+
+        # key exists, but it is not a string
+        assert await redis_client.sadd(set_key, ["foo"]) == 1
+        with pytest.raises(RequestError):
+            await redis_client.getbit(set_key, 0)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_object_encoding(self, redis_client: TRedisClient):
         string_key = get_random_string(10)
         list_key = get_random_string(10)

@@ -30,6 +30,7 @@
 * Node: Added OBJECT IDLETIME command ([#1567](https://github.com/aws/glide-for-redis/pull/1567))
 * Node: Added OBJECT REFCOUNT command ([#1568](https://github.com/aws/glide-for-redis/pull/1568))
 * Python: Added SETBIT command ([#1571](https://github.com/aws/glide-for-redis/pull/1571))
+* Python: Added GETBIT command ([#1575](https://github.com/aws/glide-for-redis/pull/1575))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
