@@ -2873,6 +2873,23 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SetBit, [key, str(offset), str(value)])
 
+    def getbit(self: TTransaction, key: str, offset: int) -> TTransaction:
+        """
+        Returns the bit value at `offset` in the string value stored at `key`.
+        `offset` should be greater than or equal to zero.
+
+        See https://valkey.io/commands/getbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to return.
+
+        Command response:
+            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+                the length of the string.
+        """
+        return self.append_command(RequestType.GetBit, [key, str(offset)])
+
     def object_encoding(self: TTransaction, key: str) -> TTransaction:
         """
         Returns the internal encoding for the Redis object stored at `key`.

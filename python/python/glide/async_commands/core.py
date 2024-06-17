@@ -4142,6 +4142,30 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def getbit(self, key: str, offset: int) -> int:
+        """
+        Returns the bit value at `offset` in the string value stored at `key`.
+        `offset` should be greater than or equal to zero.
+
+        See https://valkey.io/commands/getbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to return.
+
+        Returns:
+            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+                the length of the string.
+
+        Examples:
+            >>> await client.getbit("my_key", 1)
+                1  # Indicates that the second bit of the string stored at "my_key" is set to 1.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.GetBit, [key, str(offset)]),
+        )
+
     async def object_encoding(self, key: str) -> Optional[str]:
         """
         Returns the internal encoding for the Redis object stored at `key`.
