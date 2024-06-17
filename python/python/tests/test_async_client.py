@@ -108,9 +108,10 @@ class TestGlideClients:
             # TODO: change it to pytest fixture after we'll implement a sync client
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         info = await redis_client.custom_command(["CLIENT", "INFO"])
-        assert type(info) is str
-        assert "lib-name=GlidePy" in info
-        assert "lib-ver=unknown" in info
+        # We check bytes string because custom_command will always return so.
+        # To get String, we use redis client's info command.
+        assert b"lib-name=GlidePy" in info
+        assert b"lib-ver=unknown" in info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -281,7 +282,7 @@ class TestCommands:
         key = get_random_string(10)
         value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
         assert await redis_client.set(key, value) == OK
-        assert await redis_client.get(key) == value.encode('utf-8')
+        assert await redis_client.get(key) == value.encode("utf-8")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])

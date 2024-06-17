@@ -52,7 +52,9 @@ class StandaloneCommands(CoreCommands):
             str: Returns a string containing the information for the sections requested.
         """
         args = [section.value for section in sections] if sections else []
-        return cast(str, await self._execute_command(RequestType.Info, args))
+        result = await self._execute_command(RequestType.Info, args)
+        result = result.decode("utf-8")
+        return cast(str, result)
 
     async def exec(
         self,

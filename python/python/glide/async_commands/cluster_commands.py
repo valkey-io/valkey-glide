@@ -12,6 +12,7 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
+from glide.async_commands.utils.utils import convert_byte_string_dict
 from glide.constants import TOK, TClusterResponse, TResult, TSingleNodeRoute
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
@@ -63,10 +64,16 @@ class ClusterCommands(CoreCommands):
             the queried node and value containing the information regarding the requested sections.
         """
         args = [section.value for section in sections] if sections else []
+        result_bytes = await self._execute_command(RequestType.Info, args, route)
+        result_str = None
+        if result_bytes is bytes:
+            result_str = result_bytes.decode("utf-8")
+        elif isinstance(result_bytes, dict):
+            result_str = convert_byte_string_dict(result_bytes)
 
         return cast(
             TClusterResponse[str],
-            await self._execute_command(RequestType.Info, args, route),
+            result_str,
         )
 
     async def exec(
