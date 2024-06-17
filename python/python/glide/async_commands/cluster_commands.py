@@ -314,6 +314,40 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.Echo, [message], route),
         )
 
+    async def function_load(
+        self, library_code: str, replace: bool = False, route: Optional[Route] = None
+    ) -> str:
+        """
+        Loads a library to Redis.
+
+        See https://valkey.io/docs/latest/commands/function-load/ for more details.
+
+        Args:
+            library_code (str): The source code that implements the library.
+            replace (bool): Whether the given library should overwrite a library with the same name if
+                it already exists.
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            str: The library name that was loaded.
+
+        Examples:
+            >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+            >>> await client.function_load(code, True, RandomNode())
+                "mylib"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            str,
+            await self._execute_command(
+                RequestType.FunctionLoad,
+                ["REPLACE", library_code] if replace else [library_code],
+                route,
+            ),
+        )
+
     async def time(self, route: Optional[Route] = None) -> TClusterResponse[List[str]]:
         """
         Returns the server time.

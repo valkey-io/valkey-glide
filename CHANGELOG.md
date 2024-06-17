@@ -31,6 +31,7 @@
 * Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
 * Python: Added HSTRLEN command ([#1564](https://github.com/aws/glide-for-redis/pull/1564))
 * Python: Added MSETNX command ([#1565](https://github.com/aws/glide-for-redis/pull/1565))
+* Python: Added FUNCTION LOAD command ([#1589](https://github.com/aws/glide-for-redis/pull/1589))
 * Python: Added MOVE command ([#1566](https://github.com/aws/glide-for-redis/pull/1566))
 * Python: Added EXPIRETIME, PEXPIRETIME commands ([#1587](https://github.com/aws/glide-for-redis/pull/1587))
 * Python: Added LSET command ([#1584](https://github.com/aws/glide-for-redis/pull/1584))

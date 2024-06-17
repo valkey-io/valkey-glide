@@ -228,6 +228,35 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(str, await self._execute_command(RequestType.Echo, [message]))
 
+    async def function_load(self, library_code: str, replace: bool = False) -> str:
+        """
+        Loads a library to Redis.
+
+        See https://valkey.io/docs/latest/commands/function-load/ for more details.
+
+        Args:
+            library_code (str): The source code that implements the library.
+            replace (bool): Whether the given library should overwrite a library with the same name if
+                it already exists.
+
+        Returns:
+            str: The library name that was loaded.
+
+        Examples:
+            >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+            >>> await client.function_load(code, True)
+                "mylib"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            str,
+            await self._execute_command(
+                RequestType.FunctionLoad,
+                ["REPLACE", library_code] if replace else [library_code],
+            ),
+        )
+
     async def time(self) -> List[str]:
         """
         Returns the server time.
