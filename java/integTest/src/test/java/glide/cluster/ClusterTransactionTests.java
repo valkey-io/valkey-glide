@@ -240,6 +240,7 @@ public class ClusterTransactionTests {
         // Transaction executes successfully after modifying a watched key then calling UNWATCH
         assertEquals(OK, clusterClient.watch(keys).get());
         assertEquals(OK, clusterClient.set(key2, helloString).get());
+        assertEquals(OK, clusterClient.unwatch().get());
         assertEquals(OK, clusterClient.unwatch(ALL_PRIMARIES).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString);
         assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
