@@ -220,6 +220,8 @@ enum RequestType {
     LPos = 180;
     LCS = 181;
     GeoSearch = 182;
+    Watch = 183;
+    UnWatch = 184;
 }
 
 message Command {

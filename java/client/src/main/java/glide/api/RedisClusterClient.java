@@ -32,11 +32,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
+import glide.api.commands.TransactionsClusterCommands;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
@@ -62,7 +64,8 @@ public class RedisClusterClient extends BaseClient
         implements ConnectionManagementClusterCommands,
                 GenericClusterCommands,
                 ServerManagementClusterCommands,
-                ScriptingAndFunctionsClusterCommands {
+                ScriptingAndFunctionsClusterCommands,
+                TransactionsClusterCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -650,5 +653,11 @@ public class RedisClusterClient extends BaseClient
                 new String[0],
                 route,
                 response -> handleFunctionStatsResponse(response, route instanceof SingleNodeRoute));
+    }
+
+    @Override
+    public CompletableFuture<String> unwatch(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                UnWatch, new String[0], route, this::handleStringResponse);
     }
 }
