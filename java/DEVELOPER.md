@@ -77,10 +77,12 @@ Before starting this step, make sure you've installed all software dependencies.
     ```
 3. Build the Java wrapper (Choose a build option from the following and run it from the `java` folder):
 
-    1. Enter the 'java' directory:
+    1. Enter the java directory:
+
     ```bash
     cd java
-    `
+    ```
+
     2. Build in debug mode:
 
     ```bash
