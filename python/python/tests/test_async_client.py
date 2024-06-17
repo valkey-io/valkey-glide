@@ -11,6 +11,7 @@ from typing import Any, Dict, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
+from glide.async_commands.bitmap import BitmapIndexType, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
@@ -4317,6 +4318,70 @@ class TestCommands:
         # destination key exists, but it is not a HyperLogLog
         with pytest.raises(RequestError):
             assert await redis_client.pfmerge(string_key, [key3])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bitcount(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        set_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        value = "foobar"
+
+        assert await redis_client.set(key1, value) == OK
+        assert await redis_client.bitcount(key1) == 26
+        assert await redis_client.bitcount(key1, OffsetOptions(1, 1)) == 6
+        assert await redis_client.bitcount(key1, OffsetOptions(0, -5)) == 10
+        assert await redis_client.bitcount(non_existing_key, OffsetOptions(5, 30)) == 0
+        assert await redis_client.bitcount(non_existing_key) == 0
+
+        # key exists, but it is not a string
+        assert await redis_client.sadd(set_key, [value]) == 1
+        with pytest.raises(RequestError):
+            await redis_client.bitcount(set_key)
+        with pytest.raises(RequestError):
+            await redis_client.bitcount(set_key, OffsetOptions(1, 1))
+
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            # exception thrown because BIT and BYTE options were implemented after 7.0.0
+            with pytest.raises(RequestError):
+                await redis_client.bitcount(
+                    key1, OffsetOptions(2, 5, BitmapIndexType.BYTE)
+                )
+            with pytest.raises(RequestError):
+                await redis_client.bitcount(
+                    key1, OffsetOptions(2, 5, BitmapIndexType.BIT)
+                )
+        else:
+            assert (
+                await redis_client.bitcount(
+                    key1, OffsetOptions(2, 5, BitmapIndexType.BYTE)
+                )
+                == 16
+            )
+            assert (
+                await redis_client.bitcount(
+                    key1, OffsetOptions(5, 30, BitmapIndexType.BIT)
+                )
+                == 17
+            )
+            assert (
+                await redis_client.bitcount(
+                    key1, OffsetOptions(5, -5, BitmapIndexType.BIT)
+                )
+                == 23
+            )
+            assert (
+                await redis_client.bitcount(
+                    non_existing_key, OffsetOptions(5, 30, BitmapIndexType.BIT)
+                )
+                == 0
+            )
+
+            # key exists but it is not a string
+            with pytest.raises(RequestError):
+                await redis_client.bitcount(
+                    set_key, OffsetOptions(1, 1, BitmapIndexType.BIT)
+                )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

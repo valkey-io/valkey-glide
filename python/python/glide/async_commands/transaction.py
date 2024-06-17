@@ -3,6 +3,7 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
+from glide.async_commands.bitmap import OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
@@ -2853,6 +2854,30 @@ class BaseTransaction:
             OK: A simple OK response.
         """
         return self.append_command(RequestType.PfMerge, [destination] + source_keys)
+
+    def bitcount(
+        self: TTransaction, key: str, options: Optional[OffsetOptions] = None
+    ) -> TTransaction:
+        """
+        Counts the number of set bits (population counting) in a string stored at `key`. The `options` argument can
+        optionally be provided to count the number of bits in a specific string interval.
+
+        See https://valkey.io/commands/bitcount for more details.
+
+        Args:
+            key (str): The key for the string to count the set bits of.
+            options (Optional[OffsetOptions]): The offset options.
+
+        Command response:
+            int: If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+                If `options` is not provided, returns the number of set bits in the string stored at `key`.
+                Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+        """
+        args = [key]
+        if options is not None:
+            args = args + options.to_args()
+
+        return self.append_command(RequestType.BitCount, args)
 
     def setbit(self: TTransaction, key: str, offset: int, value: int) -> TTransaction:
         """

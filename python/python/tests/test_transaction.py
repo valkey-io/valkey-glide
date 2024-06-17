@@ -6,6 +6,7 @@ from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
+from glide.async_commands.bitmap import BitmapIndexType, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import InsertPosition, StreamAddOptions, TrimByMinId
 from glide.async_commands.sorted_set import (
@@ -56,6 +57,7 @@ async def transaction_test(
     key17 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
+    key20 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -352,6 +354,17 @@ async def transaction_test(
     args.append(1)
     transaction.getbit(key19, 1)
     args.append(0)
+
+    transaction.set(key20, "foobar")
+    args.append(OK)
+    transaction.bitcount(key20)
+    args.append(26)
+    transaction.bitcount(key20, OffsetOptions(1, 1))
+    args.append(6)
+
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
+        args.append(17)
 
     transaction.geoadd(
         key12,
