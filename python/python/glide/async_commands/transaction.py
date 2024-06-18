@@ -1638,6 +1638,41 @@ class BaseTransaction:
         )
         return self.append_command(RequestType.PExpireAt, args)
 
+    def expiretime(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the absolute Unix timestamp (since January 1, 1970) at which
+        the given `key` will expire, in seconds.
+        To get the expiration with millisecond precision, use `pexpiretime`.
+
+        See https://valkey.io/commands/expiretime/ for details.
+
+        Args:
+            key (str): The `key` to determine the expiration value of.
+
+        Commands response:
+            int: The expiration Unix timestamp in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+
+        Since: Redis version 7.0.0.
+        """
+        return self.append_command(RequestType.ExpireTime, [key])
+
+    def pexpiretime(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns the absolute Unix timestamp (since January 1, 1970) at which
+        the given `key` will expire, in milliseconds.
+
+        See https://valkey.io/commands/pexpiretime/ for details.
+
+        Args:
+            key (str): The `key` to determine the expiration value of.
+
+        Commands response:
+            int: The expiration Unix timestamp in milliseconds, -2 if `key` does not exist, or -1 if `key` exists but has no associated expiration.
+
+        Since: Redis version 7.0.0.
+        """
+        return self.append_command(RequestType.PExpireTime, [key])
+
     def ttl(self: TTransaction, key: str) -> TTransaction:
         """
         Returns the remaining time to live of `key` that has a timeout.

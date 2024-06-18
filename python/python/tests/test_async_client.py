@@ -1982,11 +1982,16 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_expire_pexpire_ttl_with_positive_timeout(
+    async def test_expire_pexpire_ttl_expiretime_pexpiretime_with_positive_timeout(
         self, redis_client: TRedisClient
     ):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
+        assert await redis_client.ttl(key) == -1
+
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.expiretime(key) == -1
+            assert await redis_client.pexpiretime(key) == -1
 
         assert await redis_client.expire(key, 10) == 1
         assert await redis_client.ttl(key) in range(11)
@@ -2003,6 +2008,8 @@ class TestCommands:
             assert await redis_client.expire(key, 15)
         else:
             assert await redis_client.expire(key, 15, ExpireOptions.HasExistingExpiry)
+            assert await redis_client.expiretime(key) > int(time.time())
+            assert await redis_client.pexpiretime(key) > (int(time.time()) * 1000)
         assert await redis_client.ttl(key) in range(16)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -2037,31 +2044,47 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_expire_pexpire_expireat_pexpireat_past_or_negative_timeout(
+    async def test_expire_pexpire_expireat_pexpireat_expiretime_pexpiretime_past_or_negative_timeout(
         self, redis_client: TRedisClient
     ):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
         assert await redis_client.ttl(key) == -1
 
-        assert await redis_client.expire(key, -10) == 1
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.expiretime(key) == -1
+            assert await redis_client.pexpiretime(key) == -1
+
+        assert await redis_client.expire(key, -10) is True
         assert await redis_client.ttl(key) == -2
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.expiretime(key) == -2
+            assert await redis_client.pexpiretime(key) == -2
 
         assert await redis_client.set(key, "foo") == OK
         assert await redis_client.pexpire(key, -10000)
         assert await redis_client.ttl(key) == -2
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.expiretime(key) == -2
+            assert await redis_client.pexpiretime(key) == -2
 
         assert await redis_client.set(key, "foo") == OK
         assert await redis_client.expireat(key, int(time.time()) - 50) == 1
         assert await redis_client.ttl(key) == -2
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.expiretime(key) == -2
+            assert await redis_client.pexpiretime(key) == -2
 
         assert await redis_client.set(key, "foo") == OK
         assert await redis_client.pexpireat(key, int(time.time() * 1000) - 50000)
         assert await redis_client.ttl(key) == -2
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.expiretime(key) == -2
+            assert await redis_client.pexpiretime(key) == -2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_expire_pexpire_expireAt_pexpireAt_ttl_non_existing_key(
+    async def test_expire_pexpire_expireAt_pexpireAt_ttl_expiretime_pexpiretime_non_existing_key(
         self, redis_client: TRedisClient
     ):
         key = get_random_string(10)
@@ -2071,6 +2094,9 @@ class TestCommands:
         assert await redis_client.expireat(key, int(time.time()) + 50) == 0
         assert not await redis_client.pexpireat(key, int(time.time() * 1000) + 50000)
         assert await redis_client.ttl(key) == -2
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.expiretime(key) == -2
+            assert await redis_client.pexpiretime(key) == -2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
