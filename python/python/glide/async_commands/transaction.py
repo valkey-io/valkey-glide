@@ -2159,6 +2159,26 @@ class BaseTransaction:
         )
         return self.append_command(RequestType.ZCount, [key, score_min, score_max])
 
+    def zincrby(
+        self: TTransaction, key: str, increment: float, member: str
+    ) -> TTransaction:
+        """
+        Increments the score of `member` in the sorted set stored at `key` by `increment`.
+        If `member` does not exist in the sorted set, it is added with `increment` as its score.
+        If `key` does not exist, a new sorted set is created with the specified member as its sole member.
+
+        See https://valkey.io/commands/zincrby/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            increment (float): The score increment.
+            member (str): A member of the sorted set.
+
+        Commands response:
+            float: The new score of `member`.
+        """
+        return self.append_command(RequestType.ZIncrBy, [key, str(increment), member])
+
     def zpopmax(
         self: TTransaction, key: str, count: Optional[int] = None
     ) -> TTransaction:
