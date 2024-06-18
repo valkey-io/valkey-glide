@@ -346,6 +346,20 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.MGet, keys)
 
+    def touch(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Updates the last access time of specified keys.
+
+        See https://valkey.io/commands/touch/ for details.
+
+        Args:
+            keys (List[str]): The keys to update last access time.
+
+        Commands response:
+            int: The number of keys that were updated, a key is ignored if it doesn't exist.
+        """
+        return self.append_command(RequestType.Touch, keys)
+
     def config_rewrite(self: TTransaction) -> TTransaction:
         """
         Rewrite the configuration file with the current configuration.

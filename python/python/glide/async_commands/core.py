@@ -796,6 +796,29 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.DecrBy, [key, str(amount)])
         )
 
+    async def touch(self, keys: List[str]) -> int:
+        """
+        Updates the last access time of specified keys.
+
+        See https://valkey.io/commands/touch/ for details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+
+        Args:
+            keys (List[str]): The keys to update last access time.
+
+        Returns:
+            int: The number of keys that were updated, a key is ignored if it doesn't exist.
+
+        Examples:
+            >>> await client.set("myKey1", "value1")
+            >>> await client.set("myKey2", "value2")
+            >>> await client.touch(["myKey1", "myKey2", "nonExistentKey"])
+                2  # Last access time of 2 keys has been updated.
+        """
+        return cast(int, await self._execute_command(RequestType.Touch, keys))
+
     async def hset(self, key: str, field_value_map: Mapping[str, str]) -> int:
         """
         Sets the specified fields to their respective values in the hash stored at `key`.
