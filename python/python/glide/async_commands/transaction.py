@@ -2028,7 +2028,7 @@ class BaseTransaction:
         """
         Increments the score of `member` in the sorted set stored at `key` by `increment`.
         If `member` does not exist in the sorted set, it is added with `increment` as its score.
-        If `key` does not exist, a new sorted set with the specified member as its sole member is created.
+        If `key` does not exist, a new sorted set is created with the specified member as its sole member.
 
         See https://valkey.io/commands/zincrby/ for more details.
 
