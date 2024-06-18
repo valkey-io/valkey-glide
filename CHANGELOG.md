@@ -27,6 +27,7 @@
 * Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
 * Python: Added MSETNX command ([#1565](https://github.com/aws/glide-for-redis/pull/1565))
 * Python: Added FUNCTION LOAD command ([#1589](https://github.com/aws/glide-for-redis/pull/1589))
+* Python: Added FUNCTION DELETE command ([#1591](https://github.com/aws/glide-for-redis/pull/1591))
 * Python: Added MOVE command ([#1566](https://github.com/aws/glide-for-redis/pull/1566))
 * Node: Added OBJECT IDLETIME command ([#1567](https://github.com/aws/glide-for-redis/pull/1567))
 * Node: Added OBJECT REFCOUNT command ([#1568](https://github.com/aws/glide-for-redis/pull/1568))

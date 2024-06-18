@@ -314,6 +314,37 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.Echo, [message], route),
         )
 
+    async def function_delete(
+        self, library_name: str, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Deletes a library and all its functions.
+
+        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+
+        Args:
+            library_code (str): The libary name to delete
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_delete("my_lib")
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionDelete,
+                [library_name],
+                route,
+            ),
+        )
+
     async def function_load(
         self, library_code: str, replace: bool = False, route: Optional[Route] = None
     ) -> str:

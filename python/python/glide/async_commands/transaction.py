@@ -1702,6 +1702,25 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.XLen, [key])
 
+    def function_delete(self: TTransaction, library_name: str) -> TTransaction:
+        """
+        Deletes a library and all its functions.
+
+        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+
+        Args:
+            library_code (str): The libary name to delete
+
+        Commands response:
+            TOK: A simple `OK`.
+
+        Since: Redis 7.0.0.
+        """
+        return self.append_command(
+            RequestType.FunctionDelete,
+            [library_name],
+        )
+
     def function_load(
         self: TTransaction, library_code: str, replace: bool = False
     ) -> TTransaction:

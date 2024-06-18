@@ -74,6 +74,8 @@ async def transaction_test(
         args.append(lib_name)
         transaction.function_load(code, True)
         args.append(lib_name)
+        transaction.function_delete(lib_name)
+        args.append(OK)
 
     transaction.dbsize()
     args.append(0)
