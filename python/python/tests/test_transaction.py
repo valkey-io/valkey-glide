@@ -168,6 +168,8 @@ async def transaction_test(
     args.append([key3])
     transaction.hrandfield_withvalues(key4, 1)
     args.append([[key3, "10.5"]])
+    transaction.hstrlen(key4, key3)
+    args.append(4)
 
     transaction.client_getname()
     args.append(None)
