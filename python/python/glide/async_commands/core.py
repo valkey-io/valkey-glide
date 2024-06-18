@@ -835,7 +835,7 @@ class CoreCommands(Protocol):
             Returns None if `field` is not presented in the hash or `key` does not exist.
 
         Examples:
-            >>> await client.hset("my_hash", "field")
+            >>> await client.hset("my_hash", "field", "value")
             >>> await client.hget("my_hash", "field")
                 "value"
             >>> await client.hget("my_hash", "nonexistent_field")
@@ -1147,6 +1147,29 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.HRandField, [key, str(count), "WITHVALUES"]
             ),
+        )
+
+    async def hstrlen(self, key: str, field: str) -> int:
+        """
+        Returns the string length of the value associated with `field` in the hash stored at `key`.
+
+        See https://valkey.io/commands/hstrlen/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field in the hash.
+
+        Returns:
+            int: The string length or 0 if `field` or `key` does not exist.
+
+        Examples:
+            >>> await client.hset("my_hash", "field", "value")
+            >>> await client.hstrlen("my_hash", "my_field")
+                5
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.HStrlen, [key, field]),
         )
 
     async def lpush(self, key: str, elements: List[str]) -> int:
