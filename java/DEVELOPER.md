@@ -71,20 +71,15 @@ protoc --version
 
 ```bash
 brew update
-brew install openjdk@11 git gcc pkgconfig protobuf openssl
+brew install openjdk@11 git gcc pkgconfig protobuf openssl protobuf
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the protobuf compiler version 26.1 or higher is installed
 protoc --version
 # Install protobuf compiler
-# Install protobuf compiler
-PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v26.1/protoc-26.1-linux-x86_64.zip
-unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
-export PATH="$PATH:$HOME/.local/bin"
+brew install protobuf
 # Check that the protobuf compiler version 26.1 or higher is installed
 protoc --version
-# will additionally need to add protoc to the PATH.
 ```
 
 #### Building and installation steps
