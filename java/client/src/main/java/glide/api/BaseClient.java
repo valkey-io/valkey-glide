@@ -35,6 +35,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -60,12 +61,14 @@ import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.LCS;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -114,9 +117,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
+import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
@@ -160,9 +167,11 @@ import glide.api.commands.SetBaseCommands;
 import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
+import glide.api.commands.TransactionsBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
@@ -182,6 +191,7 @@ import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
@@ -225,7 +235,8 @@ public abstract class BaseClient
                 StreamBaseCommands,
                 HyperLogLogBaseCommands,
                 GeospatialIndicesBaseCommands,
-                ScriptingAndFunctionsBaseCommands {
+                ScriptingAndFunctionsBaseCommands,
+                TransactionsBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
@@ -436,6 +447,17 @@ public abstract class BaseClient
             libraryInfo.put("functions", functionInfo);
         }
         return data;
+    }
+
+    /** Process a <code>FUNCTION STATS</code> standalone response. */
+    protected Map<String, Map<String, Object>> handleFunctionStatsResponse(
+            Map<String, Map<String, Object>> response) {
+        Map<String, Object> runningScriptInfo = response.get("running_script");
+        if (runningScriptInfo != null) {
+            Object[] command = (Object[]) runningScriptInfo.get("command");
+            runningScriptInfo.put("command", castArray(command, String.class));
+        }
+        return response;
     }
 
     @Override
@@ -706,6 +728,39 @@ public abstract class BaseClient
                 LPop,
                 new String[] {key, Long.toString(count)},
                 response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element) {
+        return commandManager.submitNewCommand(
+                LPos, new String[] {key, element}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpos(
+            @NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
+        String[] arguments = concatenateArrays(new String[] {key, element}, options.toArgs());
+        return commandManager.submitNewCommand(LPos, arguments, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long[]> lposCount(
+            @NonNull String key, @NonNull String element, long count) {
+        return commandManager.submitNewCommand(
+                LPos,
+                new String[] {key, element, COUNT_REDIS_API, Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> lposCount(
+            @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, element, COUNT_REDIS_API, Long.toString(count)}, options.toArgs());
+
+        return commandManager.submitNewCommand(
+                LPos, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     @Override
@@ -1363,6 +1418,29 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> xgroupCreate(
+            @NonNull String key, @NonNull String groupname, @NonNull String id) {
+        return commandManager.submitNewCommand(
+                XGroupCreate, new String[] {key, groupname, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupCreate(
+            @NonNull String key,
+            @NonNull String groupname,
+            @NonNull String id,
+            @NonNull StreamGroupOptions options) {
+        String[] arguments = concatenateArrays(new String[] {key, groupname, id}, options.toArgs());
+        return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> xgroupDestroy(@NonNull String key, @NonNull String groupname) {
+        return commandManager.submitNewCommand(
+                XGroupDestroy, new String[] {key, groupname}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
@@ -1784,6 +1862,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> fcallReadOnly(
+            @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        String[] args =
+                concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
+        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, boolean replace) {
         String[] arguments = new String[] {source, destination};
@@ -1803,5 +1889,27 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> msetnx(@NonNull Map<String, String> keyValueMap) {
         String[] args = convertMapToKeyValueStringArray(keyValueMap);
         return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lcs(@NonNull String key1, @NonNull String key2) {
+        String[] arguments = new String[] {key1, key2};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lcsLen(@NonNull String key1, @NonNull String key2) {
+        String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> watch(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> unwatch() {
+        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
     }
 }

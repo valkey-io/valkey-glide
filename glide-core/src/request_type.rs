@@ -170,6 +170,9 @@ pub enum RequestType {
     BLMPop = 158,
     XLen = 159,
     Sort = 160,
+    FunctionKill = 161,
+    FunctionStats = 162,
+    FCallReadOnly = 163,
     LSet = 165,
     XDel = 166,
     XRange = 167,
@@ -184,6 +187,11 @@ pub enum RequestType {
     XRevRange = 176,
     Copy = 178,
     MSetNX = 179,
+    LPos = 180,
+    LCS = 181,
+    GeoSearch = 182,
+    Watch = 183,
+    UnWatch = 184,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -356,6 +364,9 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::ExpireTime => RequestType::ExpireTime,
             ProtobufRequestType::PExpireTime => RequestType::PExpireTime,
             ProtobufRequestType::XLen => RequestType::XLen,
+            ProtobufRequestType::FunctionKill => RequestType::FunctionKill,
+            ProtobufRequestType::FunctionStats => RequestType::FunctionStats,
+            ProtobufRequestType::FCallReadOnly => RequestType::FCallReadOnly,
             ProtobufRequestType::LSet => RequestType::LSet,
             ProtobufRequestType::XDel => RequestType::XDel,
             ProtobufRequestType::XRange => RequestType::XRange,
@@ -371,6 +382,11 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Sort => RequestType::Sort,
             ProtobufRequestType::XRevRange => RequestType::XRevRange,
             ProtobufRequestType::MSetNX => RequestType::MSetNX,
+            ProtobufRequestType::LPos => RequestType::LPos,
+            ProtobufRequestType::LCS => RequestType::LCS,
+            ProtobufRequestType::GeoSearch => RequestType::GeoSearch,
+            ProtobufRequestType::Watch => RequestType::Watch,
+            ProtobufRequestType::UnWatch => RequestType::UnWatch,
         }
     }
 }
@@ -539,6 +555,9 @@ impl RequestType {
             RequestType::ExpireTime => Some(cmd("EXPIRETIME")),
             RequestType::PExpireTime => Some(cmd("PEXPIRETIME")),
             RequestType::XLen => Some(cmd("XLEN")),
+            RequestType::FunctionKill => Some(get_two_word_command("FUNCTION", "KILL")),
+            RequestType::FunctionStats => Some(get_two_word_command("FUNCTION", "STATS")),
+            RequestType::FCallReadOnly => Some(cmd("FCALL_RO")),
             RequestType::LSet => Some(cmd("LSET")),
             RequestType::XDel => Some(cmd("XDEL")),
             RequestType::XRange => Some(cmd("XRANGE")),
@@ -554,6 +573,11 @@ impl RequestType {
             RequestType::Sort => Some(cmd("SORT")),
             RequestType::XRevRange => Some(cmd("XREVRANGE")),
             RequestType::MSetNX => Some(cmd("MSETNX")),
+            RequestType::LPos => Some(cmd("LPOS")),
+            RequestType::LCS => Some(cmd("LCS")),
+            RequestType::GeoSearch => Some(cmd("GEOSEARCH")),
+            RequestType::Watch => Some(cmd("WATCH")),
+            RequestType::UnWatch => Some(cmd("UNWATCH")),
         }
     }
 }

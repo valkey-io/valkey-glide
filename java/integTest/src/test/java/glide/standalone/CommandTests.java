@@ -2,8 +2,10 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
-import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.checkFunctionStatsResponse;
+import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
@@ -29,8 +31,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -57,11 +57,7 @@ public class CommandTests {
     @SneakyThrows
     public static void init() {
         regularClient =
-                RedisClient.CreateClient(
-                                RedisClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
-                                        .build())
-                        .get();
+                RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get();
     }
 
     @AfterAll
@@ -400,11 +396,14 @@ public class CommandTests {
         String libName = "mylib1c";
         String funcName = "myfunc1c";
         // function $funcName returns first argument
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
         assertEquals(libName, regularClient.functionLoad(code, false).get());
 
         var functionResult =
                 regularClient.fcall(funcName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals("one", functionResult);
+        functionResult =
+                regularClient.fcallReadOnly(funcName, new String[0], new String[] {"one", "two"}).get();
         assertEquals("one", functionResult);
 
         var flist = regularClient.functionList(false).get();
@@ -417,7 +416,7 @@ public class CommandTests {
         var expectedFlags =
                 new HashMap<String, Set<String>>() {
                     {
-                        put(funcName, Set.of());
+                        put(funcName, Set.of("no-writes"));
                     }
                 };
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
@@ -440,7 +439,7 @@ public class CommandTests {
         // function $newFuncName returns argument array len
         String newCode =
                 generateLuaLibCode(
-                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), false);
+                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), true);
         assertEquals(libName, regularClient.functionLoad(newCode, true).get());
 
         // load new lib and delete it - first lib remains loaded
@@ -457,7 +456,7 @@ public class CommandTests {
 
         flist = regularClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
-        expectedFlags.put(newFuncName, Set.of());
+        expectedFlags.put(newFuncName, Set.of("no-writes"));
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
         flist = regularClient.functionList(libName, true).get();
@@ -466,6 +465,9 @@ public class CommandTests {
 
         functionResult =
                 regularClient.fcall(newFuncName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals(2L, functionResult);
+        functionResult =
+                regularClient.fcallReadOnly(newFuncName, new String[0], new String[] {"one", "two"}).get();
         assertEquals(2L, functionResult);
 
         assertEquals(OK, regularClient.functionFlush(ASYNC).get());
@@ -517,5 +519,175 @@ public class CommandTests {
         finally {
             regularClient.select(0).get();
         }
+    }
+
+    // @Test
+    @SneakyThrows
+    public void functionStats_and_functionKill() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "functionStats_and_functionKill";
+        String funcName = "deadlock";
+        String code = createLuaLibWithLongRunningFunction(libName, funcName, 15, true);
+        String error = "";
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        try {
+            // nothing to kill
+            var exception =
+                    assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+            // load the lib
+            assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+            try (var testClient =
+                    RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
+                // call the function without await
+                var promise = testClient.fcall(funcName);
+
+                int timeout = 5200; // ms
+                while (timeout > 0) {
+                    var stats = regularClient.functionStats().get();
+                    if (stats.get("running_script") != null) {
+                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
+                        break;
+                    }
+                    Thread.sleep(100);
+                    timeout -= 100;
+                }
+                if (timeout == 0) {
+                    error += "Can't find a running function.";
+                }
+
+                // redis kills a function with 5 sec delay
+                assertEquals(OK, regularClient.functionKill().get());
+
+                exception =
+                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+                exception = assertThrows(ExecutionException.class, promise::get);
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().contains("Script killed by user"));
+            }
+        } finally {
+            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+            // test to fail.
+            try {
+                regularClient.functionKill().get();
+                // should throw `notbusy` error, because the function should be killed before
+                error += "Function should be killed before.";
+            } catch (Exception ignored) {
+            }
+        }
+
+        assertEquals(OK, regularClient.functionDelete(libName).get());
+
+        assertTrue(error.isEmpty(), "Something went wrong during the test");
+    }
+
+    @Test
+    @SneakyThrows
+    public void functionStats_and_functionKill_write_function() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "functionStats_and_functionKill_write_function";
+        String funcName = "deadlock_write_function";
+        String key = libName;
+        String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, false);
+        String error = "";
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        try {
+            // nothing to kill
+            var exception =
+                    assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+            // load the lib
+            assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+            try (var testClient =
+                    RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
+                // call the function without await
+                var promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
+
+                int timeout = 5200; // ms
+                while (timeout > 0) {
+                    var stats = regularClient.functionStats().get();
+                    if (stats.get("running_script") != null) {
+                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "1", key}, 1, 1);
+                        break;
+                    }
+                    Thread.sleep(100);
+                    timeout -= 100;
+                }
+                if (timeout == 0) {
+                    error += "Can't find a running function.";
+                }
+
+                // can't kill a write function
+                exception =
+                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().toLowerCase().contains("unkillable"));
+
+                assertEquals("Timed out 6 sec", promise.get());
+
+                exception =
+                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+            }
+        } finally {
+            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+            // test to fail.
+            try {
+                regularClient.functionKill().get();
+                // should throw `notbusy` error, because the function should be killed before
+                error += "Function should finish prior to the test end.";
+            } catch (Exception ignored) {
+            }
+        }
+
+        assertTrue(error.isEmpty(), "Something went wrong during the test");
+    }
+
+    @Test
+    @SneakyThrows
+    public void functionStats() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "functionStats";
+        String funcName = libName;
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        // function $funcName returns first argument
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+        var response = regularClient.functionStats().get();
+        checkFunctionStatsResponse(response, new String[0], 1, 1);
+
+        code =
+                generateLuaLibCode(
+                        libName + "_2",
+                        Map.of(funcName + "_2", "return 'OK'", funcName + "_3", "return 42"),
+                        false);
+        assertEquals(libName + "_2", regularClient.functionLoad(code, true).get());
+
+        response = regularClient.functionStats().get();
+        checkFunctionStatsResponse(response, new String[0], 2, 3);
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        response = regularClient.functionStats().get();
+        checkFunctionStatsResponse(response, new String[0], 0, 0);
     }
 }

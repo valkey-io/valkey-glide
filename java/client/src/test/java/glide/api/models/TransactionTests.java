@@ -24,6 +24,8 @@ import static glide.api.models.commands.ZAddOptions.UpdateOptions.SCORE_LESS_THA
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
@@ -63,11 +65,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -94,12 +98,14 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LCS;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -155,6 +161,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
@@ -190,6 +198,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 import com.google.protobuf.ByteString;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -219,6 +228,7 @@ import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -358,6 +368,18 @@ public class TransactionTests {
 
         transaction.lpush("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPush, buildArgs("key", "element1", "element2")));
+
+        transaction.lpos("key", "element1");
+        results.add(Pair.of(LPos, buildArgs("key", "element1")));
+
+        transaction.lpos("key", "element1", LPosOptions.builder().rank(1L).build());
+        results.add(Pair.of(LPos, buildArgs("key", "element1", "RANK", "1")));
+
+        transaction.lposCount("key", "element1", 1L);
+        results.add(Pair.of(LPos, buildArgs("key", "element1", "COUNT", "1")));
+
+        transaction.lposCount("key", "element1", 1L, LPosOptions.builder().rank(1L).build());
+        results.add(Pair.of(LPos, buildArgs("key", "element1", "COUNT", "1", "RANK", "1")));
 
         transaction.lpop("key");
         results.add(Pair.of(LPop, buildArgs("key")));
@@ -736,6 +758,23 @@ public class TransactionTests {
                                 RANGE_COUNT_REDIS_API,
                                 "99")));
 
+        transaction.xgroupCreate("key", "group", "id");
+        results.add(Pair.of(XGroupCreate, buildArgs("key", "group", "id")));
+
+        transaction.xgroupCreate(
+                "key",
+                "group",
+                "id",
+                StreamGroupOptions.builder().makeStream().entriesRead("entry").build());
+        results.add(
+                Pair.of(
+                        XGroupCreate,
+                        buildArgs(
+                                "key", "group", "id", MAKE_STREAM_REDIS_API, ENTRIES_READ_REDIS_API, "entry")));
+
+        transaction.xgroupDestroy("key", "group");
+        results.add(Pair.of(XGroupDestroy, buildArgs("key", "group")));
+
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
 
@@ -874,6 +913,14 @@ public class TransactionTests {
         transaction.fcall("func", new String[] {"arg1", "arg2"});
         results.add(Pair.of(FCall, buildArgs("func", "0", "arg1", "arg2")));
 
+        transaction.fcallReadOnly("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
+        results.add(Pair.of(FCallReadOnly, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
+        transaction.fcallReadOnly("func", new String[] {"arg1", "arg2"});
+        results.add(Pair.of(FCallReadOnly, buildArgs("func", "0", "arg1", "arg2")));
+
+        transaction.functionStats();
+        results.add(Pair.of(FunctionStats, buildArgs()));
+
         transaction.geodist("key", "Place", "Place2");
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2")));
         transaction.geodist("key", "Place", "Place2", GeoUnit.KILOMETERS);
@@ -978,6 +1025,12 @@ public class TransactionTests {
 
         transaction.copy("key1", "key2", true);
         results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_REDIS_API)));
+
+        transaction.lcs("key1", "key2");
+        results.add(Pair.of(LCS, buildArgs("key1", "key2")));
+
+        transaction.lcsLen("key1", "key2");
+        results.add(Pair.of(LCS, buildArgs("key1", "key2", "LEN")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
