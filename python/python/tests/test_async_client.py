@@ -551,6 +551,18 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_touch(self, redis_client: TRedisClient):
+        keys = [get_random_string(10), get_random_string(10)]
+        key_value_pairs = {key: value for key, value in zip(keys, keys)}
+
+        assert await redis_client.mset(key_value_pairs) == OK
+        assert await redis_client.touch(keys) == 2
+
+        # 2 existing keys, one non-existing
+        assert await redis_client.touch([*keys, get_random_string(3)]) == 2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_msetnx(self, redis_client: TRedisClient):
         key1 = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"
@@ -4942,7 +4954,7 @@ class TestMultiKeyCommandCrossSlot:
         await redis_client.delete(["abc", "zxy", "lkn"])
         await redis_client.mget(["abc", "zxy", "lkn"])
         await redis_client.mset({"abc": "1", "zxy": "2", "lkn": "3"})
-        # TODO touch
+        await redis_client.touch(["abc", "zxy", "lkn"])
 
 
 class TestCommandsUnitTests:

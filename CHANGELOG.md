@@ -34,6 +34,7 @@
 * Python: Added SETBIT command ([#1571](https://github.com/aws/glide-for-redis/pull/1571))
 * Python: Added GETBIT command ([#1575](https://github.com/aws/glide-for-redis/pull/1575))
 * Python: Added BITCOUNT command ([#1592](https://github.com/aws/glide-for-redis/pull/1592))
+* Python: Added TOUCH command ([#1582](https://github.com/aws/glide-for-redis/pull/1582))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
