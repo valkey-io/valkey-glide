@@ -11,7 +11,7 @@ from typing import Any, Dict, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
-from glide.async_commands.bitmap import BitmapIndexType, OffsetOptions
+from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
@@ -4898,6 +4898,91 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bitop(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        keys = [key1, key2]
+        destination = f"{{testKey}}:3-{get_random_string(10)}"
+        non_existing_key1 = f"{{testKey}}:4-{get_random_string(10)}"
+        non_existing_key2 = f"{{testKey}}:5-{get_random_string(10)}"
+        non_existing_keys = [non_existing_key1, non_existing_key2]
+        set_key = f"{{testKey}}:6-{get_random_string(10)}"
+        value1 = "foobar"
+        value2 = "abcdef"
+
+        assert await redis_client.set(key1, value1) == OK
+        assert await redis_client.set(key2, value2) == OK
+        assert await redis_client.bitop(BitwiseOperation.AND, destination, keys) == 6
+        assert await redis_client.get(destination) == "`bc`ab"
+        assert await redis_client.bitop(BitwiseOperation.OR, destination, keys) == 6
+        assert await redis_client.get(destination) == "goofev"
+
+        # reset values for simplicity of results in XOR
+        assert await redis_client.set(key1, "a") == OK
+        assert await redis_client.set(key2, "b") == OK
+        assert await redis_client.bitop(BitwiseOperation.XOR, destination, keys) == 1
+        assert await redis_client.get(destination) == "\u0003"
+
+        # test single source key
+        assert await redis_client.bitop(BitwiseOperation.AND, destination, [key1]) == 1
+        assert await redis_client.get(destination) == "a"
+        assert await redis_client.bitop(BitwiseOperation.OR, destination, [key1]) == 1
+        assert await redis_client.get(destination) == "a"
+        assert await redis_client.bitop(BitwiseOperation.XOR, destination, [key1]) == 1
+        assert await redis_client.get(destination) == "a"
+        assert await redis_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1
+        # currently, attempting to get the value from destination after the above NOT incorrectly raises an error
+        # TODO: update with a GET call once fix is implemented for https://github.com/aws/glide-for-redis/issues/1447
+
+        assert await redis_client.setbit(key1, 0, 1) == 0
+        assert await redis_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1
+        assert await redis_client.get(destination) == "\u001e"
+
+        # stores None when all keys hold empty strings
+        assert (
+            await redis_client.bitop(
+                BitwiseOperation.AND, destination, non_existing_keys
+            )
+            == 0
+        )
+        assert await redis_client.get(destination) is None
+        assert (
+            await redis_client.bitop(
+                BitwiseOperation.OR, destination, non_existing_keys
+            )
+            == 0
+        )
+        assert await redis_client.get(destination) is None
+        assert (
+            await redis_client.bitop(
+                BitwiseOperation.XOR, destination, non_existing_keys
+            )
+            == 0
+        )
+        assert await redis_client.get(destination) is None
+        assert (
+            await redis_client.bitop(
+                BitwiseOperation.NOT, destination, [non_existing_key1]
+            )
+            == 0
+        )
+        assert await redis_client.get(destination) is None
+
+        # invalid argument - source key list cannot be empty
+        with pytest.raises(RequestError):
+            await redis_client.bitop(BitwiseOperation.OR, destination, [])
+
+        # invalid arguments - NOT cannot be passed more than 1 key
+        with pytest.raises(RequestError):
+            await redis_client.bitop(BitwiseOperation.NOT, destination, [key1, key2])
+
+        assert await redis_client.sadd(set_key, [value1]) == 1
+        # invalid argument - source key has the wrong type
+        with pytest.raises(RequestError):
+            await redis_client.bitop(BitwiseOperation.AND, destination, [set_key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_object_encoding(self, redis_client: TRedisClient):
         string_key = get_random_string(10)
         list_key = get_random_string(10)
@@ -5097,6 +5182,7 @@ class TestMultiKeyCommandCrossSlot:
             ),
             redis_client.msetnx({"abc": "abc", "zxy": "zyx"}),
             redis_client.sunion(["def", "ghi"]),
+            redis_client.bitop(BitwiseOperation.OR, "abc", ["zxy", "lkn"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "6.2.0"):

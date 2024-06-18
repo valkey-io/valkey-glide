@@ -3,7 +3,7 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
-from glide.async_commands.bitmap import OffsetOptions
+from glide.async_commands.bitmap import BitwiseOperation, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
@@ -3105,6 +3105,30 @@ class BaseTransaction:
                 the length of the string.
         """
         return self.append_command(RequestType.GetBit, [key, str(offset)])
+
+    def bitop(
+        self: TTransaction,
+        operation: BitwiseOperation,
+        destination: str,
+        keys: List[str],
+    ) -> TTransaction:
+        """
+        Perform a bitwise operation between multiple keys (containing string values) and store the result in the
+        `destination`.
+
+        See https://valkey.io/commands/bitop for more details.
+
+        Args:
+            operation (BitwiseOperation): The bitwise operation to perform.
+            destination (str): The key that will store the resulting string.
+            keys (List[str]): The list of keys to perform the bitwise operation on.
+
+        Command response:
+            int: The size of the string stored in `destination`.
+        """
+        return self.append_command(
+            RequestType.BitOp, [operation.value, destination] + keys
+        )
 
     def object_encoding(self: TTransaction, key: str) -> TTransaction:
         """

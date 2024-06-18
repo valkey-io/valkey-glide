@@ -16,7 +16,7 @@ from typing import (
     get_args,
 )
 
-from glide.async_commands.bitmap import OffsetOptions
+from glide.async_commands.bitmap import BitwiseOperation, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -4489,6 +4489,41 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(RequestType.GetBit, [key, str(offset)]),
+        )
+
+    async def bitop(
+        self, operation: BitwiseOperation, destination: str, keys: List[str]
+    ) -> int:
+        """
+        Perform a bitwise operation between multiple keys (containing string values) and store the result in the
+        `destination`.
+
+        See https://valkey.io/commands/bitop for more details.
+
+        Note:
+            When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+
+        Args:
+            operation (BitwiseOperation): The bitwise operation to perform.
+            destination (str): The key that will store the resulting string.
+            keys (List[str]): The list of keys to perform the bitwise operation on.
+
+        Returns:
+            int: The size of the string stored in `destination`.
+
+        Examples:
+            >>> await client.set("key1", "A")  # "A" has binary value 01000001
+            >>> await client.set("key1", "B")  # "B" has binary value 01000010
+            >>> await client.bitop(BitwiseOperation.AND, "destination", ["key1", "key2"])
+                1  # The size of the resulting string stored in "destination" is 1
+            >>> await client.get("destination")
+                "@"  # "@" has binary value 01000000
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.BitOp, [operation.value, destination] + keys
+            ),
         )
 
     async def object_encoding(self, key: str) -> Optional[str]:

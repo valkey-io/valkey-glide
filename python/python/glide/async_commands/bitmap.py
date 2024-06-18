@@ -48,3 +48,15 @@ class OffsetOptions:
             args.append(self.index_type.value)
 
         return args
+
+
+class BitwiseOperation(Enum):
+    """
+    Enumeration defining the bitwise operation to use in the `BITOP` command. Specifies the bitwise operation to
+    perform between the passed in keys.
+    """
+
+    AND = "AND"
+    OR = "OR"
+    XOR = "XOR"
+    NOT = "NOT"
