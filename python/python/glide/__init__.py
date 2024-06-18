@@ -8,8 +8,6 @@ from glide.async_commands.core import (
     ExpirySet,
     ExpiryType,
     FlushMode,
-    GeospatialData,
-    GeoUnit,
     InfoSection,
     InsertPosition,
     StreamAddOptions,

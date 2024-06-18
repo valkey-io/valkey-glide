@@ -10,7 +10,6 @@ from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, Offse
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     FlushMode,
-    GeospatialData,
     InsertPosition,
     StreamAddOptions,
     TrimByMinId,
@@ -467,12 +466,15 @@ async def transaction_test(
     args.append("one")
     transaction.srandmember_count(key7, 1)
     args.append(["one"])
-    transaction.flushall()
-    args.append(OK)
-    transaction.flushall(FlushMode.SYNC)
-    args.append(OK)
     transaction.flushall(FlushMode.ASYNC)
     args.append(OK)
+
+    min_version = "6.2.0"
+    if not await check_if_server_version_lt(redis_client, min_version):
+        transaction.flushall()
+        args.append(OK)
+        transaction.flushall(FlushMode.SYNC)
+        args.append(OK)
 
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):
