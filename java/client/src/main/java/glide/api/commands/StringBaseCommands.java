@@ -38,25 +38,6 @@ public interface StringBaseCommands {
     CompletableFuture<String> get(String key);
 
     /**
-     * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
-     * value exists.
-     *
-     * @see <a href="https://redis.io/commands/get/">redis.io</a> for details.
-     * @param key The <code>key</code> to retrieve from the database.
-     * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
-     *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
-     * @example
-     *     <pre>{@code
-     * byte[] value = client.get("key").get();
-     * assert Arrays.equals(value, "value".getBytes());
-     *
-     * String value = client.get("non_existing_key").get();
-     * assert value.equals(null);
-     * }</pre>
-     */
-    CompletableFuture<byte[]> get(byte[] key);
-
-    /**
      * Gets a string value associated with the given <code>key</code> and deletes the key.
      *
      * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
@@ -88,21 +69,6 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> set(String key, String value);
-
-    /**
-     * Sets the given <code>key</code> with the given value.
-     *
-     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
-     * @param key The <code>key</code> to store.
-     * @param value The value to store with the given <code>key</code>.
-     * @return Response from Redis containing <code>"OK"</code>.
-     * @example
-     *     <pre>{@code
-     * String value = client.set("key".getBytes(), "value".getBytes()).get();
-     * assert value.equals("OK");
-     * }</pre>
-     */
-    CompletableFuture<String> set(byte[] key, byte[] value);
 
     /**
      * Sets the given key with the given value. Return value is dependent on the passed options.
