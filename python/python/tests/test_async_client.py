@@ -911,6 +911,21 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hstrlen(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+
+        assert await redis_client.hstrlen(key, "field") == 0
+        assert await redis_client.hset(key, {"field": "value"}) == 1
+        assert await redis_client.hstrlen(key, "field") == 5
+
+        assert await redis_client.hstrlen(key, "field2") == 0
+
+        await redis_client.set(key, "value")
+        with pytest.raises(RequestError):
+            await redis_client.hstrlen(key, "field")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpush_lpop_lrange(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]

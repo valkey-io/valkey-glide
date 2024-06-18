@@ -741,6 +741,21 @@ class BaseTransaction:
             RequestType.HRandField, [key, str(count), "WITHVALUES"]
         )
 
+    def hstrlen(self: TTransaction, key: str, field: str) -> TTransaction:
+        """
+        Returns the string length of the value associated with `field` in the hash stored at `key`.
+
+        See https://valkey.io/commands/hstrlen/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field in the hash.
+
+        Commands response:
+            int: The string length or 0 if `field` or `key` does not exist.
+        """
+        return self.append_command(RequestType.HStrlen, [key, field])
+
     def lpush(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """
         Insert all the specified values at the head of the list stored at `key`.
