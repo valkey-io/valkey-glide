@@ -4678,28 +4678,3 @@ class CoreCommands(Protocol):
             List[str],
             await self._execute_command(RequestType.SRandMember, [key, str(count)]),
         )
-
-    async def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
-        """
-        Deletes all the keys of all the existing databases. This command never fails.
-
-        See https://valkey.io/commands/flushall for more details.
-
-        Args:
-            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
-
-        Returns:
-            str: OK.
-
-        Examples:
-             >>> await client.flushall(FlushMode.ASYNC)
-                 OK  # This command never fails.
-        """
-        args = []
-        if flush_mode is not None:
-            args.append(flush_mode.value)
-
-        return cast(
-            TOK,
-            await self._execute_command(RequestType.FlushAll, args),
-        )
