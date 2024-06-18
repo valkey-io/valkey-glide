@@ -20,7 +20,7 @@ on:
             - "v*.*"
 
 concurrency:
-    group: npm-${{ github.head_ref || github.ref }}
+    group: gradle-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 permissions:
@@ -40,6 +40,7 @@ jobs:
     start-self-hosted-runner:
         if: github.repository_owner == 'aws'
         runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
         steps:
           - name: Checkout
             uses: actions/checkout@v4
