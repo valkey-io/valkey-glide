@@ -1896,6 +1896,32 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def sunion(self, keys: List[str]) -> Set[str]:
+        """
+        Gets the union of all the given sets.
+
+        See https://valkey.io/commands/sunion for more details.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the sets.
+
+        Returns:
+            Set[str]: A set of members which are present in at least one of the given sets.
+                If none of the sets exist, an empty set will be returned.
+
+        Examples:
+            >>> await client.sadd("my_set1", ["member1", "member2"])
+            >>> await client.sadd("my_set2", ["member2", "member3"])
+            >>> await client.sunion(["my_set1", "my_set2"])
+                {"member1", "member2", "member3"} # sets "my_set1" and "my_set2" have three unique members
+            >>> await client.sunion(["my_set1", "non_existing_set"])
+                {"member1", "member2"}
+        """
+        return cast(Set[str], await self._execute_command(RequestType.SUnion, keys))
+
     async def sunionstore(
         self,
         destination: str,
