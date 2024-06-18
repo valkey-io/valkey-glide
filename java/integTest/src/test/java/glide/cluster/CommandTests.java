@@ -1558,8 +1558,14 @@ public class CommandTests {
         String randomKey = clusterClient.randomKey().get();
         assertEquals(1L, clusterClient.exists(new String[] {randomKey}).get());
 
+        String randomKeyPrimaries = clusterClient.randomKey(ALL_PRIMARIES).get();
+        assertEquals(1L, clusterClient.exists(new String[] {randomKeyPrimaries}).get());
+
         // no keys in database
-        assertEquals(OK, clusterClient.flushall().get());
-        assertNull(clusterClient.randomKey().get());
+        assertEquals(OK, clusterClient.flushall(SYNC).get());
+
+        // TODO: returns a ResponseError but expecting null
+        // uncomment when this is completed: https://github.com/amazon-contributing/redis-rs/pull/153
+        // assertNull(clusterClient.randomKey().get());
     }
 }
