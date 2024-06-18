@@ -4577,3 +4577,55 @@ class CoreCommands(Protocol):
             Optional[int],
             await self._execute_command(RequestType.ObjectRefCount, [key]),
         )
+
+    async def srandmember(self, key: str) -> Optional[str]:
+        """
+        Returns a random element from the set value stored at 'key'.
+
+        See https://valkey.io/commands/srandmember for more details.
+
+        Args:
+            key (str): The key from which to retrieve the set member.
+
+        Returns:
+            str: A random element from the set, or None if 'key' does not exist.
+
+        Examples:
+            >>> await client.sadd("my_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.srandmember("my_set")
+            "member1"  # "member1" is a random member of "my_set".
+            >>> await client.srandmember("non_existing_set")
+            None  # "non_existing_set" is not an existing key, so None was returned.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.SRandMember, [key]),
+        )
+
+    async def srandmember_count(self, key: str, count: int) -> List[str]:
+        """
+        Returns one or more random elements from the set value stored at 'key'.
+
+        See https://valkey.io/commands/srandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
+
+        Returns:
+            List[str]: A list of members from the set.
+                If the set does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.sadd("my_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.srandmember("my_set", -3)
+                ["member1", "member1", "member2"]  # "member1" and "member2" are random members of "my_set".
+            >>> await client.srandmember("non_existing_set", 3)
+                []  # "non_existing_set" is not an existing key, so an empty list was returned.
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.SRandMember, [key, str(count)]),
+        )
