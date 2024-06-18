@@ -81,7 +81,7 @@ fn create_client_internal(
             errors::error_message(&redis_error)
         })?;
     let client = runtime
-        .block_on(GlideClient::new(ConnectionRequest::from(request)))
+        .block_on(GlideClient::new(ConnectionRequest::from(request), None))
         .map_err(|err| err.to_string())?;
     Ok(ClientAdapter {
         client,
