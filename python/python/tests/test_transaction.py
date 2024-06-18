@@ -58,7 +58,6 @@ async def transaction_test(
     key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
     key20 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
-    key21 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # srandmember
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -420,11 +419,11 @@ async def transaction_test(
         alpha=True,
     )
     args.append(4)
-    transaction.sadd(key21, ["one"])
+    transaction.sadd(key7, ["one"])
     args.append(1)
-    transaction.srandmember(key21)
+    transaction.srandmember(key7)
     args.append("one")
-    transaction.srandmember_count(key21, 1)
+    transaction.srandmember_count(key7, 1)
     args.append(["one"])
 
     min_version = "7.0.0"
