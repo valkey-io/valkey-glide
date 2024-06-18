@@ -1872,7 +1872,7 @@ class BaseTransaction:
         Since: Redis version 6.2.0.
         """
         args = _create_geosearch_args(
-            key,
+            [key],
             search_from,
             seach_by,
             order_by,
@@ -1883,6 +1883,57 @@ class BaseTransaction:
         )
 
         return self.append_command(RequestType.GeoSearch, args)
+
+    def geosearchstore(
+        self: TTransaction,
+        destination: str,
+        source: str,
+        search_from: Union[str, GeospatialData],
+        search_by: Union[GeoSearchByRadius, GeoSearchByBox],
+        count: Optional[GeoSearchCount] = None,
+        store_dist: bool = False,
+    ) -> TTransaction:
+        """
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+
+        To get the result directly, see `geosearch`.
+
+        See https://valkey.io/commands/geosearch/ for more details.
+
+        Args:
+            destination (str): The key to store the search results.
+            source (str): The key of the sorted set representing geospatial data to search from.
+            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
+                from the sorted set or as a geospatial data (see `GeospatialData`).
+            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                For circular area search, see `GeoSearchByRadius`.
+                For rectangular area search, see `GeoSearchByBox`.
+            count (Optional[GeoSearchCount]): Specifies the maximum number of results to store. See `GeoSearchCount`.
+                If not specified, stores all results.
+            store_dist (bool): Determines what is stored as the sorted set score. Defaults to False.
+                - If set to False, the geohash of the location will be stored as the sorted set score.
+                - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted set score.
+                    The distance is represented as a floating-point number in the same unit specified for that shape.
+
+        Commands response:
+            int: The number of elements in the resulting sorted set stored at `destination`.s
+
+        Since: Redis version 6.2.0.
+        """
+        args = _create_geosearch_args(
+            [destination, source],
+            search_from,
+            search_by,
+            None,
+            count,
+            False,
+            False,
+            False,
+            store_dist,
+        )
+
+        return self.append_command(RequestType.GeoSearchStore, args)
 
     def zadd(
         self: TTransaction,

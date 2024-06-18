@@ -11,6 +11,7 @@ from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import InsertPosition, StreamAddOptions, TrimByMinId
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByBox,
     GeoSearchByRadius,
     GeospatialData,
     GeoUnit,
@@ -390,10 +391,19 @@ async def transaction_test(
             None,
         ]
     )
+
     transaction.geosearch(
         key12, "Catania", GeoSearchByRadius(200, GeoUnit.KILOMETERS), OrderBy.ASC
     )
     args.append(["Catania", "Palermo"])
+    transaction.geosearchstore(
+        key12,
+        key12,
+        GeospatialData(15, 37),
+        GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+        store_dist=True,
+    )
+    args.append(2)
 
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-1"))
     args.append("0-1")
