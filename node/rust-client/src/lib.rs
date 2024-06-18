@@ -189,9 +189,12 @@ fn redis_value_to_js(val: Value, js_env: Env) -> Result<JsUnknown> {
         // "Normal client libraries may ignore completely the difference between this"
         // "type and the String type, and return a string in both cases.""
         // https://github.com/redis/redis-specifications/blob/master/protocol/RESP3.md
-        Value::VerbatimString { format: _, text } => js_env
-            .create_string_from_std(text)
-            .map(|val| val.into_unknown()),
+        Value::VerbatimString { format: _, text } => {
+            // VerbatimString is binary safe -> convert it into such
+            Ok(js_env
+                .create_buffer_with_data(text.as_bytes().to_vec())?
+                .into_unknown())
+        }
         Value::BigNumber(num) => {
             let sign = num.is_negative();
             let words = num.iter_u64_digits().collect();
