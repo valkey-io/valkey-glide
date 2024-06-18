@@ -1382,6 +1382,36 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lset(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        element = get_random_string(5)
+        values = [get_random_string(5) for _ in range(4)]
+
+        # key does not exist
+        with pytest.raises(RequestError):
+            await redis_client.lset("non_existing_key", 0, element)
+
+        # pushing elements to list
+        await redis_client.lpush(key, values) == 4
+
+        # index out of range
+        with pytest.raises(RequestError):
+            await redis_client.lset(key, 10, element)
+
+        # assert lset result
+        assert await redis_client.lset(key, 0, element) == OK
+
+        values = [element] + values[:-1][::-1]
+        assert await redis_client.lrange(key, 0, -1) == values
+
+        # assert lset with a negative index for the last element in the list
+        assert await redis_client.lset(key, -1, element) == OK
+
+        values[-1] = element
+        assert await redis_client.lrange(key, 0, -1) == values
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sadd_srem_smembers_scard(self, redis_client: TRedisClient):
         key = get_random_string(10)
         value_list = ["member1", "member2", "member3", "member4"]
