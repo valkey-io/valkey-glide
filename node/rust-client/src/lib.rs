@@ -67,7 +67,8 @@ impl AsyncClient {
             .build()?;
         let _runtime_handle = runtime.enter();
         let client = to_js_result(redis::Client::open(connection_address))?;
-        let connection = to_js_result(runtime.block_on(client.get_multiplexed_async_connection()))?;
+        let connection =
+            to_js_result(runtime.block_on(client.get_multiplexed_async_connection(None)))?;
         Ok(AsyncClient {
             connection,
             runtime,
