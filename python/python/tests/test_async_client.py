@@ -4245,7 +4245,7 @@ class TestCommands:
         assert await redis_client.zadd(key2, member_scores2) == 1
         assert await redis_client.zadd(key3, member_scores3) == 4
 
-        assert await redis_client.zdiff([key1, key2]) == ["one", "three"]
+        assert await redis_client.zdiff([key1, key2]) == [b"one", b"three"]
         assert await redis_client.zdiff([key1, key3]) == []
         assert await redis_client.zdiff([non_existing_key, key3]) == []
 
@@ -4307,7 +4307,7 @@ class TestCommands:
 
         assert await redis_client.zdiffstore(key4, [key3, key2, key1]) == 1
         assert await redis_client.zrange_withscores(key4, RangeByIndex(0, -1)) == {
-            "four": 4.0
+            b"four": 4.0
         }
 
         assert await redis_client.zdiffstore(key4, [key1, key3]) == 0
@@ -4337,12 +4337,12 @@ class TestCommands:
         assert await redis_client.zadd(key2, {"a2": 0.1, "b2": 0.2}) == 2
 
         assert await redis_client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1) == [
-            key1,
-            {"b1": 2},
+            key1.encode("utf-8"),
+            {b"b1": 2},
         ]
         assert await redis_client.bzmpop([key2, key1], ScoreFilter.MAX, 0.1, 10) == [
-            key2,
-            {"b2": 0.2, "a2": 0.1},
+            key2.encode("utf-8"),
+            {b"b2": 0.2, b"a2": 0.1},
         ]
 
         # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
@@ -4397,7 +4397,7 @@ class TestCommands:
         assert await redis_client.zadd(key, scores) == 2
 
         member = await redis_client.zrandmember(key)
-        assert member in scores
+        assert member.decode("utf-8") in scores
         assert await redis_client.zrandmember("non_existing_key") is None
 
         # key exists, but it is not a set
@@ -4416,13 +4416,13 @@ class TestCommands:
         # unique values are expected as count is positive
         members = await redis_client.zrandmember_count(key, 4)
         assert len(members) == 2
-        assert set(members) == {"one", "two"}
+        assert set(members) == {b"one", b"two"}
 
         # duplicate values are expected as count is negative
         members = await redis_client.zrandmember_count(key, -4)
         assert len(members) == 4
         for member in members:
-            assert member in scores
+            assert member.decode("utf-8") in scores
 
         assert await redis_client.zrandmember_count(key, 0) == []
         assert await redis_client.zrandmember_count("non_existing_key", 0) == []
@@ -4445,13 +4445,13 @@ class TestCommands:
         assert len(elements) == 2
 
         for member, score in elements:
-            assert scores[str(member)] == score
+            assert scores[(member).decode("utf-8")] == score
 
         # duplicate values are expected as count is negative
         elements = await redis_client.zrandmember_withscores(key, -4)
         assert len(elements) == 4
         for member, score in elements:
-            assert scores[str(member)] == score
+            assert scores[(member).decode("utf-8")] == score
 
         assert await redis_client.zrandmember_withscores(key, 0) == []
         assert await redis_client.zrandmember_withscores("non_existing_key", 0) == []
@@ -4511,12 +4511,12 @@ class TestCommands:
         assert await redis_client.zadd(key2, {"a2": 0.1, "b2": 0.2}) == 2
 
         assert await redis_client.zmpop([key1, key2], ScoreFilter.MAX) == [
-            key1,
-            {"b1": 2},
+            key1.encode('utf-8'),
+            {b"b1": 2},
         ]
         assert await redis_client.zmpop([key2, key1], ScoreFilter.MAX, 10) == [
-            key2,
-            {"b2": 0.2, "a2": 0.1},
+            key2.encode('utf-8'),
+            {b"b2": 0.2, b"a2": 0.1},
         ]
 
         assert await redis_client.zmpop([non_existing_key], ScoreFilter.MIN) is None
