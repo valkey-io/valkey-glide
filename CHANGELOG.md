@@ -14,6 +14,7 @@
 * Python: Added XLEN command ([#1503](https://github.com/aws/glide-for-redis/pull/1503))
 * Python: Added LASTSAVE command ([#1509](https://github.com/aws/glide-for-redis/pull/1509))
 * Python: Added GETDEL command ([#1514](https://github.com/aws/glide-for-redis/pull/1514))
+* Python: Added GETRANGE command ([#1585](https://github.com/aws/glide-for-redis/pull/1585))
 * Python: Added ZINTER, ZUNION commands ([#1478](https://github.com/aws/glide-for-redis/pull/1478))
 * Python: Added SINTERCARD command ([#1511](https://github.com/aws/glide-for-redis/pull/1511))
 * Python: Added SORT command ([#1439](https://github.com/aws/glide-for-redis/pull/1439))

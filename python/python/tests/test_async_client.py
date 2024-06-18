@@ -439,6 +439,40 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_getrange(self, redis_client: TRedisClient):
+        key = get_random_string(16)
+        value = get_random_string(10)
+        non_string_key = get_random_string(10)
+
+        assert await redis_client.set(key, value) == OK
+        assert await redis_client.getrange(key, 0, 3) == value[:4]
+        assert await redis_client.getrange(key, -3, -1) == value[-3:]
+        assert await redis_client.getrange(key, 0, -1) == value
+
+        # out of range
+        assert await redis_client.getrange(key, 10, 100) == value[10:]
+        assert await redis_client.getrange(key, -200, -3) == value[-200:-2]
+        assert await redis_client.getrange(key, 100, 200) == ""
+
+        # incorrect range
+        assert await redis_client.getrange(key, -1, -3) == ""
+
+        # a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
+        if await check_if_server_version_lt(redis_client, "8.0.0"):
+            assert await redis_client.getrange(key, -200, -100) == value[0]
+        else:
+            assert await redis_client.getrange(key, -200, -100) == ""
+
+        if await check_if_server_version_lt(redis_client, "8.0.0"):
+            assert await redis_client.getrange(non_string_key, 0, -1) == ""
+
+        # non-string key
+        assert await redis_client.lpush(non_string_key, ["_"]) == 1
+        with pytest.raises(RequestError):
+            await redis_client.getrange(non_string_key, 0, -1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_config_reset_stat(self, redis_client: TRedisClient):
         # we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
         # after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.
