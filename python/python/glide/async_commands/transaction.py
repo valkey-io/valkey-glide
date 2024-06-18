@@ -99,6 +99,27 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.GetDel, [key])
 
+    def getrange(self: TTransaction, key: str, start: int, end: int) -> TTransaction:
+        """
+        Returns the substring of the string value stored at `key`, determined by the offsets `start` and `end` (both are inclusive).
+        Negative offsets can be used in order to provide an offset starting from the end of the string.
+        So `-1` means the last character, `-2` the penultimate and so forth.
+
+        If `key` does not exist, an empty string is returned. If `start` or `end`
+        are out of range, returns the substring within the valid range of the string.
+
+        See https://valkey.io/commands/getrange/ for more details.
+
+        Args:
+            key (str): The key of the string.
+            start (int): The starting offset.
+            end (int): The ending offset.
+
+        Commands response:
+            str: A substring extracted from the value stored at `key`.
+        """
+        return self.append_command(RequestType.GetRange, [key, str(start), str(end)])
+
     def set(
         self: TTransaction,
         key: str,
