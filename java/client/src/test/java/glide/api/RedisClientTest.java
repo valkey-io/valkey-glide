@@ -553,14 +553,14 @@ public class RedisClientTest {
     @Test
     public void getexOptions() {
         // setup
-        GetExOptions options = GetExOptions.builder().seconds(1000L).build();
-        String[] args = new String[] {"key", "EX", "1000"};
+        GetExOptions options = GetExOptions.builder().expiry(GetExOptions.Expiry.Seconds(10L)).build();
+        String[] arguments = new String[] {"key", "EX", "10"};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete("value");
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(GetEx), eq(args), any()))
+        when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
