@@ -125,7 +125,7 @@ class TestGlideClients:
         assert len(key) == length
         assert len(value) == length
         await redis_client.set(key, value)
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode("utf-8")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -134,7 +134,7 @@ class TestGlideClients:
         value = "שלום hello 汉字"
         assert value == "שלום hello 汉字"
         await redis_client.set(key, value)
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode("utf-8")
 
     @pytest.mark.parametrize("value_size", [100, 2**16])
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -150,7 +150,7 @@ class TestGlideClients:
             for _ in range(range_end):
                 value = get_random_string(value_size)
                 assert await redis_client.set(str(i), value) == OK
-                assert await redis_client.get(str(i)) == value
+                assert await redis_client.get(str(i)) == value.encode("utf-8")
 
         for i in range(num_of_concurrent_tasks):
             task = asyncio.create_task(exec_command(i))
@@ -187,7 +187,7 @@ class TestGlideClients:
             )
             key = get_random_string(10)
             assert await auth_client.set(key, key) == OK
-            assert await auth_client.get(key) == key
+            assert await auth_client.get(key) == key.encode("utf-8")
         finally:
             # Reset the password
             auth_client = await create_client(
@@ -235,7 +235,7 @@ class TestGlideClients:
                 credentials,
                 addresses=redis_client.config.addresses,
             )
-            assert await testuser_client.get(key) == key
+            assert await testuser_client.get(key) == key.encode("utf-8")
             with pytest.raises(RequestError) as e:
                 # This client isn't authorized to perform SET
                 await testuser_client.set("foo", "bar")
@@ -250,7 +250,7 @@ class TestGlideClients:
             request, cluster_mode=cluster_mode, database_id=4
         )
         client_info = await redis_client.custom_command(["CLIENT", "INFO"])
-        assert "db=4" in client_info
+        assert b"db=4" in client_info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -262,7 +262,7 @@ class TestGlideClients:
             protocol=protocol,
         )
         client_info = await redis_client.custom_command(["CLIENT", "INFO"])
-        assert "name=TEST_CLIENT_NAME" in client_info
+        assert b"name=TEST_CLIENT_NAME" in client_info
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -287,16 +287,16 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
     async def test_use_resp3_protocol(self, redis_client: TGlideClient):
-        result = cast(Dict[str, str], await redis_client.custom_command(["HELLO"]))
+        result = cast(Dict[bytes, bytes], await redis_client.custom_command(["HELLO"]))
 
-        assert int(result["proto"]) == 3
+        assert int(result[b"proto"]) == 3
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2])
     async def test_allow_opt_in_to_resp2_protocol(self, redis_client: TGlideClient):
-        result = cast(Dict[str, str], await redis_client.custom_command(["HELLO"]))
+        result = cast(Dict[bytes, bytes], await redis_client.custom_command(["HELLO"]))
 
-        assert int(result["proto"]) == 2
+        assert int(result[b"proto"]) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -311,12 +311,12 @@ class TestCommands:
             key, value, conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
         )
         assert res == OK
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode("utf-8")
         res = await redis_client.set(
             key, "foobar", conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST
         )
         assert res is None
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode("utf-8")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -329,11 +329,11 @@ class TestCommands:
         value = get_random_string(10)
         res = await redis_client.set(key, value)
         assert res == OK
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode("utf-8")
         new_value = get_random_string(10)
         res = await redis_client.set(key, new_value, return_old_value=True)
-        assert res == value
-        assert await redis_client.get(key) == new_value
+        assert res == value.encode("utf-8")
+        assert await redis_client.get(key) == new_value.encode("utf-8")
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -349,11 +349,11 @@ class TestCommands:
         client_list = await redis_client.custom_command(
             ["CLIENT", "LIST", "TYPE", "NORMAL"]
         )
-        assert isinstance(client_list, (str, list))
+        assert isinstance(client_list, (bytes, list))
         res: str = get_first_result(client_list)
         assert res is not None
-        assert "id" in res
-        assert "cmd=client" in res
+        assert b"id" in res
+        assert b"cmd=client" in res
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -364,11 +364,11 @@ class TestCommands:
         client_list = await redis_client.custom_command(
             ["CLIENT", "LIST", "TYPE", "NORMAL"]
         )
-        assert isinstance(client_list, (str, list))
+        assert isinstance(client_list, (bytes, list))
         res: str = get_first_result(client_list)
         assert res is not None
-        assert "id" in res
-        assert "cmd=client" in res
+        assert b"id" in res
+        assert b"cmd=client" in res
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -399,9 +399,9 @@ class TestCommands:
         info_result = await redis_client.info()
         if cluster_mode:
             cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
-            assert isinstance(cluster_nodes, (str, list))
+            assert isinstance(cluster_nodes, (bytes, list))
             cluster_nodes = get_first_result(cluster_nodes)
-            expected_num_of_results = cluster_nodes.count("master")
+            expected_num_of_results = cluster_nodes.count(b"master")
             assert len(info_result) == expected_num_of_results
         info_result = get_first_result(info_result)
         assert "# Memory" in info_result
@@ -413,11 +413,11 @@ class TestCommands:
         key = get_random_string(10)
         value = get_random_string(10)
         assert await redis_client.set(key, value) == OK
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode("utf-8")
         assert await redis_client.select(1) == OK
         assert await redis_client.get(key) is None
         assert await redis_client.select(0) == OK
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode("utf-8")
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -429,12 +429,12 @@ class TestCommands:
         assert await redis_client.move(key, 1) is False
 
         assert await redis_client.set(key, value) == OK
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode("utf-8")
 
         assert await redis_client.move(key, 1) is True
         assert await redis_client.get(key) is None
         assert await redis_client.select(1) == OK
-        assert await redis_client.get(key) == value
+        assert await redis_client.get(key) == value.encode("utf-8")
 
         with pytest.raises(RequestError) as e:
             await redis_client.move(key, -1)
@@ -444,10 +444,11 @@ class TestCommands:
     async def test_delete(self, redis_client: TGlideClient):
         keys = [get_random_string(10), get_random_string(10), get_random_string(10)]
         value = get_random_string(10)
+        value_encoded = value.encode("utf-8")
         [await redis_client.set(key, value) for key in keys]
-        assert await redis_client.get(keys[0]) == value
-        assert await redis_client.get(keys[1]) == value
-        assert await redis_client.get(keys[2]) == value
+        assert await redis_client.get(keys[0]) == value_encoded
+        assert await redis_client.get(keys[1]) == value_encoded
+        assert await redis_client.get(keys[2]) == value_encoded
         delete_keys = keys + [get_random_string(10)]
         assert await redis_client.delete(delete_keys) == 3
         assert await redis_client.delete(keys) == 0
@@ -462,7 +463,7 @@ class TestCommands:
         assert await redis_client.set(key, value) == "OK"
 
         # Retrieve and delete existing key
-        assert await redis_client.getdel(key) == value
+        assert await redis_client.getdel(key) == value.encode("utf-8")
         assert await redis_client.get(key) is None
 
         # Try to get and delete a non-existing key
@@ -549,11 +550,11 @@ class TestCommands:
         key = get_random_string(10)
         assert await redis_client.set(key, "10") == OK
         assert await redis_client.incr(key) == 11
-        assert await redis_client.get(key) == "11"
+        assert await redis_client.get(key) == b"11"
         assert await redis_client.incrby(key, 4) == 15
-        assert await redis_client.get(key) == "15"
+        assert await redis_client.get(key) == b"15"
         assert await redis_client.incrbyfloat(key, 5.5) == 20.5
-        assert await redis_client.get(key) == "20.5"
+        assert await redis_client.get(key) == b"20.5"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -564,15 +565,15 @@ class TestCommands:
 
         assert await redis_client.get(key) is None
         assert await redis_client.incr(key) == 1
-        assert await redis_client.get(key) == "1"
+        assert await redis_client.get(key) == b"1"
 
         assert await redis_client.get(key2) is None
         assert await redis_client.incrby(key2, 3) == 3
-        assert await redis_client.get(key2) == "3"
+        assert await redis_client.get(key2) == b"3"
 
         assert await redis_client.get(key3) is None
         assert await redis_client.incrbyfloat(key3, 0.5) == 0.5
-        assert await redis_client.get(key3) == "0.5"
+        assert await redis_client.get(key3) == b"0.5"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -616,7 +617,9 @@ class TestCommands:
         keys.append(non_existing_key)
         mget_res = await redis_client.mget(keys)
         keys[-1] = None
-        assert mget_res == keys
+        assert mget_res == [
+            key.encode("utf-8") if key is not None else key for key in keys
+        ]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -638,22 +641,23 @@ class TestCommands:
         key3 = f"{{key}}-3{get_random_string(5)}"
         non_existing = get_random_string(5)
         value = get_random_string(5)
+        value_encoded = value.encode("utf-8")
         key_value_map1 = {key1: value, key2: value}
         key_value_map2 = {key2: get_random_string(5), key3: value}
 
         assert await redis_client.msetnx(key_value_map1) is True
         mget_res = await redis_client.mget([key1, key2, non_existing])
-        assert mget_res == [value, value, None]
+        assert mget_res == [value_encoded, value_encoded, None]
 
         assert await redis_client.msetnx(key_value_map2) is False
         assert await redis_client.get(key3) is None
-        assert await redis_client.get(key2) == value
+        assert await redis_client.get(key2) == value_encoded
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ping(self, redis_client: TGlideClient):
-        assert await redis_client.ping() == "PONG"
-        assert await redis_client.ping("HELLO") == "HELLO"
+        assert await redis_client.ping() == b"PONG"
+        assert await redis_client.ping("HELLO") == b"HELLO"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

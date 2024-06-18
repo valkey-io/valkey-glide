@@ -13,6 +13,7 @@ from glide.async_commands.core import (
 )
 from glide.async_commands.transaction import BaseTransaction, Transaction
 from glide.constants import OK, TOK, TResult
+from glide.async_commands.utils.utils import convert_byte_string_dict
 from glide.protobuf.redis_request_pb2 import RequestType
 
 
@@ -162,7 +163,9 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(
             Dict[str, str],
-            await self._execute_command(RequestType.ConfigGet, parameters),
+            convert_byte_string_dict(
+                await self._execute_command(RequestType.ConfigGet, parameters)
+            ),
         )
 
     async def config_set(self, parameters_map: Mapping[str, str]) -> TOK:
