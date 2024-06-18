@@ -2530,13 +2530,13 @@ class TestCommands:
             key,
             "Catania",
             GeoSearchByBox(10, 10, GeoUnit.KILOMETERS),
-        ) == ["Catania"]
+        ) == [b"Catania"]
 
         assert await redis_client.geosearch(
             key,
             "Catania",
             GeoSearchByRadius(10, GeoUnit.METERS),
-        ) == ["Catania"]
+        ) == [b"Catania"]
 
         # Search from non exiting memeber
         with pytest.raises(RequestError):
@@ -2865,11 +2865,11 @@ class TestCommands:
             "Catania": GeospatialData(15.087269, 37.502669),
         }
         assert await redis_client.geoadd(key, members_coordinates) == 2
-        assert await redis_client.geohash(key, ["Palermo", "Catania", "Place"]) == [
+        assert await redis_client.geohash(key, ["Palermo", "Catania", "Place"]) == convert_str_to_bytes_list([
             "sqc8b49rny0",
             "sqdtr74hyu0",
             None,
-        ]
+        ])
 
         assert (
             await redis_client.geohash(
@@ -3143,14 +3143,14 @@ class TestCommands:
             await redis_client.zremrangebylex(key1, LexBoundary("d"), InfBound.POS_INF)
             == 1
         )
-        assert await redis_client.zrange_withscores(key1, range) == {"a": 1.0}
+        assert await redis_client.zrange_withscores(key1, range) == {b"a": 1.0}
 
         # min_lex > max_lex
         assert (
             await redis_client.zremrangebylex(key1, LexBoundary("a"), InfBound.NEG_INF)
             == 0
         )
-        assert await redis_client.zrange_withscores(key1, range) == {"a": 1.0}
+        assert await redis_client.zrange_withscores(key1, range) == {b"a": 1.0}
 
         assert (
             await redis_client.zremrangebylex(
@@ -3344,15 +3344,15 @@ class TestCommands:
 
         # zinter tests
         zinter_map = await redis_client.zinter([key1, key2])
-        expected_zinter_map = ["one", "two"]
+        expected_zinter_map = [b"one", b"two"]
         assert zinter_map == expected_zinter_map
 
         # zinterstore tests
         assert await redis_client.zinterstore(key3, [key1, key2]) == 2
         zinterstore_map = await redis_client.zrange_withscores(key3, range)
         expected_zinter_map_withscores = {
-            "one": 2.5,
-            "two": 4.5,
+            b"one": 2.5,
+            b"two": 4.5,
         }
         assert compare_maps(zinterstore_map, expected_zinter_map_withscores) is True
 
@@ -3368,8 +3368,8 @@ class TestCommands:
         )
         zinterstore_map_max = await redis_client.zrange_withscores(key3, range)
         expected_zinter_map_max = {
-            "one": 1.5,
-            "two": 2.5,
+            b"one": 1.5,
+            b"two": 2.5,
         }
         assert compare_maps(zinterstore_map_max, expected_zinter_map_max) is True
 
@@ -3384,8 +3384,8 @@ class TestCommands:
         )
         zinterstore_map_min = await redis_client.zrange_withscores(key3, range)
         expected_zinter_map_min = {
-            "one": 1.0,
-            "two": 2.0,
+            b"one": 1.0,
+            b"two": 2.0,
         }
         assert compare_maps(zinterstore_map_min, expected_zinter_map_min) is True
 
@@ -3418,8 +3418,8 @@ class TestCommands:
         )
         zinterstore_map_multiplied = await redis_client.zrange_withscores(key3, range)
         expected_zinter_map_multiplied = {
-            "one": 5.0,
-            "two": 9.0,
+            b"one": 5.0,
+            b"two": 9.0,
         }
         assert (
             compare_maps(zinterstore_map_multiplied, expected_zinter_map_multiplied)
@@ -3474,16 +3474,16 @@ class TestCommands:
 
         # zunion tests
         zunion_map = await redis_client.zunion([key1, key2])
-        expected_zunion_map = ["one", "three", "two"]
+        expected_zunion_map = [b"one", b"three", b"two"]
         assert zunion_map == expected_zunion_map
 
         # zunionstore tests
         assert await redis_client.zunionstore(key3, [key1, key2]) == 3
         zunionstore_map = await redis_client.zrange_withscores(key3, range)
         expected_zunion_map_withscores = {
-            "one": 2.5,
-            "three": 3.5,
-            "two": 4.5,
+            b"one": 2.5,
+            b"three": 3.5,
+            b"two": 4.5,
         }
         assert compare_maps(zunionstore_map, expected_zunion_map_withscores) is True
 
@@ -3499,9 +3499,9 @@ class TestCommands:
         )
         zunionstore_map_max = await redis_client.zrange_withscores(key3, range)
         expected_zunion_map_max = {
-            "one": 1.5,
-            "two": 2.5,
-            "three": 3.5,
+            b"one": 1.5,
+            b"two": 2.5,
+            b"three": 3.5,
         }
         assert compare_maps(zunionstore_map_max, expected_zunion_map_max) is True
 
@@ -3516,9 +3516,9 @@ class TestCommands:
         )
         zunionstore_map_min = await redis_client.zrange_withscores(key3, range)
         expected_zunion_map_min = {
-            "one": 1.0,
-            "two": 2.0,
-            "three": 3.5,
+            b"one": 1.0,
+            b"two": 2.0,
+            b"three": 3.5,
         }
         assert compare_maps(zunionstore_map_min, expected_zunion_map_min) is True
 
@@ -3551,9 +3551,9 @@ class TestCommands:
         )
         zunionstore_map_multiplied = await redis_client.zrange_withscores(key3, range)
         expected_zunion_map_multiplied = {
-            "one": 5.0,
-            "three": 7.0,
-            "two": 9.0,
+            b"one": 5.0,
+            b"three": 7.0,
+            b"two": 9.0,
         }
         assert (
             compare_maps(zunionstore_map_multiplied, expected_zunion_map_multiplied)
@@ -3579,8 +3579,8 @@ class TestCommands:
             key3, range
         )
         expected_zunion_map_nonexistingkey = {
-            "one": 1.0,
-            "two": 2.0,
+            b"one": 1.0,
+            b"two": 2.0,
         }
         assert (
             compare_maps(
@@ -3618,10 +3618,10 @@ class TestCommands:
         key = get_random_string(10)
         members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
-        assert await redis_client.zpopmin(key) == {"a": 1.0}
+        assert await redis_client.zpopmin(key) == {b"a": 1.0}
 
         zpopmin_map = await redis_client.zpopmin(key, 3)
-        expected_map = {"b": 2.0, "c": 3.0}
+        expected_map = {b"b": 2.0, b"c": 3.0}
         assert compare_maps(zpopmin_map, expected_map) is True
 
         assert await redis_client.zpopmin(key) == {}
@@ -3640,12 +3640,12 @@ class TestCommands:
 
         assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
         assert await redis_client.zadd(key2, {"c": 2.0}) == 1
-        assert await redis_client.bzpopmin([key1, key2], 0.5) == [key1, "a", 1.0]
-        assert await redis_client.bzpopmin([non_existing_key, key2], 0.5) == [
+        assert await redis_client.bzpopmin([key1, key2], 0.5) == convert_str_to_bytes_list([key1, "a", 1.0])
+        assert await redis_client.bzpopmin([non_existing_key, key2], 0.5) == convert_str_to_bytes_list([
             key2,
             "c",
             2.0,
-        ]
+        ])
         assert await redis_client.bzpopmin(["non_existing_key"], 0.5) is None
 
         # invalid argument - key list must not be empty
@@ -3671,7 +3671,7 @@ class TestCommands:
         key = get_random_string(10)
         members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await redis_client.zadd(key, members_scores) == 3
-        assert await redis_client.zpopmax(key) == {"c": 3.0}
+        assert await redis_client.zpopmax(key) == {b"c": 3.0}
 
         zpopmax_map = await redis_client.zpopmax(key, 3)
         expected_map = {"b": 2.0, "a": 1.0}
@@ -3693,12 +3693,12 @@ class TestCommands:
 
         assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
         assert await redis_client.zadd(key2, {"c": 2.0}) == 1
-        assert await redis_client.bzpopmax([key1, key2], 0.5) == [key1, "b", 1.5]
-        assert await redis_client.bzpopmax([non_existing_key, key2], 0.5) == [
+        assert await redis_client.bzpopmax([key1, key2], 0.5) == convert_str_to_bytes_list([key1, "b", 1.5])
+        assert await redis_client.bzpopmax([non_existing_key, key2], 0.5) == convert_str_to_bytes_list([
             key2,
             "c",
             2.0,
-        ]
+        ])
         assert await redis_client.bzpopmax(["non_existing_key"], 0.5) is None
 
         # invalid argument - key list must not be empty
@@ -4251,8 +4251,8 @@ class TestCommands:
 
         zdiff_map = await redis_client.zdiff_withscores([key1, key2])
         expected_map = {
-            "one": 1.0,
-            "three": 3.0,
+            b"one": 1.0,
+            b"three": 3.0,
         }
         assert compare_maps(zdiff_map, expected_map) is True
         assert (
