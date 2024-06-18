@@ -660,4 +660,9 @@ public class RedisClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 UnWatch, new String[0], route, this::handleStringResponse);
     }
+
+    @Override
+    public CompletableFuture<String> unwatch() {
+        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
+    }
 }
