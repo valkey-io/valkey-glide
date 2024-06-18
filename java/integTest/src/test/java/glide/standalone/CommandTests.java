@@ -343,17 +343,40 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void dbsize() {
+    public void dbsize_and_flushdb() {
         assertEquals(OK, regularClient.flushall().get());
         assertEquals(OK, regularClient.select(0).get());
 
+        // fill DB and check size
         int numKeys = 10;
         for (int i = 0; i < numKeys; i++) {
             assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
         }
         assertEquals(10L, regularClient.dbsize().get());
 
+        // check another empty DB
         assertEquals(OK, regularClient.select(1).get());
+        assertEquals(0L, regularClient.dbsize().get());
+
+        // check non-empty
+        assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
+        assertEquals(1L, regularClient.dbsize().get());
+
+        // flush and check again
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, regularClient.flushdb(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.flushdb(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, regularClient.flushdb(ASYNC).get());
+        }
+        assertEquals(0L, regularClient.dbsize().get());
+
+        // switch to DB 0 and flush and check
+        assertEquals(OK, regularClient.select(0).get());
+        assertEquals(10L, regularClient.dbsize().get());
+        assertEquals(OK, regularClient.flushdb().get());
         assertEquals(0L, regularClient.dbsize().get());
     }
 
@@ -376,7 +399,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, regularClient.flushall(SYNC).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, regularClient.flushall(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.flushall(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, regularClient.flushall(ASYNC).get());
+        }
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter = (Object[]) regularClient.customCommand(new String[] {"keys", "*"}).get();
@@ -521,7 +551,7 @@ public class CommandTests {
         }
     }
 
-    // @Test
+    @Test
     @SneakyThrows
     public void functionStats_and_functionKill() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
