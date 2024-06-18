@@ -224,6 +224,8 @@ async def transaction_test(
     args.append([key9, value3])
     transaction.brpop([key9], 1)
     args.append([key9, value])
+    transaction.lset(key9, 0, value2)
+    args.append(OK)
 
     transaction.sadd(key7, ["foo", "bar"])
     args.append(2)

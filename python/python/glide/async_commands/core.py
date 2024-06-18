@@ -1462,6 +1462,33 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.LIndex, [key, str(index)]),
         )
 
+    async def lset(self, key: str, index: int, element: str) -> TOK:
+        """
+        Sets the list element at `index` to `element`.
+
+        The index is zero-based, so `0` means the first element, `1` the second element and so on.
+        Negative indices can be used to designate elements starting at the tail of the list.
+        Here, `-1` means the last element, `-2` means the penultimate and so forth.
+
+        See https://valkey.io/commands/lset/ for details.
+
+        Args:
+            key (str): The key of the list.
+            index (int): The index of the element in the list to be set.
+            element (str): The new element to set at the specified index.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.lset("testKey", 1, "two")
+                OK
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.LSet, [key, str(index), element]),
+        )
+
     async def rpush(self, key: str, elements: List[str]) -> int:
         """
         Inserts all the specified values at the tail of the list stored at `key`.
