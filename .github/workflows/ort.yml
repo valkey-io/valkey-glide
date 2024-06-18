@@ -19,7 +19,6 @@ on:
           required: true
 jobs:
     run-ort:
-        #if: github.repository_owner == 'aws'
         name: Create attribution files
         runs-on: ubuntu-latest
         strategy:
