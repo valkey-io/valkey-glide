@@ -26,7 +26,7 @@ where
 {
     let runtime = Builder::new_current_thread().enable_all().build().unwrap();
     runtime.block_on(async {
-        let client = Client::new(create_connection_request().into())
+        let client = Client::new(create_connection_request().into(), None)
             .await
             .unwrap();
         f(client).await;

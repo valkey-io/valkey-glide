@@ -83,7 +83,7 @@ fn get_connection_info(address: ConnectionAddr) -> redis::ConnectionInfo {
 fn multiplexer_benchmark(c: &mut Criterion, address: ConnectionAddr, group: &str) {
     benchmark(c, address, "multiplexer", group, |address, runtime| {
         let client = redis::Client::open(get_connection_info(address)).unwrap();
-        runtime.block_on(async { client.get_multiplexed_tokio_connection().await.unwrap() })
+        runtime.block_on(async { client.get_multiplexed_tokio_connection(None).await.unwrap() })
     });
 }
 
@@ -120,7 +120,7 @@ fn cluster_connection_benchmark(
                     builder = builder.read_from_replicas();
                 }
                 let client = builder.build().unwrap();
-                client.get_async_connection().await
+                client.get_async_connection(None).await
             })
             .unwrap()
     });

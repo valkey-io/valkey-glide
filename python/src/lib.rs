@@ -145,7 +145,13 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
             Value::Boolean(boolean) => Ok(PyBool::new(py, boolean).into_py(py)),
             Value::VerbatimString { format: _, text } => Ok(text.into_py(py)),
             Value::BigNumber(bigint) => Ok(bigint.into_py(py)),
-            Value::Push { kind: _, data: _ } => todo!(),
+            Value::Push { kind, data } => {
+                let dict = PyDict::new(py);
+                dict.set_item("kind", format!("{kind:?}"))?;
+                let values: &PyList = PyList::new(py, iter_to_value(py, data)?);
+                dict.set_item("values", values)?;
+                Ok(dict.into_py(py))
+            }
         }
     }
 

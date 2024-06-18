@@ -224,6 +224,8 @@ enum RequestType {
     UnWatch = 184;
     GeoSearchStore = 185;
     SUnion = 186;
+    Publish = 187;
+    SPublish = 188;
 }
 
 message Command {
