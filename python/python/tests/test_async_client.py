@@ -3726,21 +3726,21 @@ class TestCommands:
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
 
         assert await redis_client.zrange(key, RangeByIndex(start=0, stop=1)) == [
-            "one",
-            "two",
+            b"one",
+            b"two",
         ]
 
         zrange_map = await redis_client.zrange_withscores(
             key, RangeByIndex(start=0, stop=-1)
         )
-        expected_map = {"one": 1.0, "two": 2.0, "three": 3.0}
+        expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
         assert await redis_client.zrange(
             key, RangeByIndex(start=0, stop=1), reverse=True
         ) == [
-            "three",
-            "two",
+            b"three",
+            b"two",
         ]
 
         assert await redis_client.zrange(key, RangeByIndex(start=3, stop=1)) == []
@@ -3761,13 +3761,13 @@ class TestCommands:
             RangeByScore(
                 start=InfBound.NEG_INF, stop=ScoreBoundary(3, is_inclusive=False)
             ),
-        ) == ["one", "two"]
+        ) == [b"one", b"two"]
 
         zrange_map = await redis_client.zrange_withscores(
             key,
             RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
         )
-        expected_map = {"one": 1.0, "two": 2.0, "three": 3.0}
+        expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
         assert await redis_client.zrange(
@@ -3776,7 +3776,7 @@ class TestCommands:
                 start=ScoreBoundary(3, is_inclusive=False), stop=InfBound.NEG_INF
             ),
             reverse=True,
-        ) == ["two", "one"]
+        ) == [b"two", b"one"]
 
         assert (
             await redis_client.zrange(
@@ -3787,7 +3787,7 @@ class TestCommands:
                     limit=Limit(offset=1, count=2),
                 ),
             )
-        ) == ["two", "three"]
+        ) == [b"two", b"three"]
 
         assert (
             await redis_client.zrange(
@@ -3843,7 +3843,7 @@ class TestCommands:
             RangeByLex(
                 start=InfBound.NEG_INF, stop=LexBoundary("c", is_inclusive=False)
             ),
-        ) == ["a", "b"]
+        ) == [b"a", b"b"]
 
         assert (
             await redis_client.zrange(
@@ -3854,7 +3854,7 @@ class TestCommands:
                     limit=Limit(offset=1, count=2),
                 ),
             )
-        ) == ["b", "c"]
+        ) == [b"b", b"c"]
 
         assert await redis_client.zrange(
             key,
@@ -3862,7 +3862,7 @@ class TestCommands:
                 start=LexBoundary("c", is_inclusive=False), stop=InfBound.NEG_INF
             ),
             reverse=True,
-        ) == ["b", "a"]
+        ) == [b"b", b"a"]
 
         assert (
             await redis_client.zrange(
