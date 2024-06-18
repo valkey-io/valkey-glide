@@ -448,6 +448,12 @@ async def transaction_test(
         alpha=True,
     )
     args.append(4)
+    transaction.sadd(key7, ["one"])
+    args.append(1)
+    transaction.srandmember(key7)
+    args.append("one")
+    transaction.srandmember_count(key7, 1)
+    args.append(["one"])
 
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):

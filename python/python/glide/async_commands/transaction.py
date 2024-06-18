@@ -3165,6 +3165,38 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ObjectRefCount, [key])
 
+    def srandmember(self: TTransaction, key: str) -> TTransaction:
+        """
+        Returns a random element from the set value stored at 'key'.
+
+        See https://valkey.io/commands/srandmember for more details.
+
+        Args:
+            key (str): The key from which to retrieve the set member.
+
+        Command Response:
+            str: A random element from the set, or None if 'key' does not exist.
+        """
+        return self.append_command(RequestType.SRandMember, [key])
+
+    def srandmember_count(self: TTransaction, key: str, count: int) -> TTransaction:
+        """
+        Returns one or more random elements from the set value stored at 'key'.
+
+        See https://valkey.io/commands/srandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
+
+        Command Response:
+            List[str]: A list of members from the set.
+                If the set does not exist or is empty, the response will be an empty list.
+        """
+        return self.append_command(RequestType.SRandMember, [key, str(count)])
+
 
 class Transaction(BaseTransaction):
     """
