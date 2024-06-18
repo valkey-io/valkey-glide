@@ -1,12 +1,14 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.GlideString;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import lombok.NonNull;
 
 /**
  * Supports commands and transactions for the "String Commands" group for standalone and cluster
@@ -74,6 +76,43 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> getdel(String key);
+
+    /**
+     * Gets the value associated with the given <code>key</code>. <code>GETEX</code>is similar to
+     * {@see #get}.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code> as a
+     *     <code>String</code>.
+     * @example
+     *     <pre>{@code
+     * String value = client.getex("key").get();
+     * assert value.equals("value");
+     *
+     * }</pre>
+     */
+    CompletableFuture<String> getex(@NonNull String key);
+
+    /**
+     * Gets the value associated with the given <code>key</code> and optionally sets its expiration.
+     * <code>GETEX</code> is similar to {@see #get}.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code> as a
+     *     <code>String</code>.
+     * @example
+     *     <pre>{@code
+     * String value = client.getex("key").get();
+     * assert value.equals("value");
+     * FINISH WRITING THE EXAMPLES I JUST DON'T WANT TO DO IT RIGHT NOW GRAAA
+     *
+     * }</pre>
+     */
+    CompletableFuture<String> getex(@NonNull String key, @NonNull GetExOptions options);
 
     /**
      * Gets a string value associated with the given <code>key</code> and deletes the key.
