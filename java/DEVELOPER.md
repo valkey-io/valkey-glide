@@ -120,9 +120,9 @@ Before starting this step, make sure you've installed all software dependencies.
 
 Some troubleshooting issues:
 
-Failed to find cargo after rustup: gradlew may need to be restarted to recognize the new path. If clearing the gradle cache doesn't work, you may need to restart your machine.
-If build fails because cargo build compiler fails, make sure submodules are updated using git submodule update.
-If protobuf 26.0 or earlier is detected, upgrade to the latest protobuf release.
+- Failed to find cargo after rustup: gradlew may need to be restarted to recognize the new path. If clearing the gradle cache doesn't work, you may need to restart your machine.
+- If build fails because cargo build compiler fails, make sure submodules are updated using git submodule update.
+- If protobuf 26.0 or earlier is detected, upgrade to the latest protobuf release.
 
 
 ### Test
@@ -201,8 +201,8 @@ Development on the Java wrapper may involve changes in either the Java or Rust c
     cargo fmt --manifest-path ./Cargo.toml --all
     ```
 
-# FFI and features
-- names of the FFI defined in lib.rs have to correspond to the paths of real Java classes that expose native functions.
+### FFI and features
+- Names of the FFI defined in lib.rs have to correspond to the paths of real Java classes that expose native functions.
 - lib.rs method names explicitly point to the native functions defined there.
 
 ### Recommended extensions for VS Code
