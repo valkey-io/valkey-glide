@@ -21,6 +21,7 @@ message Response {
         RequestError request_error = 4;
         string closing_error = 5;
     }
+    bool is_push = 6;
 }
 
 enum ConstantResponse {

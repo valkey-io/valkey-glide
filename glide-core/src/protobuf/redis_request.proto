@@ -224,8 +224,10 @@ enum RequestType {
     UnWatch = 184;
     GeoSearchStore = 185;
     SUnion = 186;
-    XGroupCreateConsumer = 188;
-    XGroupDelConsumer = 189;
+    Publish = 187;
+    SPublish = 188;
+    XGroupCreateConsumer = 189;
+    XGroupDelConsumer = 190;
 }
 
 message Command {
