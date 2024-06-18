@@ -2205,7 +2205,7 @@ class TestCommands:
             == members[:2][::-1]
         )
 
-        # Test search by radius, unit: miles, from a geospatial data, with limited count to 1
+        # Test search by radius, unit: miles, from a geospatial data
         assert (
             await redis_client.geosearch(
                 key,
@@ -2228,7 +2228,7 @@ class TestCommands:
                 with_dist=True,
                 with_hash=True,
             )
-            == result[:2]
+            == result
         )
 
         # Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
@@ -2302,6 +2302,308 @@ class TestCommands:
         assert await redis_client.set(key, "foo") == OK
         with pytest.raises(RequestError):
             await redis_client.geosearch(
+                key,
+                "Catania",
+                GeoSearchByBox(10, 10, GeoUnit.MILES),
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geosearchstore_by_box(self, redis_client: TRedisClient):
+        key = f"{{testKey}}:{get_random_string(10)}"
+        destination_key = f"{{testKey}}:{get_random_string(8)}"
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+            "edge1": GeospatialData(12.758489, 38.788135),
+            "edge2": GeospatialData(17.241510, 38.788135),
+        }
+        result = {
+            "Catania": [56.4412578701582, 3479447370796909.0],
+            "Palermo": [190.44242984775784, 3479099956230698.0],
+            "edge2": [279.7403417843143, 3481342659049484.0],
+            "edge1": [279.7404521356343, 3479273021651468.0],
+        }
+        assert await redis_client.geoadd(key, members_coordinates) == 4
+
+        # Test storing results of a box search, unit: kilometes, from a geospatial data
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+            )
+        ) == 4  # Number of elements stored
+
+        # Verify the stored results
+        zrange_map = await redis_client.zrange_withscores(
+            destination_key, RangeByIndex(0, -1)
+        )
+        expected_map = {member: value[1] for member, value in result.items()}
+        sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        assert compare_maps(zrange_map, sorted_expected_map) is True
+
+        # Test storing results of a box search, unit: kilometes, from a geospatial data, with distance
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+                store_dist=True,
+            )
+        ) == 4  # Number of elements stored
+
+        # Verify the stored results
+        zrange_map = await redis_client.zrange_withscores(
+            destination_key, RangeByIndex(0, -1)
+        )
+        expected_map = {member: value[0] for member, value in result.items()}
+        sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        assert compare_maps(zrange_map, sorted_expected_map) is True
+
+        # Test storing results of a box search, unit: kilometes, from a geospatial data, with count
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+                count=GeoSearchCount(1),
+            )
+        ) == 1  # Number of elements stored
+
+        # Verify the stored results
+        zrange_map = await redis_client.zrange_withscores(
+            destination_key, RangeByIndex(0, -1)
+        )
+        assert compare_maps(zrange_map, {"Catania": 3479447370796909.0}) is True
+
+        # Test storing results of a box search, unit: meters, from a member, with distance
+        meters = 400 * 1000
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                "Catania",
+                GeoSearchByBox(meters, meters, GeoUnit.METERS),
+                store_dist=True,
+            )
+        ) == 3  # Number of elements stored
+
+        # Verify the stored results with distances
+        zrange_map = await redis_client.zrange_withscores(
+            destination_key, RangeByIndex(0, -1)
+        )
+        expected_distances = {
+            "Catania": 0.0,
+            "Palermo": 166274.15156960033,
+            "edge2": 236529.17986494553,
+        }
+        assert compare_maps(zrange_map, expected_distances) is True
+
+        # Test search by box, unit: feet, from a member, with limited ANY count to 2, with hash
+        feet = 400 * 3280.8399
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                "Palermo",
+                GeoSearchByBox(feet, feet, GeoUnit.FEET),
+                count=GeoSearchCount(2),
+            )
+            == 2
+        )
+
+        # Verify the stored results
+        zrange_map = await redis_client.zrange_withscores(
+            destination_key, RangeByIndex(0, -1)
+        )
+        for member in zrange_map:
+            assert member in result
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geosearchstore_by_radius(self, redis_client: TRedisClient):
+        key = f"{{testKey}}:{get_random_string(10)}"
+        destination_key = f"{{testKey}}:{get_random_string(8)}"
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+            "edge1": GeospatialData(12.758489, 38.788135),
+            "edge2": GeospatialData(17.241510, 38.788135),
+        }
+        result = {
+            "Catania": [56.4412578701582, 3479447370796909.0],
+            "Palermo": [190.44242984775784, 3479099956230698.0],
+        }
+        assert await redis_client.geoadd(key, members_coordinates) == 4
+
+        # Test storing results of a radius search, unit: feet, from a member
+        feet = 200 * 3280.8399
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                "Catania",
+                GeoSearchByRadius(feet, GeoUnit.FEET),
+            )
+            == 2
+        )
+
+        # Verify the stored results
+        zrange_map = await redis_client.zrange_withscores(
+            destination_key, RangeByIndex(0, -1)
+        )
+        expected_map = {member: value[1] for member, value in result.items()}
+        sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        assert compare_maps(zrange_map, sorted_expected_map) is True
+
+        # Test search by radius, units: meters, from a member
+        meters = 200 * 1000
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                "Catania",
+                GeoSearchByRadius(meters, GeoUnit.METERS),
+                store_dist=True,
+            )
+            == 2
+        )
+
+        # Verify the stored results
+        zrange_map = await redis_client.zrange_withscores(
+            destination_key, RangeByIndex(0, -1)
+        )
+        expected_distances = {
+            "Catania": 0.0,
+            "Palermo": 166274.15156960033,
+        }
+        assert compare_maps(zrange_map, expected_distances) is True
+
+        # Test search by radius, unit: miles, from a geospatial data
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByRadius(175, GeoUnit.MILES),
+            )
+            == 4
+        )
+
+        # Test storing results of a radius search, unit: kilometers, from a geospatial data, with limited count to 2
+        kilometers = 200
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByRadius(kilometers, GeoUnit.KILOMETERS),
+                count=GeoSearchCount(2),
+                store_dist=True,
+            )
+            == 2
+        )
+
+        # Verify the stored results
+        zrange_map = await redis_client.zrange_withscores(
+            destination_key, RangeByIndex(0, -1)
+        )
+        expected_map = {member: value[0] for member, value in result.items()}
+        sorted_expected_map = dict(sorted(expected_map.items(), key=lambda x: x[1]))
+        assert compare_maps(zrange_map, sorted_expected_map) is True
+
+        # Test storing results of a radius search, unit: kilometers, from a geospatial data, with limited ANY count to 1
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByRadius(kilometers, GeoUnit.KILOMETERS),
+                count=GeoSearchCount(1, True),
+            )
+            == 1
+        )
+
+        # Verify the stored results
+        zrange_map = await redis_client.zrange_withscores(
+            destination_key, RangeByIndex(0, -1)
+        )
+
+        for member in zrange_map:
+            assert member in result
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_geosearchstore_no_result(self, redis_client: TRedisClient):
+        key = f"{{testKey}}:{get_random_string(10)}"
+        destination_key = f"{{testKey}}:{get_random_string(8)}"
+        members_coordinates = {
+            "Palermo": GeospatialData(13.361389, 38.115556),
+            "Catania": GeospatialData(15.087269, 37.502669),
+            "edge1": GeospatialData(12.758489, 38.788135),
+            "edge2": GeospatialData(17.241510, 38.788135),
+        }
+        assert await redis_client.geoadd(key, members_coordinates) == 4
+
+        # No members within the area
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(50, 50, GeoUnit.METERS),
+            )
+            == 0
+        )
+
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByRadius(10, GeoUnit.METERS),
+            )
+            == 0
+        )
+
+        # No members in the area (apart from the member we search from itself)
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                "Catania",
+                GeoSearchByBox(10, 10, GeoUnit.KILOMETERS),
+            )
+            == 1
+        )
+
+        assert (
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                "Catania",
+                GeoSearchByRadius(10, GeoUnit.METERS),
+            )
+            == 1
+        )
+
+        # Search from non-existing member
+        with pytest.raises(RequestError):
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                "non_existing_member",
+                GeoSearchByBox(10, 10, GeoUnit.MILES),
+            )
+
+        assert await redis_client.set(key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.geosearchstore(
+                destination_key,
                 key,
                 "Catania",
                 GeoSearchByBox(10, 10, GeoUnit.MILES),
@@ -4597,6 +4899,18 @@ class TestMultiKeyCommandCrossSlot:
             ),
             redis_client.msetnx({"abc": "abc", "zxy": "zyx"}),
         ]
+
+        if not await check_if_server_version_lt(redis_client, "6.2.0"):
+            promises.extend(
+                [
+                    redis_client.geosearchstore(
+                        "abc",
+                        "zxy",
+                        GeospatialData(15, 37),
+                        GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+                    )
+                ]
+            )
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
             promises.extend(

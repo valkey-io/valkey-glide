@@ -4,6 +4,7 @@
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
 * Python: Added OBJECT IDLETIME command ([#1474](https://github.com/aws/glide-for-redis/pull/1474))
 * Python: Added GEOSEARCH command ([#1482](https://github.com/aws/glide-for-redis/pull/1482))
+* Python: Added GEOSEARCHSTORE command ([#1581](https://github.com/aws/glide-for-redis/pull/1581))
 * Node: Added RENAMENX command ([#1483](https://github.com/aws/glide-for-redis/pull/1483))
 * Python: Added OBJECT REFCOUNT command ([#1485](https://github.com/aws/glide-for-redis/pull/1485))
 * Python: Added RENAMENX command ([#1492](https://github.com/aws/glide-for-redis/pull/1492))
