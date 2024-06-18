@@ -1,7 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
-from enum import Enum
-from typing import List, Optional, Union
+from enum import Enum, IntEnum
+from typing import Dict, List, Optional, Set, Union
 
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ProtocolVersion as SentProtocolVersion
@@ -221,7 +221,22 @@ class RedisClientConfiguration(BaseClientConfiguration):
         database_id (Optional[int]): index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
         protocol (ProtocolVersion): The version of the Redis RESP protocol to communicate with the server.
+        pubsub_subscriptions (Optional[RedisClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+                Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
     """
+
+    class PubSubChannelModes(IntEnum):
+        """
+        Describes pubsub subsciption modes.
+        See https://valkey.io/docs/topics/pubsub/ for more details
+        """
+
+        Exact = 0
+        """ Use exact channel names """
+        Pattern = 1
+        """ Use channel name patterns """
+
+    PubSubSubscriptions = Dict[PubSubChannelModes, Set[str]]
 
     def __init__(
         self,
@@ -234,6 +249,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
         database_id: Optional[int] = None,
         client_name: Optional[str] = None,
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
+        pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -246,6 +262,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
         )
         self.reconnect_strategy = reconnect_strategy
         self.database_id = database_id
+        self.pubsub_subscriptions = pubsub_subscriptions
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -262,6 +279,14 @@ class RedisClientConfiguration(BaseClientConfiguration):
             )
         if self.database_id:
             request.database_id = self.database_id
+
+        if self.pubsub_subscriptions:
+            for channel_type, channels_patterns in self.pubsub_subscriptions.items():
+                entry = request.pubsub_subscriptions.channels_or_patterns_by_type[
+                    int(channel_type)
+                ]
+                for channel_pattern in channels_patterns:
+                    entry.channels_or_patterns.append(str.encode(channel_pattern))
 
         return request
 
@@ -290,11 +315,28 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
             Defaults to PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS.
+        pubsub_subscriptions (Optional[ClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+            Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
 
     Notes:
         Currently, the reconnection strategy in cluster mode is not configurable, and exponential backoff
         with fixed values is used.
     """
+
+    class PubSubChannelModes(IntEnum):
+        """
+        Describes pubsub subsciption modes.
+        See https://valkey.io/docs/topics/pubsub/ for more details
+        """
+
+        Exact = 0
+        """ Use exact channel names """
+        Pattern = 1
+        """ Use channel name patterns """
+        Sharded = 2
+        """ Use sharded pubsub """
+
+    PubSubSubscriptions = Dict[PubSubChannelModes, Set[str]]
 
     def __init__(
         self,
@@ -308,6 +350,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         periodic_checks: Union[
             PeriodicChecksStatus, PeriodicChecksManualInterval
         ] = PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS,
+        pubsub_subscriptions: Optional[PubSubSubscriptions] = None,
     ):
         super().__init__(
             addresses=addresses,
@@ -319,6 +362,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             protocol=protocol,
         )
         self.periodic_checks = periodic_checks
+        self.pubsub_subscriptions = pubsub_subscriptions
 
     def _create_a_protobuf_conn_request(
         self, cluster_mode: bool = False
@@ -331,5 +375,13 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             )
         elif self.periodic_checks == PeriodicChecksStatus.DISABLED:
             request.periodic_checks_disabled.SetInParent()
+
+        if self.pubsub_subscriptions:
+            for channel_type, channels_patterns in self.pubsub_subscriptions.items():
+                entry = request.pubsub_subscriptions.channels_or_patterns_by_type[
+                    int(channel_type)
+                ]
+                for channel_pattern in channels_patterns:
+                    entry.channels_or_patterns.append(str.encode(channel_pattern))
 
         return request

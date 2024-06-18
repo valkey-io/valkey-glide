@@ -18,7 +18,6 @@ from glide.async_commands.core import (
     ExpireOptions,
     ExpirySet,
     ExpiryType,
-    InfBound,
     InfoSection,
     InsertPosition,
     StreamAddOptions,
@@ -43,7 +42,7 @@ from glide.async_commands.sorted_set import (
     ScoreBoundary,
     ScoreFilter,
 )
-from glide.config import ProtocolVersion, RedisCredentials
+from glide.config import ClusterClientConfiguration, ProtocolVersion, RedisCredentials
 from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from glide.routes import (
@@ -5459,3 +5458,87 @@ class TestScripts:
         script = Script("return redis.call('GET', KEYS[1])")
         assert await redis_client.invoke_script(script, keys=[key1]) == "value1"
         assert await redis_client.invoke_script(script, keys=[key2]) == "value2"
+
+
+@pytest.mark.asyncio
+class TestPubSub:
+
+    async def test_pubsub_basic_standalone(self, request):
+        CHANNEL_NAME = "test-channel"
+        MESSAGE = "test-message"
+        PATTERN = "*"
+
+        publishing_client: RedisClusterClient = await create_client(
+            request, cluster_mode=False
+        )
+
+        standalone_mode_pubsub: ClusterClientConfiguration.PubSubSubscriptions = {}
+        standalone_mode_pubsub[ClusterClientConfiguration.PubSubChannelModes.Exact] = {
+            CHANNEL_NAME
+        }
+        standalone_mode_pubsub[
+            ClusterClientConfiguration.PubSubChannelModes.Pattern
+        ] = {PATTERN}
+
+        listening_client = await create_client(
+            request, cluster_mode=False, standalone_mode_pubsub=standalone_mode_pubsub
+        )
+
+        await publishing_client.publish(MESSAGE, CHANNEL_NAME)
+        # allow the message to propagate
+        await asyncio.sleep(1)
+
+        pattern_cnt = 0
+        pattern = None
+        for _ in range(2):
+            pubsub_msg = await listening_client.get_pubsub_message()
+            assert pubsub_msg.channel == CHANNEL_NAME
+            assert pubsub_msg.message == MESSAGE
+            if pubsub_msg.pattern:
+                pattern_cnt += 1
+                pattern = pubsub_msg.pattern
+
+        assert pattern == PATTERN
+        assert pattern_cnt == 1
+
+    async def test_pubsub_basic_clustermode(self, request):
+        CHANNEL_NAME = "test-channel"
+        SHARDED_CHANNEL_NAME = "test-channel-sharded"
+        MESSAGE = "test-message"
+
+        publishing_client: RedisClusterClient = await create_client(
+            request, cluster_mode=True
+        )
+        test_sharded = not await check_if_server_version_lt(publishing_client, "7.0.0")
+
+        cluster_mode_pubsub: ClusterClientConfiguration.PubSubSubscriptions = {}
+        cluster_mode_pubsub[ClusterClientConfiguration.PubSubChannelModes.Exact] = {
+            CHANNEL_NAME
+        }
+        if test_sharded:
+            cluster_mode_pubsub[
+                ClusterClientConfiguration.PubSubChannelModes.Sharded
+            ] = {SHARDED_CHANNEL_NAME}
+
+        listening_client = await create_client(
+            request, cluster_mode=True, cluster_mode_pubsub=cluster_mode_pubsub
+        )
+
+        await publishing_client.publish(MESSAGE, CHANNEL_NAME)
+        # allow the message to propagate
+        await asyncio.sleep(1)
+
+        pubsub_msg = await listening_client.get_pubsub_message()
+        assert pubsub_msg.channel == CHANNEL_NAME
+        assert pubsub_msg.message == MESSAGE
+        assert pubsub_msg.pattern is None
+
+        if test_sharded:
+            await publishing_client.publish(MESSAGE, SHARDED_CHANNEL_NAME, sharded=True)
+            # allow the message to propagate
+            await asyncio.sleep(1)
+
+            pubsub_msg = await listening_client.get_pubsub_message()
+            assert pubsub_msg.channel == SHARDED_CHANNEL_NAME
+            assert pubsub_msg.message == MESSAGE
+            assert pubsub_msg.pattern is None
