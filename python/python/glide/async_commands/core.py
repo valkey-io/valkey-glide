@@ -472,6 +472,43 @@ class CoreCommands(Protocol):
             Optional[str], await self._execute_command(RequestType.GetDel, [key])
         )
 
+    async def getrange(self, key: str, start: int, end: int) -> str:
+        """
+        Returns the substring of the string value stored at `key`, determined by the offsets `start` and `end` (both are inclusive).
+        Negative offsets can be used in order to provide an offset starting from the end of the string.
+        So `-1` means the last character, `-2` the penultimate and so forth.
+
+        If `key` does not exist, an empty string is returned. If `start` or `end`
+        are out of range, returns the substring within the valid range of the string.
+
+        See https://valkey.io/commands/getrange/ for more details.
+
+        Args:
+            key (str): The key of the string.
+            start (int): The starting offset.
+            end (int): The ending offset.
+
+        Returns:
+            str: A substring extracted from the value stored at `key`.
+
+        Examples:
+            >>> await client.set("mykey", "This is a string")
+            >>> await client.getrange("mykey", 0, 3)
+                "This"
+            >>> await client.getrange("mykey", -3, -1)
+                "ing"  # extracted last 3 characters of a string
+            >>> await client.getrange("mykey", 0, 100)
+                "This is a string"
+            >>> await client.getrange("non_existing", 5, 6)
+                ""
+        """
+        return cast(
+            str,
+            await self._execute_command(
+                RequestType.GetRange, [key, str(start), str(end)]
+            ),
+        )
+
     async def append(self, key: str, value: str) -> int:
         """
         Appends a value to a key.
