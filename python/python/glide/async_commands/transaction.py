@@ -3226,13 +3226,11 @@ class BaseTransaction:
         self: TTransaction, flush_mode: Optional[FlushMode] = None
     ) -> TTransaction:
         """
-        Delete all the keys of all the existing databases, not just the currently selected one. This command never fails.
-
+        Deletes all the keys of all the existing databases. This command never fails.
         See https://valkey.io/commands/flushall for more details.
 
         Args:
-            flush_mode (Optional[FlushMode]): An optional argument that dictates the flushing mode explicitly.
-
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
         Command Response:
             str: OK.
         """
