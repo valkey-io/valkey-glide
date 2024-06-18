@@ -32,6 +32,7 @@
 * Python: Added HSTRLEN command ([#1564](https://github.com/aws/glide-for-redis/pull/1564))
 * Python: Added MSETNX command ([#1565](https://github.com/aws/glide-for-redis/pull/1565))
 * Python: Added MOVE command ([#1566](https://github.com/aws/glide-for-redis/pull/1566))
+* Python: Added EXPIRETIME, PEXPIRETIME commands ([#1587](https://github.com/aws/glide-for-redis/pull/1587))
 * Python: Added LSET command ([#1584](https://github.com/aws/glide-for-redis/pull/1584))
 * Node: Added OBJECT IDLETIME command ([#1567](https://github.com/aws/glide-for-redis/pull/1567))
 * Node: Added OBJECT REFCOUNT command ([#1568](https://github.com/aws/glide-for-redis/pull/1568))

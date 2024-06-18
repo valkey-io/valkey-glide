@@ -85,6 +85,13 @@ async def transaction_test(
 
     transaction.persist(key)
     args.append(False)
+    transaction.ttl(key)
+    args.append(-1)
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.expiretime(key)
+        args.append(-1)
+        transaction.pexpiretime(key)
+        args.append(-1)
 
     transaction.rename(key, key2)
     args.append(OK)
