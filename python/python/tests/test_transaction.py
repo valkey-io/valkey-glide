@@ -101,6 +101,8 @@ async def transaction_test(
 
     transaction.set(key, value)
     args.append(OK)
+    transaction.getrange(key, 0, -1)
+    args.append(value)
     transaction.getdel(key)
     args.append(value)
     transaction.getdel(key)
