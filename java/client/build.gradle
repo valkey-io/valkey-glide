@@ -223,4 +223,5 @@ tasks.withType(Test) {
 
 jar {
     archiveBaseName = "glide"
+    archiveClassifier = "placeholder"
 }
