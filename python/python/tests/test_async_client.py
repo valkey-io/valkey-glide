@@ -2865,11 +2865,15 @@ class TestCommands:
             "Catania": GeospatialData(15.087269, 37.502669),
         }
         assert await redis_client.geoadd(key, members_coordinates) == 2
-        assert await redis_client.geohash(key, ["Palermo", "Catania", "Place"]) == convert_str_to_bytes_list([
-            "sqc8b49rny0",
-            "sqdtr74hyu0",
-            None,
-        ])
+        assert await redis_client.geohash(
+            key, ["Palermo", "Catania", "Place"]
+        ) == convert_str_to_bytes_list(
+            [
+                "sqc8b49rny0",
+                "sqdtr74hyu0",
+                None,
+            ]
+        )
 
         assert (
             await redis_client.geohash(
@@ -3640,12 +3644,18 @@ class TestCommands:
 
         assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
         assert await redis_client.zadd(key2, {"c": 2.0}) == 1
-        assert await redis_client.bzpopmin([key1, key2], 0.5) == convert_str_to_bytes_list([key1, "a", 1.0])
-        assert await redis_client.bzpopmin([non_existing_key, key2], 0.5) == convert_str_to_bytes_list([
-            key2,
-            "c",
-            2.0,
-        ])
+        assert await redis_client.bzpopmin(
+            [key1, key2], 0.5
+        ) == convert_str_to_bytes_list([key1, "a", 1.0])
+        assert await redis_client.bzpopmin(
+            [non_existing_key, key2], 0.5
+        ) == convert_str_to_bytes_list(
+            [
+                key2,
+                "c",
+                2.0,
+            ]
+        )
         assert await redis_client.bzpopmin(["non_existing_key"], 0.5) is None
 
         # invalid argument - key list must not be empty
@@ -3693,12 +3703,18 @@ class TestCommands:
 
         assert await redis_client.zadd(key1, {"a": 1.0, "b": 1.5}) == 2
         assert await redis_client.zadd(key2, {"c": 2.0}) == 1
-        assert await redis_client.bzpopmax([key1, key2], 0.5) == convert_str_to_bytes_list([key1, "b", 1.5])
-        assert await redis_client.bzpopmax([non_existing_key, key2], 0.5) == convert_str_to_bytes_list([
-            key2,
-            "c",
-            2.0,
-        ])
+        assert await redis_client.bzpopmax(
+            [key1, key2], 0.5
+        ) == convert_str_to_bytes_list([key1, "b", 1.5])
+        assert await redis_client.bzpopmax(
+            [non_existing_key, key2], 0.5
+        ) == convert_str_to_bytes_list(
+            [
+                key2,
+                "c",
+                2.0,
+            ]
+        )
         assert await redis_client.bzpopmax(["non_existing_key"], 0.5) is None
 
         # invalid argument - key list must not be empty
@@ -4511,11 +4527,11 @@ class TestCommands:
         assert await redis_client.zadd(key2, {"a2": 0.1, "b2": 0.2}) == 2
 
         assert await redis_client.zmpop([key1, key2], ScoreFilter.MAX) == [
-            key1.encode('utf-8'),
+            key1.encode("utf-8"),
             {b"b1": 2},
         ]
         assert await redis_client.zmpop([key2, key1], ScoreFilter.MAX, 10) == [
-            key2.encode('utf-8'),
+            key2.encode("utf-8"),
             {b"b2": 0.2, b"a2": 0.1},
         ]
 
@@ -4610,7 +4626,7 @@ class TestCommands:
             order=OrderBy.ASC,
             alpha=True,
         )
-        assert result == ["Alice", "Bob"]
+        assert result == [b"Alice", b"Bob"]
 
         # Test sort_store with all arguments
         sort_store_result = await redis_client.sort_store(
@@ -4623,7 +4639,7 @@ class TestCommands:
         )
         assert sort_store_result == 2
         sorted_list = await redis_client.lrange(store, 0, -1)
-        assert sorted_list == ["Alice", "Bob"]
+        assert sorted_list == [b"Alice", b"Bob"]
 
         # Test sort with `by` argument
         result = await redis_client.sort(
@@ -4632,7 +4648,9 @@ class TestCommands:
             get_patterns=["user:*->name"],
             alpha=True,
         )
-        assert result == ["Dave", "Bob", "Alice", "Charlie", "Eve"]
+        assert result == convert_str_to_bytes_list(
+            ["Dave", "Bob", "Alice", "Charlie", "Eve"]
+        )
 
         # Test sort with `by` argument with missing keys to sort by
         assert await redis_client.lpush("user_ids", ["a"]) == 6
@@ -4642,7 +4660,9 @@ class TestCommands:
             get_patterns=["user:*->name"],
             alpha=True,
         )
-        assert result == [None, "Dave", "Bob", "Alice", "Charlie", "Eve"]
+        assert result == convert_str_to_bytes_list(
+            [None, "Dave", "Bob", "Alice", "Charlie", "Eve"]
+        )
 
         # Test sort with `by` argument with missing keys to sort by
         result = await redis_client.sort(
@@ -4651,7 +4671,7 @@ class TestCommands:
             get_patterns=["user:*->age"],
             alpha=True,
         )
-        assert result == [None, "30", "25", "35", "20", "40"]
+        assert result == convert_str_to_bytes_list([None, "30", "25", "35", "20", "40"])
 
         # Test Limit with count 0
         result = await redis_client.sort(
@@ -4832,7 +4852,9 @@ class TestCommands:
             await redis_client.xadd(
                 key,
                 [(field, "foo4"), (field2, "bar4")],
-                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=str(id))),
+                StreamAddOptions(
+                    trim=TrimByMinId(exact=True, threshold=id.decode("utf-8"))
+                ),
             )
             is not None
         )
