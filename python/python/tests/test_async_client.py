@@ -5013,6 +5013,51 @@ class TestCommands:
         refcount = await redis_client.object_refcount(string_key)
         assert refcount is not None and refcount >= 0
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_srandmember(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        string_key = get_random_string(10)
+        elements = ["one", "two"]
+        assert await redis_client.sadd(key, elements) == 2
+
+        member = await redis_client.srandmember(key)
+        assert member in elements
+        assert await redis_client.srandmember("non_existing_key") is None
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.srandmember(string_key)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_srandmember_count(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        string_key = get_random_string(10)
+        elements = ["one", "two"]
+        assert await redis_client.sadd(key, elements) == 2
+
+        # unique values are expected as count is positive
+        members = await redis_client.srandmember_count(key, 4)
+        assert len(members) == 2
+        assert set(members) == {"one", "two"}
+
+        # duplicate values are expected as count is negative
+        members = await redis_client.srandmember_count(key, -4)
+        assert len(members) == 4
+        for member in members:
+            assert member in elements
+
+        # empty return values for non-existing or empty keys
+        assert await redis_client.srandmember_count(key, 0) == []
+        assert await redis_client.srandmember_count("non_existing_key", 0) == []
+
+        # key exists, but it is not a set
+        assert await redis_client.set(string_key, "value") == OK
+        with pytest.raises(RequestError):
+            await redis_client.srandmember_count(string_key, 8)
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
