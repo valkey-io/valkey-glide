@@ -1504,6 +1504,31 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sunion(self, redis_client: TRedisClient):
+        key1 = f"{{testKey}}:{get_random_string(10)}"
+        key2 = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:non_existing_key"
+        member1_list = ["a", "b", "c"]
+        member2_list = ["b", "c", "d", "e"]
+
+        assert await redis_client.sadd(key1, member1_list) == 3
+        assert await redis_client.sadd(key2, member2_list) == 4
+        assert await redis_client.sunion([key1, key2]) == {"a", "b", "c", "d", "e"}
+
+        # invalid argument - key list must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.sunion([])
+
+        # non-existing key returns the set of existing keys
+        assert await redis_client.sunion([key1, non_existing_key]) == set(member1_list)
+
+        # non-set key
+        assert await redis_client.set(key2, "value") == OK
+        with pytest.raises(RequestError) as e:
+            await redis_client.sunion([key2])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sunionstore(self, redis_client: TRedisClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
@@ -4910,6 +4935,7 @@ class TestMultiKeyCommandCrossSlot:
                 "abc", "zxy", ListDirection.LEFT, ListDirection.LEFT, 1
             ),
             redis_client.msetnx({"abc": "abc", "zxy": "zyx"}),
+            redis_client.sunion(["def", "ghi"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "6.2.0"):
