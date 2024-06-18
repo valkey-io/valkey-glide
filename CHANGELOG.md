@@ -20,6 +20,7 @@
 * Node: Added OBJECT ENCODING command ([#1518](https://github.com/aws/glide-for-redis/pull/1518), [#1559](https://github.com/aws/glide-for-redis/pull/1559))
 * Python: Added LMOVE and BLMOVE commands ([#1536](https://github.com/aws/glide-for-redis/pull/1536))
 * Node: Added SUNIONSTORE command ([#1549](https://github.com/aws/glide-for-redis/pull/1549))
+* Python: Added SUNION command ([#1583](https://github.com/aws/glide-for-redis/pull/1583))
 * Node: Added PFCOUNT command ([#1545](https://github.com/aws/glide-for-redis/pull/1545))
 * Node: Added OBJECT FREQ command ([#1542](https://github.com/aws/glide-for-redis/pull/1542), [#1559](https://github.com/aws/glide-for-redis/pull/1559))
 * Node: Added LINSERT command ([#1544](https://github.com/aws/glide-for-redis/pull/1544))

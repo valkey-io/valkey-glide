@@ -247,6 +247,8 @@ async def transaction_test(
     args.append(2)
     transaction.sinter([key7, key7])
     args.append({"foo", "bar"})
+    transaction.sunion([key7, key7])
+    args.append({"foo", "bar"})
     transaction.sinterstore(key7, [key7, key7])
     args.append(2)
     if not await check_if_server_version_lt(redis_client, "7.0.0"):

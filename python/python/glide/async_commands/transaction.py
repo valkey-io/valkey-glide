@@ -1255,6 +1255,21 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.SMove, [source, destination, member])
 
+    def sunion(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Gets the union of all the given sets.
+
+        See https://valkey.io/commands/sunion for more details.
+
+        Args:
+            keys (List[str]): The keys of the sets.
+
+        Commands response:
+            Set[str]: A set of members which are present in at least one of the given sets.
+                If none of the sets exist, an empty set will be returned.
+        """
+        return self.append_command(RequestType.SUnion, keys)
+
     def sunionstore(
         self: TTransaction,
         destination: str,
