@@ -194,6 +194,8 @@ pub enum RequestType {
     UnWatch = 184,
     GeoSearchStore = 185,
     SUnion = 186,
+    XGroupCreateConsumer = 188,
+    XGroupDelConsumer = 189,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -391,6 +393,8 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Watch => RequestType::Watch,
             ProtobufRequestType::UnWatch => RequestType::UnWatch,
             ProtobufRequestType::GeoSearchStore => RequestType::GeoSearchStore,
+            ProtobufRequestType::XGroupCreateConsumer => RequestType::XGroupCreateConsumer,
+            ProtobufRequestType::XGroupDelConsumer => RequestType::XGroupDelConsumer,
         }
     }
 }
@@ -584,6 +588,10 @@ impl RequestType {
             RequestType::Watch => Some(cmd("WATCH")),
             RequestType::UnWatch => Some(cmd("UNWATCH")),
             RequestType::GeoSearchStore => Some(cmd("GEOSEARCHSTORE")),
+            RequestType::XGroupCreateConsumer => {
+                Some(get_two_word_command("XGROUP", "CREATECONSUMER"))
+            }
+            RequestType::XGroupDelConsumer => Some(get_two_word_command("XGROUP", "DELCONSUMER")),
         }
     }
 }
