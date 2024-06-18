@@ -24,11 +24,6 @@ jobs:
         runs-on: ubuntu-latest
         strategy:
           fail-fast: false
-          # [yipinch] Do I need to add Java matrix here?
-          # matrix:
-          #     java:
-          #        - 11
-          #        - 17
         env: 
           PYTHON_ATTRIBUTIONS: "python/THIRD_PARTY_LICENSES_PYTHON"
           NODE_ATTRIBUTIONS: "node/THIRD_PARTY_LICENSES_NODE"
