@@ -276,6 +276,8 @@ async def transaction_test(
         args.append([0, 1])
     transaction.zadd_incr(key8, "one", 3)
     args.append(4)
+    transaction.zincrby(key8, 3, "one")
+    args.append(7)
     transaction.zrem(key8, ["one"])
     args.append(1)
     transaction.zcard(key8)
