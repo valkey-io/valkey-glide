@@ -27,6 +27,7 @@
 * Node: Added LINSERT command ([#1544](https://github.com/aws/glide-for-redis/pull/1544))
 * Node: Added XLEN command ([#1555](https://github.com/aws/glide-for-redis/pull/1555))
 * Node: Added ZINTERCARD command ([#1553](https://github.com/aws/glide-for-redis/pull/1553))
+* Python: Added ZINCBY command ([#1586](https://github.com/aws/glide-for-redis/pull/1586))
 * Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
 * Python: Added HSTRLEN command ([#1564](https://github.com/aws/glide-for-redis/pull/1564))
 * Python: Added MSETNX command ([#1565](https://github.com/aws/glide-for-redis/pull/1565))

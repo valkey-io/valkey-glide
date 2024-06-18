@@ -2911,6 +2911,32 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zincrby(self, redis_client: TRedisClient):
+        key, member, member2 = (
+            get_random_string(10),
+            get_random_string(5),
+            get_random_string(5),
+        )
+
+        # key does not exist
+        assert await redis_client.zincrby(key, 2.5, member) == 2.5
+        assert await redis_client.zscore(key, member) == 2.5
+
+        # key exists, but value doesn't
+        assert await redis_client.zincrby(key, -3.3, member2) == -3.3
+        assert await redis_client.zscore(key, member2) == -3.3
+
+        # updating existing value in existing key
+        assert await redis_client.zincrby(key, 1.0, member) == 3.5
+        assert await redis_client.zscore(key, member) == 3.5
+
+        # Key exists, but it is not a sorted set
+        assert await redis_client.set(key, "_") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zincrby(key, 0.5, "_")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrem(self, redis_client: TRedisClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}

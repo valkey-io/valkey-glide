@@ -3091,6 +3091,38 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def zincrby(self, key: str, increment: float, member: str) -> float:
+        """
+        Increments the score of `member` in the sorted set stored at `key` by `increment`.
+        If `member` does not exist in the sorted set, it is added with `increment` as its score.
+        If `key` does not exist, a new sorted set is created with the specified member as its sole member.
+
+        See https://valkey.io/commands/zincrby/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            increment (float): The score increment.
+            member (str): A member of the sorted set.
+
+        Returns:
+            float: The new score of `member`.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member": 10.5, "member2": 8.2})
+            >>> await client.zincrby("my_sorted_set", 1.2, "member")
+                11.7  # The member existed in the set before score was altered, the new score is 11.7.
+            >>> await client.zincrby("my_sorted_set", -1.7, "member")
+                10.0 # Negetive increment, decrements the score.
+            >>> await client.zincrby("my_sorted_set", 5.5, "non_existing_member")
+                5.5  # A new memeber is added to the sorted set with the score being 5.5.
+        """
+        return cast(
+            float,
+            await self._execute_command(
+                RequestType.ZIncrBy, [key, str(increment), member]
+            ),
+        )
+
     async def zpopmax(
         self, key: str, count: Optional[int] = None
     ) -> Mapping[str, float]:
