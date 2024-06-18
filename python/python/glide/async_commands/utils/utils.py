@@ -22,9 +22,11 @@ def convert_byte_string_dict(
 
     def convert(item: Any) -> Any:
         if isinstance(item, dict):
-            return {key.decode("utf-8"): convert(value) for key, value in item.items()}
+            return {convert(key): convert(value) for key, value in item.items()}
         elif isinstance(item, bytes):
             return item.decode("utf-8")
+        elif isinstance(item, list):
+            return [convert(elem) for elem in item]
         else:
             return item
 
