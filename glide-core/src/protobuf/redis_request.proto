@@ -202,6 +202,7 @@ enum RequestType {
     Sort = 160;
     FunctionKill = 161;
     FunctionStats = 162;
+    FCallReadOnly = 163;
     LSet = 165;
     XDel = 166;
     XRange = 167;
@@ -219,7 +220,10 @@ enum RequestType {
     LPos = 180;
     LCS = 181;
     GeoSearch = 182;
-    SUnion = 183;
+    Watch = 183;
+    UnWatch = 184;
+    GeoSearchStore = 185;
+    SUnion = 186;
 }
 
 message Command {

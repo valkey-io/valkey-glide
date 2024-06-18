@@ -16,6 +16,7 @@ from typing import (
     get_args,
 )
 
+from glide.async_commands.bitmap import OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -795,6 +796,29 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.DecrBy, [key, str(amount)])
         )
 
+    async def touch(self, keys: List[str]) -> int:
+        """
+        Updates the last access time of specified keys.
+
+        See https://valkey.io/commands/touch/ for details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+
+        Args:
+            keys (List[str]): The keys to update last access time.
+
+        Returns:
+            int: The number of keys that were updated, a key is ignored if it doesn't exist.
+
+        Examples:
+            >>> await client.set("myKey1", "value1")
+            >>> await client.set("myKey2", "value2")
+            >>> await client.touch(["myKey1", "myKey2", "nonExistentKey"])
+                2  # Last access time of 2 keys has been updated.
+        """
+        return cast(int, await self._execute_command(RequestType.Touch, keys))
+
     async def hset(self, key: str, field_value_map: Mapping[str, str]) -> int:
         """
         Sets the specified fields to their respective values in the hash stored at `key`.
@@ -834,7 +858,7 @@ class CoreCommands(Protocol):
             Returns None if `field` is not presented in the hash or `key` does not exist.
 
         Examples:
-            >>> await client.hset("my_hash", "field")
+            >>> await client.hset("my_hash", "field", "value")
             >>> await client.hget("my_hash", "field")
                 "value"
             >>> await client.hget("my_hash", "nonexistent_field")
@@ -1146,6 +1170,29 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.HRandField, [key, str(count), "WITHVALUES"]
             ),
+        )
+
+    async def hstrlen(self, key: str, field: str) -> int:
+        """
+        Returns the string length of the value associated with `field` in the hash stored at `key`.
+
+        See https://valkey.io/commands/hstrlen/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field in the hash.
+
+        Returns:
+            int: The string length or 0 if `field` or `key` does not exist.
+
+        Examples:
+            >>> await client.hset("my_hash", "field", "value")
+            >>> await client.hstrlen("my_hash", "my_field")
+                5
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.HStrlen, [key, field]),
         )
 
     async def lpush(self, key: str, elements: List[str]) -> int:
@@ -2710,7 +2757,7 @@ class CoreCommands(Protocol):
         Since: Redis version 6.2.0.
         """
         args = _create_geosearch_args(
-            key,
+            [key],
             search_from,
             seach_by,
             order_by,
@@ -2723,6 +2770,72 @@ class CoreCommands(Protocol):
         return cast(
             List[Union[str, List[Union[str, float, int, List[float]]]]],
             await self._execute_command(RequestType.GeoSearch, args),
+        )
+
+    async def geosearchstore(
+        self,
+        destination: str,
+        source: str,
+        search_from: Union[str, GeospatialData],
+        search_by: Union[GeoSearchByRadius, GeoSearchByBox],
+        count: Optional[GeoSearchCount] = None,
+        store_dist: bool = False,
+    ) -> int:
+        """
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+
+        To get the result directly, see `geosearch`.
+
+        Note:
+            When in cluster mode, both `source` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key to store the search results.
+            source (str): The key of the sorted set representing geospatial data to search from.
+            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
+                from the sorted set or as a geospatial data (see `GeospatialData`).
+            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                For circular area search, see `GeoSearchByRadius`.
+                For rectangular area search, see `GeoSearchByBox`.
+            count (Optional[GeoSearchCount]): Specifies the maximum number of results to store. See `GeoSearchCount`.
+                If not specified, stores all results.
+            store_dist (bool): Determines what is stored as the sorted set score. Defaults to False.
+                - If set to False, the geohash of the location will be stored as the sorted set score.
+                - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted set score.
+                    The distance is represented as a floating-point number in the same unit specified for that shape.
+
+        Returns:
+            int: The number of elements in the resulting sorted set stored at `destination`.
+
+        Examples:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geosearchstore("my_dest_sorted_set", "my_geo_sorted_set", "Catania", GeoSearchByRadius(175, GeoUnit.MILES))
+                2 # Number of elements stored in "my_dest_sorted_set".
+            >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
+                {"Palermo": 3479099956230698.0, "Catania": 3479447370796909.0} # The elements within te search area, with their geohash as score.
+            >>> await client.geosearchstore("my_dest_sorted_set", "my_geo_sorted_set", GeospatialData(15, 37), GeoSearchByBox(400, 400, GeoUnit.KILOMETERS), store_dist=True)
+                2 # Number of elements stored in "my_dest_sorted_set", with distance as score.
+            >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
+                {"Catania": 56.4412578701582, "Palermo": 190.44242984775784} # The elements within te search area, with the distance as score.
+
+        Since: Redis version 6.2.0.
+        """
+        args = _create_geosearch_args(
+            [destination, source],
+            search_from,
+            search_by,
+            None,
+            count,
+            False,
+            False,
+            False,
+            store_dist,
+        )
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.GeoSearchStore, args),
         )
 
     async def zadd(
@@ -4140,6 +4253,41 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def bitcount(self, key: str, options: Optional[OffsetOptions] = None) -> int:
+        """
+        Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
+        optionally be provided to count the number of bits in a specific string interval.
+
+        See https://valkey.io/commands/bitcount for more details.
+
+        Args:
+            key (str): The key for the string to count the set bits of.
+            options (Optional[OffsetOptions]): The offset options.
+
+        Returns:
+            int: If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+                If `options` is not provided, returns the number of set bits in the string stored at `key`.
+                Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+
+        Examples:
+            >>> await client.bitcount("my_key1")
+                2  # The string stored at "my_key1" contains 2 set bits.
+            >>> await client.bitcount("my_key2", OffsetOptions(1, 3))
+                2  # The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
+            >>> await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))
+                1  # Indicates that the second bit of the string stored at "my_key3" is set.
+            >>> await client.bitcount("my_key3", OffsetOptions(-1, -1, BitmapIndexType.BIT))
+                1  # Indicates that the last bit of the string stored at "my_key3" is set.
+        """
+        args = [key]
+        if options is not None:
+            args = args + options.to_args()
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.BitCount, args),
+        )
+
     async def setbit(self, key: str, offset: int, value: int) -> int:
         """
         Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
@@ -4166,6 +4314,30 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.SetBit, [key, str(offset), str(value)]
             ),
+        )
+
+    async def getbit(self, key: str, offset: int) -> int:
+        """
+        Returns the bit value at `offset` in the string value stored at `key`.
+        `offset` should be greater than or equal to zero.
+
+        See https://valkey.io/commands/getbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to return.
+
+        Returns:
+            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+                the length of the string.
+
+        Examples:
+            >>> await client.getbit("my_key", 1)
+                1  # Indicates that the second bit of the string stored at "my_key" is set to 1.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.GetBit, [key, str(offset)]),
         )
 
     async def object_encoding(self, key: str) -> Optional[str]:

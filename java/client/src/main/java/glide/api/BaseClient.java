@@ -35,6 +35,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -116,9 +117,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
+import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
@@ -162,6 +167,7 @@ import glide.api.commands.SetBaseCommands;
 import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
+import glide.api.commands.TransactionsBaseCommands;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -185,6 +191,7 @@ import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
@@ -228,7 +235,8 @@ public abstract class BaseClient
                 StreamBaseCommands,
                 HyperLogLogBaseCommands,
                 GeospatialIndicesBaseCommands,
-                ScriptingAndFunctionsBaseCommands {
+                ScriptingAndFunctionsBaseCommands,
+                TransactionsBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
@@ -1410,6 +1418,29 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> xgroupCreate(
+            @NonNull String key, @NonNull String groupname, @NonNull String id) {
+        return commandManager.submitNewCommand(
+                XGroupCreate, new String[] {key, groupname, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupCreate(
+            @NonNull String key,
+            @NonNull String groupname,
+            @NonNull String id,
+            @NonNull StreamGroupOptions options) {
+        String[] arguments = concatenateArrays(new String[] {key, groupname, id}, options.toArgs());
+        return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> xgroupDestroy(@NonNull String key, @NonNull String groupname) {
+        return commandManager.submitNewCommand(
+                XGroupDestroy, new String[] {key, groupname}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
@@ -1831,6 +1862,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> fcallReadOnly(
+            @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        String[] args =
+                concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
+        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, boolean replace) {
         String[] arguments = new String[] {source, destination};
@@ -1862,5 +1901,15 @@ public abstract class BaseClient
     public CompletableFuture<Long> lcsLen(@NonNull String key1, @NonNull String key2) {
         String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
         return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> watch(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> unwatch() {
+        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
     }
 }

@@ -4,6 +4,7 @@
 * Python: Added OBJECT FREQ command ([#1472](https://github.com/aws/glide-for-redis/pull/1472))
 * Python: Added OBJECT IDLETIME command ([#1474](https://github.com/aws/glide-for-redis/pull/1474))
 * Python: Added GEOSEARCH command ([#1482](https://github.com/aws/glide-for-redis/pull/1482))
+* Python: Added GEOSEARCHSTORE command ([#1581](https://github.com/aws/glide-for-redis/pull/1581))
 * Node: Added RENAMENX command ([#1483](https://github.com/aws/glide-for-redis/pull/1483))
 * Python: Added OBJECT REFCOUNT command ([#1485](https://github.com/aws/glide-for-redis/pull/1485))
 * Python: Added RENAMENX command ([#1492](https://github.com/aws/glide-for-redis/pull/1492))
@@ -26,11 +27,15 @@
 * Node: Added XLEN command ([#1555](https://github.com/aws/glide-for-redis/pull/1555))
 * Node: Added ZINTERCARD command ([#1553](https://github.com/aws/glide-for-redis/pull/1553))
 * Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
+* Python: Added HSTRLEN command ([#1564](https://github.com/aws/glide-for-redis/pull/1564))
 * Python: Added MSETNX command ([#1565](https://github.com/aws/glide-for-redis/pull/1565))
 * Python: Added MOVE command ([#1566](https://github.com/aws/glide-for-redis/pull/1566))
 * Node: Added OBJECT IDLETIME command ([#1567](https://github.com/aws/glide-for-redis/pull/1567))
 * Node: Added OBJECT REFCOUNT command ([#1568](https://github.com/aws/glide-for-redis/pull/1568))
 * Python: Added SETBIT command ([#1571](https://github.com/aws/glide-for-redis/pull/1571))
+* Python: Added GETBIT command ([#1575](https://github.com/aws/glide-for-redis/pull/1575))
+* Python: Added BITCOUNT command ([#1592](https://github.com/aws/glide-for-redis/pull/1592))
+* Python: Added TOUCH command ([#1582](https://github.com/aws/glide-for-redis/pull/1582))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

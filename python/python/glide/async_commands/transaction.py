@@ -3,6 +3,7 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
+from glide.async_commands.bitmap import OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
@@ -344,6 +345,20 @@ class BaseTransaction:
             its corresponding value in the list will be None.
         """
         return self.append_command(RequestType.MGet, keys)
+
+    def touch(self: TTransaction, keys: List[str]) -> TTransaction:
+        """
+        Updates the last access time of specified keys.
+
+        See https://valkey.io/commands/touch/ for details.
+
+        Args:
+            keys (List[str]): The keys to update last access time.
+
+        Commands response:
+            int: The number of keys that were updated, a key is ignored if it doesn't exist.
+        """
+        return self.append_command(RequestType.Touch, keys)
 
     def config_rewrite(self: TTransaction) -> TTransaction:
         """
@@ -739,6 +754,21 @@ class BaseTransaction:
         return self.append_command(
             RequestType.HRandField, [key, str(count), "WITHVALUES"]
         )
+
+    def hstrlen(self: TTransaction, key: str, field: str) -> TTransaction:
+        """
+        Returns the string length of the value associated with `field` in the hash stored at `key`.
+
+        See https://valkey.io/commands/hstrlen/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field in the hash.
+
+        Commands response:
+            int: The string length or 0 if `field` or `key` does not exist.
+        """
+        return self.append_command(RequestType.HStrlen, [key, field])
 
     def lpush(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """
@@ -1871,7 +1901,7 @@ class BaseTransaction:
         Since: Redis version 6.2.0.
         """
         args = _create_geosearch_args(
-            key,
+            [key],
             search_from,
             seach_by,
             order_by,
@@ -1882,6 +1912,57 @@ class BaseTransaction:
         )
 
         return self.append_command(RequestType.GeoSearch, args)
+
+    def geosearchstore(
+        self: TTransaction,
+        destination: str,
+        source: str,
+        search_from: Union[str, GeospatialData],
+        search_by: Union[GeoSearchByRadius, GeoSearchByBox],
+        count: Optional[GeoSearchCount] = None,
+        store_dist: bool = False,
+    ) -> TTransaction:
+        """
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+
+        To get the result directly, see `geosearch`.
+
+        See https://valkey.io/commands/geosearch/ for more details.
+
+        Args:
+            destination (str): The key to store the search results.
+            source (str): The key of the sorted set representing geospatial data to search from.
+            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
+                from the sorted set or as a geospatial data (see `GeospatialData`).
+            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                For circular area search, see `GeoSearchByRadius`.
+                For rectangular area search, see `GeoSearchByBox`.
+            count (Optional[GeoSearchCount]): Specifies the maximum number of results to store. See `GeoSearchCount`.
+                If not specified, stores all results.
+            store_dist (bool): Determines what is stored as the sorted set score. Defaults to False.
+                - If set to False, the geohash of the location will be stored as the sorted set score.
+                - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted set score.
+                    The distance is represented as a floating-point number in the same unit specified for that shape.
+
+        Commands response:
+            int: The number of elements in the resulting sorted set stored at `destination`.s
+
+        Since: Redis version 6.2.0.
+        """
+        args = _create_geosearch_args(
+            [destination, source],
+            search_from,
+            search_by,
+            None,
+            count,
+            False,
+            False,
+            False,
+            store_dist,
+        )
+
+        return self.append_command(RequestType.GeoSearchStore, args)
 
     def zadd(
         self: TTransaction,
@@ -2869,6 +2950,30 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.PfMerge, [destination] + source_keys)
 
+    def bitcount(
+        self: TTransaction, key: str, options: Optional[OffsetOptions] = None
+    ) -> TTransaction:
+        """
+        Counts the number of set bits (population counting) in a string stored at `key`. The `options` argument can
+        optionally be provided to count the number of bits in a specific string interval.
+
+        See https://valkey.io/commands/bitcount for more details.
+
+        Args:
+            key (str): The key for the string to count the set bits of.
+            options (Optional[OffsetOptions]): The offset options.
+
+        Command response:
+            int: If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+                If `options` is not provided, returns the number of set bits in the string stored at `key`.
+                Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+        """
+        args = [key]
+        if options is not None:
+            args = args + options.to_args()
+
+        return self.append_command(RequestType.BitCount, args)
+
     def setbit(self: TTransaction, key: str, offset: int, value: int) -> TTransaction:
         """
         Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
@@ -2887,6 +2992,23 @@ class BaseTransaction:
             int: The bit value that was previously stored at `offset`.
         """
         return self.append_command(RequestType.SetBit, [key, str(offset), str(value)])
+
+    def getbit(self: TTransaction, key: str, offset: int) -> TTransaction:
+        """
+        Returns the bit value at `offset` in the string value stored at `key`.
+        `offset` should be greater than or equal to zero.
+
+        See https://valkey.io/commands/getbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to return.
+
+        Command response:
+            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+                the length of the string.
+        """
+        return self.append_command(RequestType.GetBit, [key, str(offset)])
 
     def object_encoding(self: TTransaction, key: str) -> TTransaction:
         """

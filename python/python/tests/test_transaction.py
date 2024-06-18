@@ -6,10 +6,12 @@ from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
+from glide.async_commands.bitmap import BitmapIndexType, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import InsertPosition, StreamAddOptions, TrimByMinId
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByBox,
     GeoSearchByRadius,
     GeospatialData,
     GeoUnit,
@@ -56,6 +58,7 @@ async def transaction_test(
     key17 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
+    key20 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -87,6 +90,8 @@ async def transaction_test(
     args.append(OK)
 
     transaction.exists([key2])
+    args.append(1)
+    transaction.touch([key2])
     args.append(1)
 
     transaction.delete([key2])
@@ -166,6 +171,8 @@ async def transaction_test(
     args.append([key3])
     transaction.hrandfield_withvalues(key4, 1)
     args.append([[key3, "10.5"]])
+    transaction.hstrlen(key4, key3)
+    args.append(4)
 
     transaction.client_getname()
     args.append(None)
@@ -352,6 +359,19 @@ async def transaction_test(
     args.append(0)
     transaction.setbit(key19, 1, 0)
     args.append(1)
+    transaction.getbit(key19, 1)
+    args.append(0)
+
+    transaction.set(key20, "foobar")
+    args.append(OK)
+    transaction.bitcount(key20)
+    args.append(26)
+    transaction.bitcount(key20, OffsetOptions(1, 1))
+    args.append(6)
+
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
+        args.append(17)
 
     transaction.geoadd(
         key12,
@@ -375,10 +395,19 @@ async def transaction_test(
             None,
         ]
     )
+
     transaction.geosearch(
         key12, "Catania", GeoSearchByRadius(200, GeoUnit.KILOMETERS), OrderBy.ASC
     )
     args.append(["Catania", "Palermo"])
+    transaction.geosearchstore(
+        key12,
+        key12,
+        GeospatialData(15, 37),
+        GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+        store_dist=True,
+    )
+    args.append(2)
 
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-1"))
     args.append("0-1")
