@@ -4845,7 +4845,7 @@ class TestCommands:
 
         assert await redis_client.object_idletime(non_existing_key) is None
         assert await redis_client.set(string_key, "foo") == OK
-        time.sleep(1)
+        time.sleep(2)
         idletime = await redis_client.object_idletime(string_key)
         assert idletime is not None and idletime > 0
 
