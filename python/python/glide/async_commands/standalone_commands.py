@@ -410,3 +410,22 @@ class StandaloneCommands(CoreCommands):
         )
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
+
+    async def publish(self, message: str, channel: str) -> int:
+        """
+        Publish message on pubsub channel.
+        See https://valkey.io/commands/publish for more details.
+
+        Args:
+            message: Message to publish
+            channel: Channel to publish the message on.
+
+        Returns:
+            int: Number of clients that received the message.
+
+        Examples:
+            >>> await client.publish("Hi all!", "global-channel")
+                1  # Publishes "Hi all!" message on global-channel channel
+        """
+        result = await self._execute_command(RequestType.Publish, [channel, message])
+        return cast(int, result)

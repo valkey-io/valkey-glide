@@ -452,3 +452,29 @@ class ClusterCommands(CoreCommands):
         args = _build_sort_args(key, None, limit, None, order, alpha, store=destination)
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
+
+    async def publish(self, message: str, channel: str, sharded: bool = False) -> int:
+        """
+        Publish message on pubsub channel.
+        This command aggregates PUBLISH and SPUBLISH commands functionalities.
+        The mode is selected using the 'sharded' parameter
+        See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+
+        Args:
+            message: Message to publish
+            channel: Channel to publish the message on.
+            sharded: Use sharded pubsub mode.
+
+        Returns:
+            int: Number of clients that received the message.
+
+        Examples:
+            >>> await client.publish("Hi all!", "global-channel", False)
+                1  # Publishes "Hi all!" message on global-channel channel using non-sharded mode
+            >>> await client.publish("Hi to sharded channel1!", "channel1, True)
+                2  # Publishes "Hi to sharded channel1!" message on channel1 using sharded mode
+        """
+        result = await self._execute_command(
+            RequestType.SPublish if sharded else RequestType.Publish, [channel, message]
+        )
+        return cast(int, result)

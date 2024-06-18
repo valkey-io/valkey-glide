@@ -223,6 +223,12 @@ async def create_client(
     client_name: Optional[str] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = None,
+    cluster_mode_pubsub: Optional[
+        ClusterClientConfiguration.PubSubSubscriptions
+    ] = None,
+    standalone_mode_pubsub: Optional[
+        RedisClientConfiguration.PubSubSubscriptions
+    ] = None,
 ) -> Union[RedisClient, RedisClusterClient]:
     # Create async socket client
     use_tls = request.config.getoption("--tls")
@@ -238,6 +244,7 @@ async def create_client(
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
+            pubsub_subscriptions=cluster_mode_pubsub,
         )
         return await RedisClusterClient.create(cluster_config)
     else:
@@ -252,6 +259,7 @@ async def create_client(
             client_name=client_name,
             protocol=protocol,
             request_timeout=timeout,
+            pubsub_subscriptions=standalone_mode_pubsub,
         )
         return await RedisClient.create(config)
 
