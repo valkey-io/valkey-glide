@@ -954,6 +954,26 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.LIndex, [key, str(index)])
 
+    def lset(self: TTransaction, key: str, index: int, element: str) -> TTransaction:
+        """
+        Sets the list element at `index` to `element`.
+
+        The index is zero-based, so `0` means the first element, `1` the second element and so on.
+        Negative indices can be used to designate elements starting at the tail of the list.
+        Here, `-1` means the last element, `-2` means the penultimate and so forth.
+
+        See https://valkey.io/commands/lset/ for details.
+
+        Args:
+            key (str): The key of the list.
+            index (int): The index of the element in the list to be set.
+            element (str): The new element to set at the specified index.
+
+        Commands response:
+            TOK: A simple `OK` response.
+        """
+        return self.append_command(RequestType.LSet, [key, str(index), element])
+
     def rpush(self: TTransaction, key: str, elements: List[str]) -> TTransaction:
         """Inserts all the specified values at the tail of the list stored at `key`.
         `elements` are inserted one after the other to the tail of the list, from the leftmost element
