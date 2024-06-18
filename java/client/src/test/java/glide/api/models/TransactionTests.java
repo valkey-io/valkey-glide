@@ -67,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
@@ -784,6 +785,10 @@ public class TransactionTests {
         transaction.flushall().flushall(ASYNC);
         results.add(Pair.of(FlushAll, buildArgs()));
         results.add(Pair.of(FlushAll, buildArgs(ASYNC.toString())));
+
+        transaction.flushdb().flushdb(ASYNC);
+        results.add(Pair.of(FlushDB, buildArgs()));
+        results.add(Pair.of(FlushDB, buildArgs(ASYNC.toString())));
 
         transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(Lolwut, buildArgs()));

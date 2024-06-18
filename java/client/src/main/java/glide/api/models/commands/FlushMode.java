@@ -14,16 +14,24 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
  *   <li><code>FLUSHALL</code> command implemented by {@link RedisClient#flushall(FlushMode)},
  *       {@link RedisClusterClient#flushall(FlushMode)}, and {@link
  *       RedisClusterClient#flushall(FlushMode, SingleNodeRoute)}.
+ *   <li><code>FLUSHDB</code> command implemented by {@link RedisClient#flushdb(FlushMode)}, {@link
+ *       RedisClusterClient#flushdb(FlushMode)}, and {@link RedisClusterClient#flushdb(FlushMode,
+ *       SingleNodeRoute)}.
  *   <li><code>FUNCTION FLUSH</code> command implemented by {@link
  *       RedisClient#functionFlush(FlushMode)}, {@link RedisClusterClient#functionFlush(FlushMode)},
  *       and {@link RedisClusterClient#functionFlush(FlushMode, Route)}.
  * </ul>
  *
- * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> and <a
- *     href="https://valkey.io/commands/function-flush/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/flushall/">flushall</a>, <a
+ *     href="https://valkey.io/commands/flushdb/">flushdb</a>, and <a
+ *     href="https://valkey.io/commands/function-flush/">function flush</a> at valkey.io
  */
 public enum FlushMode {
-    /** Flushes synchronously. */
+    /**
+     * Flushes synchronously.
+     *
+     * @since Redis 6.2 and above.
+     */
     SYNC,
     /** Flushes asynchronously. */
     ASYNC
