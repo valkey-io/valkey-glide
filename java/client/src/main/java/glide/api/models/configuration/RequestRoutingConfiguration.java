@@ -31,7 +31,12 @@ public class RequestRoutingConfiguration {
     @RequiredArgsConstructor
     @Getter
     public enum SimpleSingleNodeRoute implements SingleNodeRoute {
-        /** Route request to a random node. */
+        /**
+         * Route request to a random node.<br>
+         * <b>Warning</b><br>
+         * Don't use it with write commands, because they could be randomly routed to a replica (RO)
+         * node and fail.
+         */
         RANDOM(2);
 
         private final int ordinal;

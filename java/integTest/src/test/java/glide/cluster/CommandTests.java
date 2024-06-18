@@ -43,7 +43,6 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
-import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
@@ -643,6 +642,8 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void dbsize_and_flushdb() {
+        boolean is62orHigher = REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0");
+
         assertEquals(OK, clusterClient.flushall().get());
         // dbsize should be 0 after flushall() because all keys have been deleted
         assertEquals(0L, clusterClient.dbsize().get());
@@ -664,7 +665,11 @@ public class CommandTests {
         // add a key, measure DB size, flush DB and measure again - with all arg combinations
         assertEquals(OK, clusterClient.set(key, "foo").get());
         assertEquals(1L, clusterClient.dbsize(route).get());
-        assertEquals(OK, clusterClient.flushdb(SYNC).get());
+        if (is62orHigher) {
+            assertEquals(OK, clusterClient.flushdb(SYNC).get());
+        } else {
+            assertEquals(OK, clusterClient.flushdb(ASYNC).get());
+        }
         assertEquals(0L, clusterClient.dbsize().get());
 
         assertEquals(OK, clusterClient.set(key, "foo").get());
@@ -674,8 +679,18 @@ public class CommandTests {
 
         assertEquals(OK, clusterClient.set(key, "foo").get());
         assertEquals(1L, clusterClient.dbsize(route).get());
-        assertEquals(OK, clusterClient.flushdb(SYNC, route).get());
+        if (is62orHigher) {
+            assertEquals(OK, clusterClient.flushdb(SYNC, route).get());
+        } else {
+            assertEquals(OK, clusterClient.flushdb(ASYNC, route).get());
+        }
         assertEquals(0L, clusterClient.dbsize(route).get());
+
+        if (!is62orHigher) {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> clusterClient.flushdb(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+        }
     }
 
     @Test
@@ -812,7 +827,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, clusterClient.flushall(FlushMode.SYNC).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, clusterClient.flushall(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> clusterClient.flushall(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, clusterClient.flushall(ASYNC).get());
+        }
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter =

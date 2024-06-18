@@ -353,7 +353,7 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>.
+     *     command to the node defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -371,7 +371,7 @@ public interface ServerManagementClusterCommands {
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>.
+     *     command to the node defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -417,7 +417,7 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>.
+     *     command to the node defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -435,7 +435,7 @@ public interface ServerManagementClusterCommands {
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the nodes defined by <code>route</code>.
+     *     command to the node defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code

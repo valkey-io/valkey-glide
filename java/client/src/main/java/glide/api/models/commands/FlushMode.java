@@ -22,8 +22,9 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
  *       and {@link RedisClusterClient#functionFlush(FlushMode, Route)}.
  * </ul>
  *
- * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> and <a
- *     href="https://valkey.io/commands/function-flush/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/flushall/">flushall</a>, <a
+ *     href="https://valkey.io/commands/flushdb/">flushdb</a>, and <a
+ *     href="https://valkey.io/commands/function-flush/">function flush</a> at valkey.io
  */
 public enum FlushMode {
     /**

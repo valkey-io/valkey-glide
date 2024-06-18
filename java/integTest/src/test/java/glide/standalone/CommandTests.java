@@ -363,7 +363,14 @@ public class CommandTests {
         assertEquals(1L, regularClient.dbsize().get());
 
         // flush and check again
-        assertEquals(OK, regularClient.flushdb(SYNC).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, regularClient.flushdb(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.flushdb(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, regularClient.flushdb(ASYNC).get());
+        }
         assertEquals(0L, regularClient.dbsize().get());
 
         // switch to DB 0 and flush and check
@@ -392,7 +399,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, regularClient.flushall(SYNC).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, regularClient.flushall(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.flushall(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, regularClient.flushall(ASYNC).get());
+        }
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter = (Object[]) regularClient.customCommand(new String[] {"keys", "*"}).get();
