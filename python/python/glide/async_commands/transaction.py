@@ -105,7 +105,7 @@ class BaseTransaction:
         So `-1` means the last character, `-2` the penultimate and so forth.
 
         If `key` does not exist, an empty string is returned. If `start` or `end`
-        are out of range, it returns the substring within the valid range of the string.
+        are out of range, returns the substring within the valid range of the string.
 
         See https://valkey.io/commands/getrange/ for more details.
 
