@@ -12,7 +12,7 @@ use once_cell::sync::Lazy;
 use rand::{distributions::Alphanumeric, Rng};
 use redis::{
     cluster_routing::{MultipleNodeRoutingInfo, RoutingInfo},
-    ConnectionAddr, RedisConnectionInfo, RedisResult, Value,
+    ConnectionAddr, PushInfo, RedisConnectionInfo, RedisResult, Value,
 };
 use socket2::{Domain, Socket, Type};
 use std::{
@@ -20,6 +20,7 @@ use std::{
     sync::Mutex, time::Duration,
 };
 use tempfile::TempDir;
+use tokio::sync::mpsc;
 
 pub mod cluster;
 pub mod mocks;
@@ -456,7 +457,7 @@ pub async fn wait_for_server_to_become_ready(server_address: &ConnectionAddr) {
     })
     .unwrap();
     loop {
-        match client.get_multiplexed_async_connection().await {
+        match client.get_multiplexed_async_connection(None).await {
             Err(err) => {
                 if err.is_connection_refusal() {
                     tokio::time::sleep(millisecond).await;
@@ -546,6 +547,7 @@ pub async fn send_set_and_get(mut client: Client, key: String) {
 pub struct TestBasics {
     pub server: Option<RedisServer>,
     pub client: StandaloneClient,
+    pub push_receiver: mpsc::UnboundedReceiver<PushInfo>,
 }
 
 fn convert_to_protobuf_protocol(
@@ -592,7 +594,8 @@ pub async fn setup_acl(addr: &ConnectionAddr, connection_info: &RedisConnectionI
     })
     .unwrap();
     let mut connection =
-        repeat_try_create(|| async { client.get_multiplexed_async_connection().await.ok() }).await;
+        repeat_try_create(|| async { client.get_multiplexed_async_connection(None).await.ok() })
+            .await;
 
     let password = connection_info.password.clone().unwrap();
     let username = connection_info
@@ -689,11 +692,16 @@ pub(crate) async fn setup_test_basics_internal(configuration: &TestConfiguration
     let mut connection_request = create_connection_request(&[connection_addr], configuration);
     connection_request.cluster_mode_enabled = false;
     connection_request.protocol = configuration.protocol.into();
-    let client = StandaloneClient::create_client(connection_request.into())
+    let (push_sender, push_receiver) = tokio::sync::mpsc::unbounded_channel();
+    let client = StandaloneClient::create_client(connection_request.into(), Some(push_sender))
         .await
         .unwrap();
 
-    TestBasics { server, client }
+    TestBasics {
+        server,
+        client,
+        push_receiver,
+    }
 }
 
 pub async fn setup_test_basics(use_tls: bool) -> TestBasics {

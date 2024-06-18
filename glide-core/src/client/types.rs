@@ -2,6 +2,8 @@
  * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
  */
 
+use logger_core::log_warn;
+use std::collections::HashSet;
 use std::time::Duration;
 
 #[cfg(feature = "socket-layer")]
@@ -20,6 +22,7 @@ pub struct ConnectionRequest {
     pub request_timeout: Option<u32>,
     pub connection_retry_strategy: Option<ConnectionRetryStrategy>,
     pub periodic_checks: Option<PeriodicCheck>,
+    pub pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo>,
 }
 
 pub struct AuthenticationInfo {
@@ -150,6 +153,39 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
                     PeriodicCheck::Disabled
                 }
             });
+        let mut pubsub_subscriptions: Option<redis::PubSubSubscriptionInfo> = None;
+        if let Some(protobuf_pubsub) = value.pubsub_subscriptions.0 {
+            let mut redis_pubsub = redis::PubSubSubscriptionInfo::new();
+            for (pubsub_type, channels_patterns) in
+                protobuf_pubsub.channels_or_patterns_by_type.iter()
+            {
+                let kind = match *pubsub_type {
+                    0 => redis::PubSubSubscriptionKind::Exact,
+                    1 => redis::PubSubSubscriptionKind::Pattern,
+                    2 => redis::PubSubSubscriptionKind::Sharded,
+                    3_u32..=u32::MAX => {
+                        log_warn(
+                            "client creation",
+                            format!(
+                                "Omitting pubsub subscription on an unknown type: {:?}",
+                                *pubsub_type
+                            ),
+                        );
+                        continue;
+                    }
+                };
+
+                for channel_pattern in channels_patterns.channels_or_patterns.iter() {
+                    redis_pubsub
+                        .entry(kind)
+                        .and_modify(|channels_patterns| {
+                            channels_patterns.insert(channel_pattern.to_vec());
+                        })
+                        .or_insert(HashSet::from([channel_pattern.to_vec()]));
+                }
+            }
+            pubsub_subscriptions = Some(redis_pubsub);
+        }
 
         ConnectionRequest {
             read_from,
@@ -163,6 +199,7 @@ impl From<protobuf::ConnectionRequest> for ConnectionRequest {
             request_timeout,
             connection_retry_strategy,
             periodic_checks,
+            pubsub_subscriptions,
         }
     }
 }
