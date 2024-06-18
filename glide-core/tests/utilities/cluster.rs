@@ -249,7 +249,7 @@ pub async fn create_cluster_client(
     configuration.request_timeout = configuration.request_timeout.or(Some(10000));
     let connection_request = create_connection_request(&addresses, &configuration);
 
-    Client::new(connection_request.into()).await.unwrap()
+    Client::new(connection_request.into(), None).await.unwrap()
 }
 
 pub async fn setup_test_basics_internal(configuration: TestConfiguration) -> ClusterTestBasics {

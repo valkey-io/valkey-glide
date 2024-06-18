@@ -6,12 +6,13 @@ use crate::retry_strategies::RetryStrategy;
 use futures_intrusive::sync::ManualResetEvent;
 use logger_core::{log_debug, log_trace, log_warn};
 use redis::aio::MultiplexedConnection;
-use redis::{RedisConnectionInfo, RedisError, RedisResult};
+use redis::{PushInfo, RedisConnectionInfo, RedisError, RedisResult};
 use std::fmt;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::task;
 use tokio_retry::Retry;
 
@@ -45,6 +46,7 @@ struct InnerReconnectingConnection {
 #[derive(Clone)]
 pub(super) struct ReconnectingConnection {
     inner: Arc<InnerReconnectingConnection>,
+    push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
 }
 
 impl fmt::Debug for ReconnectingConnection {
@@ -53,10 +55,13 @@ impl fmt::Debug for ReconnectingConnection {
     }
 }
 
-async fn get_multiplexed_connection(client: &redis::Client) -> RedisResult<MultiplexedConnection> {
+async fn get_multiplexed_connection(
+    client: &redis::Client,
+    push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
+) -> RedisResult<MultiplexedConnection> {
     run_with_timeout(
         Some(DEFAULT_CONNECTION_ATTEMPT_TIMEOUT),
-        client.get_multiplexed_async_connection(),
+        client.get_multiplexed_async_connection(push_sender),
     )
     .await
 }
@@ -64,9 +69,10 @@ async fn get_multiplexed_connection(client: &redis::Client) -> RedisResult<Multi
 async fn create_connection(
     connection_backend: ConnectionBackend,
     retry_strategy: RetryStrategy,
+    push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
     let client = &connection_backend.connection_info;
-    let action = || get_multiplexed_connection(client);
+    let action = || get_multiplexed_connection(client, push_sender.clone());
 
     match Retry::spawn(retry_strategy.get_iterator(), action).await {
         Ok(connection) => {
@@ -85,6 +91,7 @@ async fn create_connection(
                     state: Mutex::new(ConnectionState::Connected(connection)),
                     backend: connection_backend,
                 }),
+                push_sender,
             })
         }
         Err(err) => {
@@ -103,6 +110,7 @@ async fn create_connection(
                     state: Mutex::new(ConnectionState::InitializedDisconnected),
                     backend: connection_backend,
                 }),
+                push_sender,
             };
             connection.reconnect();
             Err((connection, err))
@@ -141,6 +149,7 @@ impl ReconnectingConnection {
         connection_retry_strategy: RetryStrategy,
         redis_connection_info: RedisConnectionInfo,
         tls_mode: TlsMode,
+        push_sender: Option<mpsc::UnboundedSender<PushInfo>>,
     ) -> Result<ReconnectingConnection, (ReconnectingConnection, RedisError)> {
         log_debug(
             "connection creation",
@@ -153,7 +162,7 @@ impl ReconnectingConnection {
             connection_available_signal: ManualResetEvent::new(true),
             client_dropped_flagged: AtomicBool::new(false),
         };
-        create_connection(backend, connection_retry_strategy).await
+        create_connection(backend, connection_retry_strategy, push_sender).await
     }
 
     fn node_address(&self) -> String {
@@ -211,6 +220,7 @@ impl ReconnectingConnection {
         log_debug("reconnect", "starting");
 
         let connection_clone = self.clone();
+        let push_sender = self.push_sender.clone();
         // The reconnect task is spawned instead of awaited here, so that the reconnect attempt will continue in the
         // background, regardless of whether the calling task is dropped or not.
         task::spawn(async move {
@@ -224,7 +234,7 @@ impl ReconnectingConnection {
                     // Client was dropped, reconnection attempts can stop
                     return;
                 }
-                match get_multiplexed_connection(client).await {
+                match get_multiplexed_connection(client, push_sender.clone()).await {
                     Ok(mut connection) => {
                         if connection
                             .send_packed_command(&redis::cmd("PING"))

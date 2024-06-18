@@ -35,6 +35,7 @@ pub(crate) mod shared_client_tests {
                     Client::new(
                         create_connection_request(&[connection_addr.clone()], &configuration)
                             .into(),
+                        None,
                     )
                     .await
                     .ok()
