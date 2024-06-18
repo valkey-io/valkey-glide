@@ -222,6 +222,7 @@ enum RequestType {
     GeoSearch = 182;
     Watch = 183;
     UnWatch = 184;
+    GeoSearchStore = 185;
 }
 
 message Command {

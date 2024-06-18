@@ -356,7 +356,7 @@ def _create_zinter_zunion_cmd_args(
 
 
 def _create_geosearch_args(
-    key: str,
+    keys: List[str],
     search_from: Union[str, GeospatialData],
     seach_by: Union[GeoSearchByRadius, GeoSearchByBox],
     order_by: Optional[OrderBy] = None,
@@ -364,8 +364,9 @@ def _create_geosearch_args(
     with_coord: bool = False,
     with_dist: bool = False,
     with_hash: bool = False,
+    store_dist: bool = False,
 ) -> List[str]:
-    args = [key]
+    args = keys
     if isinstance(search_from, str):
         args += ["FROMMEMBER", search_from]
     else:
@@ -388,5 +389,8 @@ def _create_geosearch_args(
         args.append("WITHDIST")
     if with_hash:
         args.append("WITHHASH")
+
+    if store_dist:
+        args.append("STOREDIST")
 
     return args
