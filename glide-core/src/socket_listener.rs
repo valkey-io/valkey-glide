@@ -21,7 +21,7 @@ use redis::cluster_routing::{
 };
 use redis::cluster_routing::{ResponsePolicy, Routable};
 use redis::RedisError;
-use redis::{Cmd, Value};
+use redis::{Cmd, PushInfo, Value};
 use std::cell::Cell;
 use std::rc::Rc;
 use std::{env, str};
@@ -30,6 +30,7 @@ use thiserror::Error;
 use tokio::io::ErrorKind::AddrInUse;
 use tokio::net::{UnixListener, UnixStream};
 use tokio::runtime::Builder;
+use tokio::sync::mpsc;
 use tokio::sync::mpsc::{channel, Sender};
 use tokio::sync::Mutex;
 use tokio::task;
@@ -184,6 +185,7 @@ async fn write_result(
 ) -> Result<(), io::Error> {
     let mut response = Response::new();
     response.callback_idx = callback_index;
+    response.is_push = false;
     response.value = match resp_result {
         Ok(Value::Okay) => Some(response::response::Value::ConstantResponse(
             response::ConstantResponse::OK.into(),
@@ -473,8 +475,9 @@ pub fn close_socket(socket_path: &String) {
 async fn create_client(
     writer: &Rc<Writer>,
     request: ConnectionRequest,
+    push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
-    let client = match Client::new(request.into()).await {
+    let client = match Client::new(request.into(), push_tx).await {
         Ok(client) => client,
         Err(err) => return Err(ClientCreationError::ConnectionError(err)),
     };
@@ -485,13 +488,14 @@ async fn create_client(
 async fn wait_for_connection_configuration_and_create_client(
     client_listener: &mut UnixStreamListener,
     writer: &Rc<Writer>,
+    push_tx: Option<mpsc::UnboundedSender<PushInfo>>,
 ) -> Result<Client, ClientCreationError> {
     // Wait for the server's address
     match client_listener.next_values::<ConnectionRequest>().await {
         Closed(reason) => Err(ClientCreationError::SocketListenerClosed(reason)),
         ReceivedValues(mut received_requests) => {
             if let Some(request) = received_requests.pop() {
-                create_client(writer, request).await
+                create_client(writer, request, push_tx).await
             } else {
                 Err(ClientCreationError::UnhandledError(
                     "No received requests".to_string(),
@@ -518,6 +522,35 @@ async fn read_values_loop(
     }
 }
 
+async fn push_manager_loop(mut push_rx: mpsc::UnboundedReceiver<PushInfo>, writer: Rc<Writer>) {
+    loop {
+        let result = push_rx.recv().await;
+        match result {
+            None => {
+                log_trace("push manager loop", "got None as from push manager");
+                return;
+            }
+            Some(push_msg) => {
+                log_debug("push manager loop", format!("got PushInfo: {:?}", push_msg));
+                let mut response = Response::new();
+                response.callback_idx = 0; // callback_idx is not used with push notifications
+                response.is_push = true;
+                response.value = {
+                    let push_val = Value::Push {
+                        kind: (push_msg.kind),
+                        data: (push_msg.data),
+                    };
+                    let pointer = Box::leak(Box::new(push_val));
+                    let raw_pointer = pointer as *mut redis::Value;
+                    Some(response::response::Value::RespPointer(raw_pointer as u64))
+                };
+
+                _ = write_to_writer(response, &writer).await;
+            }
+        }
+    }
+}
+
 async fn listen_on_client_stream(socket: UnixStream) {
     let socket = Rc::new(socket);
     // Spawn a new task to listen on this client's stream
@@ -525,14 +558,18 @@ async fn listen_on_client_stream(socket: UnixStream) {
     let mut client_listener = UnixStreamListener::new(socket.clone());
     let accumulated_outputs = Cell::new(Vec::new());
     let (sender, mut receiver) = channel(1);
+    let (push_tx, push_rx) = tokio::sync::mpsc::unbounded_channel();
     let writer = Rc::new(Writer {
         socket,
         lock: write_lock,
         accumulated_outputs,
         closing_sender: sender,
     });
-    let client_creation =
-        wait_for_connection_configuration_and_create_client(&mut client_listener, &writer);
+    let client_creation = wait_for_connection_configuration_and_create_client(
+        &mut client_listener,
+        &writer,
+        Some(push_tx),
+    );
     let client = match client_creation.await {
         Ok(conn) => conn,
         Err(ClientCreationError::SocketListenerClosed(ClosingReason::ReadSocketClosed)) => {
@@ -583,6 +620,9 @@ async fn listen_on_client_stream(socket: UnixStream) {
                 } else {
                     log_trace("client closing", "writer closed");
                 }
+            },
+            _ = push_manager_loop(push_rx, writer.clone()) => {
+                log_trace("client closing", "push manager closed");
             }
     }
     log_trace("client closing", "closing connection");
