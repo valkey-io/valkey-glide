@@ -63,3 +63,18 @@ class ListDirection(Enum):
     """
     RIGHT: Represents the option that elements should be popped from or added to the right side of a list.
     """
+
+
+class FlushMode(Enum):
+    """
+    Enumeration representing the flushing mode for `FLUSHALL`, `FLUSHDB` and `FUNCTION FLUSH` commands.
+    """
+
+    SYNC = "SYNC"
+    """
+    Represents synchronous flushing mode.
+    """
+    ASYNC = "ASYNC"
+    """
+    Represents asynchronous flushing mode.
+    """

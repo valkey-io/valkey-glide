@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, cast
 
-from glide.async_commands.command_args import Limit, OrderBy
+from glide.async_commands.command_args import FlushMode, Limit, OrderBy
 from glide.async_commands.core import CoreCommands, InfoSection, _build_sort_args
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
 from glide.constants import TOK, TClusterResponse, TResult, TSingleNodeRoute
@@ -312,6 +312,37 @@ class ClusterCommands(CoreCommands):
         return cast(
             TClusterResponse[str],
             await self._execute_command(RequestType.Echo, [message], route),
+        )
+
+    async def function_flush(
+        self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (FlushMode): The flushing mode, could be either `FlushMode.SYNC` or `FlushMode.ASYNC`.
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_flush(FlushMode.SYNC)
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionFlush,
+                [mode.value] if mode else [],
+                route,
+            ),
         )
 
     async def function_load(

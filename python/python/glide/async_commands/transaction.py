@@ -4,7 +4,7 @@ import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
 from glide.async_commands.bitmap import OffsetOptions
-from glide.async_commands.command_args import Limit, ListDirection, OrderBy
+from glide.async_commands.command_args import FlushMode, Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -1822,6 +1822,27 @@ class BaseTransaction:
             int: The number of entries in the stream. If `key` does not exist, returns 0.
         """
         return self.append_command(RequestType.XLen, [key])
+
+    def function_flush(
+        self: TTransaction, mode: Optional[FlushMode] = None
+    ) -> TTransaction:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (FlushMode): The flushing mode, could be either `FlushMode.SYNC` or `FlushMode.ASYNC`.
+
+        Commands response:
+            TOK: A simple `OK`.
+
+        Since: Redis 7.0.0.
+        """
+        return self.append_command(
+            RequestType.FunctionFlush,
+            [mode.value] if mode else [],
+        )
 
     def function_load(
         self: TTransaction, library_code: str, replace: bool = False

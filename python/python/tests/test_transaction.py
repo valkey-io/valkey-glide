@@ -7,7 +7,7 @@ from typing import List, Union, cast
 import pytest
 from glide import RequestError
 from glide.async_commands.bitmap import BitmapIndexType, OffsetOptions
-from glide.async_commands.command_args import Limit, ListDirection, OrderBy
+from glide.async_commands.command_args import FlushMode, Limit, ListDirection, OrderBy
 from glide.async_commands.core import InsertPosition, StreamAddOptions, TrimByMinId
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -77,6 +77,12 @@ async def transaction_test(
         args.append(lib_name)
         transaction.function_load(code, True)
         args.append(lib_name)
+        transaction.function_flush()
+        args.append(OK)
+        transaction.function_flush(FlushMode.ASYNC)
+        args.append(OK)
+        transaction.function_flush(FlushMode.SYNC)
+        args.append(OK)
 
     transaction.dbsize()
     args.append(0)

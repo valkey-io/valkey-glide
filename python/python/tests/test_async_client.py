@@ -12,7 +12,7 @@ from typing import Any, Dict, Union, cast
 import pytest
 from glide import ClosingError, RequestError, Script
 from glide.async_commands.bitmap import BitmapIndexType, OffsetOptions
-from glide.async_commands.command_args import Limit, ListDirection, OrderBy
+from glide.async_commands.command_args import FlushMode, Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -5111,6 +5111,66 @@ class TestCommands:
         )
 
         assert await redis_client.function_load(new_code, True, route) == lib_name
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_flush(self, redis_client: RedisClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            pytest.skip(f"Redis version required >= {min_version}")
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+
+        # Load the function
+        assert await redis_client.function_load(code) == lib_name
+
+        # TODO: Ensure the function exists with FUNCTION LIST
+
+        # Flush functions
+        assert await redis_client.function_flush(FlushMode.SYNC) == OK
+        assert await redis_client.function_flush(FlushMode.ASYNC) == OK
+
+        # TODO: Ensure the function is no longer present with FUNCTION LIST
+
+        # Attempt to re-load library without overwriting to ensure FLUSH was effective
+        assert await redis_client.function_load(code) == lib_name
+
+        # Clean up by flushing functions again
+        await redis_client.function_flush()
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("single_route", [True, False])
+    async def test_function_flush_with_routing(
+        self, redis_client: RedisClusterClient, single_route: bool
+    ):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            pytest.skip(f"Redis version required >= {min_version}")
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        # Load the function
+        assert await redis_client.function_load(code, False, route) == lib_name
+
+        # TODO: Ensure the function exists with FUNCTION LIST
+
+        # Flush functions
+        assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
+        assert await redis_client.function_flush(FlushMode.ASYNC, route) == OK
+
+        # TODO: Ensure the function is no longer present with FUNCTION LIST
+
+        # Attempt to re-load library without overwriting to ensure FLUSH was effective
+        assert await redis_client.function_load(code, False, route) == lib_name
+
+        # Clean up by flushing functions again
+        assert await redis_client.function_flush(route=route) == OK
 
 
 class TestMultiKeyCommandCrossSlot:

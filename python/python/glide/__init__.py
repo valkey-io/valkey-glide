@@ -1,7 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
 from glide.async_commands.bitmap import BitmapIndexType, OffsetOptions
-from glide.async_commands.command_args import Limit, ListDirection, OrderBy
+from glide.async_commands.command_args import FlushMode, Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
@@ -103,6 +103,7 @@ __all__ = [
     "InfoSection",
     "InsertPosition",
     "json",
+    "FlushMode",
     "LexBoundary",
     "Limit",
     "ListDirection",
