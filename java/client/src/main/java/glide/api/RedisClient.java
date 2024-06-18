@@ -31,11 +31,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
+import glide.api.commands.TransactionsCommands;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -56,7 +58,8 @@ public class RedisClient extends BaseClient
         implements GenericCommands,
                 ServerManagementCommands,
                 ConnectionManagementCommands,
-                ScriptingAndFunctionsCommands {
+                ScriptingAndFunctionsCommands,
+                TransactionsCommands {
 
     protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -296,5 +299,10 @@ public class RedisClient extends BaseClient
                 FunctionStats,
                 new String[0],
                 response -> handleFunctionStatsResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> unwatch() {
+        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
     }
 }
