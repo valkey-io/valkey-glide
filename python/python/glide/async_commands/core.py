@@ -4572,7 +4572,7 @@ class CoreCommands(Protocol):
                 value of the string held at `key`.
 
         Examples:
-            >>> await client.set("key1", "A12")  # "A1" has binary value 01000001 00110001 00110010
+            >>> await client.set("key1", "A12")  # "A12" has binary value 01000001 00110001 00110010
             >>> await client.bitpos_interval("key1", 1, 1, -1)
                 10  # The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
             >>> await client.bitpos_interval("key1", 1, 2, 9, BitmapIndexType.BIT)
