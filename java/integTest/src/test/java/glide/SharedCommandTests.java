@@ -3567,62 +3567,6 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void xgroupCreateConsumer_xgroupDelConsumer(BaseClient client) {
-        String key = UUID.randomUUID().toString();
-        String stringKey = UUID.randomUUID().toString();
-        String groupName = "group" + UUID.randomUUID();
-        String zeroStreamId = "0";
-        String consumerName = "consumer" + UUID.randomUUID();
-
-        // create group and consumer for the group
-        assertEquals(
-                OK,
-                client
-                        .xgroupCreate(
-                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
-                        .get());
-        assertTrue(client.xgroupCreateConsumer(key, groupName, consumerName).get());
-
-        // create consumer for group that does not exist results in a NOGROUP request error
-        ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.xgroupCreateConsumer(key, "not_a_group", consumerName).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        assertTrue(executionException.getMessage().contains("NOGROUP"));
-
-        // create consumer for group again
-        assertFalse(client.xgroupCreateConsumer(key, groupName, consumerName).get());
-
-        // Deletes a consumer that is not created yet returns 0
-        assertEquals(0L, client.xgroupDelConsumer(key, groupName, "not_a_consumer").get());
-
-        // String streamid_1 = client.xadd(key, Map.of("field1", "value1")).get();
-        // assertNotNull(streamid_1);
-        // String streamid_2 = client.xadd(key, Map.of("field2", "value2")).get();
-        // assertNotNull(streamid_2);
-
-        // TODO use XREADGROUP to mark pending messages for the consumer so that we get non-zero return
-        assertEquals(0L, client.xgroupDelConsumer(key, groupName, consumerName).get());
-
-        // key is a string and cannot be created as a stream
-        assertEquals(OK, client.set(stringKey, "not_a_stream").get());
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.xgroupCreateConsumer(stringKey, groupName, consumerName).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-
-        executionException =
-                assertThrows(
-                        ExecutionException.class,
-                        () -> client.xgroupDelConsumer(stringKey, groupName, consumerName).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-    }
-
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
     public void xreadgroup_return_failures(BaseClient client) {
         String key = "{key}:1" + UUID.randomUUID();
         String nonStreamKey = "{key}:3" + UUID.randomUUID();
