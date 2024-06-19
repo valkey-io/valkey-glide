@@ -168,6 +168,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -323,9 +324,13 @@ public abstract class BaseClient
     @SuppressWarnings("unchecked")
     protected <T> T handleRedisResponse(
             Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws RedisException {
+        boolean encodingUtf8 = flags.contains(ResponseFlags.ENCODING_UTF8);
         boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
         Object value =
-                new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
+                encodingUtf8
+                        ? new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response)
+                        : new BaseCommandResponseResolver(RedisValueResolver::valueFromPointerBinary)
+                                .apply(response);
         if (isNullable && (value == null)) {
             return null;
         }
@@ -341,15 +346,21 @@ public abstract class BaseClient
     }
 
     protected Object handleObjectOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleRedisResponse(
+                Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected String handleStringResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleRedisResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected String handleStringOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleRedisResponse(
+                String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    protected GlideString handleBytesOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Boolean handleBooleanResponse(Response response) throws RedisException {
@@ -373,11 +384,14 @@ public abstract class BaseClient
     }
 
     protected Object[] handleArrayResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object[].class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected Object[] handleArrayOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleRedisResponse(
+                Object[].class,
+                EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8),
+                response);
     }
 
     /**
@@ -387,7 +401,7 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     /**
@@ -397,7 +411,8 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleRedisResponse(
+                Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     /**
@@ -419,7 +434,7 @@ public abstract class BaseClient
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
-        return handleRedisResponse(Set.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleRedisResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     /** Process a <code>FUNCTION LIST</code> standalone response. */
@@ -457,9 +472,27 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> get(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                Get, new GlideString[] {key}, this::handleBytesOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<String> getdel(@NonNull String key) {
         return commandManager.submitNewCommand(
                 GetDel, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> getdel(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                GetDel, new GlideString[] {key}, this::handleBytesOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> set(@NonNull GlideString key, @NonNull GlideString value) {
+        return commandManager.submitNewCommand(
+                Set, new GlideString[] {key, value}, this::handleStringResponse);
     }
 
     @Override
@@ -472,6 +505,14 @@ public abstract class BaseClient
     public CompletableFuture<String> set(
             @NonNull String key, @NonNull String value, @NonNull SetOptions options) {
         String[] arguments = ArrayUtils.addAll(new String[] {key, value}, options.toArgs());
+        return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> set(
+            @NonNull GlideString key, @NonNull GlideString value, @NonNull SetOptions options) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(new GlideString[] {key, value}, options.toGlideStringArgs());
         return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
     }
 

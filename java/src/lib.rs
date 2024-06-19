@@ -3,6 +3,7 @@
  */
 use glide_core::start_socket_listener;
 
+use jni::descriptors::Desc;
 use jni::objects::{JClass, JObject, JObjectArray, JString, JThrowable};
 use jni::sys::jlong;
 use jni::JNIEnv;
@@ -15,8 +16,93 @@ mod ffi_test;
 #[cfg(ffi_test)]
 pub use ffi_test::*;
 
+#[allow(dead_code)]
+/// Create a `JObject` from Rust's `String`. In case of an error
+/// this method throws Java exception and returns `JObject::null`
+fn create_glide_string_from_string<'local>(
+    env: &mut JNIEnv<'local>,
+    str: String,
+) -> JObject<'local> {
+    let Ok(bytearr) = env.byte_array_from_slice(str.as_bytes()) else {
+        let _ = env.throw("Failed to allocate byte array");
+        return JObject::null();
+    };
+
+    // TODO cache class
+    let Ok(class) = Desc::<JClass>::lookup("glide/api/models/GlideString", env) else {
+        let _ = env.throw("JNI: unable to find class GlideString");
+        return JObject::null();
+    };
+
+    // Call GlideString.of(byte[]) static method
+    let glide_string = match env.call_static_method(
+        class,
+        "of",
+        "([B)Lglide/api/models/GlideString;",
+        &[(&bytearr).into()],
+    ) {
+        Ok(glide_string) => glide_string,
+        Err(e) => {
+            let _ = env.throw(format!("JNI: failed to call GlideString.of. {:?}", e));
+            return JObject::null();
+        }
+    };
+
+    match JObject::try_from(glide_string) {
+        Ok(obj) => obj,
+        Err(e) => {
+            let _ = env.throw(format!("JNI: JObject::try_from failed!. {:?}", e));
+            return JObject::null();
+        }
+    }
+}
+
+/// Create a `JObject` from Rust's `Vec<u8>`. In case of an error
+/// this method throws Java exception and returns `JObject::null`
+fn create_glide_string_from_bytes<'local>(
+    env: &mut JNIEnv<'local>,
+    data: Vec<u8>,
+) -> JObject<'local> {
+    let Ok(bytearr) = env.byte_array_from_slice(&data) else {
+        let _ = env.throw("Failed to allocate byte array");
+        return JObject::null();
+    };
+
+    // TODO cache class
+    let Ok(class) = Desc::<JClass>::lookup("glide/api/models/GlideString", env) else {
+        let _ = env.throw("JNI: unable to find class GlideString");
+        return JObject::null();
+    };
+
+    // Call GlideString.of(byte[]) static method
+    let glide_string = match env.call_static_method(
+        class,
+        "of",
+        "([B)Lglide/api/models/GlideString;",
+        &[(&bytearr).into()],
+    ) {
+        Ok(glide_string) => glide_string,
+        Err(e) => {
+            let _ = env.throw(format!("JNI: failed to call GlideString.of. {:?}", e));
+            return JObject::null();
+        }
+    };
+
+    match JObject::try_from(glide_string) {
+        Ok(obj) => obj,
+        Err(e) => {
+            let _ = env.throw(format!("JNI: JObject::try_from failed!. {:?}", e));
+            return JObject::null();
+        }
+    }
+}
+
 // TODO: Consider caching method IDs here in a static variable (might need RwLock to mutate)
-fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<'local> {
+fn redis_value_to_java<'local>(
+    env: &mut JNIEnv<'local>,
+    val: Value,
+    encoding_utf8: bool,
+) -> JObject<'local> {
     match val {
         Value::Nil => JObject::null(),
         Value::SimpleString(str) => JObject::from(env.new_string(str).unwrap()),
@@ -25,14 +111,24 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             .new_object("java/lang/Long", "(J)V", &[num.into()])
             .unwrap(),
         Value::BulkString(data) => {
-            // TODO: Uncomment the below code to return binary string (next PR)
-            // let Ok(bytearr) = env.byte_array_from_slice(data.as_ref()) else {
-            //     let _ = env.throw("Failed to allocate byte array");
-            //     return JObject::null();
-            // };
-            // bytearr.into()
-            let s = String::from_utf8_lossy(&data);
-            JObject::from(env.new_string(s).unwrap())
+            if encoding_utf8 {
+                let Ok(utf8_str) = String::from_utf8(data) else {
+                    let _ = env.throw("Failed to construct UTF-8 string");
+                    return JObject::null();
+                };
+                match env.new_string(utf8_str) {
+                    Ok(string) => JObject::from(string),
+                    Err(e) => {
+                        let _ = env.throw(format!(
+                            "Failed to construct Java UTF-8 string from Rust UTF-8 string. {:?}",
+                            e
+                        ));
+                        JObject::null()
+                    }
+                }
+            } else {
+                create_glide_string_from_bytes(env, data)
+            }
         }
         Value::Array(array) => {
             let items: JObjectArray = env
@@ -40,7 +136,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
                 .unwrap();
 
             for (i, item) in array.into_iter().enumerate() {
-                let java_value = redis_value_to_java(env, item);
+                let java_value = redis_value_to_java(env, item, encoding_utf8);
                 env.set_object_array_element(&items, i as i32, java_value)
                     .unwrap();
             }
@@ -53,8 +149,8 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
                 .unwrap();
 
             for (key, value) in map {
-                let java_key = redis_value_to_java(env, key);
-                let java_value = redis_value_to_java(env, value);
+                let java_key = redis_value_to_java(env, key, encoding_utf8);
+                let java_value = redis_value_to_java(env, value, encoding_utf8);
                 env.call_method(
                     &linked_hash_map,
                     "put",
@@ -78,7 +174,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             let set = env.new_object("java/util/HashSet", "()V", &[]).unwrap();
 
             for elem in array {
-                let java_value = redis_value_to_java(env, elem);
+                let java_value = redis_value_to_java(env, elem, encoding_utf8);
                 env.call_method(
                     &set,
                     "add",
@@ -105,7 +201,19 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
     pointer: jlong,
 ) -> JObject<'local> {
     let value = unsafe { Box::from_raw(pointer as *mut Value) };
-    redis_value_to_java(&mut env, *value)
+    redis_value_to_java(&mut env, *value, true)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPointerBinary<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    pointer: jlong,
+) -> JObject<'local> {
+    let value = unsafe { Box::from_raw(pointer as *mut Value) };
+    redis_value_to_java(&mut env, *value, false)
 }
 
 #[no_mangle]
