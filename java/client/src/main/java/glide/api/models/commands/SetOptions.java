@@ -171,9 +171,9 @@ public final class SetOptions {
     }
 
     /**
-     * Converts SetOptions into a List<byte[]> to add to a {@link Command} arguments.
+     * Converts SetOptions into a GlideString[] to add to a {@link Command} arguments.
      *
-     * @return String[]
+     * @return GlideString[]
      */
     public GlideString[] toGlideStringArgs() {
         List<GlideString> optionArgs = new ArrayList<>();

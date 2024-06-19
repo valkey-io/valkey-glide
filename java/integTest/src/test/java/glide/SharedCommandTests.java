@@ -330,9 +330,9 @@ public class SharedCommandTests {
     public void set_get_binary_data(BaseClient client) {
         GlideString key = gs("set_get_binary_data_key");
         byte[] binvalue = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
-        assert client.set(key, gs(binvalue)).get().equals("OK");
+        assertEquals(client.set(key, gs(binvalue)).get(), "OK");
         GlideString data = client.get(key).get();
-        assert Arrays.equals(data.getBytes(), binvalue);
+        assertArrayEquals(data.getBytes(), binvalue);
     }
 
     @SneakyThrows
@@ -342,9 +342,9 @@ public class SharedCommandTests {
         SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_DOES_NOT_EXIST).build();
         GlideString key = gs("set_get_binary_data_with_options");
         byte[] binvalue = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
-        assert client.set(key, gs(binvalue), options).get().equals("OK");
+        assertEquals(client.set(key, gs(binvalue), options).get(), "OK");
         GlideString data = client.get(key).get();
-        assert Arrays.equals(data.getBytes(), binvalue);
+        assertArrayEquals(data.getBytes(), binvalue);
     }
 
     @SneakyThrows
