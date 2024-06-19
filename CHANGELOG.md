@@ -39,6 +39,8 @@
 * Python: Added SETBIT command ([#1571](https://github.com/aws/glide-for-redis/pull/1571))
 * Python: Added SRandMember command ([#1578](https://github.com/aws/glide-for-redis/pull/1578))
 * Python: Added GETBIT command ([#1575](https://github.com/aws/glide-for-redis/pull/1575))
+* Python: Added GETEX command ([#0000](https://github.com/aws/glide-for-redis/pull/TODOLINK))
+*
 * Python: Added BITCOUNT command ([#1592](https://github.com/aws/glide-for-redis/pull/1592))
 * Python: Added FLUSHALL command ([#1579](https://github.com/aws/glide-for-redis/pull/1579))
 * Python: Added TOUCH command ([#1582](https://github.com/aws/glide-for-redis/pull/1582))

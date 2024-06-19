@@ -71,6 +71,23 @@ class ExpiryType(Enum):
     KEEP_TTL = 4, Type[None]  # Equivalent to `KEEPTTL` in the Redis API
 
 
+class ExpiryTypeGetEx(Enum):
+    """GetEx option: The type of the expiry.
+    - EX - Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
+    - PX - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
+    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+    - UNIX_MILLSEC - Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the
+        Redis API.
+    - PERSIST - Remove the time to live associated with the key. Equivalent to `PERSIST` in the Redis API.
+    """
+
+    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Redis API
+    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Redis API
+    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Redis API
+    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Redis API
+    PERSIST = 4, Type[None]  # Equivalent to `PERSIST` in the Redis API
+
+
 class InfoSection(Enum):
     """
     INFO option: a specific section of information:
@@ -318,6 +335,61 @@ class ExpirySet:
                 value = int(value.timestamp() * 1000)
         elif self.expiry_type == ExpiryType.KEEP_TTL:
             self.cmd_arg = "KEEPTTL"
+        self.value = str(value) if value else None
+
+    def get_cmd_args(self) -> List[str]:
+        return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
+
+
+class ExpiryGetEx:
+    """GetEx option: Represents the expiry type and value to be executed with "GetEx" command."""
+
+    def __init__(
+        self,
+        expiry_type: ExpiryTypeGetEx,
+        value: Optional[Union[int, datetime, timedelta]],
+    ) -> None:
+        """
+        Args:
+            - expiry_type (ExpiryType): The expiry type.
+            - value (Optional[Union[int, datetime, timedelta]]): The value of the expiration type. The type of expiration
+                determines the type of expiration value:
+                - SEC: Union[int, timedelta]
+                - MILLSEC: Union[int, timedelta]
+                - UNIX_SEC: Union[int, datetime]
+                - UNIX_MILLSEC: Union[int, datetime]
+                - PERSIST: Type[None]
+        """
+        self.set_expiry_type_and_value(expiry_type, value)
+
+    def set_expiry_type_and_value(
+        self,
+        expiry_type: ExpiryTypeGetEx,
+        value: Optional[Union[int, datetime, timedelta]],
+    ):
+        if not isinstance(value, get_args(expiry_type.value[1])):
+            raise ValueError(
+                f"The value of {expiry_type} should be of type {expiry_type.value[1]}"
+            )
+        self.expiry_type = expiry_type
+        if self.expiry_type == ExpiryTypeGetEx.SEC:
+            self.cmd_arg = "EX"
+            if isinstance(value, timedelta):
+                value = int(value.total_seconds())
+        elif self.expiry_type == ExpiryTypeGetEx.MILLSEC:
+            self.cmd_arg = "PX"
+            if isinstance(value, timedelta):
+                value = int(value.total_seconds() * 1000)
+        elif self.expiry_type == ExpiryTypeGetEx.UNIX_SEC:
+            self.cmd_arg = "EXAT"
+            if isinstance(value, datetime):
+                value = int(value.timestamp())
+        elif self.expiry_type == ExpiryTypeGetEx.UNIX_MILLSEC:
+            self.cmd_arg = "PXAT"
+            if isinstance(value, datetime):
+                value = int(value.timestamp() * 1000)
+        elif self.expiry_type == ExpiryTypeGetEx.PERSIST:
+            self.cmd_arg = "PERSIST"
         self.value = str(value) if value else None
 
     def get_cmd_args(self) -> List[str]:
@@ -4760,4 +4832,44 @@ class CoreCommands(Protocol):
         return cast(
             List[str],
             await self._execute_command(RequestType.SRandMember, [key, str(count)]),
+        )
+
+    async def getex(
+        self,
+        key: str,
+        expiry: Optional[ExpiryGetEx] = None,
+    ) -> Optional[str]:
+        """
+        Get the value of `key` and optionally set its expiration. `GETEX` is similar to `GET`.
+        See https://valkey.io/commands/getex for more details.
+
+        Args:
+            key (str): The key to get.
+            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
+
+        Returns:
+            Optional[str]:
+                If `key` exists, return the value stored at `key`
+                If `key` does not exist, return `None`
+
+        Examples:
+            >>> await client.set("key", "value")
+                'OK'
+            >>> await client.getex("key")
+                'value'
+            >>> await client.getex("key", ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
+                'value'
+            >>> time.sleep(1)
+            >>> await client.getex("key")
+                None
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key]
+        if expiry is not None:
+            args.extend(expiry.get_cmd_args())
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.GetEx, args),
         )
