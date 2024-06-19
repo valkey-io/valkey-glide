@@ -16,7 +16,7 @@ from typing import (
     get_args,
 )
 
-from glide.async_commands.bitmap import BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -4489,6 +4489,88 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(RequestType.GetBit, [key, str(offset)]),
+        )
+
+    async def bitpos(self, key: str, bit: int, start: Optional[int] = None) -> int:
+        """
+        Returns the position of the first bit matching the given `bit` value. The optional starting offset
+        `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
+        The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
+        the last byte of the list, `-2` being the penultimate, and so on.
+
+        See https://valkey.io/commands/bitpos for more details.
+
+        Args:
+            key (str): The key of the string.
+            bit (int): The bit value to match. Must be `0` or `1`.
+            start (Optional[int]): The starting offset.
+
+        Returns:
+            int: The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+                If `start` was provided, the search begins at the offset indicated by `start`.
+
+        Examples:
+            >>> await client.set("key1", "A1")  # "A1" has binary value 01000001 00110001
+            >>> await client.bitpos("key1", 1)
+                1  # The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
+            >>> await client.bitpos("key1", 1, -1)
+                10  # The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
+        """
+        args = [key, str(bit)] if start is None else [key, str(bit), str(start)]
+        return cast(
+            int,
+            await self._execute_command(RequestType.BitPos, args),
+        )
+
+    async def bitpos_interval(
+        self,
+        key: str,
+        bit: int,
+        start: int,
+        end: int,
+        index_type: Optional[BitmapIndexType] = None,
+    ) -> int:
+        """
+        Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
+        `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
+        numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
+        being the penultimate, and so on.
+
+        If you are using Redis 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
+        `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
+        are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
+        specified, `start=0` and `end=2` means to look at the first three bytes.
+
+        See https://valkey.io/commands/bitpos for more details.
+
+        Args:
+            key (str): The key of the string.
+            bit (int): The bit value to match. Must be `0` or `1`.
+            start (int): The starting offset.
+            end (int): The ending offset.
+            index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
+                using Redis version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
+                If no index type is provided, the indexes will be assumed to be byte indexes.
+
+        Returns:
+            int: The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the binary
+                value of the string held at `key`.
+
+        Examples:
+            >>> await client.set("key1", "A12")  # "A1" has binary value 01000001 00110001 00110010
+            >>> await client.bitpos_interval("key1", 1, 1, -1)
+                10  # The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
+            >>> await client.bitpos_interval("key1", 1, 2, 9, BitmapIndexType.BIT)
+                7  # The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
+        """
+        if index_type is not None:
+            args = [key, str(bit), str(start), str(end), index_type.value]
+        else:
+            args = [key, str(bit), str(start), str(end)]
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.BitPos, args),
         )
 
     async def bitop(

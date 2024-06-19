@@ -42,6 +42,7 @@
 * Python: Added BITCOUNT command ([#1592](https://github.com/aws/glide-for-redis/pull/1592))
 * Python: Added TOUCH command ([#1582](https://github.com/aws/glide-for-redis/pull/1582))
 * Python: Added BITOP command ([#1596](https://github.com/aws/glide-for-redis/pull/1596))
+* Python: Added BITPOS command ([#1604](https://github.com/aws/glide-for-redis/pull/1604))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
