@@ -52,7 +52,7 @@ fn create_glide_string_from_string<'local>(
         Ok(obj) => obj,
         Err(e) => {
             let _ = env.throw(format!("JNI: JObject::try_from failed!. {:?}", e));
-            return JObject::null();
+            JObject::null()
         }
     }
 }
@@ -92,7 +92,7 @@ fn create_glide_string_from_bytes<'local>(
         Ok(obj) => obj,
         Err(e) => {
             let _ = env.throw(format!("JNI: JObject::try_from failed!. {:?}", e));
-            return JObject::null();
+            JObject::null()
         }
     }
 }
