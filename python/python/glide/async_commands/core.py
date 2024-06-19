@@ -337,6 +337,7 @@ class FlushMode(Enum):
 
     See https://valkey.io/commands/flushall/ and https://valkey.io/commands/function-flush/ for details
 
+    SYNC was introduced in version 6.2.0.
     """
 
     ASYNC = "ASYNC"

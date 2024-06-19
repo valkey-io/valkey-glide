@@ -3231,8 +3231,9 @@ class BaseTransaction:
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
         Command Response:
-            str: OK.
+            TOK: OK.
         """
         args = []
         if flush_mode is not None:

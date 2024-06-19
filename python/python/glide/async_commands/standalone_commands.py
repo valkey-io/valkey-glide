@@ -445,7 +445,7 @@ class StandaloneCommands(CoreCommands):
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
 
         Returns:
-            str: OK.
+            TOK: OK.
 
         Examples:
              >>> await client.flushall(FlushMode.ASYNC)

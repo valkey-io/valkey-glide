@@ -468,11 +468,11 @@ async def transaction_test(
     args.append(["one"])
     transaction.flushall(FlushMode.ASYNC)
     args.append(OK)
+    transaction.flushall()
+    args.append(OK)
 
     min_version = "6.2.0"
     if not await check_if_server_version_lt(redis_client, min_version):
-        transaction.flushall()
-        args.append(OK)
         transaction.flushall(FlushMode.SYNC)
         args.append(OK)
 

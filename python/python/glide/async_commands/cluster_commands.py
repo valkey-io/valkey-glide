@@ -494,11 +494,11 @@ class ClusterCommands(CoreCommands):
 
         Args:
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
-            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            str: OK.
+            TClusterResponse[TOK]: OK.
 
         Examples:
              >>> await client.flushall(FlushMode.ASYNC)
