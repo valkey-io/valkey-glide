@@ -112,4 +112,40 @@ public interface GenericClusterCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> exec(ClusterTransaction transaction, SingleNodeRoute route);
+
+    /**
+     * Returns a random key.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>, and will return the first successful
+     *     result.
+     * @return A random <code>key</code> from the database.
+     * @example
+     *     <pre>{@code
+     * String value = client.set("key", "value").get();
+     * String value_1 = client.set("key1", "value_1").get();
+     * String key = client.randomKey(RANDOM).get();
+     * System.out.println("The random key is: " + key);
+     * // The value of key is either "key" or "key1"
+     * }</pre>
+     */
+    CompletableFuture<String> randomKey(Route route);
+
+    /**
+     * Returns a random key.<br>
+     * The command will be routed to all primary nodes, and will return the first successful result.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
+     * @return A random <code>key</code> from the database.
+     * @example
+     *     <pre>{@code
+     * String value = client.set("key", "value").get();
+     * String value_1 = client.set("key1", "value_1").get();
+     * String key = client.randomKey().get();
+     * System.out.println("The random key is: " + key);
+     * // The value of key is either "key" or "key1"
+     * }</pre>
+     */
+    CompletableFuture<String> randomKey();
 }

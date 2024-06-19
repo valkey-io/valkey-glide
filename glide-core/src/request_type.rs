@@ -197,6 +197,7 @@ pub enum RequestType {
     SUnion = 186,
     Publish = 187,
     SPublish = 188,
+    RandomKey = 191,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -397,6 +398,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GeoSearchStore => RequestType::GeoSearchStore,
             ProtobufRequestType::Publish => RequestType::Publish,
             ProtobufRequestType::SPublish => RequestType::SPublish,
+            ProtobufRequestType::RandomKey => RequestType::RandomKey,
         }
     }
 }
@@ -593,6 +595,7 @@ impl RequestType {
             RequestType::GeoSearchStore => Some(cmd("GEOSEARCHSTORE")),
             RequestType::Publish => Some(cmd("PUBLISH")),
             RequestType::SPublish => Some(cmd("SPUBLISH")),
+            RequestType::RandomKey => Some(cmd("RANDOMKEY")),
         }
     }
 }

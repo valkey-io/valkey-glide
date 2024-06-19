@@ -120,6 +120,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
@@ -3210,6 +3211,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T type(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(Type, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns a random key from the currently selected database. *
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
+     * @return Command Response - A random <code>key</code> from the database.
+     */
+    public T randomKey() {
+        protobufTransaction.addCommands(buildCommand(RandomKey));
         return getThis();
     }
 

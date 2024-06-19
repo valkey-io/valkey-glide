@@ -156,6 +156,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
@@ -4477,6 +4478,23 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomKey() {
+        // setup
+        String key1 = "key1";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(key1);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(RandomKey), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+        CompletableFuture<String> response = service.randomKey();
+
+        // verify
+        assertEquals(testResponse, response);
     }
 
     @SneakyThrows

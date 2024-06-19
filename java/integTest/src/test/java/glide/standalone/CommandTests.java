@@ -720,4 +720,21 @@ public class CommandTests {
         response = regularClient.functionStats().get();
         checkFunctionStatsResponse(response, new String[0], 0, 0);
     }
+
+    @SneakyThrows
+    @Test
+    public void randomkey() {
+        String key1 = "{key}" + UUID.randomUUID();
+        String key2 = "{key}" + UUID.randomUUID();
+
+        assertEquals(OK, regularClient.set(key1, "a").get());
+        assertEquals(OK, regularClient.set(key2, "b").get());
+
+        String randomKey = regularClient.randomKey().get();
+        assertEquals(1L, regularClient.exists(new String[] {randomKey}).get());
+
+        // no keys in database
+        assertEquals(OK, regularClient.flushall().get());
+        assertNull(regularClient.randomKey().get());
+    }
 }
