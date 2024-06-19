@@ -12,7 +12,7 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, Transaction
-from glide.constants import TOK, TResult
+from glide.constants import OK, TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 
 
@@ -416,24 +416,24 @@ class StandaloneCommands(CoreCommands):
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
-    async def publish(self, message: str, channel: str) -> int:
+    async def publish(self, message: str, channel: str) -> TOK:
         """
         Publish message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
 
         Args:
-            message: Message to publish
-            channel: Channel to publish the message on.
+            message (str): Message to publish
+            channel (str): Channel to publish the message on.
 
         Returns:
-            int: Number of clients that received the message.
+            TOK: a simple `OK` response.
 
         Examples:
             >>> await client.publish("Hi all!", "global-channel")
-                1  # Publishes "Hi all!" message on global-channel channel
+                "OK"
         """
-        result = await self._execute_command(RequestType.Publish, [channel, message])
-        return cast(int, result)
+        await self._execute_command(RequestType.Publish, [channel, message])
+        return cast(TOK, OK)
 
     async def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
         """
