@@ -551,7 +551,7 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void getexOptions() {
+    public void getex_options() {
         // setup
         GetExOptions options = GetExOptions.Seconds(10L);
         String[] arguments = new String[] {"key", "EX", "10"};

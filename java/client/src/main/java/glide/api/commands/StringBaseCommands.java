@@ -83,8 +83,8 @@ public interface StringBaseCommands {
      * @since Redis 6.2.0.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return If <code>key</code> exists, return the value of the <code>key</code>. Otherwise, return
-     *     <code>null</code>.
+     * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
+     *     Otherwise, return <code>null</code>.
      * @example
      *     <pre>{@code
      * String value = client.getex("key").get();
@@ -100,8 +100,8 @@ public interface StringBaseCommands {
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The {@link GetExOptions} options.
-     * @return If <code>key</code> exists, return the value of the <code>key</code>. Otherwise, return
-     *     <code>null</code>.
+     * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
+     *     Otherwise, return <code>null</code>.
      * @example
      *     <pre>{@code
      * String response = client.set("key", "value").get();
