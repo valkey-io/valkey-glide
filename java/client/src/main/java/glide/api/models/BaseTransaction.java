@@ -415,7 +415,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.2.0.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @param options The GetEx options.
+     * @param options The {@link GetExOptions} options.
      * @return Command Response - If <code>key</code> exists, return the value of the <code>key</code>
      *     . Otherwise, return <code>null</code>.
      */

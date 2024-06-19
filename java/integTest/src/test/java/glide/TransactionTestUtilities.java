@@ -210,6 +210,7 @@ public class TransactionTestUtilities {
         String stringKey6 = "{StringKey}-6-" + UUID.randomUUID();
         String stringKey7 = "{StringKey}-7-" + UUID.randomUUID();
         String stringKey8 = "{StringKey}-8-" + UUID.randomUUID();
+        String stringKey9 = "{StringKey}-9-" + UUID.randomUUID();
 
         transaction
                 .flushall()
@@ -235,10 +236,6 @@ public class TransactionTestUtilities {
                 .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
                 .mget(new String[] {stringKey4, stringKey5});
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            transaction.getex(stringKey1).getex(stringKey1, GetExOptions.Seconds(20L));
-        }
-
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .set(stringKey6, "abcd")
@@ -248,6 +245,13 @@ public class TransactionTestUtilities {
                     .lcs(stringKey6, stringKey8)
                     .lcsLen(stringKey6, stringKey7)
                     .lcsLen(stringKey6, stringKey8);
+        }
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            transaction
+                    .set(stringKey9, value1)
+                    .getex(stringKey9)
+                    .getex(stringKey9, GetExOptions.Seconds(20L));
         }
 
         var expectedResults =
@@ -276,16 +280,6 @@ public class TransactionTestUtilities {
                     new String[] {"foo", null}, // mget({stringKey4, stringKey5})
                 };
 
-        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
-            expectedResults =
-                    concatenateArrays(
-                            expectedResults,
-                            new Object[] {
-                                value1, // getex(stringKey1)
-                                value1, // getex(stringKey1,GetExOptions.Seconds(20L))
-                            });
-        }
-
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             expectedResults =
                     concatenateArrays(
@@ -298,6 +292,17 @@ public class TransactionTestUtilities {
                                 "", // lcs(stringKey6, stringKey8)
                                 3L, // lcsLEN(stringKey6, stringKey7)
                                 0L, // lcsLEN(stringKey6, stringKey8)
+                            });
+        }
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey9, value1)
+                                value1, // getex(stringKey1)
+                                value1, // getex(stringKey1,GetExOptions.Seconds(20L))
                             });
         }
 
