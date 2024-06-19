@@ -5,7 +5,12 @@ from __future__ import annotations
 from typing import Dict, List, Mapping, Optional, cast
 
 from glide.async_commands.command_args import Limit, OrderBy
-from glide.async_commands.core import CoreCommands, InfoSection, _build_sort_args
+from glide.async_commands.core import (
+    CoreCommands,
+    FlushMode,
+    InfoSection,
+    _build_sort_args,
+)
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
 from glide.constants import TOK, TClusterResponse, TResult, TSingleNodeRoute
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -478,3 +483,34 @@ class ClusterCommands(CoreCommands):
             RequestType.SPublish if sharded else RequestType.Publish, [channel, message]
         )
         return cast(int, result)
+
+    async def flushall(
+        self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TClusterResponse[TOK]:
+        """
+        Deletes all the keys of all the existing databases. This command never fails.
+
+        See https://valkey.io/commands/flushall for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[TOK]: OK.
+
+        Examples:
+             >>> await client.flushall(FlushMode.ASYNC)
+                 OK  # This command never fails.
+             >>> await client.flushall(FlushMode.ASYNC, AllNodes())
+                 OK  # This command never fails.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+
+        return cast(
+            TClusterResponse[TOK],
+            await self._execute_command(RequestType.FlushAll, args, route),
+        )
