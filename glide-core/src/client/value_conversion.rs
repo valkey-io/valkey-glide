@@ -860,9 +860,21 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             }),
         }),
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
-        b"HEXISTS" | b"HSETNX" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT"
-        | b"SISMEMBER" | b"PERSIST" | b"SMOVE" | b"RENAMENX" | b"MOVE" | b"COPY"
-        | b"XGROUP DESTROY" | b"MSETNX" => Some(ExpectedReturnType::Boolean),
+        b"HEXISTS"
+        | b"HSETNX"
+        | b"EXPIRE"
+        | b"EXPIREAT"
+        | b"PEXPIRE"
+        | b"PEXPIREAT"
+        | b"SISMEMBER"
+        | b"PERSIST"
+        | b"SMOVE"
+        | b"RENAMENX"
+        | b"MOVE"
+        | b"COPY"
+        | b"MSETNX"
+        | b"XGROUP DESTROY"
+        | b"XGROUP CREATECONSUMER" => Some(ExpectedReturnType::Boolean),
         b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
         b"SMEMBERS" | b"SINTER" | b"SDIFF" | b"SUNION" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),

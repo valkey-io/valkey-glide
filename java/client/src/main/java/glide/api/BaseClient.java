@@ -122,6 +122,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -1410,6 +1412,20 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> xgroupDestroy(@NonNull String key, @NonNull String groupname) {
         return commandManager.submitNewCommand(
                 XGroupDestroy, new String[] {key, groupname}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> xgroupCreateConsumer(
+            @NonNull String key, @NonNull String group, @NonNull String consumer) {
+        return commandManager.submitNewCommand(
+                XGroupCreateConsumer, new String[] {key, group, consumer}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> xgroupDelConsumer(
+            @NonNull String key, @NonNull String group, @NonNull String consumer) {
+        return commandManager.submitNewCommand(
+                XGroupDelConsumer, new String[] {key, group, consumer}, this::handleLongResponse);
     }
 
     @Override

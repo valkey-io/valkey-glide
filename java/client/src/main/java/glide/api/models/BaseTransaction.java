@@ -150,6 +150,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -3008,6 +3010,40 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T xgroupDestroy(@NonNull String key, @NonNull String groupname) {
         protobufTransaction.addCommands(buildCommand(XGroupDestroy, buildArgs(key, groupname)));
+        return getThis();
+    }
+
+    /**
+     * Creates a consumer named <code>consumer</code> in the consumer group <code>group</code> for the
+     * stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-createconsumer/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @return Command Response - <code>true</code> if the consumer is created. Otherwise, <code>false
+     *     </code>.
+     */
+    public T xgroupCreateConsumer(
+            @NonNull String key, @NonNull String group, @NonNull String consumer) {
+        protobufTransaction.addCommands(
+                buildCommand(XGroupCreateConsumer, buildArgs(key, group, consumer)));
+        return getThis();
+    }
+
+    /**
+     * Deletes a consumer named <code>consumer</code> in the consumer group <code>group</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @return Command Response - The number of pending messages the <code>consumer</code> had before
+     *     it was deleted.
+     */
+    public T xgroupDelConsumer(@NonNull String key, @NonNull String group, @NonNull String consumer) {
+        protobufTransaction.addCommands(
+                buildCommand(XGroupDelConsumer, buildArgs(key, group, consumer)));
         return getThis();
     }
 
