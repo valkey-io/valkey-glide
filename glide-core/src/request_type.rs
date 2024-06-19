@@ -173,6 +173,7 @@ pub enum RequestType {
     FunctionKill = 161,
     FunctionStats = 162,
     FCallReadOnly = 163,
+    FlushDB = 164,
     LSet = 165,
     XDel = 166,
     XRange = 167,
@@ -198,6 +199,7 @@ pub enum RequestType {
     SPublish = 188,
     XGroupCreateConsumer = 189,
     XGroupDelConsumer = 190,
+    RandomKey = 191,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -373,6 +375,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FunctionKill => RequestType::FunctionKill,
             ProtobufRequestType::FunctionStats => RequestType::FunctionStats,
             ProtobufRequestType::FCallReadOnly => RequestType::FCallReadOnly,
+            ProtobufRequestType::FlushDB => RequestType::FlushDB,
             ProtobufRequestType::LSet => RequestType::LSet,
             ProtobufRequestType::XDel => RequestType::XDel,
             ProtobufRequestType::XRange => RequestType::XRange,
@@ -399,6 +402,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SPublish => RequestType::SPublish,
             ProtobufRequestType::XGroupCreateConsumer => RequestType::XGroupCreateConsumer,
             ProtobufRequestType::XGroupDelConsumer => RequestType::XGroupDelConsumer,
+            ProtobufRequestType::RandomKey => RequestType::RandomKey,
         }
     }
 }
@@ -570,6 +574,7 @@ impl RequestType {
             RequestType::FunctionKill => Some(get_two_word_command("FUNCTION", "KILL")),
             RequestType::FunctionStats => Some(get_two_word_command("FUNCTION", "STATS")),
             RequestType::FCallReadOnly => Some(cmd("FCALL_RO")),
+            RequestType::FlushDB => Some(cmd("FLUSHDB")),
             RequestType::LSet => Some(cmd("LSET")),
             RequestType::XDel => Some(cmd("XDEL")),
             RequestType::XRange => Some(cmd("XRANGE")),
@@ -598,6 +603,7 @@ impl RequestType {
                 Some(get_two_word_command("XGROUP", "CREATECONSUMER"))
             }
             RequestType::XGroupDelConsumer => Some(get_two_word_command("XGROUP", "DELCONSUMER")),
+            RequestType::RandomKey => Some(cmd("RANDOMKEY")),
         }
     }
 }

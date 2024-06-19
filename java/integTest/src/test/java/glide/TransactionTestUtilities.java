@@ -209,7 +209,9 @@ public class TransactionTestUtilities {
         String stringKey8 = "{StringKey}-8-" + UUID.randomUUID();
 
         transaction
+                .flushall()
                 .set(stringKey1, value1)
+                .randomKey()
                 .get(stringKey1)
                 .getdel(stringKey1)
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
@@ -243,7 +245,9 @@ public class TransactionTestUtilities {
 
         var expectedResults =
                 new Object[] {
+                    OK, // flushall()
                     OK, // set(stringKey1, value1)
+                    stringKey1, // randomKey()
                     value1, // get(stringKey1)
                     value1, // getdel(stringKey1)
                     null, // set(stringKey2, value2, returnOldValue(true))
@@ -669,6 +673,8 @@ public class TransactionTestUtilities {
                 .lolwut(1)
                 .flushall()
                 .flushall(ASYNC)
+                .flushdb()
+                .flushdb(ASYNC)
                 .dbsize();
 
         return new Object[] {
@@ -678,6 +684,8 @@ public class TransactionTestUtilities {
             "Redis ver. " + REDIS_VERSION + '\n', // lolwut(1)
             OK, // flushall()
             OK, // flushall(ASYNC)
+            OK, // flushdb()
+            OK, // flushdb(ASYNC)
             0L, // dbsize()
         };
     }

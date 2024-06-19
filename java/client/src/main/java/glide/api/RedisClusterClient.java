@@ -21,6 +21,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
@@ -31,6 +32,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
@@ -347,6 +349,30 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> flushdb() {
+        return commandManager.submitNewCommand(FlushDB, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb(@NonNull FlushMode mode) {
+        return commandManager.submitNewCommand(
+                FlushDB, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb(@NonNull SingleNodeRoute route) {
+        return commandManager.submitNewCommand(
+                FlushDB, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb(
+            @NonNull FlushMode mode, @NonNull SingleNodeRoute route) {
+        return commandManager.submitNewCommand(
+                FlushDB, new String[] {mode.toString()}, route, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> lolwut() {
         return commandManager.submitNewCommand(Lolwut, new String[0], this::handleStringResponse);
     }
@@ -659,5 +685,22 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> unwatch(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 UnWatch, new String[0], route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> unwatch() {
+        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> randomKey(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                RandomKey, new String[0], route, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> randomKey() {
+        return commandManager.submitNewCommand(
+                RandomKey, new String[0], this::handleStringOrNullResponse);
     }
 }

@@ -18,6 +18,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
@@ -29,13 +30,16 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
+import glide.api.commands.TransactionsCommands;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -56,7 +60,8 @@ public class RedisClient extends BaseClient
         implements GenericCommands,
                 ServerManagementCommands,
                 ConnectionManagementCommands,
-                ScriptingAndFunctionsCommands {
+                ScriptingAndFunctionsCommands,
+                TransactionsCommands {
 
     protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -170,6 +175,17 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String> flushall(@NonNull FlushMode mode) {
         return commandManager.submitNewCommand(
                 FlushAll, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb() {
+        return commandManager.submitNewCommand(FlushDB, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb(@NonNull FlushMode mode) {
+        return commandManager.submitNewCommand(
+                FlushDB, new String[] {mode.toString()}, this::handleStringResponse);
     }
 
     @Override
@@ -296,5 +312,16 @@ public class RedisClient extends BaseClient
                 FunctionStats,
                 new String[0],
                 response -> handleFunctionStatsResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> unwatch() {
+        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> randomKey() {
+        return commandManager.submitNewCommand(
+                RandomKey, new String[0], this::handleStringOrNullResponse);
     }
 }

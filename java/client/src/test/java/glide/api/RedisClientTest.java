@@ -87,6 +87,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
@@ -155,6 +156,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
@@ -4534,6 +4536,23 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void randomKey() {
+        // setup
+        String key1 = "key1";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(key1);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(RandomKey), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+        CompletableFuture<String> response = service.randomKey();
+
+        // verify
+        assertEquals(testResponse, response);
+    }
+
+    @SneakyThrows
+    @Test
     public void rename() {
         // setup
         String key = "key1";
@@ -4649,6 +4668,47 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String> response = service.flushall(SYNC);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushdb_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FlushDB), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushdb();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushdb_with_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(FlushDB), eq(new String[] {SYNC.toString()}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushdb(SYNC);
         String payload = response.get();
 
         // verify

@@ -67,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
@@ -133,6 +134,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
@@ -793,6 +795,10 @@ public class TransactionTests {
         results.add(Pair.of(FlushAll, buildArgs()));
         results.add(Pair.of(FlushAll, buildArgs(ASYNC.toString())));
 
+        transaction.flushdb().flushdb(ASYNC);
+        results.add(Pair.of(FlushDB, buildArgs()));
+        results.add(Pair.of(FlushDB, buildArgs(ASYNC.toString())));
+
         transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(Lolwut, buildArgs()));
         results.add(Pair.of(Lolwut, buildArgs(VERSION_REDIS_API, "5")));
@@ -819,6 +825,9 @@ public class TransactionTests {
 
         transaction.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
+
+        transaction.randomKey();
+        results.add(Pair.of(RandomKey, buildArgs()));
 
         transaction.rename("key", "newKey");
         results.add(Pair.of(Rename, buildArgs("key", "newKey")));

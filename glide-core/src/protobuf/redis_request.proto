@@ -203,6 +203,7 @@ enum RequestType {
     FunctionKill = 161;
     FunctionStats = 162;
     FCallReadOnly = 163;
+    FlushDB = 164;
     LSet = 165;
     XDel = 166;
     XRange = 167;
@@ -228,6 +229,7 @@ enum RequestType {
     SPublish = 188;
     XGroupCreateConsumer = 189;
     XGroupDelConsumer = 190;
+    RandomKey = 191;
 }
 
 message Command {

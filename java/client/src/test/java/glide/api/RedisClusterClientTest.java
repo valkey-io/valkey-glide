@@ -29,6 +29,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FCall;
 import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
@@ -39,6 +40,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
@@ -922,6 +924,88 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void flushdb_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FlushDB), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushdb();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushdb_with_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(FlushDB), eq(new String[] {SYNC.toString()}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushdb(SYNC);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushdb_with_route_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FlushDB), eq(new String[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushdb(RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void flushdb_with_route_and_mode_returns_success() {
+        // setup
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(FlushDB), eq(new String[] {SYNC.toString()}), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.flushdb(SYNC, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lolwut_returns_success() {
         // setup
         String value = "pewpew";
@@ -1777,5 +1861,41 @@ public class RedisClusterClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomKey_with_route() {
+        // setup
+        String key1 = "key1";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(key1);
+        Route route = ALL_NODES;
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(RandomKey), eq(new String[0]), eq(route), any()))
+                .thenReturn(testResponse);
+        CompletableFuture<String> response = service.randomKey(route);
+
+        // verify
+        assertEquals(testResponse, response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomKey() {
+        // setup
+        String key1 = "key1";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(key1);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(RandomKey), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+        CompletableFuture<String> response = service.randomKey();
+
+        // verify
+        assertEquals(testResponse, response);
     }
 }
