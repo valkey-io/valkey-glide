@@ -4345,6 +4345,41 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrevrank(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        string_key = get_random_string(10)
+        member_scores = {"one": 1.0, "two": 2.0, "three": 3.0}
+
+        assert await redis_client.zadd(key, member_scores) == 3
+        assert await redis_client.zrevrank(key, "three") == 0
+        assert await redis_client.zrevrank(key, "non_existing_member") is None
+        assert (
+            await redis_client.zrevrank(non_existing_key, "non_existing_member") is None
+        )
+
+        if not check_if_server_version_lt(redis_client, "7.2.0"):
+            assert await redis_client.zrevrank_withscore(key, "one") == [2, 1.0]
+            assert (
+                await redis_client.zrevrank_withscore(key, "non_existing_member")
+                is None
+            )
+            assert (
+                await redis_client.zrevrank_withscore(
+                    non_existing_key, "non_existing_member"
+                )
+                is None
+            )
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrevrank(string_key, "member")
+        with pytest.raises(RequestError):
+            await redis_client.zrevrank_withscore(string_key, "member")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zmpop(self, redis_client: TRedisClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
