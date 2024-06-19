@@ -200,7 +200,7 @@ pub enum RequestType {
     XGroupCreateConsumer = 189,
     XGroupDelConsumer = 190,
     RandomKey = 191,
-    GetEx = 195,
+    GetEx = 192,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
