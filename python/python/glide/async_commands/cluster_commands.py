@@ -466,12 +466,12 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
 
         Args:
-            message: Message to publish
-            channel: Channel to publish the message on.
-            sharded: Use sharded pubsub mode.
+            message (str): Message to publish
+            channel (str): Channel to publish the message on.
+            sharded (bool): Use sharded pubsub mode.
 
         Returns:
-            int: Number of clients that received the message.
+            int: Number of subscriptions in that shard that received the message.
 
         Examples:
             >>> await client.publish("Hi all!", "global-channel", False)
