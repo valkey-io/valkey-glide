@@ -9,6 +9,8 @@ from glide import RequestError
 from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
+    ExpiryGetEx,
+    ExpiryTypeGetEx,
     FlushMode,
     InsertPosition,
     StreamAddOptions,
@@ -64,6 +66,7 @@ async def transaction_test(
     key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
     key20 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
+    key22 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # getex
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -479,6 +482,15 @@ async def transaction_test(
     if not await check_if_server_version_lt(redis_client, min_version):
         transaction.flushall(FlushMode.SYNC)
         args.append(OK)
+
+    min_version = "6.2.0"
+    if not await check_if_server_version_lt(redis_client, min_version):
+        transaction.set(key22, "value")
+        args.append(OK)
+        transaction.getex(key22)
+        args.append("value")
+        transaction.getex(key22, ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
+        args.append("value")
 
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):

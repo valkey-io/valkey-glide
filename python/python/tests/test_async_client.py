@@ -16,8 +16,10 @@ from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
+    ExpiryGetEx,
     ExpirySet,
     ExpiryType,
+    ExpiryTypeGetEx,
     FlushMode,
     InfBound,
     InfoSection,
@@ -5234,6 +5236,41 @@ class TestCommands:
                 assert await redis_client.flushall(FlushMode.SYNC, AllPrimaries()) is OK
             assert await redis_client.dbsize() == 0
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_getex(self, redis_client: TRedisClient):
+        min_version = "6.2.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        value = get_random_string(10)
+
+        assert await redis_client.set(key1, value) == OK
+        assert await redis_client.getex(non_existing_key) is None
+        assert await redis_client.getex(key1) == value
+        assert await redis_client.ttl(key1) == -1
+
+        # setting expiration timer
+        assert (
+            await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 50))
+            == value
+        )
+        assert await redis_client.ttl(key1) != -1
+
+        # setting and clearing expiration timer
+        assert await redis_client.set(key1, value) == OK
+        assert (
+            await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.SEC, 10))
+            == value
+        )
+        assert (
+            await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
+            == value
+        )
+        assert await redis_client.ttl(key1) == -1
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -5355,6 +5392,50 @@ class TestCommandsUnitTests:
             datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
         )
         assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
+
+    def test_get_expiry_cmd_args(self):
+        exp_sec = ExpiryGetEx(ExpiryTypeGetEx.SEC, 5)
+        assert exp_sec.get_cmd_args() == ["EX", "5"]
+
+        exp_sec_timedelta = ExpiryGetEx(ExpiryTypeGetEx.SEC, timedelta(seconds=5))
+        assert exp_sec_timedelta.get_cmd_args() == ["EX", "5"]
+
+        exp_millsec = ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 5)
+        assert exp_millsec.get_cmd_args() == ["PX", "5"]
+
+        exp_millsec_timedelta = ExpiryGetEx(
+            ExpiryTypeGetEx.MILLSEC, timedelta(seconds=5)
+        )
+        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
+
+        exp_millsec_timedelta = ExpiryGetEx(
+            ExpiryTypeGetEx.MILLSEC, timedelta(seconds=5)
+        )
+        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
+
+        exp_unix_sec = ExpiryGetEx(ExpiryTypeGetEx.UNIX_SEC, 1682575739)
+        assert exp_unix_sec.get_cmd_args() == ["EXAT", "1682575739"]
+
+        exp_unix_sec_datetime = ExpiryGetEx(
+            ExpiryTypeGetEx.UNIX_SEC,
+            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
+        )
+        assert exp_unix_sec_datetime.get_cmd_args() == ["EXAT", "1682639759"]
+
+        exp_unix_millisec = ExpiryGetEx(ExpiryTypeGetEx.UNIX_MILLSEC, 1682586559964)
+        assert exp_unix_millisec.get_cmd_args() == ["PXAT", "1682586559964"]
+
+        exp_unix_millisec_datetime = ExpiryGetEx(
+            ExpiryTypeGetEx.UNIX_MILLSEC,
+            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
+        )
+        assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
+
+        exp_persist = ExpiryGetEx(
+            ExpiryTypeGetEx.PERSIST,
+            None,
+        )
+        assert exp_persist.get_cmd_args() == ["PERSIST"]
 
     def test_expiry_raises_on_value_error(self):
         with pytest.raises(ValueError):
