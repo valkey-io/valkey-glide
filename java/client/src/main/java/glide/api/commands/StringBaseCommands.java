@@ -184,6 +184,24 @@ public interface StringBaseCommands {
     CompletableFuture<String[]> mget(String[] keys);
 
     /**
+     * Retrieves the values of multiple <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
+     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @param keys A list of keys to retrieve values for.
+     * @return An array of values corresponding to the provided <code>keys</code>.<br>
+     *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * GlideString[] values = client.mget(new GlideString[] {"key1", "key2"}).get();
+     * assert values.equals(new GlideString[] {"value1", "value2"});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> mget(GlideString[] keys);
+
+    /**
      * Sets multiple keys to multiple values in a single operation.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>

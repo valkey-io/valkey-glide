@@ -449,6 +449,23 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void mset_mget_binary(BaseClient client) {
+        // keys are from different slots
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> keyValueMap = Map.of(key1, value, key2, value, key3, value);
+
+        assertEquals(OK, client.mset(keyValueMap).get());
+        assertArrayEquals(
+                new GlideString[] {gs(value), gs(value), gs(value)},
+                client.mget(new GlideString[] {gs(key1), gs(key2), gs(key3)}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void incr_commands_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
@@ -767,6 +784,24 @@ public class SharedCommandTests {
         Map<String, String> fieldValueMap = Map.of(field1, value, field2, value);
 
         assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertEquals(fieldValueMap, client.hgetall(key).get());
+        assertEquals(Map.of(), client.hgetall("non_existing_key").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hgetall_binary_api(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<String, String> fieldValueMapStrings =
+                Map.of(field1.getString(), value.getString(), field2.getString(), value.getString());
+        Map<GlideString, GlideString> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key.getString(), fieldValueMapStrings).get());
+        // use the binary API (GlideString)
         assertEquals(fieldValueMap, client.hgetall(key).get());
         assertEquals(Map.of(), client.hgetall("non_existing_key").get());
     }

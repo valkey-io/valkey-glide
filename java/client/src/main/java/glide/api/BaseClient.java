@@ -394,6 +394,10 @@ public abstract class BaseClient
                 response);
     }
 
+    protected Object[] handleArrayOrNullResponseBinary(Response response) throws RedisException {
+        return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+    }
+
     /**
      * @param response A Protobuf response
      * @return A map of <code>String</code> to <code>V</code>.
@@ -402,6 +406,17 @@ public abstract class BaseClient
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
         return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of <code>GlideString</code> to <code>V</code>.
+     * @param <V> Value type.
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
+    protected <V> Map<GlideString, V> handleMapResponseBinary(Response response)
+            throws RedisException {
+        return handleRedisResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
     /**
@@ -526,6 +541,14 @@ public abstract class BaseClient
     public CompletableFuture<String[]> mget(@NonNull String[] keys) {
         return commandManager.submitNewCommand(
                 MGet, keys, response -> castArray(handleArrayOrNullResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> mget(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(
+                MGet,
+                keys,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -670,6 +693,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, String>> hgetall(@NonNull String key) {
         return commandManager.submitNewCommand(HGetAll, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, GlideString>> hgetall(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                HGetAll, new GlideString[] {key}, this::handleMapResponseBinary);
     }
 
     @Override
