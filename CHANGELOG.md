@@ -40,6 +40,7 @@
 * Python: Added SRandMember command ([#1578](https://github.com/aws/glide-for-redis/pull/1578))
 * Python: Added GETBIT command ([#1575](https://github.com/aws/glide-for-redis/pull/1575))
 * Python: Added BITCOUNT command ([#1592](https://github.com/aws/glide-for-redis/pull/1592))
+* Python: Added FLUSHALL command ([#1579](https://github.com/aws/glide-for-redis/pull/1579))
 * Python: Added TOUCH command ([#1582](https://github.com/aws/glide-for-redis/pull/1582))
 * Python: Added BITOP command ([#1596](https://github.com/aws/glide-for-redis/pull/1596))
 * Python: Added BITPOS command ([#1604](https://github.com/aws/glide-for-redis/pull/1604))
