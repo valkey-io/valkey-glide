@@ -85,9 +85,13 @@ jobs:
               with:
                   redis-version: ${{ matrix.redis }}
 
+            - name: Create secret key ring file
+              working-directory: java
+              run: echo ${{ secrets.SECRING_GPG }} > secring.gpg
+
             - name: Build java client
               working-directory: java
-              run: ./gradlew --continue build
+              run: ./gradlew --continue build -Psigning.secretKeyRingFile=secring.gpg -Psigning.password=${{ secrets.GPG_PASSWORD }} -Psigning.keyId=${{ secrets.GPG_ID }}
 
             - name: Ensure no skipped files by linter
               working-directory: java

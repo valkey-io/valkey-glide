@@ -3,6 +3,7 @@ import java.nio.file.Paths
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'signing'
 }
 
 repositories {
@@ -211,6 +212,10 @@ publishing {
     repositories {
         mavenLocal()
     }
+}
+
+signing {
+    sign publishing.publications.maven
 }
 
 tasks.withType(Test) {
