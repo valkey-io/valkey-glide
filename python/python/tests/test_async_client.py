@@ -5431,6 +5431,12 @@ class TestCommandsUnitTests:
         )
         assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
 
+        exp_persist = ExpiryGetEx(
+            ExpiryTypeGetEx.PERSIST,
+            None,
+        )
+        assert exp_persist.get_cmd_args() == ["PERSIST"]
+
     def test_expiry_raises_on_value_error(self):
         with pytest.raises(ValueError):
             ExpirySet(ExpiryType.SEC, 5.5)
