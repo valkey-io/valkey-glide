@@ -372,4 +372,39 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> xgroupDestroy(String key, String groupname);
+
+    /**
+     * Creates a consumer named <code>consumer</code> in the consumer group <code>group</code> for the
+     * stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-createconsumer/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @return <code>true</code> if the consumer is created. Otherwise, <code>false</code>.
+     * @example
+     *     <pre>{@code
+     * // Creates the consumer "myconsumer" in consumer group "mygroup"
+     * assert client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer").get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> xgroupCreateConsumer(String key, String group, String consumer);
+
+    /**
+     * Deletes a consumer named <code>consumer</code> in the consumer group <code>group</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @return The number of pending messages the <code>consumer</code> had before it was deleted.
+     * @example
+     *     <pre>{@code
+     * // Deletes the consumer "myconsumer" in consumer group "mygroup"
+     * Long pendingMsgCount = client.xgroupDelConsumer("mystream", "mygroup", "myconsumer").get();
+     * System.out.println("Consumer 'myconsumer' had " +
+     *     + pendingMsgCount + " pending messages unclaimed.");
+     * }</pre>
+     */
+    CompletableFuture<Long> xgroupDelConsumer(String key, String group, String consumer);
 }
