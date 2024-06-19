@@ -47,8 +47,8 @@ public class GetExOptions {
     /**
      * Set the specified expire time, in milliseconds. Equivalent to <code>PX</code> in the Redis API.
      *
-     * @param milliseconds The time to expire, in seconds.
-     * @return Expiry
+     * @param milliseconds The time to expire, in milliseconds.
+     * @return The options specifying the given expiry.
      */
     public static GetExOptions Milliseconds(Long milliseconds) {
         return new GetExOptions(MILLISECONDS, milliseconds);
@@ -59,7 +59,7 @@ public class GetExOptions {
      * EXAT</code> in the Redis API.
      *
      * @param unixSeconds The <code>UNIX TIME</code> to expire, in seconds.
-     * @return Expiry
+     * @return The options specifying the given expiry.
      */
     public static GetExOptions UnixSeconds(Long unixSeconds) {
         return new GetExOptions(UNIX_SECONDS, unixSeconds);
@@ -70,7 +70,7 @@ public class GetExOptions {
      * PXAT</code> in the Redis API.
      *
      * @param unixMilliseconds The <code>UNIX TIME</code> to expire, in milliseconds.
-     * @return Expiry
+     * @return The options specifying the given expiry.
      */
     public static GetExOptions UnixMilliseconds(Long unixMilliseconds) {
         return new GetExOptions(UNIX_MILLISECONDS, unixMilliseconds);

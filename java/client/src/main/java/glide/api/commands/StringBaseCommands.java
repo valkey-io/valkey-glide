@@ -110,7 +110,7 @@ public interface StringBaseCommands {
      * assert value.equals("value");
      * }</pre>
      */
-    CompletableFuture<String> getex(String key, @NonNull GetExOptions options);
+    CompletableFuture<String> getex(String key, GetExOptions options);
 
     /**
      * Gets a string value associated with the given <code>key</code> and deletes the key.
