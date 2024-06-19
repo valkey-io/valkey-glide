@@ -87,6 +87,8 @@ __all__ = [
     # Response
     "OK",
     # Commands
+    "BitmapIndexType",
+    "BitwiseOperation",
     "Script",
     "ScoreBoundary",
     "ConditionalChange",
@@ -106,6 +108,7 @@ __all__ = [
     "LexBoundary",
     "Limit",
     "ListDirection",
+    "OffsetOptions",
     "RangeByIndex",
     "RangeByLex",
     "RangeByScore",
