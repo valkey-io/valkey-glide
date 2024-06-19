@@ -111,7 +111,11 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
     fn redis_value_to_py(py: Python, val: Value) -> PyResult<PyObject> {
         match val {
             Value::Nil => Ok(py.None()),
-            Value::SimpleString(str) => Ok(str.into_py(py)),
+            Value::SimpleString(str) => {
+                let data_bytes = PyBytes::new(py, str.as_bytes());
+                Ok(data_bytes.into_py(py))
+                // Ok(str.into_py(py)),
+            }
             Value::Okay => Ok("OK".into_py(py)),
             Value::Int(num) => Ok(num.into_py(py)),
             Value::BulkString(data) => {
