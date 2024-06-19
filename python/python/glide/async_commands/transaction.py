@@ -9,6 +9,7 @@ from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
     ExpirySet,
+    FlushMode,
     GeospatialData,
     GeoUnit,
     InfoSection,
@@ -3284,6 +3285,24 @@ class BaseTransaction:
                 If the set does not exist or is empty, the response will be an empty list.
         """
         return self.append_command(RequestType.SRandMember, [key, str(count)])
+
+    def flushall(
+        self: TTransaction, flush_mode: Optional[FlushMode] = None
+    ) -> TTransaction:
+        """
+        Deletes all the keys of all the existing databases. This command never fails.
+        See https://valkey.io/commands/flushall for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Command Response:
+            TOK: OK.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+        return self.append_command(RequestType.FlushAll, args)
 
 
 class Transaction(BaseTransaction):

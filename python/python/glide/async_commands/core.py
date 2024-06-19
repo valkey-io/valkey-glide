@@ -329,6 +329,21 @@ class InsertPosition(Enum):
     AFTER = "AFTER"
 
 
+class FlushMode(Enum):
+    """
+    Defines flushing mode for:
+
+    `FLUSHALL` command and `FUNCTION FLUSH` command.
+
+    See https://valkey.io/commands/flushall/ and https://valkey.io/commands/function-flush/ for details
+
+    SYNC was introduced in version 6.2.0.
+    """
+
+    ASYNC = "ASYNC"
+    SYNC = "SYNC"
+
+
 def _build_sort_args(
     key: str,
     by_pattern: Optional[str] = None,

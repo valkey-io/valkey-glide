@@ -8,7 +8,12 @@ import pytest
 from glide import RequestError
 from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
-from glide.async_commands.core import InsertPosition, StreamAddOptions, TrimByMinId
+from glide.async_commands.core import (
+    FlushMode,
+    InsertPosition,
+    StreamAddOptions,
+    TrimByMinId,
+)
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -465,6 +470,15 @@ async def transaction_test(
     args.append("one")
     transaction.srandmember_count(key7, 1)
     args.append(["one"])
+    transaction.flushall(FlushMode.ASYNC)
+    args.append(OK)
+    transaction.flushall()
+    args.append(OK)
+
+    min_version = "6.2.0"
+    if not await check_if_server_version_lt(redis_client, min_version):
+        transaction.flushall(FlushMode.SYNC)
+        args.append(OK)
 
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):
