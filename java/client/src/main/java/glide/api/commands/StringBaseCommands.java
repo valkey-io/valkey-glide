@@ -78,10 +78,9 @@ public interface StringBaseCommands {
     CompletableFuture<String> getdel(String key);
 
     /**
-     * Gets the value associated with the given <code>key</code>. <code>GETEX</code>is similar to
-     * {@see #get}.
+     * Gets the value associated with the given <code>key</code>.
      *
-     * @since Redis 6.0.6.
+     * @since Redis 6.2.0.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return If <code>key</code> exists, return the value of the <code>key</code>. Otherwise, return
@@ -90,16 +89,14 @@ public interface StringBaseCommands {
      *     <pre>{@code
      * String value = client.getex("key").get();
      * assert value.equals("value");
-     *
      * }</pre>
      */
-    CompletableFuture<String> getex(@NonNull String key);
+    CompletableFuture<String> getex(String key);
 
     /**
-     * Gets the value associated with the given <code>key</code> and optionally sets its expiration.
-     * <code>GETEX</code> is similar to {@see #get}.
+     * Gets the value associated with the given <code>key</code>.
      *
-     * @since Redis 6.0.6.
+     * @since Redis 6.2.0.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The GetEx options.
@@ -111,10 +108,9 @@ public interface StringBaseCommands {
      * assert response.equals(OK);
      * String value = client.getex("key", GetExOptions.Seconds(10L)).get();
      * assert value.equals("value");
-     * ass
      * }</pre>
      */
-    CompletableFuture<String> getex(@NonNull String key, @NonNull GetExOptions options);
+    CompletableFuture<String> getex(String key, @NonNull GetExOptions options);
 
     /**
      * Gets a string value associated with the given <code>key</code> and deletes the key.

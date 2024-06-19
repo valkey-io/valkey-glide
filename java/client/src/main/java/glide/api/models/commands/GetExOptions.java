@@ -37,8 +37,8 @@ public class GetExOptions {
     /**
      * Set the specified expire time, in seconds. Equivalent to <code>EX</code> in the Redis API.
      *
-     * @param seconds time to expire, in seconds
-     * @return Expiry
+     * @param seconds The time to expire, in seconds.
+     * @return The options specifying the given expiry.
      */
     public static GetExOptions Seconds(Long seconds) {
         return new GetExOptions(SECONDS, seconds);
@@ -47,7 +47,7 @@ public class GetExOptions {
     /**
      * Set the specified expire time, in milliseconds. Equivalent to <code>PX</code> in the Redis API.
      *
-     * @param milliseconds time to expire, in milliseconds
+     * @param milliseconds The time to expire, in seconds.
      * @return Expiry
      */
     public static GetExOptions Milliseconds(Long milliseconds) {
@@ -58,7 +58,7 @@ public class GetExOptions {
      * Set the specified Unix time at which the key will expire, in seconds. Equivalent to <code>
      * EXAT</code> in the Redis API.
      *
-     * @param unixSeconds <code>UNIX TIME</code> to expire, in seconds.
+     * @param unixSeconds The <code>UNIX TIME</code> to expire, in seconds.
      * @return Expiry
      */
     public static GetExOptions UnixSeconds(Long unixSeconds) {
@@ -69,7 +69,7 @@ public class GetExOptions {
      * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to <code>
      * PXAT</code> in the Redis API.
      *
-     * @param unixMilliseconds <code>UNIX TIME</code> to expire, in milliseconds.
+     * @param unixMilliseconds The <code>UNIX TIME</code> to expire, in milliseconds.
      * @return Expiry
      */
     public static GetExOptions UnixMilliseconds(Long unixMilliseconds) {
@@ -94,7 +94,7 @@ public class GetExOptions {
     }
 
     /**
-     * Converts GetExOptions into a String[] to add to a {@link GetExOptions} arguments.
+     * Converts GetExOptions into a String[] to pass to the <code>GETEX</code> command.
      *
      * @return String[]
      */

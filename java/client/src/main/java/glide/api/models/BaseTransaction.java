@@ -395,10 +395,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Gets the value associated with the given <code>key</code>. <code>GETEX</code>is similar to
-     * {@see #get}.
+     * Gets the value associated with the given <code>key</code>.
      *
-     * @since Redis 6.0.6.
+     * @since Redis 6.2.0.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @return Command Response - If <code>key</code> exists, return the value of the <code>key</code>
@@ -411,10 +410,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Gets the value associated with the given <code>key</code> and optionally sets its expiration.
-     * <code>GETEX</code> is similar to {@see #get}.
+     * Gets the value associated with the given <code>key</code>.
      *
-     * @since Redis 6.0.6.
+     * @since Redis 6.2.0.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
      * @param options The GetEx options.
