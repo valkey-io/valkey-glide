@@ -40,6 +40,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
@@ -1860,5 +1861,41 @@ public class RedisClusterClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomKey_with_route() {
+        // setup
+        String key1 = "key1";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(key1);
+        Route route = ALL_NODES;
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(RandomKey), eq(new String[0]), eq(route), any()))
+                .thenReturn(testResponse);
+        CompletableFuture<String> response = service.randomKey(route);
+
+        // verify
+        assertEquals(testResponse, response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomKey() {
+        // setup
+        String key1 = "key1";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(key1);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(RandomKey), eq(new String[0]), any()))
+                .thenReturn(testResponse);
+        CompletableFuture<String> response = service.randomKey();
+
+        // verify
+        assertEquals(testResponse, response);
     }
 }
