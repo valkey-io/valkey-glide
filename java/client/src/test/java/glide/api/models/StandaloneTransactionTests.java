@@ -4,11 +4,21 @@ package glide.api.models;
 import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.GenericCommands.DB_REDIS_API;
 import static glide.api.models.TransactionTests.buildArgs;
+import static glide.api.models.commands.SortOptions.ALPHA_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.LIMIT_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.Limit;
+import static glide.api.models.commands.SortOptions.OrderBy.DESC;
+import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortStandaloneOptions.BY_COMMAND_STRING;
+import static glide.api.models.commands.SortStandaloneOptions.GET_COMMAND_STRING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
+import static redis_request.RedisRequestOuterClass.RequestType.Sort;
+import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
+import glide.api.models.commands.SortStandaloneOptions;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
@@ -28,6 +38,139 @@ public class StandaloneTransactionTests {
         results.add(Pair.of(Move, buildArgs("testKey", "2")));
         transaction.copy("key1", "key2", 1, true);
         results.add(Pair.of(Copy, buildArgs("key1", "key2", DB_REDIS_API, "1", REPLACE_REDIS_API)));
+
+        transaction.sort(
+                "key1",
+                SortStandaloneOptions.builder()
+                        .byPattern("byPattern")
+                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .build());
+        results.add(
+                Pair.of(
+                        Sort,
+                        buildArgs(
+                                "key1",
+                                BY_COMMAND_STRING,
+                                "byPattern",
+                                GET_COMMAND_STRING,
+                                "getPattern1",
+                                GET_COMMAND_STRING,
+                                "getPattern2")));
+        transaction.sort(
+                "key1",
+                SortStandaloneOptions.builder()
+                        .orderBy(DESC)
+                        .alpha(true)
+                        .limit(new Limit(0L, 1L))
+                        .byPattern("byPattern")
+                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .build());
+        results.add(
+                Pair.of(
+                        Sort,
+                        buildArgs(
+                                "key1",
+                                LIMIT_COMMAND_STRING,
+                                "0",
+                                "1",
+                                DESC.toString(),
+                                ALPHA_COMMAND_STRING,
+                                BY_COMMAND_STRING,
+                                "byPattern",
+                                GET_COMMAND_STRING,
+                                "getPattern1",
+                                GET_COMMAND_STRING,
+                                "getPattern2")));
+        transaction.sortReadOnly(
+                "key1",
+                SortStandaloneOptions.builder()
+                        .byPattern("byPattern")
+                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .build());
+        results.add(
+                Pair.of(
+                        SortReadOnly,
+                        buildArgs(
+                                "key1",
+                                BY_COMMAND_STRING,
+                                "byPattern",
+                                GET_COMMAND_STRING,
+                                "getPattern1",
+                                GET_COMMAND_STRING,
+                                "getPattern2")));
+        transaction.sortReadOnly(
+                "key1",
+                SortStandaloneOptions.builder()
+                        .orderBy(DESC)
+                        .alpha(true)
+                        .limit(new Limit(0L, 1L))
+                        .byPattern("byPattern")
+                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .build());
+        results.add(
+                Pair.of(
+                        SortReadOnly,
+                        buildArgs(
+                                "key1",
+                                LIMIT_COMMAND_STRING,
+                                "0",
+                                "1",
+                                DESC.toString(),
+                                ALPHA_COMMAND_STRING,
+                                BY_COMMAND_STRING,
+                                "byPattern",
+                                GET_COMMAND_STRING,
+                                "getPattern1",
+                                GET_COMMAND_STRING,
+                                "getPattern2")));
+        transaction.sortStore(
+                "key1",
+                "key2",
+                SortStandaloneOptions.builder()
+                        .byPattern("byPattern")
+                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .build());
+        results.add(
+                Pair.of(
+                        Sort,
+                        buildArgs(
+                                "key1",
+                                STORE_COMMAND_STRING,
+                                "key2",
+                                BY_COMMAND_STRING,
+                                "byPattern",
+                                GET_COMMAND_STRING,
+                                "getPattern1",
+                                GET_COMMAND_STRING,
+                                "getPattern2")));
+        transaction.sortStore(
+                "key1",
+                "key2",
+                SortStandaloneOptions.builder()
+                        .orderBy(DESC)
+                        .alpha(true)
+                        .limit(new Limit(0L, 1L))
+                        .byPattern("byPattern")
+                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .build());
+        results.add(
+                Pair.of(
+                        Sort,
+                        buildArgs(
+                                "key1",
+                                STORE_COMMAND_STRING,
+                                "key2",
+                                LIMIT_COMMAND_STRING,
+                                "0",
+                                "1",
+                                DESC.toString(),
+                                ALPHA_COMMAND_STRING,
+                                BY_COMMAND_STRING,
+                                "byPattern",
+                                GET_COMMAND_STRING,
+                                "getPattern1",
+                                GET_COMMAND_STRING,
+                                "getPattern2")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

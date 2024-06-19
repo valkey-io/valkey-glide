@@ -7,6 +7,10 @@ import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
+import static glide.api.models.commands.SortOptions.ALPHA_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.LIMIT_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.OrderBy.DESC;
+import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -40,6 +44,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.Sort;
+import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
@@ -48,6 +54,8 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.SortBaseOptions;
+import glide.api.models.commands.SortOptions.Limit;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -1897,5 +1905,196 @@ public class RedisClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sort_returns_success() {
+        // setup
+        String[] result = new String[] {"1", "2", "3"};
+        String key = "key";
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(Sort), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.sort(key);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sort_with_options_returns_success() {
+        // setup
+        String[] result = new String[] {"1", "2", "3"};
+        String key = "key";
+        Long limitOffset = 0L;
+        Long limitCount = 2L;
+        String[] args =
+                new String[] {
+                    key,
+                    LIMIT_COMMAND_STRING,
+                    limitOffset.toString(),
+                    limitCount.toString(),
+                    DESC.toString(),
+                    ALPHA_COMMAND_STRING
+                };
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(Sort), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.sort(
+                        key,
+                        SortBaseOptions.builder()
+                                .alpha(true)
+                                .limit(new Limit(limitOffset, limitCount))
+                                .orderBy(DESC)
+                                .build());
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sortReadOnly_returns_success() {
+        // setup
+        String[] result = new String[] {"1", "2", "3"};
+        String key = "key";
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(SortReadOnly), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response = service.sortReadOnly(key);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sortReadOnly_with_options_returns_success() {
+        // setup
+        String[] result = new String[] {"1", "2", "3"};
+        String key = "key";
+        Long limitOffset = 0L;
+        Long limitCount = 2L;
+        String[] args =
+                new String[] {
+                    key,
+                    LIMIT_COMMAND_STRING,
+                    limitOffset.toString(),
+                    limitCount.toString(),
+                    DESC.toString(),
+                    ALPHA_COMMAND_STRING
+                };
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(SortReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.sortReadOnly(
+                        key,
+                        SortBaseOptions.builder()
+                                .alpha(true)
+                                .limit(new Limit(limitOffset, limitCount))
+                                .orderBy(DESC)
+                                .build());
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sortStore_returns_success() {
+        // setup
+        Long result = 5L;
+        String key = "key";
+        String destKey = "destKey";
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(Sort), eq(new String[] {key, STORE_COMMAND_STRING, destKey}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sortStore(key, destKey);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sortStore_with_options_returns_success() {
+        // setup
+        Long result = 5L;
+        String key = "key";
+        String destKey = "destKey";
+        Long limitOffset = 0L;
+        Long limitCount = 2L;
+        String[] args =
+                new String[] {
+                    key,
+                    STORE_COMMAND_STRING,
+                    destKey,
+                    LIMIT_COMMAND_STRING,
+                    limitOffset.toString(),
+                    limitCount.toString(),
+                    DESC.toString(),
+                    ALPHA_COMMAND_STRING
+                };
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Sort), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.sortStore(
+                        key,
+                        destKey,
+                        SortBaseOptions.builder()
+                                .alpha(true)
+                                .limit(new Limit(limitOffset, limitCount))
+                                .orderBy(DESC)
+                                .build());
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
     }
 }

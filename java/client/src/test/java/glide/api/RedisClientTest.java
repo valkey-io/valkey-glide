@@ -20,6 +20,11 @@ import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
+import static glide.api.models.commands.SortOptions.ALPHA_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.LIMIT_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.OrderBy.DESC;
+import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortStandaloneOptions.BY_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT;
 import static glide.api.models.commands.bitmap.BitFieldOptions.GET_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.INCRBY_COMMAND_STRING;
@@ -184,6 +189,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
+import static redis_request.RedisRequestOuterClass.RequestType.Sort;
+import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -255,6 +262,8 @@ import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
+import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortStandaloneOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -6800,5 +6809,257 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void sort_with_standalone_options_returns_success() {
+        // setup
+        String[] result = new String[] {"1", "2", "3"};
+        String key = "key";
+        String byPattern = "byPattern";
+        String getPattern = "getPattern";
+        String[] args =
+                new String[] {key, BY_COMMAND_STRING, byPattern, GET_COMMAND_STRING, getPattern};
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(Sort), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.sort(
+                        key,
+                        SortStandaloneOptions.builder()
+                                .getPatterns(new String[] {getPattern})
+                                .byPattern(byPattern)
+                                .build());
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sort_with_standalone_and_sort_options_returns_success() {
+        // setup
+        String[] result = new String[] {"1", "2", "3"};
+        String key = "key";
+        Long limitOffset = 0L;
+        Long limitCount = 2L;
+        String byPattern = "byPattern";
+        String getPattern = "getPattern";
+        String[] args =
+                new String[] {
+                    key,
+                    LIMIT_COMMAND_STRING,
+                    limitOffset.toString(),
+                    limitCount.toString(),
+                    DESC.toString(),
+                    ALPHA_COMMAND_STRING,
+                    BY_COMMAND_STRING,
+                    byPattern,
+                    GET_COMMAND_STRING,
+                    getPattern
+                };
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(Sort), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.sort(
+                        key,
+                        SortStandaloneOptions.builder()
+                                .alpha(true)
+                                .limit(new SortOptions.Limit(limitOffset, limitCount))
+                                .orderBy(DESC)
+                                .getPatterns(new String[] {getPattern})
+                                .byPattern(byPattern)
+                                .build());
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sortReadOnly_with_standalone_options_returns_success() {
+        // setup
+        String[] result = new String[] {"1", "2", "3"};
+        String key = "key";
+        String byPattern = "byPattern";
+        String getPattern = "getPattern";
+        String[] args =
+                new String[] {key, BY_COMMAND_STRING, byPattern, GET_COMMAND_STRING, getPattern};
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(SortReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.sortReadOnly(
+                        key,
+                        SortStandaloneOptions.builder()
+                                .getPatterns(new String[] {getPattern})
+                                .byPattern(byPattern)
+                                .build());
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sortReadOnly_with_standalone_and_sort_options_returns_success() {
+        // setup
+        String[] result = new String[] {"1", "2", "3"};
+        String key = "key";
+        Long limitOffset = 0L;
+        Long limitCount = 2L;
+        String byPattern = "byPattern";
+        String getPattern = "getPattern";
+        String[] args =
+                new String[] {
+                    key,
+                    LIMIT_COMMAND_STRING,
+                    limitOffset.toString(),
+                    limitCount.toString(),
+                    DESC.toString(),
+                    ALPHA_COMMAND_STRING,
+                    BY_COMMAND_STRING,
+                    byPattern,
+                    GET_COMMAND_STRING,
+                    getPattern
+                };
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(SortReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.sortReadOnly(
+                        key,
+                        SortStandaloneOptions.builder()
+                                .alpha(true)
+                                .limit(new SortOptions.Limit(limitOffset, limitCount))
+                                .orderBy(DESC)
+                                .getPatterns(new String[] {getPattern})
+                                .byPattern(byPattern)
+                                .build());
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sortStore__standalone_options_returns_success() {
+        // setup
+        Long result = 5L;
+        String key = "key";
+        String destKey = "destKey";
+        String byPattern = "byPattern";
+        String getPattern = "getPattern";
+        String[] args =
+                new String[] {
+                    key,
+                    STORE_COMMAND_STRING,
+                    destKey,
+                    BY_COMMAND_STRING,
+                    byPattern,
+                    GET_COMMAND_STRING,
+                    getPattern
+                };
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Sort), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.sortStore(
+                        key,
+                        destKey,
+                        SortStandaloneOptions.builder()
+                                .getPatterns(new String[] {getPattern})
+                                .byPattern(byPattern)
+                                .build());
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sortStore_with_standalone_and_sort_options_returns_success() {
+        // setup
+        Long result = 5L;
+        String key = "key";
+        String destKey = "destKey";
+        Long limitOffset = 0L;
+        Long limitCount = 2L;
+        String byPattern = "byPattern";
+        String getPattern = "getPattern";
+        String[] args =
+                new String[] {
+                    key,
+                    STORE_COMMAND_STRING,
+                    destKey,
+                    LIMIT_COMMAND_STRING,
+                    limitOffset.toString(),
+                    limitCount.toString(),
+                    DESC.toString(),
+                    ALPHA_COMMAND_STRING,
+                    BY_COMMAND_STRING,
+                    byPattern,
+                    GET_COMMAND_STRING,
+                    getPattern
+                };
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Sort), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.sortStore(
+                        key,
+                        destKey,
+                        SortStandaloneOptions.builder()
+                                .alpha(true)
+                                .limit(new SortOptions.Limit(limitOffset, limitCount))
+                                .orderBy(DESC)
+                                .getPatterns(new String[] {getPattern})
+                                .byPattern(byPattern)
+                                .build());
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
     }
 }

@@ -5,6 +5,7 @@ import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.SortOptions.OrderBy.DESC;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -17,6 +18,9 @@ import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClient;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.SortStandaloneOptions;
+import glide.api.models.configuration.NodeAddress;
+import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -327,5 +331,91 @@ public class TransactionTests {
         assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
         assertEquals(foobarString, client.get(key1).get());
         assertEquals(foobarString, client.get(key2).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void sort_and_sortReadOnly() {
+        Transaction transaction1 = new Transaction();
+        Transaction transaction2 = new Transaction();
+        String genericKey1 = "{GenericKey}-1-" + UUID.randomUUID();
+        String genericKey2 = "{GenericKey}-2-" + UUID.randomUUID();
+        String[] ascendingListByAge = new String[] {"Bob", "Alice"};
+        String[] descendingListByAge = new String[] {"Alice", "Bob"};
+
+        transaction1
+                .hset("user:1", Map.of("name", "Alice", "age", "30"))
+                .hset("user:2", Map.of("name", "Bob", "age", "25"))
+                .lpush(genericKey1, new String[] {"2", "1"})
+                .sort(
+                        genericKey1,
+                        SortStandaloneOptions.builder()
+                                .byPattern("user:*->age")
+                                .getPatterns(new String[] {"user:*->name"})
+                                .build())
+                .sort(
+                        genericKey1,
+                        SortStandaloneOptions.builder()
+                                .orderBy(DESC)
+                                .byPattern("user:*->age")
+                                .getPatterns(new String[] {"user:*->name"})
+                                .build())
+                .sortStore(
+                        genericKey1,
+                        genericKey2,
+                        SortStandaloneOptions.builder()
+                                .byPattern("user:*->age")
+                                .getPatterns(new String[] {"user:*->name"})
+                                .build())
+                .lrange(genericKey2, 0, -1)
+                .sortStore(
+                        genericKey1,
+                        genericKey2,
+                        SortStandaloneOptions.builder()
+                                .orderBy(DESC)
+                                .byPattern("user:*->age")
+                                .getPatterns(new String[] {"user:*->name"})
+                                .build())
+                .lrange(genericKey2, 0, -1);
+
+        var expectedResults =
+                new Object[] {
+                    2L, // hset("user:1", Map.of("name", "Alice", "age", "30"))
+                    2L, // hset("user:2", Map.of("name", "Bob", "age", "25"))
+                    2L, // lpush(genericKey1, new String[] {"2", "1"})
+                    ascendingListByAge, // sort(genericKey1, SortStandaloneOptions)
+                    descendingListByAge, // sort(genericKey1, SortStandaloneOptions)
+                    2L, // sortStore(genericKey1, genericKey2, SortStandaloneOptions)
+                    ascendingListByAge, // lrange(genericKey4, 0, -1)
+                    2L, // sortStore(genericKey1, genericKey2, SortStandaloneOptions)
+                    descendingListByAge, // lrange(genericKey2, 0, -1)
+                };
+
+        assertArrayEquals(expectedResults, client.exec(transaction1).get());
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction2
+                    .sortReadOnly(
+                            genericKey1,
+                            SortStandaloneOptions.builder()
+                                    .byPattern("user:*->age")
+                                    .getPatterns(new String[] {"user:*->name"})
+                                    .build())
+                    .sortReadOnly(
+                            genericKey1,
+                            SortStandaloneOptions.builder()
+                                    .orderBy(DESC)
+                                    .byPattern("user:*->age")
+                                    .getPatterns(new String[] {"user:*->name"})
+                                    .build());
+
+            expectedResults =
+                    new Object[] {
+                        ascendingListByAge, // sortReadOnly(genericKey1, SortStandaloneOptions)
+                        descendingListByAge, // sortReadOnly(genericKey1, SortStandaloneOptions)
+                    };
+
+            assertArrayEquals(expectedResults, client.exec(transaction2).get());
+        }
     }
 }

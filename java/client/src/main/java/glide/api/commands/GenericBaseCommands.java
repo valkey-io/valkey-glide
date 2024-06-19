@@ -6,6 +6,8 @@ import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.SortBaseOptions;
+import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -652,4 +654,150 @@ public interface GenericBaseCommands {
      */
     CompletableFuture<String> restore(
             GlideString key, long ttl, byte[] value, RestoreOptions restoreOptions);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sort</code> command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.<br>
+     * To store the result into a new key, see {@link #sortStore(String, String)}.
+     *
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @return An <code>Array</code> of sorted elements.
+     * @example
+     *     <pre>{@code
+     * client.lpush("mylist", new String[] {"3", "1", "2"}).get();
+     * assertArrayEquals(new String[] {"1", "2", "3"}, client.sort("mylist").get()); // List is sorted in ascending order
+     * }</pre>
+     */
+    CompletableFuture<String[]> sort(String key);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sort</code> command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.<br>
+     * To store the result into a new key, see {@link #sortStore(String, String, SortBaseOptions)}.
+     *
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortBaseOptions The {@link SortBaseOptions}.
+     * @return A <code>Array</code> of sorted elements.
+     * @example
+     *     <pre>{@code
+     * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
+     * String[] payload = client.sort(
+     *      "mylist",
+     *      SortBaseOptions.builder()
+     *          .alpha(true)
+     *          .orderBy(DESC)
+     *          .limit(new SortOptions.Limit(0L, 3L))
+     *          .build())
+     *      .get();
+     * assertArrayEquals(new String[] {"a", "3", "2"}, payload); // List is sorted in descending order lexicographically starting
+     * }</pre>
+     */
+    CompletableFuture<String[]> sort(String key, SortBaseOptions sortBaseOptions);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * <br>
+     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
+     * and apply transformations on sorted elements.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @return A <code>Array</code> of sorted elements.
+     * @example
+     *     <pre>{@code
+     * client.lpush("mylist", new String[] {"3", "1", "2"}).get();
+     * assertArrayEquals(new String[] {"1", "2", "3"}, client.sortReadOnly("mylist").get()); // List is sorted in ascending order
+     * }</pre>
+     */
+    CompletableFuture<String[]> sortReadOnly(String key);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * <br>
+     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
+     * and apply transformations on sorted elements.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortBaseOptions The {@link SortBaseOptions}.
+     * @return A <code>Array</code> of sorted elements.
+     * @example
+     *     <pre>{@code
+     * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
+     * String[] payload = client.sortReadOnly(
+     *      "mylist",
+     *      SortBaseOptions.builder()
+     *          .alpha(true)
+     *          .orderBy(DESC)
+     *          .limit(new SortOptions.Limit(0L, 3L))
+     *          .build())
+     *      .get();
+     * assertArrayEquals(new String[] {"a", "3", "2"}, payload); // List is sorted in descending order lexicographically starting
+     * }</pre>
+     */
+    CompletableFuture<String[]> sortReadOnly(String key, SortBaseOptions sortBaseOptions);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
+     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
+     * different criteria, apply transformations on sorted elements, and store the result in a new
+     * key.<br>
+     * To get the sort result without storing it into a key, see {@link #sort(String)} and {@link
+     * #sortReadOnly(String)}.
+     *
+     * @apiNote When in cluster mode, <code>key</code> and <code>destination</code> must map to the
+     *     same hash slot.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param destination The key where the sorted result will be stored.
+     * @return The number of elements in the sorted key stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * client.lpush("mylist", new String[] {"3", "1", "2"}).get();
+     * assert client.sortStore("mylist", "destination").get() == 3;
+     * assertArrayEquals(
+     *    new String[] {"1", "2", "3"},
+     *    client.lrange("destination", 0, -1).get()); // Sorted list is stored in `destination`
+     * }</pre>
+     */
+    CompletableFuture<Long> sortStore(String key, String destination);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
+     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
+     * different criteria, apply transformations on sorted elements, and store the result in a new
+     * key.<br>
+     * To get the sort result without storing it into a key, see {@link #sort(String,
+     * SortBaseOptions)} and {@link #sortReadOnly(String, SortBaseOptions)}.
+     *
+     * @apiNote When in cluster mode, <code>key</code> and <code>destination</code> must map to the
+     *     same hash slot.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param destination The key where the sorted result will be stored.
+     * @param sortBaseOptions The {@link SortBaseOptions}.
+     * @return The number of elements in the sorted key stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
+     * Long payload = client
+     *      .sortStore(
+     *          "mylist",
+     *          "destination",
+     *          SortBaseOptions.builder()
+     *              .alpha(true)
+     *              .orderBy(DESC)
+     *              .limit(new SortOptions.Limit(0L, 3L))
+     *              .build())
+     *      .get();
+     * assertEquals(3, payload);
+     * assertArrayEquals(
+     *      new String[] {"a", "3", "2"},
+     *      client.lrange("destination", 0, -1).get()); // Sorted list is stored in "destination"
+     * }</pre>
+     */
+    CompletableFuture<Long> sortStore(
+            String key, String destination, SortBaseOptions sortBaseOptions);
 }

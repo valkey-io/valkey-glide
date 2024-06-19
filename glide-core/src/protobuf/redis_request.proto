@@ -233,6 +233,7 @@ enum RequestType {
     GetEx = 192;
     Dump = 193;
     Restore = 194;
+    SortReadOnly = 195;
 }
 
 message Command {
