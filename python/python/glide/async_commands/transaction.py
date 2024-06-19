@@ -3,7 +3,7 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
-from glide.async_commands.bitmap import BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
@@ -3105,6 +3105,70 @@ class BaseTransaction:
                 the length of the string.
         """
         return self.append_command(RequestType.GetBit, [key, str(offset)])
+
+    def bitpos(
+        self: TTransaction, key: str, bit: int, start: Optional[int] = None
+    ) -> TTransaction:
+        """
+        Returns the position of the first bit matching the given `bit` value. The optional starting offset
+        `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
+        The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
+        the last byte of the list, `-2` being the penultimate, and so on.
+
+        See https://valkey.io/commands/bitpos for more details.
+
+        Args:
+            key (str): The key of the string.
+            bit (int): The bit value to match. Must be `0` or `1`.
+            start (Optional[int]): The starting offset.
+
+        Command response:
+            int: The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+                If `start` was provided, the search begins at the offset indicated by `start`.
+        """
+        args = [key, str(bit)] if start is None else [key, str(bit), str(start)]
+        return self.append_command(RequestType.BitPos, args)
+
+    def bitpos_interval(
+        self: TTransaction,
+        key: str,
+        bit: int,
+        start: int,
+        end: int,
+        index_type: Optional[BitmapIndexType] = None,
+    ) -> TTransaction:
+        """
+        Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
+        `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
+        numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
+        being the penultimate, and so on.
+
+        If you are using Redis 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
+        `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
+        are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
+        specified, `start=0` and `end=2` means to look at the first three bytes.
+
+        See https://valkey.io/commands/bitpos for more details.
+
+        Args:
+            key (str): The key of the string.
+            bit (int): The bit value to match. Must be `0` or `1`.
+            start (int): The starting offset.
+            end (int): The ending offset.
+            index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
+                using Redis version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
+                If no index type is provided, the indexes will be assumed to be byte indexes.
+
+        Command response:
+            int: The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the binary
+                value of the string held at `key`.
+        """
+        if index_type is not None:
+            args = [key, str(bit), str(start), str(end), index_type.value]
+        else:
+            args = [key, str(bit), str(start), str(end)]
+
+        return self.append_command(RequestType.BitPos, args)
 
     def bitop(
         self: TTransaction,
