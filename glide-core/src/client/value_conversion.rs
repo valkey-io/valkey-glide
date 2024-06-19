@@ -791,6 +791,7 @@ fn convert_to_array_of_pairs(
     value_expected_return_type: Option<ExpectedReturnType>,
 ) -> RedisResult<Value> {
     match response {
+        Value::Nil => Ok(response),
         Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Array(_)) => {
             // The server response is an empty array or a RESP3 array of pairs. In RESP3, the values in the pairs are
             // already of the correct type, so we do not need to convert them and `response` is in the correct format.
@@ -852,7 +853,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             key_type: &Some(ExpectedReturnType::BulkString),
             value_type: &Some(ExpectedReturnType::ArrayOfPairs),
         }),
-        b"XREAD" => Some(ExpectedReturnType::Map {
+        b"XREAD" | b"XREADGROUP" => Some(ExpectedReturnType::Map {
             key_type: &Some(ExpectedReturnType::BulkString),
             value_type: &Some(ExpectedReturnType::Map {
                 key_type: &Some(ExpectedReturnType::BulkString),
@@ -1195,6 +1196,28 @@ mod tests {
     fn convert_xread() {
         assert!(matches!(
             expected_type_for_cmd(redis::cmd("XREAD").arg("streams").arg("key").arg("id")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::BulkString),
+                value_type: &Some(ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::BulkString),
+                    value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+                }),
+            })
+        ));
+    }
+
+    #[test]
+    fn convert_xreadgroup() {
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("XREADGROUP")
+                    .arg("GROUP")
+                    .arg("group")
+                    .arg("consumer")
+                    .arg("streams")
+                    .arg("key")
+                    .arg("id")
+            ),
             Some(ExpectedReturnType::Map {
                 key_type: &Some(ExpectedReturnType::BulkString),
                 value_type: &Some(ExpectedReturnType::Map {
