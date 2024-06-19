@@ -521,15 +521,15 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> set(@NonNull byte[] key, @NonNull byte[] value) {
+    public CompletableFuture<GlideString> getdel(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                Set, Arrays.asList(key, value), this::handleStringResponse);
+            GetDel, new GlideString[] {key}, this::handleBytesOrNullResponse);
     }
 
     @Override
-    public CompletableFuture<GlideString> getdel(@NonNull GlideString key) {
+    public CompletableFuture<String> set(@NonNull byte[] key, @NonNull byte[] value) {
         return commandManager.submitNewCommand(
-                GetDel, new GlideString[] {key}, this::handleBytesOrNullResponse);
+                Set, Arrays.asList(key, value), this::handleStringResponse);
     }
 
     @Override
