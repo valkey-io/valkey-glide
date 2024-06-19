@@ -5422,4 +5422,40 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sunion(BaseClient client) {
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String nonSetKey = "{key}-4" + UUID.randomUUID();
+        String[] memberList1 = new String[] {"a", "b", "c"};
+        String[] memberList2 = new String[] {"b", "c", "d", "e"};
+        Set<String> expectedUnion = Set.of("a", "b", "c", "d", "e");
+
+        assertEquals(3, client.sadd(key1, memberList1).get());
+        assertEquals(4, client.sadd(key2, memberList2).get());
+        assertEquals(expectedUnion, client.sunion(new String[] {key1, key2}).get());
+
+        // Key has an empty set
+        assertEquals(Set.of(), client.sunion(new String[] {key3}).get());
+
+        // Empty key with non-empty key returns non-empty key set
+        assertEquals(Set.of(memberList1), client.sunion(new String[] {key1, key3}).get());
+
+        // Exceptions
+        // Empty keys
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sunion(new String[] {}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Non-set key
+        assertEquals(OK, client.set(nonSetKey, "value").get());
+        assertThrows(
+                ExecutionException.class, () -> client.sunion(new String[] {nonSetKey, key1}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
 }
