@@ -304,53 +304,29 @@ public class SharedCommandTests {
         String data = client.getex(key1).get();
         assertEquals(data, value1);
 
-//        // non-existent key
-//        data = client.getex(key2).get();
-//        assertNull(data);
-//
-//        // key isn't a string
-//        client.sadd(key2, new String[] {"a"}).get();
-//        ExecutionException executionException =
-//                assertThrows(ExecutionException.class, () -> client.getex(key2).get());
-//        assertInstanceOf(RequestException.class, executionException.getCause());
-//
-//        // with option
-//        data =
-//                client
-//                        .getex(key1, GetExOptions.builder().expiry(GetExOptions.Expiry.Seconds(10L)).build())
-//                        .get();
-//        assertEquals(data, value1);
+        // non-existent key
+        data = client.getex(key2).get();
+        assertNull(data);
 
-        // more than one option
-//        ExecutionException moreThanOneOptionException =
-//                assertThrows(
-//                        ExecutionException.class,
-//                        () ->
-//                                client
-//                                        .getex(
-//                                                key1,
-//                                                GetExOptions.builder()
-//                                                        .expiry(GetExOptions.Expiry.Seconds(20L).Milliseconds(200L))
-//                                                        .build())
-//                                        .get());
-//        assertInstanceOf(RequestException.class, moreThanOneOptionException.getCause());
-        data = client.getex(key1,
-                                                GetExOptions.builder()
-                                                        .expiry(GetExOptions.Expiry.Seconds(20L).Milliseconds(200L))
-                                                        .build())
-                                        .get();
+        // key isn't a string
+        client.sadd(key2, new String[] {"a"}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.getex(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
 
-//        // invalid time measurement
-//        ExecutionException invalidTimeException =
-//                assertThrows(
-//                        ExecutionException.class,
-//                        () ->
-//                                client
-//                                        .getex(
-//                                                key1,
-//                                                GetExOptions.builder().expiry(GetExOptions.Expiry.Seconds(-10L)).build())
-//                                        .get());
-//        assertInstanceOf(RequestException.class, invalidTimeException.getCause());
+        // with option
+        data = client.getex(key1, GetExOptions.Seconds(10L)).get();
+        assertEquals(data, value1);
+
+        // invalid time measurement
+        ExecutionException invalidTimeException =
+                assertThrows(
+                        ExecutionException.class, () -> client.getex(key1, GetExOptions.Seconds(-10L)).get());
+        assertInstanceOf(RequestException.class, invalidTimeException.getCause());
+
+        // setting and clearing expiration timer
+        assertEquals(value1, client.getex(key1, GetExOptions.Seconds(10L)).get());
+        assertEquals(value1, client.getex(key1, GetExOptions.Persist()).get());
     }
 
     @SneakyThrows

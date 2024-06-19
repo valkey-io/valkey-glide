@@ -84,8 +84,8 @@ public interface StringBaseCommands {
      * @since Redis 6.0.6.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code> as a
-     *     <code>String</code>.
+     * @return If <code>key</code> exists, return the value of the <code>key</code>. Otherwise, return
+     *     <code>null</code>.
      * @example
      *     <pre>{@code
      * String value = client.getex("key").get();
@@ -102,14 +102,16 @@ public interface StringBaseCommands {
      * @since Redis 6.0.6.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code> as a
-     *     <code>String</code>.
+     * @param options The GetEx options.
+     * @return If <code>key</code> exists, return the value of the <code>key</code>. Otherwise, return
+     *     <code>null</code>.
      * @example
      *     <pre>{@code
-     * String value = client.getex("key").get();
+     * String response = client.set("key", "value").get();
+     * assert response.equals(OK);
+     * String value = client.getex("key", GetExOptions.Seconds(10L)).get();
      * assert value.equals("value");
-     * FINISH WRITING THE EXAMPLES I JUST DON'T WANT TO DO IT RIGHT NOW GRAAA
-     *
+     * ass
      * }</pre>
      */
     CompletableFuture<String> getex(@NonNull String key, @NonNull GetExOptions options);

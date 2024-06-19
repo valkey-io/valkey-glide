@@ -401,8 +401,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.0.6.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code> as a
-     *     <code>String</code>.
+     * @return Command Response - If <code>key</code> exists, return the value of the <code>key</code>
+     *     . Otherwise, return <code>null</code>.
      */
     public T getex(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
@@ -417,8 +417,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 6.0.6.
      * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
      * @param key The <code>key</code> to retrieve from the database.
-     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code> as a
-     *     <code>String</code>.
+     * @param options The GetEx options.
+     * @return Command Response - If <code>key</code> exists, return the value of the <code>key</code>
+     *     . Otherwise, return <code>null</code>.
      */
     public T getex(@NonNull String key, @NonNull GetExOptions options) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addAll(new String[] {key}, options.toArgs()));

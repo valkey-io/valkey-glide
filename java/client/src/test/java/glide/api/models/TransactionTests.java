@@ -273,8 +273,7 @@ public class TransactionTests {
         transaction.getex("key");
         results.add(Pair.of(GetEx, buildArgs("key")));
 
-        transaction.getex(
-                "key", GetExOptions.builder().expiry(GetExOptions.Expiry.Seconds(10L)).build());
+        transaction.getex("key", GetExOptions.Seconds(10L));
         results.add(Pair.of(GetEx, buildArgs("key", "EX", "10")));
 
         transaction.set("key", "value");

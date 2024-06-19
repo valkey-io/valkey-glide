@@ -553,7 +553,7 @@ public class RedisClientTest {
     @Test
     public void getexOptions() {
         // setup
-        GetExOptions options = GetExOptions.builder().expiry(GetExOptions.Expiry.Seconds(10L)).build();
+        GetExOptions options = GetExOptions.Seconds(10L);
         String[] arguments = new String[] {"key", "EX", "10"};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();

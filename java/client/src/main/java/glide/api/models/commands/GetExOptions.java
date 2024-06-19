@@ -2,6 +2,7 @@
 package glide.api.models.commands;
 
 import static glide.api.models.commands.GetExOptions.ExpiryType.MILLISECONDS;
+import static glide.api.models.commands.GetExOptions.ExpiryType.PERSIST;
 import static glide.api.models.commands.GetExOptions.ExpiryType.SECONDS;
 import static glide.api.models.commands.GetExOptions.ExpiryType.UNIX_MILLISECONDS;
 import static glide.api.models.commands.GetExOptions.ExpiryType.UNIX_SECONDS;
@@ -9,7 +10,6 @@ import static glide.api.models.commands.GetExOptions.ExpiryType.UNIX_SECONDS;
 import glide.api.commands.StringBaseCommands;
 import java.util.ArrayList;
 import java.util.List;
-import lombok.Builder;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -17,72 +17,68 @@ import lombok.RequiredArgsConstructor;
  *
  * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a>
  */
-@Builder
 public class GetExOptions {
 
-    private final Expiry expiry;
+    /** Expiry type for the time to live */
+    private final ExpiryType type;
 
-    /** Redis API keyword used to remove the time associated with the key. */
-    public static final String PERSIST_REDIS_API = "PERSIST";
+    /** The amount of time to live before the key expires. */
+    private Long count;
 
-    public static final class Expiry {
-        /** Expiry type for the time to live */
-        private final ExpiryType type;
+    private GetExOptions(ExpiryType type) {
+        this.type = type;
+    }
 
-        /** The amount of time to live before the key expires. */
-        private Long count;
+    private GetExOptions(ExpiryType type, Long count) {
+        this.type = type;
+        this.count = count;
+    }
 
-        private Expiry(ExpiryType type) {
-            this.type = type;
-        }
+    /**
+     * Set the specified expire time, in seconds. Equivalent to <code>EX</code> in the Redis API.
+     *
+     * @param seconds time to expire, in seconds
+     * @return Expiry
+     */
+    public static GetExOptions Seconds(Long seconds) {
+        return new GetExOptions(SECONDS, seconds);
+    }
 
-        private Expiry(ExpiryType type, Long count) {
-            this.type = type;
-            this.count = count;
-        }
+    /**
+     * Set the specified expire time, in milliseconds. Equivalent to <code>PX</code> in the Redis API.
+     *
+     * @param milliseconds time to expire, in milliseconds
+     * @return Expiry
+     */
+    public static GetExOptions Milliseconds(Long milliseconds) {
+        return new GetExOptions(MILLISECONDS, milliseconds);
+    }
 
-        /**
-         * Set the specified expire time, in seconds. Equivalent to <code>EX</code> in the Redis API.
-         *
-         * @param seconds time to expire, in seconds
-         * @return Expiry
-         */
-        public static Expiry Seconds(Long seconds) {
-            return new Expiry(SECONDS, seconds);
-        }
+    /**
+     * Set the specified Unix time at which the key will expire, in seconds. Equivalent to <code>
+     * EXAT</code> in the Redis API.
+     *
+     * @param unixSeconds <code>UNIX TIME</code> to expire, in seconds.
+     * @return Expiry
+     */
+    public static GetExOptions UnixSeconds(Long unixSeconds) {
+        return new GetExOptions(UNIX_SECONDS, unixSeconds);
+    }
 
-        /**
-         * Set the specified expire time, in milliseconds. Equivalent to <code>PX</code> in the Redis
-         * API.
-         *
-         * @param milliseconds time to expire, in milliseconds
-         * @return Expiry
-         */
-        public static Expiry Milliseconds(Long milliseconds) {
-            return new Expiry(MILLISECONDS, milliseconds);
-        }
+    /**
+     * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to <code>
+     * PXAT</code> in the Redis API.
+     *
+     * @param unixMilliseconds <code>UNIX TIME</code> to expire, in milliseconds.
+     * @return Expiry
+     */
+    public static GetExOptions UnixMilliseconds(Long unixMilliseconds) {
+        return new GetExOptions(UNIX_MILLISECONDS, unixMilliseconds);
+    }
 
-        /**
-         * Set the specified Unix time at which the key will expire, in seconds. Equivalent to <code>
-         * EXAT</code> in the Redis API.
-         *
-         * @param unixSeconds <code>UNIX TIME</code> to expire, in seconds.
-         * @return Expiry
-         */
-        public static Expiry UnixSeconds(Long unixSeconds) {
-            return new Expiry(UNIX_SECONDS, unixSeconds);
-        }
-
-        /**
-         * Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to
-         * <code>PXAT</code> in the Redis API.
-         *
-         * @param unixMilliseconds <code>UNIX TIME</code> to expire, in milliseconds.
-         * @return Expiry
-         */
-        public static Expiry UnixMilliseconds(Long unixMilliseconds) {
-            return new Expiry(UNIX_MILLISECONDS, unixMilliseconds);
-        }
+    /** Remove the time to live associated with the key. */
+    public static GetExOptions Persist() {
+        return new GetExOptions(PERSIST);
     }
 
     /** Types of value expiration configuration. */
@@ -91,7 +87,8 @@ public class GetExOptions {
         SECONDS("EX"),
         MILLISECONDS("PX"),
         UNIX_SECONDS("EXAT"),
-        UNIX_MILLISECONDS("PXAT");
+        UNIX_MILLISECONDS("PXAT"),
+        PERSIST("PERSIST");
 
         private final String redisApi;
     }
@@ -104,13 +101,9 @@ public class GetExOptions {
     public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>();
 
-        if (expiry != null) {
-            optionArgs.add(expiry.type.redisApi);
-            optionArgs.add(String.valueOf(expiry.count));
-        }
-
-        if (expiry == null) {
-            optionArgs.add(PERSIST_REDIS_API);
+        optionArgs.add(type.redisApi);
+        if (count != null) {
+            optionArgs.add(String.valueOf(count));
         }
 
         return optionArgs.toArray(new String[0]);
