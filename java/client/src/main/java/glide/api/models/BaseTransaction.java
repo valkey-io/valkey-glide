@@ -137,6 +137,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
@@ -4631,6 +4632,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lcsLen(@NonNull String key1, @NonNull String key2) {
         ArgsArray args = buildArgs(key1, key2, LEN_REDIS_API);
         protobufTransaction.addCommands(buildCommand(LCS, args));
+        return getThis();
+    }
+
+    /**
+     * Gets the union of all the given sets.
+     *
+     * @see <a href="https://valkey.io/commands/sunion">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return Command Response - A set of members which are present in at least one of the given
+     *     sets. If none of the sets exist, an empty set will be returned.
+     */
+    public T sunion(@NonNull String[] keys) {
+        protobufTransaction.addCommands(buildCommand(SUnion, buildArgs(keys)));
         return getThis();
     }
 

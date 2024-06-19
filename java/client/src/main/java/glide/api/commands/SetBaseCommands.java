@@ -342,4 +342,25 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Set<String>> spopCount(String key, long count);
+
+    /**
+     * Gets the union of all the given sets.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://valkey.io/commands/sunion">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return A set of members which are present in at least one of the given sets. If none of the
+     *     sets exist, an empty set will be returned.
+     * @example
+     *     <pre>{@code
+     * assert client.sadd("my_set1", new String[]{"member1", "member2"}).get() == 2;
+     * assert client.sadd("my_set2", new String[]{"member2", "member3"}).get() == 2;
+     * Set<String> result = client.sunion(new String[] {"my_set1", "my_set2"}).get();
+     * assertEquals(Set.of("member1", "member2", "member3"), result);
+     *
+     * result = client.sunion(new String[] {"my_set1", "non_existent_set"}).get();
+     * assertEquals(Set.of("member1", "member2"), result);
+     * }</pre>
+     */
+    CompletableFuture<Set<String>> sunion(String[] keys);
 }

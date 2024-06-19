@@ -109,6 +109,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
@@ -1894,5 +1895,10 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> watch(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<String>> sunion(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(SUnion, keys, this::handleSetResponse);
     }
 }
