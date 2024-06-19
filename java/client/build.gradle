@@ -215,7 +215,7 @@ publishing {
 }
 
 signing {
-    sign publishing.publications.maven
+    sign publishing.publications
 }
 
 tasks.withType(Test) {
