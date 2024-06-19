@@ -4915,6 +4915,12 @@ class TestCommands:
         assert await redis_client.bitpos(non_existing_key, 1) == -1
         assert await redis_client.bitpos_interval(non_existing_key, 1, 3, 5) == -1
 
+        # invalid argument - bit value must be 0 or 1
+        with pytest.raises(RequestError):
+            await redis_client.bitpos(key, 2)
+        with pytest.raises(RequestError):
+            await redis_client.bitpos_interval(key, 2, 3, 5)
+
         # key exists, but it is not a string
         assert await redis_client.sadd(set_key, [value]) == 1
         with pytest.raises(RequestError):
