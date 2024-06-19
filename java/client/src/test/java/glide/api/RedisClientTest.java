@@ -188,6 +188,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -4454,6 +4456,58 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(Boolean.TRUE, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupCreateConsumer() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumerName = "testConsumerName";
+        String[] arguments = new String[] {key, groupName, consumerName};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(XGroupCreateConsumer), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response =
+                service.xgroupCreateConsumer(key, groupName, consumerName);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(Boolean.TRUE, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupDelConsumer() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumerName = "testConsumerName";
+        String[] arguments = new String[] {key, groupName, consumerName};
+        Long result = 28L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(XGroupDelConsumer), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xgroupDelConsumer(key, groupName, consumerName);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
     }
 
     @SneakyThrows

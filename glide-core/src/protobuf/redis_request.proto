@@ -227,6 +227,8 @@ enum RequestType {
     SUnion = 186;
     Publish = 187;
     SPublish = 188;
+    XGroupCreateConsumer = 189;
+    XGroupDelConsumer = 190;
     RandomKey = 191;
 }
 
