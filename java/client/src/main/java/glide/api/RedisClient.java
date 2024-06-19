@@ -30,6 +30,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
@@ -316,5 +317,11 @@ public class RedisClient extends BaseClient
     @Override
     public CompletableFuture<String> unwatch() {
         return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> randomKey() {
+        return commandManager.submitNewCommand(
+                RandomKey, new String[0], this::handleStringOrNullResponse);
     }
 }
