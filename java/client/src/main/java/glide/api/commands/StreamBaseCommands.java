@@ -385,7 +385,7 @@ public interface StreamBaseCommands {
      * @example
      *     <pre>{@code
      * // Creates the consumer "myconsumer" in consumer group "mygroup"
-     * assert client.xgroupDestroy("mystream", "mygroup", "myconsumer").get();
+     * assert client.xgroupCreateConsumer("mystream", "mygroup", "myconsumer").get();
      * }</pre>
      */
     CompletableFuture<Boolean> xgroupCreateConsumer(String key, String group, String consumer);
@@ -401,7 +401,7 @@ public interface StreamBaseCommands {
      * @example
      *     <pre>{@code
      * // Deletes the consumer "myconsumer" in consumer group "mygroup"
-     * Long pendingMsgCount = client.xgroupDestroy("mystream", "mygroup", "myconsumer").get();
+     * Long pendingMsgCount = client.xgroupDelConsumer("mystream", "mygroup", "myconsumer").get();
      * System.out.println("Consumer 'myconsumer' had " +
      *     + pendingMsgCount + " pending messages unclaimed.");
      * }</pre>
