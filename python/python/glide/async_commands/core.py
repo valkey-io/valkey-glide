@@ -4722,7 +4722,7 @@ class CoreCommands(Protocol):
                     - `BitFieldOverflow`
 
         Returns:
-            List[int]: An array of results from the executed subcommands:
+            List[Optional[int]]: An array of results from the executed subcommands:
                 - `BitFieldGet` returns the value in `Offset` or `OffsetMultiplier`.
                 - `BitFieldSet` returns the old value in `Offset` or `OffsetMultiplier`.
                 - `BitFieldIncrBy` returns the new value in `Offset` or `OffsetMultiplier`.

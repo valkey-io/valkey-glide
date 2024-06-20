@@ -399,10 +399,13 @@ async def transaction_test(
     args.append(6)
     transaction.bitpos(key20, 1)
     args.append(1)
-    transaction.bitfield_read_only(
-        key20, [BitFieldGet(SignedEncoding(5), BitOffset(3))]
-    )
-    args.append([6])
+
+    if not await check_if_server_version_lt(redis_client, "6.0.0"):
+        transaction.bitfield_read_only(
+            key20, [BitFieldGet(SignedEncoding(5), BitOffset(3))]
+        )
+        args.append([6])
+
     transaction.set(key19, "abcdef")
     args.append(OK)
     transaction.bitop(BitwiseOperation.AND, key19, [key19, key20])
