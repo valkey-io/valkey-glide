@@ -16,7 +16,15 @@ from typing import (
     get_args,
 )
 
-from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import (
+    BitFieldGet,
+    BitFieldSubCommands,
+    BitmapIndexType,
+    BitwiseOperation,
+    OffsetOptions,
+    _create_bitfield_args,
+    _create_bitfield_read_only_args,
+)
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -4693,6 +4701,72 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.BitOp, [operation.value, destination] + keys
             ),
+        )
+
+    async def bitfield(
+        self, key: str, subcommands: List[BitFieldSubCommands]
+    ) -> List[Optional[int]]:
+        """
+        Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+        `subcommands`.
+
+        See https://valkey.io/commands/bitfield for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldSubCommands]): The subcommands to be performed on the binary value of the string
+                at `key`, which could be any of the following:
+                    - `BitFieldGet`
+                    - `BitFieldSet`
+                    - `BitFieldIncrBy`
+                    - `BitFieldOverflow`
+
+        Returns:
+            List[Optional[int]]: An array of results from the executed subcommands:
+                - `BitFieldGet` returns the value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldSet` returns the old value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldIncrBy` returns the new value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldOverflow` determines the behavior of the "SET" and "INCRBY" subcommands when an overflow or
+                  underflow occurs. "OVERFLOW" does not return a value and does not contribute a value to the list
+                  response.
+
+        Examples:
+            >>> await client.set("my_key", "A")  # "A" has binary value 01000001
+            >>> await client.bitfield("my_key", [BitFieldSet(UnsignedEncoding(2), Offset(1), 3), BitFieldGet(UnsignedEncoding(2), Offset(1))])
+                [2, 3]  # The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
+        """
+        args = [key] + _create_bitfield_args(subcommands)
+        return cast(
+            List[Optional[int]],
+            await self._execute_command(RequestType.BitField, args),
+        )
+
+    async def bitfield_read_only(
+        self, key: str, subcommands: List[BitFieldGet]
+    ) -> List[int]:
+        """
+        Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+
+        See https://valkey.io/commands/bitfield_ro for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldGet]): The "GET" subcommands to be performed.
+
+        Returns:
+            List[int]: An array of results from the "GET" subcommands.
+
+        Examples:
+            >>> await client.set("my_key", "A")  # "A" has binary value 01000001
+            >>> await client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
+                [2]  # The value at offset 1 with an unsigned encoding of 2 is 3.
+
+        Since: Redis version 6.0.0.
+        """
+        args = [key] + _create_bitfield_read_only_args(subcommands)
+        return cast(
+            List[int],
+            await self._execute_command(RequestType.BitFieldReadOnly, args),
         )
 
     async def object_encoding(self, key: str) -> Optional[str]:
