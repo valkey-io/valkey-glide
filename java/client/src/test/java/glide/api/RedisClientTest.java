@@ -3955,67 +3955,67 @@ public class RedisClientTest {
                         // no TRIM option
                         "test_xadd_no_trim",
                         StreamAddOptions.builder().id("id").makeStream(Boolean.FALSE).build(),
-                        new String[] {NO_MAKE_STREAM_REDIS_API, "id"},
-                        Arguments.of(
-                                // MAXLEN with LIMIT
-                                "test_xadd_maxlen_with_limit",
-                                StreamAddOptions.builder()
-                                        .id("id")
-                                        .makeStream(Boolean.TRUE)
-                                        .trim(new MaxLen(5L, 10L))
-                                        .build(),
-                                new String[] {
-                                    TRIM_MAXLEN_REDIS_API,
-                                    TRIM_EXACT_REDIS_API,
-                                    Long.toString(5L),
-                                    TRIM_LIMIT_REDIS_API,
-                                    Long.toString(10L),
-                                    "id"
-                                }),
-                        Arguments.of(
-                                // MAXLEN with non exact match
-                                "test_xadd_maxlen_with_non_exact_match",
-                                StreamAddOptions.builder()
-                                        .makeStream(Boolean.FALSE)
-                                        .trim(new MaxLen(false, 2L))
-                                        .build(),
-                                new String[] {
-                                    NO_MAKE_STREAM_REDIS_API,
-                                    TRIM_MAXLEN_REDIS_API,
-                                    TRIM_NOT_EXACT_REDIS_API,
-                                    Long.toString(2L),
-                                    "*"
-                                }),
-                        Arguments.of(
-                                // MIN ID with LIMIT
-                                "test_xadd_minid_with_limit",
-                                StreamAddOptions.builder()
-                                        .id("id")
-                                        .makeStream(Boolean.TRUE)
-                                        .trim(new MinId("testKey", 10L))
-                                        .build(),
-                                new String[] {
-                                    TRIM_MINID_REDIS_API,
-                                    TRIM_EXACT_REDIS_API,
-                                    Long.toString(5L),
-                                    TRIM_LIMIT_REDIS_API,
-                                    Long.toString(10L),
-                                    "id"
-                                }),
-                        Arguments.of(
-                                // MIN ID with non exact match
-                                "test_xadd_minid_with_non_exact_match",
-                                StreamAddOptions.builder()
-                                        .makeStream(Boolean.FALSE)
-                                        .trim(new MinId(false, "testKey"))
-                                        .build(),
-                                new String[] {
-                                    NO_MAKE_STREAM_REDIS_API,
-                                    TRIM_MINID_REDIS_API,
-                                    TRIM_NOT_EXACT_REDIS_API,
-                                    Long.toString(5L),
-                                    "*"
-                                })));
+                        new String[] {NO_MAKE_STREAM_REDIS_API, "id"}),
+                Arguments.of(
+                        // MAXLEN with LIMIT
+                        "test_xadd_maxlen_with_limit",
+                        StreamAddOptions.builder()
+                                .id("id")
+                                .makeStream(Boolean.TRUE)
+                                .trim(new MaxLen(5L, 10L))
+                                .build(),
+                        new String[] {
+                            TRIM_MAXLEN_REDIS_API,
+                            TRIM_NOT_EXACT_REDIS_API,
+                            Long.toString(5L),
+                            TRIM_LIMIT_REDIS_API,
+                            Long.toString(10L),
+                            "id"
+                        }),
+                Arguments.of(
+                        // MAXLEN with non exact match
+                        "test_xadd_maxlen_with_non_exact_match",
+                        StreamAddOptions.builder()
+                                .makeStream(Boolean.FALSE)
+                                .trim(new MaxLen(false, 2L))
+                                .build(),
+                        new String[] {
+                            NO_MAKE_STREAM_REDIS_API,
+                            TRIM_MAXLEN_REDIS_API,
+                            TRIM_NOT_EXACT_REDIS_API,
+                            Long.toString(2L),
+                            "*"
+                        }),
+                Arguments.of(
+                        // MIN ID with LIMIT
+                        "test_xadd_minid_with_limit",
+                        StreamAddOptions.builder()
+                                .id("id")
+                                .makeStream(Boolean.TRUE)
+                                .trim(new MinId("testKey", 10L))
+                                .build(),
+                        new String[] {
+                            TRIM_MINID_REDIS_API,
+                            TRIM_NOT_EXACT_REDIS_API,
+                            "testKey",
+                            TRIM_LIMIT_REDIS_API,
+                            Long.toString(10L),
+                            "id"
+                        }),
+                Arguments.of(
+                        // MIN ID with non-exact match
+                        "test_xadd_minid_with_non_exact_match",
+                        StreamAddOptions.builder()
+                                .makeStream(Boolean.FALSE)
+                                .trim(new MinId(false, "testKey"))
+                                .build(),
+                        new String[] {
+                            NO_MAKE_STREAM_REDIS_API,
+                            TRIM_MINID_REDIS_API,
+                            TRIM_NOT_EXACT_REDIS_API,
+                            "testKey",
+                            "*"
+                        }));
     }
 
     @SneakyThrows
@@ -4023,7 +4023,8 @@ public class RedisClientTest {
     @MethodSource("getStreamAddOptions")
     public void xadd_with_options_to_arguments(
             String testName, StreamAddOptions options, String[] expectedArgs) {
-        assertArrayEquals(expectedArgs, options.toArgs());
+        assertArrayEquals(
+                expectedArgs, options.toArgs(), "Expected " + testName + " toArgs() to pass.");
     }
 
     @SneakyThrows
