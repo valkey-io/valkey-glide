@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -38,6 +39,25 @@ public interface StringBaseCommands {
     CompletableFuture<String> get(String key);
 
     /**
+     * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
+     * value exists.
+     *
+     * @see <a href="https://redis.io/commands/get/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return Response from Redis. If <code>key</code> exists, returns the <code>value</code> of
+     *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * GlideString value = client.get(gs("key")).get();
+     * assert Arrays.equals(value.getString(), "value");
+     *
+     * String value = client.get("non_existing_key").get();
+     * assert value.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<GlideString> get(GlideString key);
+
+    /**
      * Gets a string value associated with the given <code>key</code> and deletes the key.
      *
      * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
@@ -56,6 +76,24 @@ public interface StringBaseCommands {
     CompletableFuture<String> getdel(String key);
 
     /**
+     * Gets a string value associated with the given <code>key</code> and deletes the key.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code>.
+     *     Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * GlideString value = client.getdel(gs("key")).get();
+     * assert assert Arrays.equals(value.getString(), "value");
+     *
+     * String value = client.getdel("key").get();
+     * assert value.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<GlideString> getdel(GlideString key);
+
+    /**
      * Sets the given <code>key</code> with the given value.
      *
      * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
@@ -69,6 +107,21 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> set(String key, String value);
+
+    /**
+     * Sets the given <code>key</code> with the given value.
+     *
+     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @param key The <code>key</code> to store.
+     * @param value The value to store with the given <code>key</code>.
+     * @return Response from Redis containing <code>"OK"</code>.
+     * @example
+     *     <pre>{@code
+     * GlideString value = client.set(gs("key"), gs("value")).get();
+     * assert value.getString().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> set(GlideString key, GlideString value);
 
     /**
      * Sets the given key with the given value. Return value is dependent on the passed options.
@@ -92,6 +145,27 @@ public interface StringBaseCommands {
     CompletableFuture<String> set(String key, String value, SetOptions options);
 
     /**
+     * Sets the given key with the given value. Return value is dependent on the passed options.
+     *
+     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @param key The key to store.
+     * @param value The value to store with the given key.
+     * @param options The Set options.
+     * @return Response from Redis containing a <code>String</code> or <code>null</code> response. If
+     *     the value is successfully set, return <code>"OK"</code>. If value isn't set because of
+     *     {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
+     *     conditions, return <code>null</code>. If {@link SetOptionsBuilder#returnOldValue(boolean)}
+     *     is set, return the old value as a <code>String</code>.
+     * @example
+     *     <pre>{@code
+     * SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).expiry(Seconds(5L)).build();
+     * String value = client.set("key".getBytes(), "value".getBytes(), options).get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> set(GlideString key, GlideString value, SetOptions options);
+
+    /**
      * Retrieves the values of multiple <code>keys</code>.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
@@ -108,6 +182,24 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String[]> mget(String[] keys);
+
+    /**
+     * Retrieves the values of multiple <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
+     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @param keys A list of keys to retrieve values for.
+     * @return An array of values corresponding to the provided <code>keys</code>.<br>
+     *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * GlideString[] values = client.mget(new GlideString[] {"key1", "key2"}).get();
+     * assert values.equals(new GlideString[] {"value1", "value2"});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> mget(GlideString[] keys);
 
     /**
      * Sets multiple keys to multiple values in a single operation.
