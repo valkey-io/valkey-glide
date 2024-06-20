@@ -2,8 +2,7 @@
 
 import asyncio
 import threading
-from dataclasses import dataclass
-from typing import Dict, List, Optional, Tuple, Type, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 
 import async_timeout
 from glide.async_commands.cluster_commands import ClusterCommands
@@ -17,6 +16,7 @@ from glide.exceptions import (
     ExecAbortError,
     RequestError,
     TimeoutError,
+    WrongConfiguration,
 )
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
@@ -255,26 +255,59 @@ class BaseRedisClient(CoreCommands):
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
-    @dataclass
-    class PubSubMsg:
-        message: str
-        channel: str
-        pattern: Optional[str]
-
-    async def get_pubsub_message(self) -> PubSubMsg:
+    async def get_pubsub_message(self) -> CoreCommands.PubSubMsg:
         if self._is_closed:
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
+
+        if not self.config._is_pubsub_configured():
+            raise WrongConfiguration(
+                "The operation will never complete since there was no pubsbub subscriptions applied to the client."
+            )
+
+        if self.config._get_pubsub_callback_and_context()[0] is not None:
+            raise WrongConfiguration(
+                "The operation will never complete since messages will be passed to the configured callback."
+            )
+
         # locking might not be required
         response_future: asyncio.Future = asyncio.Future()
         try:
             self._pubsub_lock.acquire()
             self._pubsub_futures.append(response_future)
-            self._push_pubsub_messages_safe()
+            self._complete_pubsub_futures_safe()
         finally:
             self._pubsub_lock.release()
         return await response_future
+
+    def try_get_pubsub_message(self) -> Optional[CoreCommands.PubSubMsg]:
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+
+        if not self.config._is_pubsub_configured():
+            raise WrongConfiguration(
+                "The operation will never succeed since there was no pubsbub subscriptions applied to the client."
+            )
+
+        if self.config._get_pubsub_callback_and_context()[0] is not None:
+            raise WrongConfiguration(
+                "The operation will never succeed since messages will be passed to the configured callback."
+            )
+
+        # locking might not be required
+        msg: Optional[CoreCommands.PubSubMsg] = None
+        try:
+            self._pubsub_lock.acquire()
+            self._complete_pubsub_futures_safe()
+            while len(self._pending_push_notifications) and not msg:
+                push_notification = self._pending_push_notifications.pop(0)
+                msg = self._notification_to_pubsub_message_safe(push_notification)
+        finally:
+            self._pubsub_lock.release()
+        return msg
 
     def _cancel_pubsub_futures_with_exception_safe(self, exception: ConnectionError):
         while len(self._pubsub_futures):
@@ -282,52 +315,60 @@ class BaseRedisClient(CoreCommands):
             if not next_future.cancelled():
                 next_future.set_exception(exception)
 
-    def _push_pubsub_messages_safe(self):
+    def _notification_to_pubsub_message_safe(
+        self, response: Response
+    ) -> Optional[CoreCommands.PubSubMsg]:
+        pubsub_message = None
+        push_notification = cast(
+            Dict[str, Any], value_from_pointer(response.resp_pointer)
+        )
+        message_kind = push_notification["kind"]
+        if message_kind == "Disconnect":
+            # cancel all futures since we dont know how many (if any) messages wont arrive
+            # TODO: consider cancelling a single future
+            self._cancel_pubsub_futures_with_exception_safe(
+                ConnectionError(
+                    "Warning, transport disconnect occured, messages might be lost"
+                )
+            )
+        elif (
+            message_kind == "Message"
+            or message_kind == "PMessage"
+            or message_kind == "SMessage"
+        ):
+            values: List = push_notification["values"]
+            if message_kind == "PMessage":
+                pubsub_message = BaseRedisClient.PubSubMsg(
+                    message=values[2], channel=values[1], pattern=values[0]
+                )
+            else:
+                pubsub_message = BaseRedisClient.PubSubMsg(
+                    message=values[1], channel=values[0], pattern=None
+                )
+        elif (
+            message_kind == "PSubscribe"
+            or message_kind == "Subscribe"
+            or message_kind == "SSubscribe"
+            or message_kind == "Unsubscribe"
+        ):
+            pass
+        else:
+            err_msg = f"Unsupported push message: '{message_kind}'"
+            ClientLogger.log(LogLevel.ERROR, "pubsub message", err_msg)
+            # cancel all futures since its a serious
+            # TODO: consider cancelling a single future
+            self._cancel_pubsub_futures_with_exception_safe(ConnectionError(err_msg))
+
+        return pubsub_message
+
+    def _complete_pubsub_futures_safe(self):
         while len(self._pending_push_notifications) and len(self._pubsub_futures):
             next_push_notification = self._pending_push_notifications.pop(0)
-            next_push_notification: Dict = value_from_pointer(
-                next_push_notification.resp_pointer
+            pubsub_message = self._notification_to_pubsub_message_safe(
+                next_push_notification
             )
-            message_kind = next_push_notification["kind"]
-            if message_kind == "Disconnect":
-                # cancel all futures since we dont know how many (if any) messages wont arrive
-                # TODO: consider cancelling a single future
-                self._cancel_pubsub_futures_with_exception_safe(
-                    ConnectionError(
-                        "Warning, transport disconnect occured, messages might be lost"
-                    )
-                )
-            elif (
-                message_kind == "Message"
-                or message_kind == "PMessage"
-                or message_kind == "SMessage"
-            ):
-                next_future = self._pubsub_futures.pop(0)
-                values: List = next_push_notification["values"]
-                if message_kind == "PMessage":
-                    msg = BaseRedisClient.PubSubMsg(
-                        message=values[2], channel=values[1], pattern=values[0]
-                    )
-                else:
-                    msg = BaseRedisClient.PubSubMsg(
-                        message=values[1], channel=values[0], pattern=None
-                    )
-                next_future.set_result(msg)
-            elif (
-                message_kind == "PSubscribe"
-                or message_kind == "Subscribe"
-                or message_kind == "SSubscribe"
-                or message_kind == "Unsubscribe"
-            ):
-                pass
-            else:
-                err_msg = f"Unsupported push message: '{message_kind}'"
-                ClientLogger.log(LogLevel.ERROR, "pubsub message", err_msg)
-                # cancel all futures since its a serious
-                # TODO: consider cancelling a single future
-                self._cancel_pubsub_futures_with_exception_safe(
-                    ConnectionError(err_msg)
-                )
+            if pubsub_message:
+                self._pubsub_futures.pop(0).set_result(pubsub_message)
 
     async def _write_request_await_response(self, request: RedisRequest):
         # Create a response future for this request and add it to the available
@@ -380,8 +421,14 @@ class BaseRedisClient(CoreCommands):
 
         try:
             self._pubsub_lock.acquire()
-            self._pending_push_notifications.append(response)
-            self._push_pubsub_messages_safe()
+            callback, context = self.config._get_pubsub_callback_and_context()
+            if callback:
+                pubsub_message = self._notification_to_pubsub_message_safe(response)
+                if pubsub_message:
+                    callback(pubsub_message, context)
+            else:
+                self._pending_push_notifications.append(response)
+                self._complete_pubsub_futures_safe()
         finally:
             self._pubsub_lock.release()
 
@@ -430,8 +477,6 @@ class RedisClient(BaseRedisClient, StandaloneCommands):
     For full documentation, see
     https://github.com/aws/babushka/wiki/Python-wrapper#redis-standalone
     """
-
-    pass
 
 
 TRedisClient = Union[RedisClient, RedisClusterClient]

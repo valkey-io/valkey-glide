@@ -1,8 +1,12 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
-from enum import Enum, IntEnum
-from typing import Dict, List, Optional, Set, Union
+from __future__ import annotations
 
+from dataclasses import dataclass
+from enum import Enum, IntEnum
+from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+
+from glide.async_commands.core import CoreCommands
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ProtocolVersion as SentProtocolVersion
 from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
@@ -194,6 +198,14 @@ class BaseClientConfiguration:
 
         return request
 
+    def _is_pubsub_configured(self) -> bool:
+        return False
+
+    def _get_pubsub_callback_and_context(
+        self,
+    ) -> Tuple[Optional[Callable[[CoreCommands.PubSubMsg, Any], None]], Any]:
+        return None, None
+
 
 class RedisClientConfiguration(BaseClientConfiguration):
     """
@@ -236,7 +248,24 @@ class RedisClientConfiguration(BaseClientConfiguration):
         Pattern = 1
         """ Use channel name patterns """
 
-    PubSubSubscriptions = Dict[PubSubChannelModes, Set[str]]
+    @dataclass
+    class PubSubSubscriptions:
+        """Describes pubsub configuration for standalone mode client.
+
+        Attributes:
+            channels_and_patterns (Dict[RedisClientConfiguration.PubSubChannelModes, Set[str]]):
+                Channels and patterns by modes.
+            callback (Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]):
+                Optional callback to accept the incomming messages.
+            context (Any):
+                Arbitrary context to pass to the callback.
+        """
+
+        channels_and_patterns: Dict[
+            RedisClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+        callback: Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]
+        context: Any
 
     def __init__(
         self,
@@ -281,7 +310,10 @@ class RedisClientConfiguration(BaseClientConfiguration):
             request.database_id = self.database_id
 
         if self.pubsub_subscriptions:
-            for channel_type, channels_patterns in self.pubsub_subscriptions.items():
+            for (
+                channel_type,
+                channels_patterns,
+            ) in self.pubsub_subscriptions.channels_and_patterns.items():
                 entry = request.pubsub_subscriptions.channels_or_patterns_by_type[
                     int(channel_type)
                 ]
@@ -289,6 +321,16 @@ class RedisClientConfiguration(BaseClientConfiguration):
                     entry.channels_or_patterns.append(str.encode(channel_pattern))
 
         return request
+
+    def _is_pubsub_configured(self) -> bool:
+        return self.pubsub_subscriptions is not None
+
+    def _get_pubsub_callback_and_context(
+        self,
+    ) -> Tuple[Optional[Callable[[CoreCommands.PubSubMsg, Any], None]], Any]:
+        if self.pubsub_subscriptions:
+            return self.pubsub_subscriptions.callback, self.pubsub_subscriptions.context
+        return None, None
 
 
 class ClusterClientConfiguration(BaseClientConfiguration):
@@ -336,7 +378,24 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         Sharded = 2
         """ Use sharded pubsub """
 
-    PubSubSubscriptions = Dict[PubSubChannelModes, Set[str]]
+    @dataclass
+    class PubSubSubscriptions:
+        """Describes pubsub configuration for cluster mode client.
+
+        Attributes:
+            channels_and_patterns (Dict[ClusterClientConfiguration.PubSubChannelModes, Set[str]]):
+                Channels and patterns by modes.
+            callback (Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]):
+                Optional callback to accept the incomming messages.
+            context (Any):
+                Arbitrary context to pass to the callback.
+        """
+
+        channels_and_patterns: Dict[
+            ClusterClientConfiguration.PubSubChannelModes, Set[str]
+        ]
+        callback: Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]
+        context: Any
 
     def __init__(
         self,
@@ -377,7 +436,10 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             request.periodic_checks_disabled.SetInParent()
 
         if self.pubsub_subscriptions:
-            for channel_type, channels_patterns in self.pubsub_subscriptions.items():
+            for (
+                channel_type,
+                channels_patterns,
+            ) in self.pubsub_subscriptions.channels_and_patterns.items():
                 entry = request.pubsub_subscriptions.channels_or_patterns_by_type[
                     int(channel_type)
                 ]
@@ -385,3 +447,13 @@ class ClusterClientConfiguration(BaseClientConfiguration):
                     entry.channels_or_patterns.append(str.encode(channel_pattern))
 
         return request
+
+    def _is_pubsub_configured(self) -> bool:
+        return self.pubsub_subscriptions is not None
+
+    def _get_pubsub_callback_and_context(
+        self,
+    ) -> Tuple[Optional[Callable[[CoreCommands.PubSubMsg, Any], None]], Any]:
+        if self.pubsub_subscriptions:
+            return self.pubsub_subscriptions.callback, self.pubsub_subscriptions.context
+        return None, None

@@ -1,6 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
@@ -5006,3 +5007,51 @@ class CoreCommands(Protocol):
             Optional[str],
             await self._execute_command(RequestType.GetEx, args),
         )
+
+    @dataclass
+    class PubSubMsg:
+        """Describes incoming pubsub message
+
+        Attributes:
+            message (str): Incoming message.
+            channel (str): Name of an channel that triggered the message.
+            pattern (Optional[str]): Pattern that triggered the message.
+        """
+
+        message: str
+        channel: str
+        pattern: Optional[str]
+
+    async def get_pubsub_message(self) -> PubSubMsg:
+        """
+        Returns the next pubsub message.
+        Throws WrongConfiguration in cases:
+        1. No pubsub subscriptions are configured for the client
+        2. Callback is configured with the pubsub subsciptions
+
+        See https://valkey.io/docs/topics/pubsub/ for more details.
+
+        Returns:
+            PubSubMsg: The next pubsub message
+
+        Examples:
+            >>> pubsub_msg = await listening_client.get_pubsub_message()
+        """
+        ...
+
+    def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
+        """
+        Tries to returns the next pubsub message.
+        Throws WrongConfiguration in cases:
+        1. No pubsub subscriptions are configured for the client
+        2. Callback is configured with the pubsub subsciptions
+
+        See https://valkey.io/docs/topics/pubsub/ for more details.
+
+        Returns:
+            Optional[PubSubMsg]: The next pubsub message or None
+
+        Examples:
+            >>> pubsub_msg = listening_client.try_get_pubsub_message()
+        """
+        ...
