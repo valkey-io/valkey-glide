@@ -87,7 +87,9 @@ jobs:
 
             - name: Create secret key ring file
               working-directory: java
-              run: echo ${{ secrets.SECRING_GPG }} > secring.gpg
+              env:
+                  SECRING_GPG: ${{ secrets.SECRING_GPG }}
+              run: echo "$SECRING_GPG" > "secring.gpg"
 
             - name: Build java client
               working-directory: java
