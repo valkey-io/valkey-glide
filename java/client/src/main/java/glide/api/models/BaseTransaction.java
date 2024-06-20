@@ -3057,12 +3057,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
      * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}</code> to receive only new messages.
+     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
+     *     </code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
-     * @return Command Response - A <code>{@literal Map<String, Map<String, Map<String[][]>>>}</code> with stream
-     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns null if the consumer group does not exist. Returns a Map with a value of null if the stream is empty.
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
+     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     [[field, entry], [field, entry], ...]<code>.
+     *     Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code>
+     *     with a value of code>null</code> if the stream is empty.
      */
     public T xreadgroup(
             @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
@@ -3077,13 +3080,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
      * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
-     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}</code> to receive only new messages.
+     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
+     *     </code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The newly created consumer.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
-     * @return Command Response - A <code>{@literal Map<String, Map<String, Map<String[][]>>>}</code> with stream
-     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns null if the consumer group does not exist. Returns a Map with a value of null if the stream is empty.
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
+     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     [[field, entry], [field, entry], ...]<code>.
+     *     Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code>
+     *     with a value of code>null</code> if the stream is empty.
      */
     public T xreadgroup(
             @NonNull Map<String, String> keysAndIds,
