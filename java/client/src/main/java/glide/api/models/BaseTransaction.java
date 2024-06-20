@@ -66,6 +66,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
+import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -190,6 +191,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 import com.google.protobuf.ByteString;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -389,6 +391,37 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T getdel(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(GetDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets the value associated with the given <code>key</code>.
+     *
+     * @since Redis 6.2.0.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return Command Response - If <code>key</code> exists, return the <code>value</code> of the
+     *     <code>key</code>. Otherwise, return <code>null</code>.
+     */
+    public T getex(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(GetEx, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets the value associated with the given <code>key</code>.
+     *
+     * @since Redis 6.2.0.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @param options The {@link GetExOptions} options.
+     * @return Command Response - If <code>key</code> exists, return the <code>value</code> of the
+     *     <code>key</code>. Otherwise, return <code>null</code>.
+     */
+    public T getex(@NonNull String key, @NonNull GetExOptions options) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(options.toArgs(), key));
+        protobufTransaction.addCommands(buildCommand(GetEx, commandArgs));
         return getThis();
     }
 

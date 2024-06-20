@@ -82,6 +82,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
+import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -205,6 +206,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import com.google.protobuf.ByteString;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -267,6 +269,12 @@ public class TransactionTests {
 
         transaction.get("key");
         results.add(Pair.of(Get, buildArgs("key")));
+
+        transaction.getex("key");
+        results.add(Pair.of(GetEx, buildArgs("key")));
+
+        transaction.getex("key", GetExOptions.Seconds(10L));
+        results.add(Pair.of(GetEx, buildArgs("key", "EX", "10")));
 
         transaction.set("key", "value");
         results.add(Pair.of(Set, buildArgs("key", "value")));
