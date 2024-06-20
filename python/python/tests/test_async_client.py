@@ -4776,8 +4776,18 @@ class TestCommands:
         stream_id2 = "0-2"
         stream_id3 = "0-3"
 
-        assert await redis_client.xadd(key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id1)) == stream_id1
-        assert await redis_client.xadd(key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id2)) == stream_id2
+        assert (
+            await redis_client.xadd(
+                key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id1)
+            )
+            == stream_id1
+        )
+        assert (
+            await redis_client.xadd(
+                key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id2)
+            )
+            == stream_id2
+        )
         assert await redis_client.xlen(key1) == 2
 
         # deletes one stream id, and ignores anything invalid
