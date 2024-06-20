@@ -157,6 +157,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
 import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
@@ -233,6 +234,7 @@ import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.ReadFrom;
@@ -2767,7 +2769,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
      *     pair</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
-     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xread(@NonNull Map<String, String> keysAndIds) {
@@ -2782,7 +2784,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     pair</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
      * @param options options detailing how to read the stream {@link StreamReadOptions}.
-     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xread(@NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
@@ -3045,6 +3047,58 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T xgroupDelConsumer(@NonNull String key, @NonNull String group, @NonNull String consumer) {
         protobufTransaction.addCommands(
                 buildCommand(XGroupDelConsumer, buildArgs(key, group, consumer)));
+        return getThis();
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
+     *     </code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
+     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     [[field, entry], [field, entry], ...]<code>.
+     *     Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code>
+     *     with a value of code>null</code> if the stream is empty.
+     */
+    public T xreadgroup(
+            @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
+        return xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
+     *     </code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
+     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     [[field, entry], [field, entry], ...]<code>.
+     *     Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code>
+     *     with a value of code>null</code> if the stream is empty.
+     */
+    public T xreadgroup(
+            @NonNull Map<String, String> keysAndIds,
+            @NonNull String group,
+            @NonNull String consumer,
+            @NonNull StreamReadGroupOptions options) {
+        protobufTransaction.addCommands(
+                buildCommand(XReadGroup, buildArgs(options.toArgs(group, consumer, keysAndIds))));
         return getThis();
     }
 

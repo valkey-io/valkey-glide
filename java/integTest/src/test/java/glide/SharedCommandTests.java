@@ -69,6 +69,7 @@ import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -3480,7 +3481,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void xgroupCreateConsumer_xgroupDelConsumer(BaseClient client) {
+    public void xgroupCreateConsumer_xreadgroup_xgroupDelConsumer(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String stringKey = UUID.randomUUID().toString();
         String groupName = "group" + UUID.randomUUID();
@@ -3510,8 +3511,43 @@ public class SharedCommandTests {
         // Deletes a consumer that is not created yet returns 0
         assertEquals(0L, client.xgroupDelConsumer(key, groupName, "not_a_consumer").get());
 
-        // TODO use XREADGROUP to mark pending messages for the consumer so that we get non-zero return
-        assertEquals(0L, client.xgroupDelConsumer(key, groupName, consumerName).get());
+        // Add two stream entries
+        String streamid_1 = client.xadd(key, Map.of("field1", "value1")).get();
+        assertNotNull(streamid_1);
+        String streamid_2 = client.xadd(key, Map.of("field2", "value2")).get();
+        assertNotNull(streamid_2);
+
+        // read the entire stream for the consumer and mark messages as pending
+        var result_1 = client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamid_1, new String[][] {{"field1", "value1"}},
+                                streamid_2, new String[][] {{"field2", "value2"}})),
+                result_1);
+
+        // delete one of the streams
+        assertEquals(1L, client.xdel(key, new String[] {streamid_1}).get());
+
+        // now xreadgroup yeilds one empty stream and one non-empty stream
+        var result_2 = client.xreadgroup(Map.of(key, "0"), groupName, consumerName).get();
+        assertEquals(2, result_2.get(key).size());
+        assertNull(result_2.get(key).get(streamid_1));
+        assertArrayEquals(new String[][] {{"field2", "value2"}}, result_2.get(key).get(streamid_2));
+
+        String streamid_3 = client.xadd(key, Map.of("field3", "value3")).get();
+        assertNotNull(streamid_3);
+
+        // Delete the consumer group and expect 2 pending messages
+        assertEquals(2L, client.xgroupDelConsumer(key, groupName, consumerName).get());
+
+        // Consume the last message with the previously deleted consumer (creates the consumer anew)
+        var result_3 = client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get();
+        assertEquals(1, result_3.get(key).size());
+
+        // Delete the consumer group and expect the pending message
+        assertEquals(1L, client.xgroupDelConsumer(key, groupName, consumerName).get());
 
         // key is a string and cannot be created as a stream
         assertEquals(OK, client.set(stringKey, "not_a_stream").get());
@@ -3526,6 +3562,124 @@ public class SharedCommandTests {
                         ExecutionException.class,
                         () -> client.xgroupDelConsumer(stringKey, groupName, consumerName).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xreadgroup_return_failures(BaseClient client) {
+        String key = "{key}:1" + UUID.randomUUID();
+        String nonStreamKey = "{key}:3" + UUID.randomUUID();
+        String field1 = "f1_";
+
+        // setup first entries in streams key1 and key2
+        Map<String, String> timestamp_1_1_map = new LinkedHashMap<>();
+        timestamp_1_1_map.put(field1, field1 + "1");
+        String timestamp_1_1 =
+                client.xadd(key, timestamp_1_1_map, StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
+
+        String groupName = "group" + UUID.randomUUID();
+        String zeroStreamId = "0";
+        String consumerName = "consumer" + UUID.randomUUID();
+
+        // create group and consumer for the group
+        assertEquals(
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumerName).get());
+
+        // First key exists, but it is not a stream
+        assertEquals(OK, client.set(nonStreamKey, "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xreadgroup(
+                                                Map.of(nonStreamKey, timestamp_1_1, key, timestamp_1_1),
+                                                groupName,
+                                                consumerName)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Second key exists, but it is not a stream
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xreadgroup(
+                                                Map.of(key, timestamp_1_1, nonStreamKey, timestamp_1_1),
+                                                groupName,
+                                                consumerName)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+            String timeoutKey = "{key}:2" + UUID.randomUUID();
+            String timeoutGroupName = "group" + UUID.randomUUID();
+            String timeoutConsumerName = "consumer" + UUID.randomUUID();
+
+            // Create a group read with the test client
+            // add a single stream entry and consumer
+            // the first call to ">" will return an update consumer group
+            // the second call to ">" will block waiting for new entries
+            // using anything other than ">" won't block, but will return the empty consumer result
+            // see: https://github.com/redis/redis/issues/6587
+            assertEquals(
+                    OK,
+                    testClient
+                            .xgroupCreate(
+                                    timeoutKey,
+                                    timeoutGroupName,
+                                    zeroStreamId,
+                                    StreamGroupOptions.builder().makeStream().build())
+                            .get());
+            assertTrue(
+                    testClient.xgroupCreateConsumer(timeoutKey, timeoutGroupName, timeoutConsumerName).get());
+            String streamid_1 = testClient.xadd(timeoutKey, Map.of("field1", "value1")).get();
+            assertNotNull(streamid_1);
+
+            // read the entire stream for the consumer and mark messages as pending
+            var result_1 =
+                    testClient
+                            .xreadgroup(Map.of(timeoutKey, ">"), timeoutGroupName, timeoutConsumerName)
+                            .get();
+            // returns an null result on the key
+            assertNull(result_1.get(key));
+
+            // subsequent calls to read ">" will block:
+            // ensure that command doesn't time out even if timeout > request timeout
+            long oneSecondInMS = 1000L;
+            assertNull(
+                    testClient
+                            .xreadgroup(
+                                    Map.of(timeoutKey, ">"),
+                                    timeoutGroupName,
+                                    timeoutConsumerName,
+                                    StreamReadGroupOptions.builder().block(oneSecondInMS).build())
+                            .get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .xreadgroup(
+                                            Map.of(timeoutKey, ">"),
+                                            timeoutGroupName,
+                                            timeoutConsumerName,
+                                            StreamReadGroupOptions.builder().block(0L).build())
+                                    .get(3, TimeUnit.SECONDS));
+        }
     }
 
     @SneakyThrows
