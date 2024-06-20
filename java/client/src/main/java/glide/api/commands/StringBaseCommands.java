@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -74,6 +75,41 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> getdel(String key);
+
+    /**
+     * Gets the value associated with the given <code>key</code>.
+     *
+     * @since Redis 6.2.0.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
+     *     Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String value = client.getex("key").get();
+     * assert value.equals("value");
+     * }</pre>
+     */
+    CompletableFuture<String> getex(String key);
+
+    /**
+     * Gets the value associated with the given <code>key</code>.
+     *
+     * @since Redis 6.2.0.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @param options The {@link GetExOptions} options.
+     * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
+     *     Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.set("key", "value").get();
+     * assert response.equals(OK);
+     * String value = client.getex("key", GetExOptions.Seconds(10L)).get();
+     * assert value.equals("value");
+     * }</pre>
+     */
+    CompletableFuture<String> getex(String key, GetExOptions options);
 
     /**
      * Gets a string value associated with the given <code>key</code> and deletes the key.
