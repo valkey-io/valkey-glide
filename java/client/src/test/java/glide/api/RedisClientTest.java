@@ -20,11 +20,11 @@ import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
-import static glide.api.models.commands.SortOptions.ALPHA_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.LIMIT_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.OrderBy.DESC;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.SortStandaloneOptions.BY_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.BY_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT;
 import static glide.api.models.commands.bitmap.BitFieldOptions.GET_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.INCRBY_COMMAND_STRING;
@@ -262,8 +262,8 @@ import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
+import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
-import glide.api.models.commands.SortStandaloneOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -6832,7 +6832,7 @@ public class RedisClientTest {
         CompletableFuture<String[]> response =
                 service.sort(
                         key,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .getPatterns(new String[] {getPattern})
                                 .byPattern(byPattern)
                                 .build());
@@ -6877,9 +6877,9 @@ public class RedisClientTest {
         CompletableFuture<String[]> response =
                 service.sort(
                         key,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .alpha(true)
-                                .limit(new SortOptions.Limit(limitOffset, limitCount))
+                                .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
                                 .getPatterns(new String[] {getPattern})
                                 .byPattern(byPattern)
@@ -6912,7 +6912,7 @@ public class RedisClientTest {
         CompletableFuture<String[]> response =
                 service.sortReadOnly(
                         key,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .getPatterns(new String[] {getPattern})
                                 .byPattern(byPattern)
                                 .build());
@@ -6957,9 +6957,9 @@ public class RedisClientTest {
         CompletableFuture<String[]> response =
                 service.sortReadOnly(
                         key,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .alpha(true)
-                                .limit(new SortOptions.Limit(limitOffset, limitCount))
+                                .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
                                 .getPatterns(new String[] {getPattern})
                                 .byPattern(byPattern)
@@ -7001,7 +7001,7 @@ public class RedisClientTest {
                 service.sortStore(
                         key,
                         destKey,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .getPatterns(new String[] {getPattern})
                                 .byPattern(byPattern)
                                 .build());
@@ -7049,9 +7049,9 @@ public class RedisClientTest {
                 service.sortStore(
                         key,
                         destKey,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .alpha(true)
-                                .limit(new SortOptions.Limit(limitOffset, limitCount))
+                                .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
                                 .getPatterns(new String[] {getPattern})
                                 .byPattern(byPattern)

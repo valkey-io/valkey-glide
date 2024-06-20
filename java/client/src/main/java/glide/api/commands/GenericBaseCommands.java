@@ -6,7 +6,7 @@ import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
-import glide.api.models.commands.SortBaseOptions;
+import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
@@ -675,26 +675,26 @@ public interface GenericBaseCommands {
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String, SortBaseOptions)}.
+     * To store the result into a new key, see {@link #sortStore(String, String, SortClusterOptions)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortBaseOptions The {@link SortBaseOptions}.
+     * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return A <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
      * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
      * String[] payload = client.sort(
      *      "mylist",
-     *      SortBaseOptions.builder()
+     *      SortClusterOptions.builder()
      *          .alpha(true)
      *          .orderBy(DESC)
-     *          .limit(new SortOptions.Limit(0L, 3L))
+     *          .limit(new SortBaseOptions.Limit(0L, 3L))
      *          .build())
      *      .get();
      * assertArrayEquals(new String[] {"a", "3", "2"}, payload); // List is sorted in descending order lexicographically starting
      * }</pre>
      */
-    CompletableFuture<String[]> sort(String key, SortBaseOptions sortBaseOptions);
+    CompletableFuture<String[]> sort(String key, SortClusterOptions sortClusterOptions);
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
@@ -723,23 +723,23 @@ public interface GenericBaseCommands {
      *
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortBaseOptions The {@link SortBaseOptions}.
+     * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return A <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
      * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
      * String[] payload = client.sortReadOnly(
      *      "mylist",
-     *      SortBaseOptions.builder()
+     *      SortClusterOptions.builder()
      *          .alpha(true)
      *          .orderBy(DESC)
-     *          .limit(new SortOptions.Limit(0L, 3L))
+     *          .limit(new SortBaseOptions.Limit(0L, 3L))
      *          .build())
      *      .get();
      * assertArrayEquals(new String[] {"a", "3", "2"}, payload); // List is sorted in descending order lexicographically starting
      * }</pre>
      */
-    CompletableFuture<String[]> sortReadOnly(String key, SortBaseOptions sortBaseOptions);
+    CompletableFuture<String[]> sortReadOnly(String key, SortClusterOptions sortClusterOptions);
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
@@ -771,13 +771,13 @@ public interface GenericBaseCommands {
      * different criteria, apply transformations on sorted elements, and store the result in a new
      * key.<br>
      * To get the sort result without storing it into a key, see {@link #sort(String,
-     * SortBaseOptions)} and {@link #sortReadOnly(String, SortBaseOptions)}.
+     * SortClusterOptions)} and {@link #sortReadOnly(String, SortClusterOptions)}.
      *
      * @apiNote When in cluster mode, <code>key</code> and <code>destination</code> must map to the
      *     same hash slot.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param destination The key where the sorted result will be stored.
-     * @param sortBaseOptions The {@link SortBaseOptions}.
+     * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return The number of elements in the sorted key stored at <code>destination</code>.
      * @example
      *     <pre>{@code
@@ -786,10 +786,10 @@ public interface GenericBaseCommands {
      *      .sortStore(
      *          "mylist",
      *          "destination",
-     *          SortBaseOptions.builder()
+     *          SortClusterOptions.builder()
      *              .alpha(true)
      *              .orderBy(DESC)
-     *              .limit(new SortOptions.Limit(0L, 3L))
+     *              .limit(new SortBaseOptions.Limit(0L, 3L))
      *              .build())
      *      .get();
      * assertEquals(3, payload);
@@ -799,5 +799,5 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> sortStore(
-            String key, String destination, SortBaseOptions sortBaseOptions);
+            String key, String destination, SortClusterOptions sortClusterOptions);
 }

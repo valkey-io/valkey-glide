@@ -4,13 +4,13 @@ package glide.api.models;
 import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.GenericCommands.DB_REDIS_API;
 import static glide.api.models.TransactionTests.buildArgs;
-import static glide.api.models.commands.SortOptions.ALPHA_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.LIMIT_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.Limit;
-import static glide.api.models.commands.SortOptions.OrderBy.DESC;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.SortStandaloneOptions.BY_COMMAND_STRING;
-import static glide.api.models.commands.SortStandaloneOptions.GET_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.Limit;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.BY_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.GET_COMMAND_STRING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
@@ -18,7 +18,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
-import glide.api.models.commands.SortStandaloneOptions;
+import glide.api.models.commands.SortOptions;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
@@ -41,7 +41,7 @@ public class StandaloneTransactionTests {
 
         transaction.sort(
                 "key1",
-                SortStandaloneOptions.builder()
+                SortOptions.builder()
                         .byPattern("byPattern")
                         .getPatterns(new String[] {"getPattern1", "getPattern2"})
                         .build());
@@ -58,7 +58,7 @@ public class StandaloneTransactionTests {
                                 "getPattern2")));
         transaction.sort(
                 "key1",
-                SortStandaloneOptions.builder()
+                SortOptions.builder()
                         .orderBy(DESC)
                         .alpha(true)
                         .limit(new Limit(0L, 1L))
@@ -83,7 +83,7 @@ public class StandaloneTransactionTests {
                                 "getPattern2")));
         transaction.sortReadOnly(
                 "key1",
-                SortStandaloneOptions.builder()
+                SortOptions.builder()
                         .byPattern("byPattern")
                         .getPatterns(new String[] {"getPattern1", "getPattern2"})
                         .build());
@@ -100,7 +100,7 @@ public class StandaloneTransactionTests {
                                 "getPattern2")));
         transaction.sortReadOnly(
                 "key1",
-                SortStandaloneOptions.builder()
+                SortOptions.builder()
                         .orderBy(DESC)
                         .alpha(true)
                         .limit(new Limit(0L, 1L))
@@ -126,7 +126,7 @@ public class StandaloneTransactionTests {
         transaction.sortStore(
                 "key1",
                 "key2",
-                SortStandaloneOptions.builder()
+                SortOptions.builder()
                         .byPattern("byPattern")
                         .getPatterns(new String[] {"getPattern1", "getPattern2"})
                         .build());
@@ -146,7 +146,7 @@ public class StandaloneTransactionTests {
         transaction.sortStore(
                 "key1",
                 "key2",
-                SortStandaloneOptions.builder()
+                SortOptions.builder()
                         .orderBy(DESC)
                         .alpha(true)
                         .limit(new Limit(0L, 1L))

@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.GenericCommands.DB_REDIS_API;
 import static redis_request.RedisRequestOuterClass.RequestType.Copy;
@@ -10,7 +11,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
-import glide.api.models.commands.SortStandaloneOptions;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.configuration.ReadFrom;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
@@ -121,16 +122,14 @@ public class Transaction extends BaseTransaction<Transaction> {
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String,
-     * SortStandaloneOptions)}.
+     * To store the result into a new key, see {@link #sortStore(String, String, SortOptions)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortStandaloneOptions The {@link SortStandaloneOptions}.
+     * @param sortOptions The {@link SortOptions}.
      * @return Command Response - A <code>Array</code> of sorted elements.
      */
-    public Transaction sort(
-            @NonNull String key, @NonNull SortStandaloneOptions sortStandaloneOptions) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortStandaloneOptions.toArgs(), key));
+    public Transaction sort(@NonNull String key, @NonNull SortOptions sortOptions) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortOptions.toArgs(), key));
         protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
         return this;
     }
@@ -143,12 +142,11 @@ public class Transaction extends BaseTransaction<Transaction> {
      *
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortStandaloneOptions The {@link SortStandaloneOptions}.
+     * @param sortOptions The {@link SortOptions}.
      * @return Command Response - A <code>Array</code> of sorted elements.
      */
-    public Transaction sortReadOnly(
-            @NonNull String key, @NonNull SortStandaloneOptions sortStandaloneOptions) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortStandaloneOptions.toArgs(), key));
+    public Transaction sortReadOnly(@NonNull String key, @NonNull SortOptions sortOptions) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortOptions.toArgs(), key));
         protobufTransaction.addCommands(buildCommand(SortReadOnly, commandArgs));
         return this;
     }
@@ -158,24 +156,20 @@ public class Transaction extends BaseTransaction<Transaction> {
      * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
      * different criteria, apply transformations on sorted elements, and store the result in a new
      * key.<br>
-     * To get the sort result without storing it into a key, see {@link #sort(String,
-     * SortStandaloneOptions)}.
+     * To get the sort result without storing it into a key, see {@link #sort(String, SortOptions)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortStandaloneOptions The {@link SortStandaloneOptions}.
+     * @param sortOptions The {@link SortOptions}.
      * @param destination The key where the sorted result will be stored.
      * @return Command Response - The number of elements in the sorted key stored at <code>destination
      *     </code>.
      */
     public Transaction sortStore(
-            @NonNull String key,
-            @NonNull String destination,
-            @NonNull SortStandaloneOptions sortStandaloneOptions) {
+            @NonNull String key, @NonNull String destination, @NonNull SortOptions sortOptions) {
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         ArgsArray arguments =
                 buildArgs(
-                        ArrayUtils.addFirst(
-                                ArrayUtils.addAll(storeArguments, sortStandaloneOptions.toArgs()), key));
+                        ArrayUtils.addFirst(ArrayUtils.addAll(storeArguments, sortOptions.toArgs()), key));
         protobufTransaction.addCommands(buildCommand(Sort, arguments));
         return this;
     }

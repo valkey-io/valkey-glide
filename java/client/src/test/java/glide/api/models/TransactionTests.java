@@ -18,10 +18,10 @@ import static glide.api.models.commands.RangeOptions.InfScoreBound.POSITIVE_INFI
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
-import static glide.api.models.commands.SortOptions.ALPHA_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.LIMIT_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.OrderBy.ASC;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
 import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
 import static glide.api.models.commands.ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
@@ -227,7 +227,7 @@ import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
-import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -1109,10 +1109,10 @@ public class TransactionTests {
         results.add(Pair.of(Sort, buildArgs("key1")));
         transaction.sort(
                 "key1",
-                SortBaseOptions.builder()
+                SortClusterOptions.builder()
                         .orderBy(ASC)
                         .alpha(true)
-                        .limit(new SortOptions.Limit(0L, 1L))
+                        .limit(new SortBaseOptions.Limit(0L, 1L))
                         .build());
         results.add(
                 Pair.of(
@@ -1123,10 +1123,10 @@ public class TransactionTests {
         results.add(Pair.of(SortReadOnly, buildArgs("key1")));
         transaction.sortReadOnly(
                 "key1",
-                SortBaseOptions.builder()
+                SortClusterOptions.builder()
                         .orderBy(ASC)
                         .alpha(true)
-                        .limit(new SortOptions.Limit(0L, 1L))
+                        .limit(new SortBaseOptions.Limit(0L, 1L))
                         .build());
         results.add(
                 Pair.of(
@@ -1138,10 +1138,10 @@ public class TransactionTests {
         transaction.sortStore(
                 "key1",
                 "key2",
-                SortBaseOptions.builder()
+                SortClusterOptions.builder()
                         .orderBy(ASC)
                         .alpha(true)
-                        .limit(new SortOptions.Limit(0L, 1L))
+                        .limit(new SortBaseOptions.Limit(0L, 1L))
                         .build());
         results.add(
                 Pair.of(

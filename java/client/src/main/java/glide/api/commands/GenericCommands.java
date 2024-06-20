@@ -2,7 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.Transaction;
-import glide.api.models.commands.SortStandaloneOptions;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
@@ -139,11 +139,10 @@ public interface GenericCommands {
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String,
-     * SortStandaloneOptions)}.
+     * To store the result into a new key, see {@link #sortStore(String, String, SortOptions)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortStandaloneOptions The {@link SortStandaloneOptions}.
+     * @param sortOptions The {@link SortOptions}.
      * @return A <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
@@ -152,7 +151,7 @@ public interface GenericCommands {
      * client.lpush("user_ids", new String[] {"2", "1"}).get();
      * String [] payload = client.sort(
      *      "user_ids",
-     *      SortStandaloneOptions
+     *      SortOptions
      *          .builder()
      *              .byPattern("user:*->age")
      *                  .getPatterns(new String[] {"user:*->name"})
@@ -160,7 +159,7 @@ public interface GenericCommands {
      * assertArrayEquals(new String[] {"Bob", "Alice"}, payload); // Returns a list of the names sorted by age
      * }</pre>
      */
-    CompletableFuture<String[]> sort(String key, SortStandaloneOptions sortStandaloneOptions);
+    CompletableFuture<String[]> sort(String key, SortOptions sortOptions);
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
@@ -170,7 +169,7 @@ public interface GenericCommands {
      *
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortStandaloneOptions The {@link SortStandaloneOptions}.
+     * @param sortOptions The {@link SortOptions}.
      * @return A <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
@@ -179,7 +178,7 @@ public interface GenericCommands {
      * client.lpush("user_ids", new String[] {"2", "1"}).get();
      * String [] payload = client.sortReadOnly(
      *      "user_ids",
-     *      SortStandaloneOptions
+     *      SortOptions
      *          .builder()
      *              .byPattern("user:*->age")
      *                  .getPatterns(new String[] {"user:*->name"})
@@ -187,18 +186,17 @@ public interface GenericCommands {
      * assertArrayEquals(new String[] {"Bob", "Alice"}, payload); // Returns a list of the names sorted by age
      * }</pre>
      */
-    CompletableFuture<String[]> sortReadOnly(String key, SortStandaloneOptions sortStandaloneOptions);
+    CompletableFuture<String[]> sortReadOnly(String key, SortOptions sortOptions);
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
      * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
      * different criteria, apply transformations on sorted elements, and store the result in a new
      * key.<br>
-     * To get the sort result without storing it into a key, see {@link #sort(String,
-     * SortStandaloneOptions)}.
+     * To get the sort result without storing it into a key, see {@link #sort(String, SortOptions)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortStandaloneOptions The {@link SortStandaloneOptions}.
+     * @param sortOptions The {@link SortOptions}.
      * @param destination The key where the sorted result will be stored.
      * @return The number of elements in the sorted key stored at <code>destination</code>.
      * @example
@@ -210,7 +208,7 @@ public interface GenericCommands {
      *      .sortStore(
      *          "user_ids",
      *          "destination",
-     *          SortStandaloneOptions.builder()
+     *          SortOptions.builder()
      *              .byPattern("user:*->age")
      *              .getPatterns(new String[] {"user:*->name"})
      *              .build())
@@ -221,6 +219,5 @@ public interface GenericCommands {
      *      client.lrange("destination", 0, -1).get()); // The list of the names sorted by age is stored in `destination`
      * }</pre>
      */
-    CompletableFuture<Long> sortStore(
-            String key, String destination, SortStandaloneOptions sortStandaloneOptions);
+    CompletableFuture<Long> sortStore(String key, String destination, SortOptions sortOptions);
 }

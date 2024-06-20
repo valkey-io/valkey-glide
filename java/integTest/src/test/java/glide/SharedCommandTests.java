@@ -18,7 +18,7 @@ import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
-import static glide.api.models.commands.SortOptions.OrderBy.DESC;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -51,7 +51,7 @@ import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortBaseOptions;
-import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -5913,16 +5913,18 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new String[0],
                 client
-                        .sort(key1, SortBaseOptions.builder().limit(new SortOptions.Limit(0L, 0L)).build())
+                        .sort(
+                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
                         .get());
         assertArrayEquals(key1AscendingList, client.sort(key1).get());
         assertArrayEquals(
                 key1DescendingList,
-                client.sort(key1, SortBaseOptions.builder().orderBy(DESC).build()).get());
+                client.sort(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
         assertArrayEquals(
                 Arrays.copyOfRange(key1AscendingList, 0, 2),
                 client
-                        .sort(key1, SortBaseOptions.builder().limit(new SortOptions.Limit(0L, 2L)).build())
+                        .sort(
+                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                         .get());
         assertEquals(7, client.lpush(key2, key2LpushArgs).get());
         assertArrayEquals(
@@ -5930,10 +5932,10 @@ public class SharedCommandTests {
                 client
                         .sort(
                                 key2,
-                                SortBaseOptions.builder()
+                                SortClusterOptions.builder()
                                         .alpha(true)
                                         .orderBy(DESC)
-                                        .limit(new SortOptions.Limit(0L, 4L))
+                                        .limit(new SortBaseOptions.Limit(0L, 4L))
                                         .build())
                         .get());
 
@@ -5943,22 +5945,23 @@ public class SharedCommandTests {
             assertArrayEquals(key1AscendingList, client.sortReadOnly(key1).get());
             assertArrayEquals(
                     key1DescendingList,
-                    client.sortReadOnly(key1, SortBaseOptions.builder().orderBy(DESC).build()).get());
+                    client.sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
             assertArrayEquals(
                     Arrays.copyOfRange(key1AscendingList, 0, 2),
                     client
                             .sortReadOnly(
-                                    key1, SortBaseOptions.builder().limit(new SortOptions.Limit(0L, 2L)).build())
+                                    key1,
+                                    SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
                             .get());
             assertArrayEquals(
                     key2DescendingListSubset,
                     client
                             .sortReadOnly(
                                     key2,
-                                    SortBaseOptions.builder()
+                                    SortClusterOptions.builder()
                                             .alpha(true)
                                             .orderBy(DESC)
-                                            .limit(new SortOptions.Limit(0L, 4L))
+                                            .limit(new SortBaseOptions.Limit(0L, 4L))
                                             .build())
                             .get());
         }
@@ -5971,10 +5974,10 @@ public class SharedCommandTests {
                         .sortStore(
                                 key2,
                                 key3,
-                                SortBaseOptions.builder()
+                                SortClusterOptions.builder()
                                         .alpha(true)
                                         .orderBy(DESC)
-                                        .limit(new SortOptions.Limit(0L, 4L))
+                                        .limit(new SortBaseOptions.Limit(0L, 4L))
                                         .build())
                         .get());
         assertArrayEquals(key2DescendingListSubset, client.lrange(key3, 0, -1).get());

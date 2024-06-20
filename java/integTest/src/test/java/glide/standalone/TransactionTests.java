@@ -5,7 +5,7 @@ import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.api.BaseClient.OK;
-import static glide.api.models.commands.SortOptions.OrderBy.DESC;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -18,7 +18,7 @@ import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClient;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.SortStandaloneOptions;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
@@ -349,13 +349,13 @@ public class TransactionTests {
                 .lpush(genericKey1, new String[] {"2", "1"})
                 .sort(
                         genericKey1,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .byPattern("user:*->age")
                                 .getPatterns(new String[] {"user:*->name"})
                                 .build())
                 .sort(
                         genericKey1,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .orderBy(DESC)
                                 .byPattern("user:*->age")
                                 .getPatterns(new String[] {"user:*->name"})
@@ -363,7 +363,7 @@ public class TransactionTests {
                 .sortStore(
                         genericKey1,
                         genericKey2,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .byPattern("user:*->age")
                                 .getPatterns(new String[] {"user:*->name"})
                                 .build())
@@ -371,7 +371,7 @@ public class TransactionTests {
                 .sortStore(
                         genericKey1,
                         genericKey2,
-                        SortStandaloneOptions.builder()
+                        SortOptions.builder()
                                 .orderBy(DESC)
                                 .byPattern("user:*->age")
                                 .getPatterns(new String[] {"user:*->name"})
@@ -383,11 +383,11 @@ public class TransactionTests {
                     2L, // hset("user:1", Map.of("name", "Alice", "age", "30"))
                     2L, // hset("user:2", Map.of("name", "Bob", "age", "25"))
                     2L, // lpush(genericKey1, new String[] {"2", "1"})
-                    ascendingListByAge, // sort(genericKey1, SortStandaloneOptions)
-                    descendingListByAge, // sort(genericKey1, SortStandaloneOptions)
-                    2L, // sortStore(genericKey1, genericKey2, SortStandaloneOptions)
+                    ascendingListByAge, // sort(genericKey1, SortOptions)
+                    descendingListByAge, // sort(genericKey1, SortOptions)
+                    2L, // sortStore(genericKey1, genericKey2, SortOptions)
                     ascendingListByAge, // lrange(genericKey4, 0, -1)
-                    2L, // sortStore(genericKey1, genericKey2, SortStandaloneOptions)
+                    2L, // sortStore(genericKey1, genericKey2, SortOptions)
                     descendingListByAge, // lrange(genericKey2, 0, -1)
                 };
 
@@ -397,13 +397,13 @@ public class TransactionTests {
             transaction2
                     .sortReadOnly(
                             genericKey1,
-                            SortStandaloneOptions.builder()
+                            SortOptions.builder()
                                     .byPattern("user:*->age")
                                     .getPatterns(new String[] {"user:*->name"})
                                     .build())
                     .sortReadOnly(
                             genericKey1,
-                            SortStandaloneOptions.builder()
+                            SortOptions.builder()
                                     .orderBy(DESC)
                                     .byPattern("user:*->age")
                                     .getPatterns(new String[] {"user:*->name"})
@@ -411,8 +411,8 @@ public class TransactionTests {
 
             expectedResults =
                     new Object[] {
-                        ascendingListByAge, // sortReadOnly(genericKey1, SortStandaloneOptions)
-                        descendingListByAge, // sortReadOnly(genericKey1, SortStandaloneOptions)
+                        ascendingListByAge, // sortReadOnly(genericKey1, SortOptions)
+                        descendingListByAge, // sortReadOnly(genericKey1, SortOptions)
                     };
 
             assertArrayEquals(expectedResults, client.exec(transaction2).get());

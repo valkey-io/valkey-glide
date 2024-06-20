@@ -12,7 +12,7 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
@@ -217,7 +217,7 @@ import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
-import glide.api.models.commands.SortBaseOptions;
+import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.WeightAggregateOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
@@ -4775,14 +4775,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String, SortBaseOptions)}.
+     * To store the result into a new key, see {@link #sortStore(String, String, SortClusterOptions)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortBaseOptions The {@link SortBaseOptions}.
+     * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - A <code>Array</code> of sorted elements.
      */
-    public T sort(@NonNull String key, @NonNull SortBaseOptions sortBaseOptions) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortBaseOptions.toArgs(), key));
+    public T sort(@NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortClusterOptions.toArgs(), key));
         protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
         return getThis();
     }
@@ -4813,11 +4813,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortBaseOptions The {@link SortBaseOptions}.
+     * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - A <code>Array</code> of sorted elements.
      */
-    public T sortReadOnly(@NonNull String key, @NonNull SortBaseOptions sortBaseOptions) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortBaseOptions.toArgs(), key));
+    public T sortReadOnly(@NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortClusterOptions.toArgs(), key));
         protobufTransaction.addCommands(buildCommand(SortReadOnly, commandArgs));
         return getThis();
     }
@@ -4847,20 +4847,23 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * different criteria, apply transformations on sorted elements, and store the result in a new
      * key.<br>
      * To get the sort result without storing it into a key, see {@link #sort(String,
-     * SortBaseOptions)} and {@link #sortReadOnly(String, SortBaseOptions)}.
+     * SortClusterOptions)} and {@link #sortReadOnly(String, SortClusterOptions)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param destination The key where the sorted result will be stored.
-     * @param sortBaseOptions The {@link SortBaseOptions}.
+     * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - The number of elements in the sorted key stored at <code>destination
      *     </code>.
      */
     public T sortStore(
-            @NonNull String key, @NonNull String destination, @NonNull SortBaseOptions sortBaseOptions) {
+            @NonNull String key,
+            @NonNull String destination,
+            @NonNull SortClusterOptions sortClusterOptions) {
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         ArgsArray commandArgs =
                 buildArgs(
-                        ArrayUtils.addFirst(ArrayUtils.addAll(storeArguments, sortBaseOptions.toArgs()), key));
+                        ArrayUtils.addFirst(
+                                ArrayUtils.addAll(storeArguments, sortClusterOptions.toArgs()), key));
         protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
         return getThis();
     }

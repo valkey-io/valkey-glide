@@ -11,6 +11,10 @@ import static glide.api.models.commands.SortOptions.ALPHA_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.OrderBy.DESC;
 import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.ALPHA_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
@@ -54,8 +58,8 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.commands.SortBaseOptions;
-import glide.api.models.commands.SortOptions.Limit;
+import glide.api.models.commands.SortBaseOptions.Limit;
+import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -1957,7 +1961,7 @@ public class RedisClusterClientTest {
         CompletableFuture<String[]> response =
                 service.sort(
                         key,
-                        SortBaseOptions.builder()
+                        SortClusterOptions.builder()
                                 .alpha(true)
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
@@ -2019,7 +2023,7 @@ public class RedisClusterClientTest {
         CompletableFuture<String[]> response =
                 service.sortReadOnly(
                         key,
-                        SortBaseOptions.builder()
+                        SortClusterOptions.builder()
                                 .alpha(true)
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
@@ -2086,7 +2090,7 @@ public class RedisClusterClientTest {
                 service.sortStore(
                         key,
                         destKey,
-                        SortBaseOptions.builder()
+                        SortClusterOptions.builder()
                                 .alpha(true)
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
