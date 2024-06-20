@@ -7,15 +7,15 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
-import lombok.Builder;
+import lombok.experimental.SuperBuilder;
 
 /**
  * Optional arguments for {@link StreamBaseCommands#xread(Map, StreamReadOptions)}
  *
  * @see <a href="https://redis.io/commands/xread/">redis.io</a>
  */
-@Builder
-public final class StreamReadOptions {
+@SuperBuilder
+public class StreamReadOptions {
 
     public static final String READ_COUNT_REDIS_API = "COUNT";
     public static final String READ_BLOCK_REDIS_API = "BLOCK";
@@ -25,12 +25,12 @@ public final class StreamReadOptions {
      * If set, the request will be blocked for the set amount of milliseconds or until the server has
      * the required number of entries. Equivalent to <code>BLOCK</code> in the Redis API.
      */
-    Long block;
+    protected Long block;
 
     /**
      * The maximal number of elements requested. Equivalent to <code>COUNT</code> in the Redis API.
      */
-    Long count;
+    protected Long count;
 
     /**
      * Converts options and the key-to-id input for {@link StreamBaseCommands#xread(Map,

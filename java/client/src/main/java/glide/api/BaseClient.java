@@ -129,6 +129,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
 import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
@@ -195,6 +196,7 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -1427,6 +1429,22 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String group, @NonNull String consumer) {
         return commandManager.submitNewCommand(
                 XGroupDelConsumer, new String[] {key, group, consumer}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
+            @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
+        return xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
+            @NonNull Map<String, String> keysAndIds,
+            @NonNull String group,
+            @NonNull String consumer,
+            @NonNull StreamReadGroupOptions options) {
+        String[] arguments = options.toArgs(group, consumer, keysAndIds);
+        return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponse);
     }
 
     @Override

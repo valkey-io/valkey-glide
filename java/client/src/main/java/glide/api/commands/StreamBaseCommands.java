@@ -7,6 +7,7 @@ import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Map;
@@ -68,7 +69,7 @@ public interface StreamBaseCommands {
      * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
-     * @return A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
+     * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
@@ -95,7 +96,7 @@ public interface StreamBaseCommands {
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
      * @param options Options detailing how to read the stream {@link StreamReadOptions}.
-     * @return A <code>{@literal Map<String, Map<String[][]>>}</code> with stream
+     * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      * @example
      *     <pre>{@code
@@ -407,4 +408,89 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xgroupDelConsumer(String key, String group, String consumer);
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     *      Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code> with a value of code>null</code> if the stream is empty.
+     * @example
+     *     <pre>{@code
+     * // create a new stream at "mystream", with stream id "1-0"
+     * Map<String, String> xreadKeys = Map.of("myfield", "mydata");
+     * String streamId = client.xadd("mystream", Map.of("myfield", "mydata"), StreamAddOptions.builder().id("1-0").build()).get();
+     * assert client.xgroupCreate("mystream", "mygroup").get().equals("OK"); // create the consumer group "mygroup"
+     * Map<String, Map<String, String[][]>> streamReadResponse = client.xreadgroup(Map.of("mystream", ">"), "mygroup", "myconsumer").get();
+     * // Returns "mystream": "1-0": {{"myfield", "mydata"}}
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }
+     * assert client.xdel("mystream", "1-0").get() == 1L;
+     * client.xreadgroup(Map.of("mystream", "0"), "mygroup", "myconsumer").get();
+     * // Returns "mystream": "1-0": null
+     * assert streamReadResponse.get("mystream").get("1-0") == null;
+     * </pre>
+     */
+    CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
+            Map<String, String> keysAndIds, String group, String consumer);
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
+     * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     *      Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code> with a value of code>null</code> if the stream is empty.
+     * @example
+     *     <pre>{@code
+     * // create a new stream at "mystream", with stream id "1-0"
+     * Map<String, String> xreadKeys = Map.of("myfield", "mydata");
+     * String streamId = client.xadd("mystream", Map.of("myfield", "mydata"), StreamAddOptions.builder().id("1-0").build()).get();
+     * assert client.xgroupCreate("mystream", "mygroup").get().equals("OK"); // create the consumer group "mygroup"
+     * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(1).build(); // retrieves only a single message at a time
+     * Map<String, Map<String, String[][]>> streamReadResponse = client.xreadgroup(Map.of("mystream", ">"), "mygroup", "myconsumer", options).get();
+     * // Returns "mystream": "1-0": {{"myfield", "mydata"}}
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }
+     * assert client.xdel("mystream", "1-0").get() == 1L;
+     * // read the first 10 items and acknowledge (ACK) them:
+     * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(10L).noack().build();
+     * streamReadResponse = client.xreadgroup(Map.of("mystream", "0"), "mygroup", "myconsumer", options).get();
+     * // Returns "mystream": "1-0": null
+     * assert streamReadResponse.get("mystream").get("1-0") == null;
+     * </pre>
+     */
+    CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
+            Map<String, String> keysAndIds,
+            String group,
+            String consumer,
+            StreamReadGroupOptions options);
 }
