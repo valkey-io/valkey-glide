@@ -2448,6 +2448,45 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.ZRank, [key, member, "WITHSCORE"])
 
+    def zrevrank(self: TTransaction, key: str, member: str) -> TTransaction:
+        """
+        Returns the rank of `member` in the sorted set stored at `key`, where scores are ordered from the highest to
+        lowest, starting from `0`.
+
+        To get the rank of `member` with its score, see `zrevrank_withscore`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Command response:
+            Optional[int]: The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+        """
+        return self.append_command(RequestType.ZRevRank, [key, member])
+
+    def zrevrank_withscore(self: TTransaction, key: str, member: str) -> TTransaction:
+        """
+        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
+        highest to lowest, starting from `0`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Command response:
+            Optional[List[Union[int, float]]]: A list containing the rank (as `int`) and score (as `float`) of `member`
+                in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+
+        Since: Redis version 7.2.0.
+        """
+        return self.append_command(RequestType.ZRevRank, [key, member, "WITHSCORE"])
+
     def zrem(
         self: TTransaction,
         key: str,

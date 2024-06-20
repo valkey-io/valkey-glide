@@ -296,9 +296,13 @@ async def transaction_test(
     args.append(4)
     transaction.zrank(key8, "one")
     args.append(0)
+    transaction.zrevrank(key8, "one")
+    args.append(3)
     if not await check_if_server_version_lt(redis_client, "7.2.0"):
         transaction.zrank_withscore(key8, "one")
         args.append([0, 1])
+        transaction.zrevrank_withscore(key8, "one")
+        args.append([3, 1])
     transaction.zadd_incr(key8, "one", 3)
     args.append(4)
     transaction.zincrby(key8, 3, "one")
