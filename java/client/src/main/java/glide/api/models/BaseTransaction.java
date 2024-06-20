@@ -149,6 +149,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -3098,7 +3099,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code>
+     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
      *     with a value of code>null</code> if the stream is empty.
      */
     public T xreadgroup(
@@ -3122,7 +3123,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code>
+     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
      *     with a value of code>null</code> if the stream is empty.
      */
     public T xreadgroup(
@@ -3132,6 +3133,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull StreamReadGroupOptions options) {
         protobufTransaction.addCommands(
                 buildCommand(XReadGroup, buildArgs(options.toArgs(group, consumer, keysAndIds))));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member
+     * of a stream. This command should be called on a pending message so that such message does not
+     * get processed again.
+     *
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param ids Stream entry ID to acknowledge and purge messages.
+     * @return Command Response - The number of messages that were successfully acknowledged.
+     */
+    public T xack(@NonNull String key, @NonNull String group, @NonNull String[] ids) {
+        String[] args = concatenateArrays(new String[] {key, group}, ids);
+        protobufTransaction.addCommands(buildCommand(XAck, buildArgs(args)));
         return getThis();
     }
 

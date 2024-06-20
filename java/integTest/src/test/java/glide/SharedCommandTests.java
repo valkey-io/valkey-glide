@@ -3589,7 +3589,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void xgroupCreateConsumer_xreadgroup_xgroupDelConsumer(BaseClient client) {
+    public void xgroupCreateConsumer_xgroupDelConsumer_xreadgroup_xack(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String stringKey = UUID.randomUUID().toString();
         String groupName = "group" + UUID.randomUUID();
@@ -3638,7 +3638,7 @@ public class SharedCommandTests {
         // delete one of the streams
         assertEquals(1L, client.xdel(key, new String[] {streamid_1}).get());
 
-        // now xreadgroup yeilds one empty stream and one non-empty stream
+        // now xreadgroup returns one empty stream and one non-empty stream
         var result_2 = client.xreadgroup(Map.of(key, "0"), groupName, consumerName).get();
         assertEquals(2, result_2.get(key).size());
         assertNull(result_2.get(key).get(streamid_1));
@@ -3647,12 +3647,21 @@ public class SharedCommandTests {
         String streamid_3 = client.xadd(key, Map.of("field3", "value3")).get();
         assertNotNull(streamid_3);
 
-        // Delete the consumer group and expect 2 pending messages
-        assertEquals(2L, client.xgroupDelConsumer(key, groupName, consumerName).get());
+        // xack that streamid_1, and streamid_2 was received
+        assertEquals(2L, client.xack(key, groupName, new String[] {streamid_1, streamid_2}).get());
+
+        // Delete the consumer group and expect 1 pending messages (one was received)
+        assertEquals(0L, client.xgroupDelConsumer(key, groupName, consumerName).get());
+
+        // xack streamid_1, and streamid_2 already received returns 0L
+        assertEquals(0L, client.xack(key, groupName, new String[] {streamid_1, streamid_2}).get());
 
         // Consume the last message with the previously deleted consumer (creates the consumer anew)
         var result_3 = client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get();
         assertEquals(1, result_3.get(key).size());
+
+        // wrong group, so xack streamid_3 returns 0
+        assertEquals(0L, client.xack(key, "not_a_group", new String[] {streamid_3}).get());
 
         // Delete the consumer group and expect the pending message
         assertEquals(1L, client.xgroupDelConsumer(key, groupName, consumerName).get());
@@ -3678,18 +3687,14 @@ public class SharedCommandTests {
     public void xreadgroup_return_failures(BaseClient client) {
         String key = "{key}:1" + UUID.randomUUID();
         String nonStreamKey = "{key}:3" + UUID.randomUUID();
-        String field1 = "f1_";
-
-        // setup first entries in streams key1 and key2
-        Map<String, String> timestamp_1_1_map = new LinkedHashMap<>();
-        timestamp_1_1_map.put(field1, field1 + "1");
-        String timestamp_1_1 =
-                client.xadd(key, timestamp_1_1_map, StreamAddOptions.builder().id("1-1").build()).get();
-        assertNotNull(timestamp_1_1);
-
         String groupName = "group" + UUID.randomUUID();
         String zeroStreamId = "0";
         String consumerName = "consumer" + UUID.randomUUID();
+
+        // setup first entries in streams key1 and key2
+        String timestamp_1_1 =
+                client.xadd(key, Map.of("f1", "v1"), StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
 
         // create group and consumer for the group
         assertEquals(
@@ -3788,6 +3793,45 @@ public class SharedCommandTests {
                                             StreamReadGroupOptions.builder().block(0L).build())
                                     .get(3, TimeUnit.SECONDS));
         }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xack_return_failures(BaseClient client) {
+        String key = "{key}:1" + UUID.randomUUID();
+        String nonStreamKey = "{key}:3" + UUID.randomUUID();
+        String groupName = "group" + UUID.randomUUID();
+        String zeroStreamId = "0";
+        String consumerName = "consumer" + UUID.randomUUID();
+
+        // setup first entries in streams key1 and key2
+        String timestamp_1_1 =
+                client.xadd(key, Map.of("f1", "v1"), StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
+
+        // create group and consumer for the group
+        assertEquals(
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumerName).get());
+
+        // Empty entity id list throws a RequestException
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xack(key, groupName, new String[0]).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Key exists, but it is not a stream
+        assertEquals(OK, client.set(nonStreamKey, "bar").get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xack(nonStreamKey, groupName, new String[] {zeroStreamId}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
     @SneakyThrows
