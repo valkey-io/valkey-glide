@@ -5688,26 +5688,27 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, value).get());
 
         // Dump existed key
-        byte[] result = client.dump(key.getBytes()).get();
+        GlideString result = client.dump(gs(key.getBytes())).get();
         assertNotNull(result.toString());
 
         // Dump non-existing key
-        assertNull(client.dump(nonExistingKey.getBytes()).get());
+        assertNull(client.dump(gs(nonExistingKey.getBytes())).get());
 
         // Restore to a new key
-        assertEquals(OK, client.restore(newKey1.getBytes(), 0L, result).get());
+        assertEquals(OK, client.restore(gs(newKey1.getBytes()), 0L, result).get());
 
         // Restore to an existed key - Error: "Target key name already exists"
         Exception executionException =
-            assertThrows(
-                ExecutionException.class, () -> client.restore(newKey1.getBytes(), 0L, result).get());
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.restore(gs(newKey1.getBytes()), 0L, result).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Restore with checksum error - Error: "payload version or checksum are wrong"
         executionException =
-            assertThrows(
-                ExecutionException.class,
-                () -> client.restore(newKey2.getBytes(), 0L, value.getBytes()).get());
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.restore(gs(newKey2.getBytes()), 0L, gs(value.getBytes())).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -5724,96 +5725,101 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, value).get());
 
         // Dump existed key
-        byte[] data = client.dump(key.getBytes()).get();
+        GlideString data = client.dump(gs(key.getBytes())).get();
         assertNotNull(data.toString());
 
         // Restore without option
-        String result = client.restore(newKey.getBytes(), 0L, data).get();
+        String result = client.restore(gs(newKey.getBytes()), 0L, data).get();
         assertEquals(OK, result);
 
         // Restore with REPLACE option
         result =
-            client
-                .restore(newKey.getBytes(), 0L, data, RestoreOptions.builder().replace().build())
-                .get();
+                client
+                        .restore(gs(newKey.getBytes()), 0L, data, RestoreOptions.builder().replace().build())
+                        .get();
         assertEquals(OK, result);
 
         // Restore with REPLACE and existed key holding different value
         assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
         result =
-            client.restore(key2.getBytes(), 0L, data, RestoreOptions.builder().replace().build()).get();
+                client
+                        .restore(gs(key2.getBytes()), 0L, data, RestoreOptions.builder().replace().build())
+                        .get();
         assertEquals(OK, result);
 
         // Restore with REPLACE, ABSTTL, and positive TTL
         result =
-            client
-                .restore(
-                    newKey.getBytes(), 1000L, data, RestoreOptions.builder().replace().absttl().build())
-                .get();
+                client
+                        .restore(
+                                gs(newKey.getBytes()),
+                                1000L,
+                                data,
+                                RestoreOptions.builder().replace().absttl().build())
+                        .get();
         assertEquals(OK, result);
 
         // Restore with REPLACE, ABSTTL, and negative TTL
         ExecutionException executionException =
-            assertThrows(
-                ExecutionException.class,
-                () ->
-                    client
-                        .restore(
-                            newKey.getBytes(),
-                            -10L,
-                            data,
-                            RestoreOptions.builder().replace().absttl().build())
-                        .get());
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .restore(
+                                                gs(newKey.getBytes()),
+                                                -10L,
+                                                data,
+                                                RestoreOptions.builder().replace().absttl().build())
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Restore with REPLACE and positive idletime
         result =
-            client
-                .restore(
-                    newKey.getBytes(),
-                    0L,
-                    data,
-                    RestoreOptions.builder().replace().idletime(10L).build())
-                .get();
+                client
+                        .restore(
+                                gs(newKey.getBytes()),
+                                0L,
+                                data,
+                                RestoreOptions.builder().replace().idletime(10L).build())
+                        .get();
         assertEquals(OK, result);
 
         // Restore with REPLACE and negative idletime
         executionException =
-            assertThrows(
-                ExecutionException.class,
-                () ->
-                    client
-                        .restore(
-                            newKey.getBytes(),
-                            0L,
-                            data,
-                            RestoreOptions.builder().replace().idletime(-10L).build())
-                        .get());
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .restore(
+                                                gs(newKey.getBytes()),
+                                                0L,
+                                                data,
+                                                RestoreOptions.builder().replace().idletime(-10L).build())
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Restore with REPLACE and positive frequency
         result =
-            client
-                .restore(
-                    newKey.getBytes(),
-                    0L,
-                    data,
-                    RestoreOptions.builder().replace().frequency(10L).build())
-                .get();
+                client
+                        .restore(
+                                gs(newKey.getBytes()),
+                                0L,
+                                data,
+                                RestoreOptions.builder().replace().frequency(10L).build())
+                        .get();
         assertEquals(OK, result);
 
         // Restore with REPLACE and negative frequency
         executionException =
-            assertThrows(
-                ExecutionException.class,
-                () ->
-                    client
-                        .restore(
-                            newKey.getBytes(),
-                            0L,
-                            data,
-                            RestoreOptions.builder().replace().frequency(-10L).build())
-                        .get());
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .restore(
+                                                gs(newKey.getBytes()),
+                                                0L,
+                                                data,
+                                                RestoreOptions.builder().replace().frequency(-10L).build())
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }

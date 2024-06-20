@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RestoreOptions;
@@ -602,13 +603,13 @@ public interface GenericBaseCommands {
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
      * @example
      *     <pre>{@code
-     * byte[] result = client.dump("myKey").get();
+     * GlideString result = client.dump("myKey").get();
      *
-     * byte[] response = client.dump("nonExistingKey").get();
+     * GlideString response = client.dump("nonExistingKey").get();
      * assert response.equals(null);
      * }</pre>
      */
-    CompletableFuture<byte[]> dump(byte[] key);
+    CompletableFuture<GlideString> dump(GlideString key);
 
     /**
      * Create a <code>key</code> associated with a <code>value</code> that is obtained by
@@ -627,7 +628,7 @@ public interface GenericBaseCommands {
      * assert result.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> restore(byte[] key, long ttl, byte[] value);
+    CompletableFuture<String> restore(GlideString key, long ttl, GlideString value);
 
     /**
      * Create a <code>key</code> associated with a <code>value</code> that is obtained by
@@ -650,5 +651,5 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> restore(
-            byte[] key, long ttl, byte[] value, RestoreOptions restoreOptions);
+            GlideString key, long ttl, GlideString value, RestoreOptions restoreOptions);
 }

@@ -12,6 +12,7 @@ import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
@@ -53,7 +54,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -230,6 +230,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.Transaction;
 import glide.api.models.commands.ConditionalChange;
@@ -286,7 +287,6 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -6633,20 +6633,20 @@ public class RedisClientTest {
     @Test
     public void dump_returns_success() {
         // setup
-        byte[] key = "testKey".getBytes();
-        byte[] value = "value".getBytes();
-        List<byte[]> arguments = List.of(key);
+        GlideString key = gs("testKey".getBytes());
+        GlideString value = gs("value".getBytes());
+        GlideString[] arguments = new GlideString[] {key};
 
-        CompletableFuture<byte[]> testResponse = new CompletableFuture<>();
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<byte[]>submitNewCommand(eq(Dump), eq(arguments), any()))
+        when(commandManager.<GlideString>submitNewCommand(eq(Dump), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<byte[]> response = service.dump(key);
-        byte[] payload = response.get();
+        CompletableFuture<GlideString> response = service.dump(key);
+        GlideString payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -6657,18 +6657,17 @@ public class RedisClientTest {
     @Test
     public void restore_returns_success() {
         // setup
-        byte[] key = "testKey".getBytes();
+        GlideString key = gs("testKey".getBytes());
         long ttl = 0L;
-        byte[] value = "value".getBytes();
+        GlideString value = gs("value".getBytes());
 
-        List<byte[]> arguments = List.of(key, Long.toString(ttl).getBytes(), value);
+        GlideString[] arg = new GlideString[] {key, gs(Long.toString(ttl).getBytes()), value};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(Restore), argThat(new ByteArrayArgumentMatcher(arguments)), any()))
+        when(commandManager.<String>submitNewCommand(eq(Restore), eq(arg), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -6683,33 +6682,30 @@ public class RedisClientTest {
     @Test
     public void restore_with_restoreOptions_returns_success() {
         // setup
-        byte[] key = "testKey".getBytes();
+        GlideString key = gs("testKey".getBytes());
         long ttl = 0L;
-        byte[] value = "value".getBytes();
-        Optional<Long> idletime = Optional.of(10L);
-        Optional<Long> frequency = Optional.of(5L);
+        GlideString value = gs("value".getBytes());
+        Long idletime = 10L;
+        Long frequency = 5L;
 
-        List<byte[]> arguments = new ArrayList<>();
-        arguments.add(key);
-        arguments.add(Long.toString(ttl).getBytes());
-        arguments.add(value);
-        arguments.add("REPLACE".getBytes());
-        arguments.add("ABSTTL".getBytes());
-        arguments.add("IDLETIME".getBytes());
-
-        // Add idletime if present
-        idletime.ifPresent(sec -> arguments.add(Long.toString(sec).getBytes()));
-
-        // Add FREQ and frequency if present
-        arguments.add("FREQ".getBytes());
-        frequency.ifPresent(freq -> arguments.add(Long.toString(freq).getBytes()));
+        GlideString[] arg =
+                new GlideString[] {
+                    key,
+                    gs(Long.toString(ttl).getBytes()),
+                    value,
+                    gs("REPLACE".getBytes()),
+                    gs("ABSTTL".getBytes()),
+                    gs("IDLETIME".getBytes()),
+                    gs("10".getBytes()),
+                    gs("FREQ".getBytes()),
+                    gs("5".getBytes())
+                };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-                        eq(Restore), argThat(new ByteArrayArgumentMatcher(arguments)), any()))
+        when(commandManager.<String>submitNewCommand(eq(Restore), eq(arg), any()))
                 .thenReturn(testResponse);
 
         // exercise

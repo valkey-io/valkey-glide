@@ -1,13 +1,17 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import glide.api.commands.*;
+import static glide.api.models.GlideString.gs;
+
+import glide.api.commands.GenericBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.*;
 
 /**
- * Optional arguments to {@link GenericBaseCommands#restore(byte[], long, byte[], RestoreOptions)}
+ * Optional arguments to {@link GenericBaseCommands#restore(GlideString, long, GlideString,
+ * RestoreOptions)}
  *
  * @see <a href="https://valkey.io/commands/restore/">valkey.io</a>
  */
@@ -41,37 +45,37 @@ public final class RestoreOptions {
     @Builder.Default private Long frequency = null;
 
     /**
-     * Creates the argument to be used in {@link GenericBaseCommands#restore(byte[], long, byte[],
-     * RestoreOptions)}
+     * Creates the argument to be used in {@link GenericBaseCommands#restore(GlideString, long,
+     * GlideString, RestoreOptions)}
      *
      * @return a byte array that holds the sub commands and their arguments.
      */
-    public List<byte[]> toArgs(byte[] key, long ttl, byte[] value) {
-        List<byte[]> resultList = new ArrayList<>();
+    public GlideString[] toArgs(GlideString key, long ttl, GlideString value) {
+        List<GlideString> resultList = new ArrayList<>();
 
         resultList.add(key);
-        resultList.add(Long.toString(ttl).getBytes());
+        resultList.add(gs(Long.toString(ttl).getBytes()));
         resultList.add(value);
 
         if (hasReplace) {
-            resultList.add(REPLACE_REDIS_API.getBytes());
+            resultList.add(gs(REPLACE_REDIS_API.getBytes()));
         }
 
         if (hasAbsttl) {
-            resultList.add(ABSTTL_REDIS_API.getBytes());
+            resultList.add(gs(ABSTTL_REDIS_API.getBytes()));
         }
 
         if (idletime != null) {
-            resultList.add(IDLETIME_REDIS_API.getBytes());
-            resultList.add(Long.toString(idletime).getBytes());
+            resultList.add(gs(IDLETIME_REDIS_API.getBytes()));
+            resultList.add(gs(Long.toString(idletime).getBytes()));
         }
 
         if (frequency != null) {
-            resultList.add(FREQ_REDIS_API.getBytes());
-            resultList.add(Long.toString(frequency).getBytes());
+            resultList.add(gs(FREQ_REDIS_API.getBytes()));
+            resultList.add(gs(Long.toString(frequency).getBytes()));
         }
 
-        return resultList;
+        return resultList.toArray(new GlideString[0]);
     }
 
     /** Custom setter methods for replace and absttl */
