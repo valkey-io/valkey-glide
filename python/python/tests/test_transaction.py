@@ -473,6 +473,8 @@ async def transaction_test(
     args.append(2)
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
+    transaction.xdel(key11, ["0-2", "0-3"])
+    args.append(1)
 
     transaction.lpush(key17, ["2", "1", "4", "3", "a"])
     args.append(5)
