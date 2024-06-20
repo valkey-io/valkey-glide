@@ -4768,6 +4768,43 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xdel(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        stream_id1 = "0-1"
+        stream_id2 = "0-2"
+        stream_id3 = "0-3"
+
+        assert (
+            await redis_client.xadd(
+                key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id1)
+            )
+            == stream_id1
+        )
+        assert (
+            await redis_client.xadd(
+                key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id2)
+            )
+            == stream_id2
+        )
+        assert await redis_client.xlen(key1) == 2
+
+        # deletes one stream id, and ignores anything invalid
+        assert await redis_client.xdel(key1, [stream_id1, stream_id3]) == 1
+        assert await redis_client.xdel(non_existing_key, [stream_id3]) == 0
+
+        # invalid argument - id list should not be empty
+        with pytest.raises(RequestError):
+            await redis_client.xdel(key1, [])
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xdel(string_key, [stream_id3])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_pfadd(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.pfadd(key, []) == 1

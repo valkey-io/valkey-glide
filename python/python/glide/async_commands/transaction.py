@@ -1796,6 +1796,22 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XAdd, args)
 
+    def xdel(self: TTransaction, key: str, ids: List[str]) -> TTransaction:
+        """
+        Removes the specified entries by id from a stream, and returns the number of entries deleted.
+
+        See https://valkey.io/commands/xdel for more details.
+
+        Args:
+            key (str): The key of the stream.
+            ids (List[str]): An array of entry ids.
+
+        Command response:
+            int: The number of entries removed from the stream. This number may be less than the number of entries in
+                `ids`, if the specified `ids` don't exist in the stream.
+        """
+        return self.append_command(RequestType.XDel, [key] + ids)
+
     def xtrim(
         self: TTransaction,
         key: str,
