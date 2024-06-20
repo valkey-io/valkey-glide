@@ -6,7 +6,6 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
-import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -353,7 +352,7 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/flushall/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the node defined by <code>route</code>.
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -362,7 +361,7 @@ public interface ServerManagementClusterCommands {
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> flushall(SingleNodeRoute route);
+    CompletableFuture<String> flushall(Route route);
 
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
@@ -371,7 +370,7 @@ public interface ServerManagementClusterCommands {
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the node defined by <code>route</code>.
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -380,7 +379,7 @@ public interface ServerManagementClusterCommands {
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> flushall(FlushMode mode, SingleNodeRoute route);
+    CompletableFuture<String> flushall(FlushMode mode, Route route);
 
     /**
      * Deletes all the keys of the currently selected database. This command never fails.<br>
@@ -417,7 +416,7 @@ public interface ServerManagementClusterCommands {
      *
      * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the node defined by <code>route</code>.
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -426,7 +425,7 @@ public interface ServerManagementClusterCommands {
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> flushdb(SingleNodeRoute route);
+    CompletableFuture<String> flushdb(Route route);
 
     /**
      * Deletes all the keys of the currently selected database. This command never fails.
@@ -435,7 +434,7 @@ public interface ServerManagementClusterCommands {
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
      * @param route Specifies the routing configuration for the command. The client will route the
-     *     command to the node defined by <code>route</code>.
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -444,7 +443,7 @@ public interface ServerManagementClusterCommands {
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> flushdb(FlushMode mode, SingleNodeRoute route);
+    CompletableFuture<String> flushdb(FlushMode mode, Route route);
 
     /**
      * Displays a piece of generative computer art and the Redis version.<br>
