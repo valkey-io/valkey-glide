@@ -480,29 +480,30 @@ class TestCommands:
     async def test_getrange(self, redis_client: TGlideClient):
         key = get_random_string(16)
         value = get_random_string(10)
+        value_encoded = value.encode()
         non_string_key = get_random_string(10)
 
         assert await redis_client.set(key, value) == OK
-        assert await redis_client.getrange(key, 0, 3) == value[:4]
-        assert await redis_client.getrange(key, -3, -1) == value[-3:]
-        assert await redis_client.getrange(key, 0, -1) == value
+        assert await redis_client.getrange(key, 0, 3) == value_encoded[:4]
+        assert await redis_client.getrange(key, -3, -1) == value_encoded[-3:]
+        assert await redis_client.getrange(key, 0, -1) == value_encoded
 
         # out of range
-        assert await redis_client.getrange(key, 10, 100) == value[10:]
-        assert await redis_client.getrange(key, -200, -3) == value[-200:-2]
-        assert await redis_client.getrange(key, 100, 200) == ""
+        assert await redis_client.getrange(key, 10, 100) == value_encoded[10:]
+        assert await redis_client.getrange(key, -200, -3) == value_encoded[-200:-2]
+        assert await redis_client.getrange(key, 100, 200) == b""
 
         # incorrect range
-        assert await redis_client.getrange(key, -1, -3) == ""
+        assert await redis_client.getrange(key, -1, -3) == b""
 
         # a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
         if await check_if_server_version_lt(redis_client, "8.0.0"):
-            assert await redis_client.getrange(key, -200, -100) == value[0]
+            assert await redis_client.getrange(key, -200, -100) == value[0].encode()
         else:
-            assert await redis_client.getrange(key, -200, -100) == ""
+            assert await redis_client.getrange(key, -200, -100) == b""
 
         if await check_if_server_version_lt(redis_client, "8.0.0"):
-            assert await redis_client.getrange(non_string_key, 0, -1) == ""
+            assert await redis_client.getrange(non_string_key, 0, -1) == b""
 
         # non-string key
         assert await redis_client.lpush(non_string_key, ["_"]) == 1
@@ -1536,13 +1537,13 @@ class TestCommands:
         assert await redis_client.lset(key, 0, element) == OK
 
         values = [element] + values[:-1][::-1]
-        assert await redis_client.lrange(key, 0, -1) == values
+        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(values)
 
         # assert lset with a negative index for the last element in the list
         assert await redis_client.lset(key, -1, element) == OK
 
         values[-1] = element
-        assert await redis_client.lrange(key, 0, -1) == values
+        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(values)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1683,14 +1684,14 @@ class TestCommands:
 
         assert await redis_client.sadd(key1, member1_list) == 3
         assert await redis_client.sadd(key2, member2_list) == 4
-        assert await redis_client.sunion([key1, key2]) == {"a", "b", "c", "d", "e"}
+        assert await redis_client.sunion([key1, key2]) == {b"a", b"b", b"c", b"d", b"e"}
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
             await redis_client.sunion([])
 
         # non-existing key returns the set of existing keys
-        assert await redis_client.sunion([key1, non_existing_key]) == set(member1_list)
+        assert await redis_client.sunion([key1, non_existing_key]) == convert_str_to_bytes_set(set(member1_list))
 
         # non-set key
         assert await redis_client.set(key2, "value") == OK
@@ -2475,7 +2476,7 @@ class TestCommands:
                 with_dist=True,
                 with_hash=True,
             )
-            == result[:2]
+            == convert_str_to_bytes_list(result)
         )
 
         # Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
@@ -2566,10 +2567,10 @@ class TestCommands:
             "edge2": GeospatialData(17.241510, 38.788135),
         }
         result = {
-            "Catania": [56.4412578701582, 3479447370796909.0],
-            "Palermo": [190.44242984775784, 3479099956230698.0],
-            "edge2": [279.7403417843143, 3481342659049484.0],
-            "edge1": [279.7404521356343, 3479273021651468.0],
+            b"Catania": [56.4412578701582, 3479447370796909.0],
+            b"Palermo": [190.44242984775784, 3479099956230698.0],
+            b"edge2": [279.7403417843143, 3481342659049484.0],
+            b"edge1": [279.7404521356343, 3479273021651468.0],
         }
         assert await redis_client.geoadd(key, members_coordinates) == 4
 
@@ -2625,7 +2626,7 @@ class TestCommands:
         zrange_map = await redis_client.zrange_withscores(
             destination_key, RangeByIndex(0, -1)
         )
-        assert compare_maps(zrange_map, {"Catania": 3479447370796909.0}) is True
+        assert compare_maps(zrange_map, {b"Catania": 3479447370796909.0}) is True
 
         # Test storing results of a box search, unit: meters, from a member, with distance
         meters = 400 * 1000
@@ -2644,9 +2645,9 @@ class TestCommands:
             destination_key, RangeByIndex(0, -1)
         )
         expected_distances = {
-            "Catania": 0.0,
-            "Palermo": 166274.15156960033,
-            "edge2": 236529.17986494553,
+            b"Catania": 0.0,
+            b"Palermo": 166274.15156960033,
+            b"edge2": 236529.17986494553,
         }
         assert compare_maps(zrange_map, expected_distances) is True
 
@@ -2682,8 +2683,8 @@ class TestCommands:
             "edge2": GeospatialData(17.241510, 38.788135),
         }
         result = {
-            "Catania": [56.4412578701582, 3479447370796909.0],
-            "Palermo": [190.44242984775784, 3479099956230698.0],
+            b"Catania": [56.4412578701582, 3479447370796909.0],
+            b"Palermo": [190.44242984775784, 3479099956230698.0],
         }
         assert await redis_client.geoadd(key, members_coordinates) == 4
 
@@ -2725,8 +2726,8 @@ class TestCommands:
             destination_key, RangeByIndex(0, -1)
         )
         expected_distances = {
-            "Catania": 0.0,
-            "Palermo": 166274.15156960033,
+            b"Catania": 0.0,
+            b"Palermo": 166274.15156960033,
         }
         assert compare_maps(zrange_map, expected_distances) is True
 
@@ -6356,30 +6357,30 @@ class TestCommands:
         assert await redis_client.set(key1, value1) == OK
         assert await redis_client.set(key2, value2) == OK
         assert await redis_client.bitop(BitwiseOperation.AND, destination, keys) == 6
-        assert await redis_client.get(destination) == "`bc`ab"
+        assert await redis_client.get(destination) == b"`bc`ab"
         assert await redis_client.bitop(BitwiseOperation.OR, destination, keys) == 6
-        assert await redis_client.get(destination) == "goofev"
+        assert await redis_client.get(destination) == b"goofev"
 
         # reset values for simplicity of results in XOR
         assert await redis_client.set(key1, "a") == OK
         assert await redis_client.set(key2, "b") == OK
         assert await redis_client.bitop(BitwiseOperation.XOR, destination, keys) == 1
-        assert await redis_client.get(destination) == "\u0003"
+        assert await redis_client.get(destination) == "\u0003".encode()
 
         # test single source key
         assert await redis_client.bitop(BitwiseOperation.AND, destination, [key1]) == 1
-        assert await redis_client.get(destination) == "a"
+        assert await redis_client.get(destination) == b"a"
         assert await redis_client.bitop(BitwiseOperation.OR, destination, [key1]) == 1
-        assert await redis_client.get(destination) == "a"
+        assert await redis_client.get(destination) == b"a"
         assert await redis_client.bitop(BitwiseOperation.XOR, destination, [key1]) == 1
-        assert await redis_client.get(destination) == "a"
+        assert await redis_client.get(destination) == b"a"
         assert await redis_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1
         # currently, attempting to get the value from destination after the above NOT incorrectly raises an error
         # TODO: update with a GET call once fix is implemented for https://github.com/aws/glide-for-redis/issues/1447
 
         assert await redis_client.setbit(key1, 0, 1) == 0
         assert await redis_client.bitop(BitwiseOperation.NOT, destination, [key1]) == 1
-        assert await redis_client.get(destination) == "\u001e"
+        assert await redis_client.get(destination) == "\u001e".encode()
 
         # stores None when all keys hold empty strings
         assert (
@@ -6991,7 +6992,7 @@ class TestCommands:
         assert await redis_client.sadd(key, elements) == 2
 
         member = await redis_client.srandmember(key)
-        assert member in elements
+        assert member.decode() in elements
         assert await redis_client.srandmember("non_existing_key") is None
 
         # key exists, but it is not a set
@@ -7010,13 +7011,13 @@ class TestCommands:
         # unique values are expected as count is positive
         members = await redis_client.srandmember_count(key, 4)
         assert len(members) == 2
-        assert set(members) == {"one", "two"}
+        assert set(members) == {b"one", b"two"}
 
         # duplicate values are expected as count is negative
         members = await redis_client.srandmember_count(key, -4)
         assert len(members) == 4
         for member in members:
-            assert member in elements
+            assert member.decode() in elements
 
         # empty return values for non-existing or empty keys
         assert await redis_client.srandmember_count(key, 0) == []
@@ -7095,16 +7096,17 @@ class TestCommands:
         key1 = get_random_string(10)
         non_existing_key = get_random_string(10)
         value = get_random_string(10)
+        value_encoded = value.encode()
 
         assert await redis_client.set(key1, value) == OK
         assert await redis_client.getex(non_existing_key) is None
-        assert await redis_client.getex(key1) == value
+        assert await redis_client.getex(key1) == value_encoded
         assert await redis_client.ttl(key1) == -1
 
         # setting expiration timer
         assert (
             await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 50))
-            == value
+            == value_encoded
         )
         assert await redis_client.ttl(key1) != -1
 
@@ -7112,11 +7114,11 @@ class TestCommands:
         assert await redis_client.set(key1, value) == OK
         assert (
             await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.SEC, 10))
-            == value
+            == value_encoded
         )
         assert (
             await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
-            == value
+            == value_encoded
         )
         assert await redis_client.ttl(key1) == -1
 

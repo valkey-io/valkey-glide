@@ -164,7 +164,7 @@ async def transaction_test(
     transaction.set(key, value)
     args.append(OK)
     transaction.getrange(key, 0, -1)
-    args.append(value)
+    args.append(value_bytes)
     transaction.getdel(key)
     args.append(value_bytes)
     transaction.getdel(key)
@@ -457,7 +457,7 @@ async def transaction_test(
     transaction.bitop(BitwiseOperation.AND, key19, [key19, key20])
     args.append(6)
     transaction.get(key19)
-    args.append("`bc`ab")
+    args.append(b"`bc`ab")
     transaction.bitfield(
         key20, [BitFieldSet(UnsignedEncoding(10), BitOffsetMultiplier(3), 4)]
     )
@@ -575,9 +575,9 @@ async def transaction_test(
     transaction.sadd(key7, ["one"])
     args.append(1)
     transaction.srandmember(key7)
-    args.append("one")
+    args.append(b"one")
     transaction.srandmember_count(key7, 1)
-    args.append(["one"])
+    args.append([b"one"])
     transaction.flushall(FlushMode.ASYNC)
     args.append(OK)
     transaction.flushall()
@@ -603,9 +603,9 @@ async def transaction_test(
         transaction.set(key22, "value")
         args.append(OK)
         transaction.getex(key22)
-        args.append("value")
+        args.append(b"value")
         transaction.getex(key22, ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
-        args.append("value")
+        args.append(b"value")
 
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):
