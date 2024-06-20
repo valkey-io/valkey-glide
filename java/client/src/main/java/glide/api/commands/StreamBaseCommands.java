@@ -422,7 +422,7 @@ public interface StreamBaseCommands {
      * @param consumer The newly created consumer.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code> with a value of code>null</code> if the stream is empty.
+     *      Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code> with a value of <code>null</code> if the stream is empty.
      * @example
      *     <pre>{@code
      * // create a new stream at "mystream", with stream id "1-0"
@@ -462,7 +462,7 @@ public interface StreamBaseCommands {
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns code>null</code> if the consumer group does not exist. Returns a code>Map</code> with a value of code>null</code> if the stream is empty.
+     *      Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code> with a value of <code>null</code> if the stream is empty.
      * @example
      *     <pre>{@code
      * // create a new stream at "mystream", with stream id "1-0"
@@ -493,4 +493,23 @@ public interface StreamBaseCommands {
             String group,
             String consumer,
             StreamReadGroupOptions options);
+
+    /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
+     * This command should be called on a pending message so that such message does not get processed again.
+     *
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param ids Stream entry ID to acknowledge and purge messages.
+     * @return The number of messages that were successfully acknowledged.
+     * @example
+     *     <pre>{@code
+     * String entryId = client.xadd("mystream", Map.of("myfield", "mydata")).get();
+     * // read messages from streamId
+     * var readResult = client.xreadgroup(Map.of("mystream", entryId), "mygroup", "my0consumer").get();
+     * // acknowledge messages on stream
+     * assert 1L == client.xack("mystream", "mygroup", new String[] {entryId}).get();
+     * </pre>
+     */
+    CompletableFuture<Long> xack(String key, String group, String[] ids);
 }
