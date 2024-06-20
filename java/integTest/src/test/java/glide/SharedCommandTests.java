@@ -296,6 +296,9 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void getex(BaseClient client) {
+
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
         String key1 = "{key}" + UUID.randomUUID();
         String value1 = String.valueOf(UUID.randomUUID());
         String key2 = "{key}" + UUID.randomUUID();
@@ -303,6 +306,9 @@ public class SharedCommandTests {
         client.set(key1, value1).get();
         String data = client.getex(key1).get();
         assertEquals(data, value1);
+
+        Long ttlValue = Long.valueOf(client.get(key1).get());
+        assert ttlValue >= -0L;
 
         // non-existent key
         data = client.getex(key2).get();
@@ -327,6 +333,7 @@ public class SharedCommandTests {
         // setting and clearing expiration timer
         assertEquals(value1, client.getex(key1, GetExOptions.Seconds(10L)).get());
         assertEquals(value1, client.getex(key1, GetExOptions.Persist()).get());
+        assertEquals(-1L, client.ttl(key1).get());
     }
 
     @SneakyThrows

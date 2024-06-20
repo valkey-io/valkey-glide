@@ -516,7 +516,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> getex(@NonNull String key, @NonNull GetExOptions options) {
-        String[] arguments = ArrayUtils.addAll(new String[] {key}, options.toArgs());
+        String[] arguments = ArrayUtils.addFirst(options.toArgs(), key);
         return commandManager.submitNewCommand(GetEx, arguments, this::handleStringOrNullResponse);
     }
 

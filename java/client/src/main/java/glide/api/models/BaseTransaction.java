@@ -420,7 +420,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>key</code>. Otherwise, return <code>null</code>.
      */
     public T getex(@NonNull String key, @NonNull GetExOptions options) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addAll(new String[] {key}, options.toArgs()));
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(options.toArgs(), key));
         protobufTransaction.addCommands(buildCommand(GetEx, commandArgs));
         return getThis();
     }

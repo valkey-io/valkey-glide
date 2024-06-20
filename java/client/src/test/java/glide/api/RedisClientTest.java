@@ -553,23 +553,68 @@ public class RedisClientTest {
     @Test
     public void getex_options() {
         // setup
-        GetExOptions options = GetExOptions.Seconds(10L);
-        String[] arguments = new String[] {"key", "EX", "10"};
+        GetExOptions options1 = GetExOptions.Seconds(10L);
+        GetExOptions options2 = GetExOptions.Milliseconds(1000L);
+        GetExOptions options3 = GetExOptions.UnixSeconds(10L);
+        GetExOptions options4 = GetExOptions.UnixMilliseconds(1000L);
+        GetExOptions options5 = GetExOptions.Persist();
+
+        String[] arguments1 = new String[] {"key", "EX", "10"};
+        String[] arguments2 = new String[] {"key", "PX", "1000"};
+        String[] arguments3 = new String[] {"key", "EXAT", "10"};
+        String[] arguments4 = new String[] {"key", "PXAT", "1000"};
+        String[] arguments5 = new String[] {"key", "PERSIST"};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete("value");
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments), any()))
+        when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments1), any()))
                 .thenReturn(testResponse);
 
+        when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments2), any()))
+            .thenReturn(testResponse);
+
+        when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments3), any()))
+            .thenReturn(testResponse);
+
+        when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments4), any()))
+            .thenReturn(testResponse);
+
+        when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments5), any()))
+            .thenReturn(testResponse);
+
         // exercise
-        CompletableFuture<String> response = service.getex("key", options);
-        String payload = response.get();
+        CompletableFuture<String> response1 = service.getex("key", options1);
+        String payload1 = response1.get();
+
+        CompletableFuture<String> response2 = service.getex("key", options2);
+        String payload2 = response2.get();
+
+        CompletableFuture<String> response3 = service.getex("key", options3);
+        String payload3 = response3.get();
+
+        CompletableFuture<String> response4 = service.getex("key", options4);
+        String payload4 = response4.get();
+
+        CompletableFuture<String> response5 = service.getex("key", options5);
+        String payload5 = response5.get();
 
         // verify
-        assertEquals(testResponse, response);
-        assertEquals("value", payload);
+        assertEquals(testResponse, response1);
+        assertEquals("value", payload1);
+
+        assertEquals(testResponse, response2);
+        assertEquals("value", payload2);
+
+        assertEquals(testResponse, response3);
+        assertEquals("value", payload3);
+
+        assertEquals(testResponse, response4);
+        assertEquals("value", payload4);
+
+        assertEquals(testResponse, response5);
+        assertEquals("value", payload5);
     }
 
     @SneakyThrows
