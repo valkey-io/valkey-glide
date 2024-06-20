@@ -3,7 +3,6 @@
  */
 use glide_core::start_socket_listener;
 
-use jni::descriptors::Desc;
 use jni::objects::{JClass, JObject, JObjectArray, JString, JThrowable};
 use jni::sys::jlong;
 use jni::JNIEnv;
