@@ -11,7 +11,20 @@ from typing import Any, Dict, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
-from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import (
+    BitFieldGet,
+    BitFieldIncrBy,
+    BitFieldOverflow,
+    BitFieldSet,
+    BitmapIndexType,
+    BitOffset,
+    BitOffsetMultiplier,
+    BitOverflowControl,
+    BitwiseOperation,
+    OffsetOptions,
+    SignedEncoding,
+    UnsignedEncoding,
+)
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
@@ -5050,6 +5063,205 @@ class TestCommands:
         # invalid argument - source key has the wrong type
         with pytest.raises(RequestError):
             await redis_client.bitop(BitwiseOperation.AND, destination, [set_key])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bitfield(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        set_key = get_random_string(10)
+        foobar = "foobar"
+        u2 = UnsignedEncoding(2)
+        u7 = UnsignedEncoding(7)
+        i3 = SignedEncoding(3)
+        i8 = SignedEncoding(8)
+        offset1 = BitOffset(1)
+        offset5 = BitOffset(5)
+        offset_multiplier4 = BitOffsetMultiplier(4)
+        offset_multiplier8 = BitOffsetMultiplier(8)
+        overflow_set = BitFieldSet(u2, offset1, -10)
+        overflow_get = BitFieldGet(u2, offset1)
+
+        # binary value: 01100110 01101111 01101111 01100010 01100001 01110010
+        assert await redis_client.set(key1, foobar) == OK
+
+        # SET tests
+        assert await redis_client.bitfield(
+            key1,
+            [
+                # binary value becomes: 0(10)00110 01101111 01101111 01100010 01100001 01110010
+                BitFieldSet(u2, offset1, 2),
+                # binary value becomes: 01000(011) 01101111 01101111 01100010 01100001 01110010
+                BitFieldSet(i3, offset5, 3),
+                # binary value becomes: 01000011 01101111 01101111 0110(0010 010)00001 01110010
+                BitFieldSet(u7, offset_multiplier4, 18),
+                # addressing with SET or INCRBY bits outside the current string length will enlarge the string,
+                # zero-padding it, as needed, for the minimal length needed, according to the most far bit touched.
+                #
+                # binary value becomes:
+                # 01000011 01101111 01101111 01100010 01000001 01110010 00000000 00000000 (00010100)
+                BitFieldSet(i8, offset_multiplier8, 20),
+                BitFieldGet(u2, offset1),
+                BitFieldGet(i3, offset5),
+                BitFieldGet(u7, offset_multiplier4),
+                BitFieldGet(i8, offset_multiplier8),
+            ],
+        ) == [3, -2, 19, 0, 2, 3, 18, 20]
+
+        # INCRBY tests
+        assert await redis_client.bitfield(
+            key1,
+            [
+                # binary value becomes:
+                # 0(11)00011 01101111 01101111 01100010 01000001 01110010 00000000 00000000 00010100
+                BitFieldIncrBy(u2, offset1, 1),
+                # binary value becomes:
+                # 01100(101) 01101111 01101111 01100010 01000001 01110010 00000000 00000000 00010100
+                BitFieldIncrBy(i3, offset5, 2),
+                # binary value becomes:
+                # 01100101 01101111 01101111 0110(0001 111)00001 01110010 00000000 00000000 00010100
+                BitFieldIncrBy(u7, offset_multiplier4, -3),
+                # binary value becomes:
+                # 01100101 01101111 01101111 01100001 11100001 01110010 00000000 00000000 (00011110)
+                BitFieldIncrBy(i8, offset_multiplier8, 10),
+            ],
+        ) == [3, -3, 15, 30]
+
+        # OVERFLOW WRAP is used by default if no OVERFLOW is specified
+        assert await redis_client.bitfield(
+            key2,
+            [
+                overflow_set,
+                BitFieldOverflow(BitOverflowControl.WRAP),
+                overflow_set,
+                overflow_get,
+            ],
+        ) == [0, 2, 2]
+
+        # OVERFLOW affects only SET or INCRBY after OVERFLOW subcommand
+        assert await redis_client.bitfield(
+            key2,
+            [
+                overflow_set,
+                BitFieldOverflow(BitOverflowControl.SAT),
+                overflow_set,
+                overflow_get,
+                BitFieldOverflow(BitOverflowControl.FAIL),
+                overflow_set,
+            ],
+        ) == [2, 2, 3, None]
+
+        # if the key doesn't exist, the operation is performed as though the missing value was a string with all bits
+        # set to 0.
+        assert await redis_client.bitfield(
+            non_existing_key, [BitFieldSet(UnsignedEncoding(2), BitOffset(3), 2)]
+        ) == [0]
+
+        # empty subcommands argument returns an empty list
+        assert await redis_client.bitfield(key1, []) == []
+
+        # invalid argument - offset must be >= 0
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                key1, [BitFieldSet(UnsignedEncoding(5), BitOffset(-1), 1)]
+            )
+
+        # invalid argument - encoding size must be > 0
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                key1, [BitFieldSet(UnsignedEncoding(0), BitOffset(1), 1)]
+            )
+
+        # invalid argument - unsigned encoding size must be < 64
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                key1, [BitFieldSet(UnsignedEncoding(64), BitOffset(1), 1)]
+            )
+
+        # invalid argument - signed encoding size must be < 65
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                key1, [BitFieldSet(SignedEncoding(65), BitOffset(1), 1)]
+            )
+
+        # key exists, but it is not a string
+        assert await redis_client.sadd(set_key, [foobar]) == 1
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                set_key, [BitFieldSet(SignedEncoding(3), BitOffset(1), 2)]
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bitfield_read_only(self, redis_client: TRedisClient):
+        min_version = "6.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        set_key = get_random_string(10)
+        foobar = "foobar"
+        unsigned_offset_get = BitFieldGet(UnsignedEncoding(2), BitOffset(1))
+
+        # binary value: 01100110 01101111 01101111 01100010 01100001 01110010
+        assert await redis_client.set(key, foobar) == OK
+        assert await redis_client.bitfield_read_only(
+            key,
+            [
+                # Get value in: 0(11)00110 01101111 01101111 01100010 01100001 01110010 00010100
+                unsigned_offset_get,
+                # Get value in: 01100(110) 01101111 01101111 01100010 01100001 01110010 00010100
+                BitFieldGet(SignedEncoding(3), BitOffset(5)),
+                # Get value in: 01100110 01101111 01101(111 0110)0010 01100001 01110010 00010100
+                BitFieldGet(UnsignedEncoding(7), BitOffsetMultiplier(3)),
+                # Get value in: 01100110 01101111 (01101111) 01100010 01100001 01110010 00010100
+                BitFieldGet(SignedEncoding(8), BitOffsetMultiplier(2)),
+            ],
+        ) == [3, -2, 118, 111]
+        # offset is greater than current length of string: the operation is performed like the missing part all consists
+        # of bits set to 0.
+        assert await redis_client.bitfield_read_only(
+            key, [BitFieldGet(UnsignedEncoding(3), BitOffset(100))]
+        ) == [0]
+        # similarly, if the key doesn't exist, the operation is performed as though the missing value was a string with
+        # all bits set to 0.
+        assert await redis_client.bitfield_read_only(
+            non_existing_key, [unsigned_offset_get]
+        ) == [0]
+
+        # empty subcommands argument returns an empty list
+        assert await redis_client.bitfield_read_only(key, []) == []
+
+        # invalid argument - offset must be >= 0
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(
+                key, [BitFieldGet(UnsignedEncoding(5), BitOffset(-1))]
+            )
+
+        # invalid argument - encoding size must be > 0
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(
+                key, [BitFieldGet(UnsignedEncoding(0), BitOffset(1))]
+            )
+
+        # invalid argument - unsigned encoding size must be < 64
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(
+                key, [BitFieldGet(UnsignedEncoding(64), BitOffset(1))]
+            )
+
+        # invalid argument - signed encoding size must be < 65
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(
+                key, [BitFieldGet(SignedEncoding(65), BitOffset(1))]
+            )
+
+        # key exists, but it is not a string
+        assert await redis_client.sadd(set_key, [foobar]) == 1
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(set_key, [unsigned_offset_get])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
