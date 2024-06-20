@@ -551,33 +551,34 @@ public class RedisClientTest {
 
     private static List<Arguments> getGetExOptions() {
         return List.of(
-            Arguments.of(
-                // desc...
-                "test_with_seconds",
-                GetExOptions.Seconds(10L),
-                new String[] {"EX", "10"}
-            )
-        );
+                Arguments.of(
+                        // seconds
+                        "test_with_seconds", GetExOptions.Seconds(10L), new String[] {"EX", "10"}),
+                Arguments.of(
+                        // milliseconds
+                        "test_with_milliseconds",
+                        GetExOptions.Milliseconds(1000L),
+                        new String[] {"PX", "1000"}),
+                Arguments.of(
+                        // unix seconds
+                        "test_with_unix_seconds", GetExOptions.UnixSeconds(10L), new String[] {"EXAT", "10"}),
+                Arguments.of(
+                        // unix milliseconds
+                        "test_with_unix_milliseconds",
+                        GetExOptions.UnixMilliseconds(1000L),
+                        new String[] {"PXAT", "1000"}),
+                Arguments.of(
+                        // persist
+                        "test_with_persist", GetExOptions.Persist(), new String[] {"PERSIST"}));
     }
 
     @SneakyThrows
     @ParameterizedTest(name = "{0}")
     @MethodSource("getGetExOptions")
     public void getex_options(String testName, GetExOptions options, String[] expectedArgs) {
-        assertArrayEquals(expectedArgs, options.toArgs(), "Expected " + testName + " toArgs() to pass.");
-
-        // setup
-//        GetExOptions options1 = GetExOptions.Seconds(10L);
-//        GetExOptions options2 = GetExOptions.Milliseconds(1000L);
-//        GetExOptions options3 = GetExOptions.UnixSeconds(10L);
-//        GetExOptions options4 = GetExOptions.UnixMilliseconds(1000L);
-//        GetExOptions options5 = GetExOptions.Persist();
-
-//        String[] arguments1 = new String[] {"key", "EX", "10"};
-//        String[] arguments2 = new String[] {"key", "PX", "1000"};
-//        String[] arguments3 = new String[] {"key", "EXAT", "10"};
-//        String[] arguments4 = new String[] {"key", "PXAT", "1000"};
-//        String[] arguments5 = new String[] {"key", "PERSIST"};
+        assertArrayEquals(
+                expectedArgs, options.toArgs(), "Expected " + testName + " toArgs() to pass.");
+        System.out.println(expectedArgs);
     }
 
     @SneakyThrows
