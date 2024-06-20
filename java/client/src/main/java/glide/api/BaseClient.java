@@ -43,6 +43,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
+import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -174,6 +175,7 @@ import glide.api.commands.TransactionsBaseCommands;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -504,6 +506,18 @@ public abstract class BaseClient
     public CompletableFuture<String> getdel(@NonNull String key) {
         return commandManager.submitNewCommand(
                 GetDel, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> getex(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                GetEx, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> getex(@NonNull String key, @NonNull GetExOptions options) {
+        String[] arguments = ArrayUtils.addFirst(options.toArgs(), key);
+        return commandManager.submitNewCommand(GetEx, arguments, this::handleStringOrNullResponse);
     }
 
     @Override
