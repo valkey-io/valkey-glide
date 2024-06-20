@@ -441,7 +441,9 @@ public abstract class BaseClient
         return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
-    /** Get a map and convert {@link Map} keys from <code>byte[]</code> to {@link String}.
+    /**
+     * Get a map and convert {@link Map} keys from <code>byte[]</code> to {@link String}.
+     *
      * @param response A Protobuf response
      * @return A map of <code>GlideString</code> to <code>V</code>.
      * @param <V> Value type.
@@ -743,7 +745,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, GlideString>> hgetall(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                HGetAll, new GlideString[] {key}, this::handleMapResponseBinary);
+                HGetAll, new GlideString[] {key}, this::handleBinaryMapResponse);
     }
 
     @Override

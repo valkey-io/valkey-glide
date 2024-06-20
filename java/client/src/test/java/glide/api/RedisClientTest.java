@@ -5826,7 +5826,7 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<byte[]>submitNewCommand(eq(FunctionDump), eq(List.of()), any()))
+        when(commandManager.<byte[]>submitNewCommand(eq(FunctionDump), eq(new GlideString[0]), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5843,13 +5843,12 @@ public class RedisClientTest {
     public void functionRestore_returns_success() {
         // setup
         byte[] data = new byte[] {42};
-        List<byte[]> args = List.of(data);
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
         // match on protobuf request
-        // TODO maybe use ByteArrayArgumentMatcher
-        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), any(List.class), any()))
+        when(commandManager.<String>submitNewCommand(
+                        eq(FunctionRestore), eq(new GlideString[] {gs(data)}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5866,12 +5865,12 @@ public class RedisClientTest {
     public void functionRestore_with_policy_returns_success() {
         // setup
         byte[] data = new byte[] {42};
-        List<byte[]> args = List.of(data, FunctionRestorePolicy.FLUSH.toString().getBytes());
+        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString().getBytes())};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), any(List.class), any()))
+        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), any()))
                 .thenReturn(testResponse);
 
         // exercise

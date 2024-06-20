@@ -3,6 +3,7 @@ package glide.api;
 
 import static glide.api.BaseClient.OK;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
@@ -54,6 +55,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortBaseOptions.Limit;
@@ -66,7 +68,6 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -1885,8 +1886,8 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<byte[]>>submitNewCommand(
-            eq(FunctionDump), eq(List.of()), any()))
-            .thenReturn(testResponse);
+                        eq(FunctionDump), eq(new GlideString[0]), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<ClusterValue<byte[]>> response = service.functionDump();
@@ -1907,8 +1908,8 @@ public class RedisClusterClientTest {
 
         // match on protobuf request
         when(commandManager.<ClusterValue<byte[]>>submitNewCommand(
-            eq(FunctionDump), eq(List.of()), eq(RANDOM), any()))
-            .thenReturn(testResponse);
+                        eq(FunctionDump), eq(new GlideString[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<ClusterValue<byte[]>> response = service.functionDump(RANDOM);
@@ -1924,14 +1925,14 @@ public class RedisClusterClientTest {
     public void functionRestore_returns_success() {
         // setup
         byte[] data = new byte[] {42};
-        List<byte[]> args = List.of(data);
+        GlideString[] args = {gs(data)};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
         // match on protobuf request
         // TODO maybe use ByteArrayArgumentMatcher
-        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), any(List.class), any()))
-            .thenReturn(testResponse);
+        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response = service.functionRestore(data);
@@ -1947,13 +1948,13 @@ public class RedisClusterClientTest {
     public void functionRestore_with_policy_returns_success() {
         // setup
         byte[] data = new byte[] {42};
-        List<byte[]> args = List.of(data, FunctionRestorePolicy.FLUSH.toString().getBytes());
+        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString().getBytes())};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), any(List.class), any()))
-            .thenReturn(testResponse);
+        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response = service.functionRestore(data, FunctionRestorePolicy.FLUSH);
@@ -1969,15 +1970,14 @@ public class RedisClusterClientTest {
     public void functionRestore_with_route_returns_success() {
         // setup
         byte[] data = new byte[] {42};
-        List<byte[]> args = List.of(data);
+        GlideString[] args = {gs(data)};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
         // match on protobuf request
         // TODO maybe use ByteArrayArgumentMatcher
-        when(commandManager.<String>submitNewCommand(
-            eq(FunctionRestore), any(List.class), eq(RANDOM), any()))
-            .thenReturn(testResponse);
+        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response = service.functionRestore(data, RANDOM);
@@ -1993,18 +1993,17 @@ public class RedisClusterClientTest {
     public void functionRestore_with_policy_and_route_returns_success() {
         // setup
         byte[] data = new byte[] {42};
-        List<byte[]> args = List.of(data, FunctionRestorePolicy.FLUSH.toString().getBytes());
+        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString().getBytes())};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(
-            eq(FunctionRestore), any(List.class), eq(RANDOM), any()))
-            .thenReturn(testResponse);
+        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response =
-            service.functionRestore(data, FunctionRestorePolicy.FLUSH, RANDOM);
+                service.functionRestore(data, FunctionRestorePolicy.FLUSH, RANDOM);
         String payload = response.get();
 
         // verify

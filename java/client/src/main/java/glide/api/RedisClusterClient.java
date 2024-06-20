@@ -3,6 +3,7 @@ package glide.api;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
@@ -48,6 +49,7 @@ import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortClusterOptions;
@@ -59,7 +61,6 @@ import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
@@ -588,26 +589,26 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<ClusterValue<byte[]>> functionDump() {
         return commandManager.submitNewCommand(
                 FunctionDump,
-                List.of(),
-                response -> ClusterValue.ofMultiValue(handleBinaryMapResponse(response)));
+                new GlideString[] {},
+                response -> ClusterValue.ofMultiValueBinary(handleBinaryMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<ClusterValue<byte[]>> functionDump(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionDump,
-                List.of(),
+                new GlideString[] {},
                 route,
                 response ->
                         route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleBytesResponse(response))
-                                : ClusterValue.ofMultiValue(handleBinaryMapResponse(response)));
+                                ? ClusterValue.ofSingleValue(handleBytesResponse(response).getBytes())
+                                : ClusterValue.ofMultiValueBinary(handleBinaryMapResponse(response)));
     }
 
     @Override
     public CompletableFuture<String> functionRestore(byte @NonNull [] payload) {
         return commandManager.submitNewCommand(
-                FunctionRestore, List.of(payload), this::handleStringResponse);
+                FunctionRestore, new GlideString[] {gs(payload)}, this::handleStringResponse);
     }
 
     @Override
@@ -615,14 +616,14 @@ public class RedisClusterClient extends BaseClient
             byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy) {
         return commandManager.submitNewCommand(
                 FunctionRestore,
-                List.of(payload, policy.toString().getBytes()),
+                new GlideString[] {gs(payload), gs(policy.toString().getBytes())},
                 this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> functionRestore(byte @NonNull [] payload, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                FunctionRestore, List.of(payload), route, this::handleStringResponse);
+                FunctionRestore, new GlideString[] {gs(payload)}, route, this::handleStringResponse);
     }
 
     @Override
@@ -630,7 +631,7 @@ public class RedisClusterClient extends BaseClient
             byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionRestore,
-                List.of(payload, policy.toString().getBytes()),
+                new GlideString[] {gs(payload), gs(policy.toString().getBytes())},
                 route,
                 this::handleStringResponse);
     }

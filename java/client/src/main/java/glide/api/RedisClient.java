@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
@@ -46,6 +47,7 @@ import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.commands.TransactionsCommands;
+import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -55,7 +57,6 @@ import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.Arrays;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import lombok.NonNull;
@@ -283,13 +284,14 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<byte[]> functionDump() {
-        return commandManager.submitNewCommand(FunctionDump, List.of(), this::handleBytesResponse);
+        return commandManager.submitNewCommand(
+                FunctionDump, new GlideString[0], response -> handleBytesResponse(response).getBytes());
     }
 
     @Override
     public CompletableFuture<String> functionRestore(byte @NonNull [] payload) {
         return commandManager.submitNewCommand(
-                FunctionRestore, List.of(payload), this::handleStringResponse);
+                FunctionRestore, new GlideString[] {gs(payload)}, this::handleStringResponse);
     }
 
     @Override
@@ -297,7 +299,7 @@ public class RedisClient extends BaseClient
             byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy) {
         return commandManager.submitNewCommand(
                 FunctionRestore,
-                List.of(payload, policy.toString().getBytes()),
+                new GlideString[] {gs(payload), gs(policy.toString().getBytes())},
                 this::handleStringResponse);
     }
 

@@ -748,7 +748,7 @@ public class CommandTests {
         // function $name1 returns first argument
         // function $name2 returns argument array len
         String code =
-            generateLuaLibCode(name1, Map.of(name1, "return args[1]", name2, "return #args"), false);
+                generateLuaLibCode(name1, Map.of(name1, "return args[1]", name2, "return #args"), false);
         assertEquals(name1, regularClient.functionLoad(code, true).get());
         var flist = regularClient.functionList(true).get();
 
@@ -756,14 +756,14 @@ public class CommandTests {
 
         // restore without cleaning the lib and/or overwrite option causes an error
         var executionException =
-            assertThrows(ExecutionException.class, () -> regularClient.functionRestore(dump).get());
+                assertThrows(ExecutionException.class, () -> regularClient.functionRestore(dump).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().contains("Library " + name1 + " already exists"));
 
         // APPEND policy also fails for the same reason (name collision)
         executionException =
-            assertThrows(
-                ExecutionException.class, () -> regularClient.functionRestore(dump, APPEND).get());
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionRestore(dump, APPEND).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().contains("Library " + name1 + " already exists"));
 
@@ -779,13 +779,13 @@ public class CommandTests {
 
         // REPLACE policy now fails due name collision
         executionException =
-            assertThrows(
-                ExecutionException.class, () -> regularClient.functionRestore(dump, REPLACE).get());
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionRestore(dump, REPLACE).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         // redis checks names in random order and blames on first collision
         assertTrue(
-            executionException.getMessage().contains("Function " + name1 + " already exists")
-                || executionException.getMessage().contains("Function " + name2 + " already exists"));
+                executionException.getMessage().contains("Function " + name1 + " already exists")
+                        || executionException.getMessage().contains("Function " + name2 + " already exists"));
 
         // FLUSH policy succeeds, but deletes the second lib
         assertEquals(OK, regularClient.functionRestore(dump, FLUSH).get());
@@ -793,9 +793,9 @@ public class CommandTests {
 
         // call restored functions
         assertEquals(
-            "meow", regularClient.fcall(name1, new String[0], new String[] {"meow", "woem"}).get());
+                "meow", regularClient.fcall(name1, new String[0], new String[] {"meow", "woem"}).get());
         assertEquals(
-            2L, regularClient.fcall(name2, new String[0], new String[] {"meow", "woem"}).get());
+                2L, regularClient.fcall(name2, new String[0], new String[] {"meow", "woem"}).get());
     }
 
     @SneakyThrows
