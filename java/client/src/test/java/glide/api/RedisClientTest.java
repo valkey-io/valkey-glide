@@ -33,6 +33,8 @@ import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_RE
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
@@ -195,6 +197,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
 import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
@@ -268,6 +271,7 @@ import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
@@ -4509,6 +4513,103 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xreadgroup_multiple_keys() {
+        // setup
+        String keyOne = "one";
+        String streamIdOne = "id-one";
+        String keyTwo = "two";
+        String streamIdTwo = "id-two";
+        String groupName = "testGroup";
+        String consumerName = "consumerGroup";
+        String[][] fieldValues = {{"field", "value"}};
+        Map<String, Map<String, String[][]>> completedResult = new LinkedHashMap<>();
+        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        String[] arguments = {
+            READ_GROUP_REDIS_API,
+            groupName,
+            consumerName,
+            READ_STREAMS_REDIS_API,
+            keyOne,
+            keyTwo,
+            streamIdOne,
+            streamIdTwo
+        };
+
+        CompletableFuture<Map<String, Map<String, String[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+                        eq(XReadGroup), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        Map<String, String> keysAndIds = new LinkedHashMap<>();
+        keysAndIds.put(keyOne, streamIdOne);
+        keysAndIds.put(keyTwo, streamIdTwo);
+        CompletableFuture<Map<String, Map<String, String[][]>>> response =
+                service.xreadgroup(keysAndIds, groupName, consumerName);
+        Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xreadgroup_with_options() {
+        // setup
+        String keyOne = "one";
+        String streamIdOne = "id-one";
+        Long block = 2L;
+        Long count = 10L;
+        String groupName = "testGroup";
+        String consumerName = "consumerGroup";
+        String[][] fieldValues = {{"field", "value"}};
+        Map<String, Map<String, String[][]>> completedResult =
+                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+        String[] arguments = {
+            READ_GROUP_REDIS_API,
+            groupName,
+            consumerName,
+            READ_COUNT_REDIS_API,
+            count.toString(),
+            READ_BLOCK_REDIS_API,
+            block.toString(),
+            READ_NOACK_REDIS_API,
+            READ_STREAMS_REDIS_API,
+            keyOne,
+            streamIdOne
+        };
+
+        CompletableFuture<Map<String, Map<String, String[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+                        eq(XReadGroup), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Map<String, String[][]>>> response =
+                service.xreadgroup(
+                        Map.of(keyOne, streamIdOne),
+                        groupName,
+                        consumerName,
+                        StreamReadGroupOptions.builder().block(block).count(count).noack().build());
+        Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
     }
 
     @SneakyThrows
