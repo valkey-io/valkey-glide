@@ -3066,7 +3066,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist. Returns a code>Map</code>
+     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
      *     with a value of code>null</code> if the stream is empty.
      */
     public T xreadgroup(
@@ -3090,7 +3090,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist. Returns a code>Map</code>
+     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
      *     with a value of code>null</code> if the stream is empty.
      */
     public T xreadgroup(
