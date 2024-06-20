@@ -87,16 +87,14 @@ jobs:
 
             - name: Create secret key ring file
               working-directory: java/client
-              env:
-                  SECRING_GPG: ${{ secrets.SECRING_GPG }}
               run: |
-                  echo $SECRING_GPG > "secring.gpg"
-                  cat secring.gpg
+                  cat << EOF > ./secring.gpg
+                  ${{ secrets.SECRING_GPG }}
+                  EOF
 
             - name: Build java client
               working-directory: java
               run: |
-                  cat client/secring.gpg
                   ./gradlew --continue build -Psigning.secretKeyRingFile=secring.gpg -Psigning.password=${{ secrets.GPG_PASSWORD }} -Psigning.keyId=${{ secrets.GPG_ID }}
 
             - name: Ensure no skipped files by linter
