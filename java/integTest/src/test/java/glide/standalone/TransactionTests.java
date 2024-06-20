@@ -19,8 +19,6 @@ import glide.api.RedisClient;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
-import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;

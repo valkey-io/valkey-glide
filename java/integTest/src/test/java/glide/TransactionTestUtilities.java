@@ -184,18 +184,19 @@ public class TransactionTestUtilities {
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            return concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        OK, // set(genericKey1, value1)
-                        true, // expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
-                        true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
-                        false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
-                        false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
-                        -2L, // expiretime(genericKey1)
-                        -2L, // pexpiretime(genericKey1)
-                        ascendingList, // sortReadOnly(genericKey3)
-                    });
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(genericKey1, value1)
+                                true, // expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                                true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
+                                false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                                false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                                -2L, // expiretime(genericKey1)
+                                -2L, // pexpiretime(genericKey1)
+                                ascendingList, // sortReadOnly(genericKey3)
+                            });
         }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
