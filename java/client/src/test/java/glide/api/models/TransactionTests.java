@@ -29,6 +29,8 @@ import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_RE
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
@@ -171,6 +173,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
 import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
@@ -235,6 +238,7 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.ArrayList;
@@ -785,6 +789,34 @@ public class TransactionTests {
 
         transaction.xgroupDelConsumer("key", "group", "consumer");
         results.add(Pair.of(XGroupDelConsumer, buildArgs("key", "group", "consumer")));
+
+        transaction.xreadgroup(Map.of("key", "id"), "group", "consumer");
+        results.add(
+                Pair.of(
+                        XReadGroup,
+                        buildArgs(
+                                READ_GROUP_REDIS_API, "group", "consumer", READ_STREAMS_REDIS_API, "key", "id")));
+
+        transaction.xreadgroup(
+                Map.of("key", "id"),
+                "group",
+                "consumer",
+                StreamReadGroupOptions.builder().block(1L).count(2L).noack().build());
+        results.add(
+                Pair.of(
+                        XReadGroup,
+                        buildArgs(
+                                READ_GROUP_REDIS_API,
+                                "group",
+                                "consumer",
+                                READ_COUNT_REDIS_API,
+                                "2",
+                                READ_BLOCK_REDIS_API,
+                                "1",
+                                READ_NOACK_REDIS_API,
+                                READ_STREAMS_REDIS_API,
+                                "key",
+                                "id")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
