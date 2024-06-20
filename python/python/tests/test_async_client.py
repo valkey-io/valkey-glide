@@ -342,7 +342,7 @@ class TestCommands:
     async def test_custom_command_single_arg(self, redis_client: TGlideClient):
         # Test single arg command
         res = await redis_client.custom_command(["PING"])
-        assert res == "PONG"
+        assert res == b"PONG"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1665,7 +1665,7 @@ class TestCommands:
         # move missing element to missing key
         assert await redis_client.smove(key1, non_existing_key, "42") is False
         assert await redis_client.smembers(key1) == {b"3"}
-        assert await redis_client.type(non_existing_key) == "none"
+        assert await redis_client.type(non_existing_key) == b"none"
 
         # key exists, but it is not a set
         assert await redis_client.set(string_key, "value") == OK
@@ -4569,30 +4569,30 @@ class TestCommands:
     async def test_type(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK
-        assert (await redis_client.type(key)).lower() == "string"
+        assert (await redis_client.type(key)).lower() == b"string"
         assert await redis_client.delete([key]) == 1
 
         assert await redis_client.lpush(key, ["value"]) == 1
-        assert (await redis_client.type(key)).lower() == "list"
+        assert (await redis_client.type(key)).lower() == b"list"
         assert await redis_client.delete([key]) == 1
 
         assert await redis_client.sadd(key, ["value"]) == 1
-        assert (await redis_client.type(key)).lower() == "set"
+        assert (await redis_client.type(key)).lower() == b"set"
         assert await redis_client.delete([key]) == 1
 
         assert await redis_client.zadd(key, {"member": 1.0}) == 1
-        assert (await redis_client.type(key)).lower() == "zset"
+        assert (await redis_client.type(key)).lower() == b"zset"
         assert await redis_client.delete([key]) == 1
 
         assert await redis_client.hset(key, {"field": "value"}) == 1
-        assert (await redis_client.type(key)).lower() == "hash"
+        assert (await redis_client.type(key)).lower() == b"hash"
         assert await redis_client.delete([key]) == 1
 
         await redis_client.xadd(key, [("field", "value")])
-        assert await redis_client.type(key) == "stream"
+        assert await redis_client.type(key) == b"stream"
         assert await redis_client.delete([key]) == 1
 
-        assert (await redis_client.type(key)).lower() == "none"
+        assert (await redis_client.type(key)).lower() == b"none"
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7641,12 +7641,12 @@ class TestClusterRoutes:
         )
 
         all_results = await redis_client.custom_command(["INFO", "REPLICATION"], route)
-        all_results = all_results.decode("utf-8")
         assert isinstance(all_results, dict)
         assert len(all_results) == expected_num_of_results
         primary_count = 0
         replica_count = 0
         for _, info_res in all_results.items():
+            info_res = info_res.decode("utf-8")
             assert "role:master" in info_res or "role:slave" in info_res
             if "role:master" in info_res:
                 primary_count += 1
@@ -7679,6 +7679,7 @@ class TestClusterRoutes:
         info_res = await redis_client.custom_command(
             ["INFO", "REPLICATION"], RandomNode()
         )
+        info_res = info_res.decode("utf-8")
         assert type(info_res) is str
         assert "role:master" in info_res or "role:slave" in info_res
 
@@ -7729,8 +7730,8 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_info_random_route(self, redis_client: GlideClusterClient):
         info = await redis_client.info([InfoSection.SERVER], RandomNode())
-        print("######################")
-        print(type(info))
+        print("####")
+        print(info)
         assert isinstance(info, str)
         assert "# Server" in info
 

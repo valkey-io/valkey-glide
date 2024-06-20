@@ -75,7 +75,7 @@ class ClusterCommands(CoreCommands):
         args = [section.value for section in sections] if sections else []
         result_bytes = await self._execute_command(RequestType.Info, args, route)
         result_str = None
-        if result_bytes is bytes:
+        if isinstance(result_bytes, bytes):
             result_str = result_bytes.decode("utf-8")
         elif isinstance(result_bytes, dict):
             result_str = convert_byte_string_dict(result_bytes)
