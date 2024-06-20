@@ -573,16 +573,16 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments2), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments3), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments4), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         when(commandManager.<String>submitNewCommand(eq(GetEx), eq(arguments5), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<String> response1 = service.getex("key", options1);

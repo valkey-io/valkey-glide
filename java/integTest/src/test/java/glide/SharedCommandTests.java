@@ -307,8 +307,9 @@ public class SharedCommandTests {
         String data = client.getex(key1).get();
         assertEquals(data, value1);
 
-        Long ttlValue = Long.valueOf(client.get(key1).get());
-        assert ttlValue >= -0L;
+        data = client.getex(key1, GetExOptions.Seconds(10L)).get();
+        Long ttlValue = client.ttl(key1).get();
+        assert ttlValue >= 0L;
 
         // non-existent key
         data = client.getex(key2).get();
