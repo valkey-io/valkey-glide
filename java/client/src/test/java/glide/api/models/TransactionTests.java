@@ -165,6 +165,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -825,6 +826,9 @@ public class TransactionTests {
                                 READ_STREAMS_REDIS_API,
                                 "key",
                                 "id")));
+
+        transaction.xack("key", "group", new String[] {"12345-1", "98765-4"});
+        results.add(Pair.of(XAck, buildArgs("key", "group", "12345-1", "98765-4")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
