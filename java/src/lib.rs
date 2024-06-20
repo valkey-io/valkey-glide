@@ -16,87 +16,6 @@ mod ffi_test;
 #[cfg(ffi_test)]
 pub use ffi_test::*;
 
-#[allow(dead_code)]
-/// Create a `JObject` from Rust's `String`. In case of an error
-/// this method throws Java exception and returns `JObject::null`
-fn create_glide_string_from_string<'local>(
-    env: &mut JNIEnv<'local>,
-    str: String,
-) -> JObject<'local> {
-    let Ok(bytearr) = env.byte_array_from_slice(str.as_bytes()) else {
-        let _ = env.throw("Failed to allocate byte array");
-        return JObject::null();
-    };
-
-    // TODO cache class
-    let Ok(class) = Desc::<JClass>::lookup("glide/api/models/GlideString", env) else {
-        let _ = env.throw("JNI: unable to find class GlideString");
-        return JObject::null();
-    };
-
-    // Call GlideString.of(byte[]) static method
-    let glide_string = match env.call_static_method(
-        class,
-        "of",
-        "([B)Lglide/api/models/GlideString;",
-        &[(&bytearr).into()],
-    ) {
-        Ok(glide_string) => glide_string,
-        Err(e) => {
-            let _ = env.throw(format!("JNI: failed to call GlideString.of. {:?}", e));
-            return JObject::null();
-        }
-    };
-
-    match JObject::try_from(glide_string) {
-        Ok(obj) => obj,
-        Err(e) => {
-            let _ = env.throw(format!("JNI: JObject::try_from failed!. {:?}", e));
-            JObject::null()
-        }
-    }
-}
-
-/// Create a `JObject` from Rust's `Vec<u8>`. In case of an error
-/// this method throws Java exception and returns `JObject::null`
-fn create_glide_string_from_bytes<'local>(
-    env: &mut JNIEnv<'local>,
-    data: Vec<u8>,
-) -> JObject<'local> {
-    let Ok(bytearr) = env.byte_array_from_slice(&data) else {
-        let _ = env.throw("Failed to allocate byte array");
-        return JObject::null();
-    };
-
-    // TODO cache class
-    let Ok(class) = Desc::<JClass>::lookup("glide/api/models/GlideString", env) else {
-        let _ = env.throw("JNI: unable to find class GlideString");
-        return JObject::null();
-    };
-
-    // Call GlideString.of(byte[]) static method
-    let glide_string = match env.call_static_method(
-        class,
-        "of",
-        "([B)Lglide/api/models/GlideString;",
-        &[(&bytearr).into()],
-    ) {
-        Ok(glide_string) => glide_string,
-        Err(e) => {
-            let _ = env.throw(format!("JNI: failed to call GlideString.of. {:?}", e));
-            return JObject::null();
-        }
-    };
-
-    match JObject::try_from(glide_string) {
-        Ok(obj) => obj,
-        Err(e) => {
-            let _ = env.throw(format!("JNI: JObject::try_from failed!. {:?}", e));
-            JObject::null()
-        }
-    }
-}
-
 // TODO: Consider caching method IDs here in a static variable (might need RwLock to mutate)
 fn redis_value_to_java<'local>(
     env: &mut JNIEnv<'local>,
@@ -127,7 +46,11 @@ fn redis_value_to_java<'local>(
                     }
                 }
             } else {
-                create_glide_string_from_bytes(env, data)
+                let Ok(bytearr) = env.byte_array_from_slice(&data) else {
+                    let _ = env.throw("Failed to allocate byte array");
+                    return JObject::null();
+                };
+                bytearr.into()
             }
         }
         Value::Array(array) => {

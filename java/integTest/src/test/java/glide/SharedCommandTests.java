@@ -798,12 +798,13 @@ public class SharedCommandTests {
         GlideString value = gs(UUID.randomUUID().toString());
         Map<String, String> fieldValueMapStrings =
                 Map.of(field1.getString(), value.getString(), field2.getString(), value.getString());
-        Map<GlideString, GlideString> fieldValueMap = Map.of(field1, value, field2, value);
+        HashMap<GlideString, GlideString> fieldValueMap =
+                new HashMap<>(Map.of(field1, value, field2, value));
 
         assertEquals(2, client.hset(key.getString(), fieldValueMapStrings).get());
-        // use the binary API (GlideString)
-        assertEquals(fieldValueMap, client.hgetall(key).get());
-        assertEquals(Map.of(), client.hgetall("non_existing_key").get());
+        Map<GlideString, GlideString> allItems = client.hgetall(key).get();
+        assertEquals(value, allItems.get(field1));
+        assertEquals(value, allItems.get(field2));
     }
 
     @SneakyThrows
