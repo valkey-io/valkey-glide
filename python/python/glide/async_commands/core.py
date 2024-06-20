@@ -3583,6 +3583,65 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ZRank, [key, member, "WITHSCORE"]),
         )
 
+    async def zrevrank(self, key: str, member: str) -> Optional[int]:
+        """
+        Returns the rank of `member` in the sorted set stored at `key`, where scores are ordered from the highest to
+        lowest, starting from `0`.
+
+        To get the rank of `member` with its score, see `zrevrank_withscore`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Returns:
+            Optional[int]: The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2, "member3": 9.6})
+            >>> await client.zrevrank("my_sorted_set", "member2")
+                2  # "member2" has the third-highest score in the sorted set "my_sorted_set"
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ZRevRank, [key, member]),
+        )
+
+    async def zrevrank_withscore(
+        self, key: str, member: str
+    ) -> Optional[List[Union[int, float]]]:
+        """
+        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
+        highest to lowest, starting from `0`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Returns:
+            Optional[List[Union[int, float]]]: A list containing the rank (as `int`) and score (as `float`) of `member`
+                in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2, "member3": 9.6})
+            >>> await client.zrevrank("my_sorted_set", "member2")
+                [2, 8.2]  # "member2" with score 8.2 has the third-highest score in the sorted set "my_sorted_set"
+
+        Since: Redis version 7.2.0.
+        """
+        return cast(
+            Optional[List[Union[int, float]]],
+            await self._execute_command(
+                RequestType.ZRevRank, [key, member, "WITHSCORE"]
+            ),
+        )
+
     async def zrem(
         self,
         key: str,
