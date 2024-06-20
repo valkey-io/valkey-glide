@@ -2,6 +2,8 @@
 package glide.api;
 
 public enum ResponseFlags {
+    /** Strings in the response are UTF-8 encoded */
+    ENCODING_UTF8,
     /** Null is a valid response */
     IS_NULLABLE,
 }

@@ -3,6 +3,7 @@ package glide.managers;
 
 import com.google.protobuf.ByteString;
 import glide.api.models.ClusterTransaction;
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
@@ -67,7 +68,7 @@ public class CommandManager {
      */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
-            List<byte[]> arguments,
+            GlideString[] arguments,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
         RedisRequest.Builder command = prepareRedisRequest(requestType, arguments);
@@ -104,7 +105,7 @@ public class CommandManager {
      */
     public <T> CompletableFuture<T> submitNewCommand(
             RequestType requestType,
-            List<byte[]> arguments,
+            GlideString[] arguments,
             Route route,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
@@ -223,10 +224,10 @@ public class CommandManager {
      *     adding a callback id.
      */
     protected RedisRequest.Builder prepareRedisRequest(
-            RequestType requestType, List<byte[]> arguments, Route route) {
+            RequestType requestType, GlideString[] arguments, Route route) {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
         for (var arg : arguments) {
-            commandArgs.addArgs(ByteString.copyFrom(arg));
+            commandArgs.addArgs(ByteString.copyFrom(arg.getBytes()));
         }
 
         var builder =
@@ -319,10 +320,10 @@ public class CommandManager {
      *     adding a callback id.
      */
     protected RedisRequest.Builder prepareRedisRequest(
-            RequestType requestType, List<byte[]> arguments) {
+            RequestType requestType, GlideString[] arguments) {
         ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
         for (var arg : arguments) {
-            commandArgs.addArgs(ByteString.copyFrom(arg));
+            commandArgs.addArgs(ByteString.copyFrom(arg.getBytes()));
         }
 
         return RedisRequest.newBuilder()

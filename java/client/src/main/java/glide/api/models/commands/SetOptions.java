@@ -8,6 +8,7 @@ import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_MILLISECONDS;
 import static glide.api.models.commands.SetOptions.ExpiryType.UNIX_SECONDS;
 
 import glide.api.commands.StringBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
@@ -167,5 +168,32 @@ public final class SetOptions {
         }
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Converts SetOptions into a GlideString[] to add to a {@link Command} arguments.
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toGlideStringArgs() {
+        List<GlideString> optionArgs = new ArrayList<>();
+        if (conditionalSet != null) {
+            optionArgs.add(GlideString.of(conditionalSet.redisApi));
+        }
+
+        if (returnOldValue) {
+            optionArgs.add(GlideString.of(RETURN_OLD_VALUE));
+        }
+
+        if (expiry != null) {
+            optionArgs.add(GlideString.of(expiry.type.redisApi));
+            if (expiry.type != KEEP_EXISTING) {
+                assert expiry.count != null
+                        : "Set command received expiry type " + expiry.type + ", but count was not set.";
+                optionArgs.add(GlideString.of(expiry.count.toString()));
+            }
+        }
+
+        return optionArgs.toArray(new GlideString[0]);
     }
 }

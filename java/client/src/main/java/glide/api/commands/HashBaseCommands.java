@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -176,6 +177,22 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, String>> hgetall(String key);
+
+    /**
+     * Returns all fields and values of the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return A <code>Map</code> of fields and their values stored in the hash. Every field name in
+     *     the map is associated with its corresponding value.<br>
+     *     If <code>key</code> does not exist, it returns an empty map.
+     * @example
+     *     <pre>{@code
+     * Map fieldValueMap = client.hgetall(gs("my_hash")).get();
+     * assert fieldValueMap.equals(Map.of(gs("field1"), gs("value1"), gs("field2"), gs("value2")));
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, GlideString>> hgetall(GlideString key);
 
     /**
      * Increments the number stored at <code>field</code> in the hash stored at <code>key</code> by
