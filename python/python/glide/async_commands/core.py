@@ -2705,6 +2705,29 @@ class CoreCommands(Protocol):
 
         return cast(Optional[str], await self._execute_command(RequestType.XAdd, args))
 
+    async def xdel(self, key: str, ids: List[str]) -> int:
+        """
+        Removes the specified entries by id from a stream, and returns the number of entries deleted.
+
+        See https://valkey.io/commands/xdel for more details.
+
+        Args:
+            key (str): The key of the stream.
+            ids (List[str]): An array of entry ids.
+
+        Returns:
+            int: The number of entries removed from the stream. This number may be less than the number of entries in
+                `ids`, if the specified `ids` don't exist in the stream.
+
+        Examples:
+            >>> await client.xdel("key", ["1538561698944-0", "1538561698944-1"])
+                2  # Stream marked 2 entries as deleted.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.XDel, [key] + ids),
+        )
+
     async def xtrim(
         self,
         key: str,
