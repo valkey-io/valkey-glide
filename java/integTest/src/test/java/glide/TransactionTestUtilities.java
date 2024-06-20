@@ -9,7 +9,6 @@ import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
-import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
@@ -23,7 +22,6 @@ import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
@@ -134,10 +132,7 @@ public class TransactionTestUtilities {
                 .ttl(genericKey2)
                 .lpush(genericKey3, new String[] {"3", "1", "2"})
                 .sort(genericKey3)
-                .sort(genericKey3, SortClusterOptions.builder().orderBy(DESC).build())
                 .sortStore(genericKey3, genericKey4)
-                .lrange(genericKey4, 0, -1)
-                .sortStore(genericKey3, genericKey4, SortClusterOptions.builder().orderBy(DESC).build())
                 .lrange(genericKey4, 0, -1);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -149,8 +144,7 @@ public class TransactionTestUtilities {
                     .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                     .expiretime(genericKey1)
                     .pexpiretime(genericKey1)
-                    .sortReadOnly(genericKey3)
-                    .sortReadOnly(genericKey3, SortClusterOptions.builder().orderBy(DESC).build());
+                    .sortReadOnly(genericKey3);
         }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
@@ -185,28 +179,23 @@ public class TransactionTestUtilities {
                     -2L, // ttl(genericKey2)
                     3L, // lpush(genericKey3, new String[] {"3", "1", "2"})
                     ascendingList, // sort(genericKey3)
-                    descendingList, // sort(genericKey3, SortClusterOptions.builder().orderBy(DESC).build())
                     3L, // sortStore(genericKey3, genericKey4)
                     ascendingList, // lrange(genericKey4, 0, -1)
-                    3L, // sortStore(genericKey3, genericKey4, DESC))
-                    descendingList, // lrange(genericKey4, 0, -1)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            expectedResults =
-                    concatenateArrays(
-                            expectedResults,
-                            new Object[] {
-                                OK, // set(genericKey1, value1)
-                                true, // expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
-                                true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
-                                false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
-                                false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
-                                -2L, // expiretime(genericKey1)
-                                -2L, // pexpiretime(genericKey1)
-                                ascendingList, // sortReadOnly(genericKey3)
-                                descendingList, // sortReadOnly(genericKey3, DESC)
-                            });
+            return concatenateArrays(
+                    expectedResults,
+                    new Object[] {
+                        OK, // set(genericKey1, value1)
+                        true, // expire(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                        true, // expireAt(genericKey1, 500, ExpireOptions.HAS_EXISTING_EXPIRY)
+                        false, // pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                        false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
+                        -2L, // expiretime(genericKey1)
+                        -2L, // pexpiretime(genericKey1)
+                        ascendingList, // sortReadOnly(genericKey3)
+                    });
         }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {

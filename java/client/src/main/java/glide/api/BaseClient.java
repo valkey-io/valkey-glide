@@ -196,7 +196,6 @@ import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
@@ -2095,14 +2094,6 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String[]> sort(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        String[] arguments = ArrayUtils.addFirst(sortClusterOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                Sort, arguments, response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
     public CompletableFuture<String[]> sortReadOnly(@NonNull String key) {
         return commandManager.submitNewCommand(
                 SortReadOnly,
@@ -2111,29 +2102,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String[]> sortReadOnly(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        String[] arguments = ArrayUtils.addFirst(sortClusterOptions.toArgs(), key);
-        return commandManager.submitNewCommand(
-                SortReadOnly,
-                arguments,
-                response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
     public CompletableFuture<Long> sortStore(@NonNull String key, @NonNull String destination) {
         return commandManager.submitNewCommand(
                 Sort, new String[] {key, STORE_COMMAND_STRING, destination}, this::handleLongResponse);
-    }
-
-    @Override
-    public CompletableFuture<Long> sortStore(
-            @NonNull String key,
-            @NonNull String destination,
-            @NonNull SortClusterOptions sortClusterOptions) {
-        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
-        String[] arguments =
-                ArrayUtils.addFirst(concatenateArrays(storeArguments, sortClusterOptions.toArgs()), key);
-        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 }

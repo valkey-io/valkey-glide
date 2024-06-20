@@ -6813,39 +6813,7 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void sort_with_standalone_options_returns_success() {
-        // setup
-        String[] result = new String[] {"1", "2", "3"};
-        String key = "key";
-        String byPattern = "byPattern";
-        String getPattern = "getPattern";
-        String[] args =
-                new String[] {key, BY_COMMAND_STRING, byPattern, GET_COMMAND_STRING, getPattern};
-        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(result);
-
-        // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(Sort), eq(args), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String[]> response =
-                service.sort(
-                        key,
-                        SortOptions.builder()
-                                .getPatterns(new String[] {getPattern})
-                                .byPattern(byPattern)
-                                .build());
-        String[] payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(result, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void sort_with_standalone_and_sort_options_returns_success() {
+    public void sort_with_options_returns_success() {
         // setup
         String[] result = new String[] {"1", "2", "3"};
         String key = "key";
@@ -6893,7 +6861,7 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void sortReadOnly_with_standalone_options_returns_success() {
+    public void sortReadOnly_with_options_returns_success() {
         // setup
         String[] result = new String[] {"1", "2", "3"};
         String key = "key";
@@ -6925,96 +6893,7 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
-    public void sortReadOnly_with_standalone_and_sort_options_returns_success() {
-        // setup
-        String[] result = new String[] {"1", "2", "3"};
-        String key = "key";
-        Long limitOffset = 0L;
-        Long limitCount = 2L;
-        String byPattern = "byPattern";
-        String getPattern = "getPattern";
-        String[] args =
-                new String[] {
-                    key,
-                    LIMIT_COMMAND_STRING,
-                    limitOffset.toString(),
-                    limitCount.toString(),
-                    DESC.toString(),
-                    ALPHA_COMMAND_STRING,
-                    BY_COMMAND_STRING,
-                    byPattern,
-                    GET_COMMAND_STRING,
-                    getPattern
-                };
-        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
-        testResponse.complete(result);
-
-        // match on protobuf request
-        when(commandManager.<String[]>submitNewCommand(eq(SortReadOnly), eq(args), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<String[]> response =
-                service.sortReadOnly(
-                        key,
-                        SortOptions.builder()
-                                .alpha(true)
-                                .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
-                                .orderBy(DESC)
-                                .getPatterns(new String[] {getPattern})
-                                .byPattern(byPattern)
-                                .build());
-        String[] payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(result, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void sortStore__standalone_options_returns_success() {
-        // setup
-        Long result = 5L;
-        String key = "key";
-        String destKey = "destKey";
-        String byPattern = "byPattern";
-        String getPattern = "getPattern";
-        String[] args =
-                new String[] {
-                    key,
-                    STORE_COMMAND_STRING,
-                    destKey,
-                    BY_COMMAND_STRING,
-                    byPattern,
-                    GET_COMMAND_STRING,
-                    getPattern
-                };
-        CompletableFuture<Long> testResponse = new CompletableFuture<>();
-        testResponse.complete(result);
-
-        // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(Sort), eq(args), any())).thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Long> response =
-                service.sortStore(
-                        key,
-                        destKey,
-                        SortOptions.builder()
-                                .getPatterns(new String[] {getPattern})
-                                .byPattern(byPattern)
-                                .build());
-        Long payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(result, payload);
-    }
-
-    @SneakyThrows
-    @Test
-    public void sortStore_with_standalone_and_sort_options_returns_success() {
+    public void sortStore_with_options_returns_success() {
         // setup
         Long result = 5L;
         String key = "key";

@@ -1,7 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import glide.api.commands.GenericBaseCommands;
+import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.GenericCommands;
 import java.util.ArrayList;
 import java.util.List;
@@ -9,9 +9,9 @@ import lombok.RequiredArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Optional arguments to {@link GenericBaseCommands#sort(String, SortClusterOptions)}, {@link
- * GenericBaseCommands#sortReadOnly(String, SortClusterOptions)}, {@link
- * GenericBaseCommands#sortStore(String, String, SortClusterOptions)}, {@link
+ * Optional arguments to {@link GenericClusterCommands#sort(String, SortClusterOptions)}, {@link
+ * GenericClusterCommands#sortReadOnly(String, SortClusterOptions)}, {@link
+ * GenericClusterCommands#sortStore(String, String, SortClusterOptions)}, {@link
  * GenericCommands#sort(String, SortOptions)}, {@link GenericCommands#sortReadOnly(String,
  * SortOptions)}, and {@link GenericCommands#sortStore(String, String, SortOptions)}
  *

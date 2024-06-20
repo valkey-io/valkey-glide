@@ -18,7 +18,6 @@ import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_DOES_NOT_EXIST;
 import static glide.api.models.commands.SetOptions.ConditionalSet.ONLY_IF_EXISTS;
 import static glide.api.models.commands.SetOptions.Expiry.Milliseconds;
-import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -50,8 +49,6 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
-import glide.api.models.commands.SortBaseOptions;
-import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -5903,87 +5900,25 @@ public class SharedCommandTests {
         String key3 = "{key}-3" + UUID.randomUUID();
         String[] key1LpushArgs = {"2", "1", "4", "3"};
         String[] key1AscendingList = {"1", "2", "3", "4"};
-        String[] key1DescendingList = {"4", "3", "2", "1"};
         String[] key2LpushArgs = {"2", "1", "a", "x", "c", "4", "3"};
-        String[] key2DescendingList = {"x", "c", "a", "4", "3", "2", "1"};
-        String[] key2DescendingListSubset = Arrays.copyOfRange(key2DescendingList, 0, 4);
 
         assertArrayEquals(new String[0], client.sort(key3).get());
         assertEquals(4, client.lpush(key1, key1LpushArgs).get());
-        assertArrayEquals(
-                new String[0],
-                client
-                        .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
-                        .get());
         assertArrayEquals(key1AscendingList, client.sort(key1).get());
-        assertArrayEquals(
-                key1DescendingList,
-                client.sort(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
-        assertArrayEquals(
-                Arrays.copyOfRange(key1AscendingList, 0, 2),
-                client
-                        .sort(
-                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
-                        .get());
-        assertEquals(7, client.lpush(key2, key2LpushArgs).get());
-        assertArrayEquals(
-                key2DescendingListSubset,
-                client
-                        .sort(
-                                key2,
-                                SortClusterOptions.builder()
-                                        .alpha(true)
-                                        .orderBy(DESC)
-                                        .limit(new SortBaseOptions.Limit(0L, 4L))
-                                        .build())
-                        .get());
 
         // SORT_R0
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertArrayEquals(new String[0], client.sortReadOnly(key3).get());
             assertArrayEquals(key1AscendingList, client.sortReadOnly(key1).get());
-            assertArrayEquals(
-                    key1DescendingList,
-                    client.sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
-            assertArrayEquals(
-                    Arrays.copyOfRange(key1AscendingList, 0, 2),
-                    client
-                            .sortReadOnly(
-                                    key1,
-                                    SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
-                            .get());
-            assertArrayEquals(
-                    key2DescendingListSubset,
-                    client
-                            .sortReadOnly(
-                                    key2,
-                                    SortClusterOptions.builder()
-                                            .alpha(true)
-                                            .orderBy(DESC)
-                                            .limit(new SortBaseOptions.Limit(0L, 4L))
-                                            .build())
-                            .get());
         }
+
         // SORT with STORE
         assertEquals(4, client.sortStore(key1, key3).get());
         assertArrayEquals(key1AscendingList, client.lrange(key3, 0, -1).get());
-        assertEquals(
-                4,
-                client
-                        .sortStore(
-                                key2,
-                                key3,
-                                SortClusterOptions.builder()
-                                        .alpha(true)
-                                        .orderBy(DESC)
-                                        .limit(new SortBaseOptions.Limit(0L, 4L))
-                                        .build())
-                        .get());
-        assertArrayEquals(key2DescendingListSubset, client.lrange(key3, 0, -1).get());
 
         // Exceptions
         // SORT with strings require ALPHA
+        assertEquals(7, client.lpush(key2, key2LpushArgs).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sort(key2).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
