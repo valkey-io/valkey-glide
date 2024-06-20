@@ -35,6 +35,7 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -289,6 +290,52 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.getdel(key2).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void getex(BaseClient client) {
+
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
+        String key1 = "{key}" + UUID.randomUUID();
+        String value1 = String.valueOf(UUID.randomUUID());
+        String key2 = "{key}" + UUID.randomUUID();
+
+        client.set(key1, value1).get();
+        String data = client.getex(key1).get();
+        assertEquals(data, value1);
+        assertEquals(-1, client.ttl(key1).get());
+
+        data = client.getex(key1, GetExOptions.Seconds(10L)).get();
+        Long ttlValue = client.ttl(key1).get();
+        assertTrue(ttlValue >= 0L);
+
+        // non-existent key
+        data = client.getex(key2).get();
+        assertNull(data);
+
+        // key isn't a string
+        client.sadd(key2, new String[] {"a"}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.getex(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // with option
+        data = client.getex(key1, GetExOptions.Seconds(10L)).get();
+        assertEquals(data, value1);
+
+        // invalid time measurement
+        ExecutionException invalidTimeException =
+                assertThrows(
+                        ExecutionException.class, () -> client.getex(key1, GetExOptions.Seconds(-10L)).get());
+        assertInstanceOf(RequestException.class, invalidTimeException.getCause());
+
+        // setting and clearing expiration timer
+        assertEquals(value1, client.getex(key1, GetExOptions.Seconds(10L)).get());
+        assertEquals(value1, client.getex(key1, GetExOptions.Persist()).get());
+        assertEquals(-1L, client.ttl(key1).get());
     }
 
     @SneakyThrows
