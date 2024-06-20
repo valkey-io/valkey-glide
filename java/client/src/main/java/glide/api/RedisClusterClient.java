@@ -336,14 +336,13 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> flushall(@NonNull SingleNodeRoute route) {
+    public CompletableFuture<String> flushall(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 FlushAll, new String[0], route, this::handleStringResponse);
     }
 
     @Override
-    public CompletableFuture<String> flushall(
-            @NonNull FlushMode mode, @NonNull SingleNodeRoute route) {
+    public CompletableFuture<String> flushall(@NonNull FlushMode mode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FlushAll, new String[] {mode.toString()}, route, this::handleStringResponse);
     }
@@ -360,14 +359,13 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<String> flushdb(@NonNull SingleNodeRoute route) {
+    public CompletableFuture<String> flushdb(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 FlushDB, new String[0], route, this::handleStringResponse);
     }
 
     @Override
-    public CompletableFuture<String> flushdb(
-            @NonNull FlushMode mode, @NonNull SingleNodeRoute route) {
+    public CompletableFuture<String> flushdb(@NonNull FlushMode mode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FlushDB, new String[] {mode.toString()}, route, this::handleStringResponse);
     }
