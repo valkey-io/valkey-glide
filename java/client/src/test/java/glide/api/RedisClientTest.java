@@ -53,6 +53,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -81,6 +82,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
@@ -161,6 +163,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -243,6 +246,7 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
@@ -282,6 +286,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -6622,5 +6627,101 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void dump_returns_success() {
+        // setup
+        byte[] key = "testKey".getBytes();
+        byte[] value = "value".getBytes();
+        List<byte[]> arguments = List.of(key);
+
+        CompletableFuture<byte[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<byte[]>submitNewCommand(eq(Dump), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<byte[]> response = service.dump(key);
+        byte[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void restore_returns_success() {
+        // setup
+        byte[] key = "testKey".getBytes();
+        long ttl = 0L;
+        byte[] value = "value".getBytes();
+
+        List<byte[]> arguments = List.of(key, Long.toString(ttl).getBytes(), value);
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(Restore), argThat(new ByteArrayArgumentMatcher(arguments)), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.restore(key, ttl, value);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void restore_with_restoreOptions_returns_success() {
+        // setup
+        byte[] key = "testKey".getBytes();
+        long ttl = 0L;
+        byte[] value = "value".getBytes();
+        Optional<Long> idletime = Optional.of(10L);
+        Optional<Long> frequency = Optional.of(5L);
+
+        List<byte[]> arguments = new ArrayList<>();
+        arguments.add(key);
+        arguments.add(Long.toString(ttl).getBytes());
+        arguments.add(value);
+        arguments.add("REPLACE".getBytes());
+        arguments.add("ABSTTL".getBytes());
+        arguments.add("IDLETIME".getBytes());
+
+        // Add idletime if present
+        idletime.ifPresent(sec -> arguments.add(Long.toString(sec).getBytes()));
+
+        // Add FREQ and frequency if present
+        arguments.add("FREQ".getBytes());
+        frequency.ifPresent(freq -> arguments.add(Long.toString(freq).getBytes()));
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(Restore), argThat(new ByteArrayArgumentMatcher(arguments)), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response =
+                service.restore(
+                        key,
+                        ttl,
+                        value,
+                        RestoreOptions.builder().replace().absttl().idletime(10L).frequency(5L).build());
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
     }
 }

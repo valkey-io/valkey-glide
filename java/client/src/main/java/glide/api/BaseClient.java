@@ -30,6 +30,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
@@ -95,6 +96,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -182,6 +184,7 @@ import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
@@ -2023,4 +2026,27 @@ public abstract class BaseClient
         }
         return o;
     }
+
+    @Override
+    public CompletableFuture<byte[]> dump(@NonNull byte[] key) {
+        List<byte[]> arguments = List.of(key);
+        return commandManager.submitNewCommand(Dump, arguments, this::handleBytesOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> restore(@NonNull byte[] key, long ttl, @NonNull byte[] value) {
+        List<byte[]> arguments = List.of(key, Long.toString(ttl).getBytes(), value);
+        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> restore(
+        @NonNull byte[] key,
+        long ttl,
+        @NonNull byte[] value,
+        @NonNull RestoreOptions restoreOptions) {
+        List<byte[]> arguments = restoreOptions.toArgs(key, ttl, value);
+        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
+    }
+
 }
