@@ -86,7 +86,7 @@ jobs:
                   redis-version: ${{ matrix.redis }}
 
             - name: Create secret key ring file
-              working-directory: java
+              working-directory: java/client
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
               run: echo "$SECRING_GPG" > "secring.gpg"
