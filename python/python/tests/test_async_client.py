@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import math
 import time
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, Union, cast
+from typing import Any, Dict, List, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
@@ -51,15 +52,18 @@ from glide.async_commands.sorted_set import (
     GeoUnit,
     InfBound,
     LexBoundary,
-    Limit,
-    OrderBy,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
 )
-from glide.config import ClusterClientConfiguration, ProtocolVersion, RedisCredentials
+from glide.config import (
+    ClusterClientConfiguration,
+    ProtocolVersion,
+    RedisClientConfiguration,
+    RedisCredentials,
+)
 from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from glide.routes import (
@@ -5888,30 +5892,75 @@ class TestPubSub:
         MESSAGE = "test-message"
         PATTERN = "*"
 
-        publishing_client: RedisClusterClient = await create_client(
+        publishing_client: RedisClient = await create_client(
             request, cluster_mode=False
         )
 
-        standalone_mode_pubsub: ClusterClientConfiguration.PubSubSubscriptions = {}
-        standalone_mode_pubsub[ClusterClientConfiguration.PubSubChannelModes.Exact] = {
-            CHANNEL_NAME
-        }
-        standalone_mode_pubsub[
-            ClusterClientConfiguration.PubSubChannelModes.Pattern
-        ] = {PATTERN}
+        standalone_mode_pubsub = RedisClientConfiguration.PubSubSubscriptions(
+            channels_and_patterns={
+                RedisClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME},
+                RedisClientConfiguration.PubSubChannelModes.Pattern: {PATTERN},
+            },
+            callback=None,
+            context=None,
+        )
 
-        listening_client = await create_client(
-            request, cluster_mode=False, standalone_mode_pubsub=standalone_mode_pubsub
+        # will be used with get_pubsub_message
+        listening_client_async = await create_client(
+            request,
+            cluster_mode=False,
+            standalone_mode_pubsub=copy.deepcopy(standalone_mode_pubsub),
+        )
+
+        listening_client_try = await create_client(
+            request,
+            cluster_mode=False,
+            standalone_mode_pubsub=copy.deepcopy(standalone_mode_pubsub),
+        )
+
+        async_messages: List[RedisClient.PubSubMsg] = []
+        try_messages: List[RedisClient.PubSubMsg] = []
+        callback_messages: List[RedisClient.PubSubMsg] = []
+
+        def new_message(msg: RedisClient.PubSubMsg, context: Any):
+            received_messages: List[RedisClient.PubSubMsg] = context
+            received_messages.append(msg)
+
+        # create callback client
+        standalone_mode_pubsub_with_callback = copy.deepcopy(standalone_mode_pubsub)
+        standalone_mode_pubsub_with_callback.callback = new_message
+        standalone_mode_pubsub_with_callback.context = callback_messages
+        _ = await create_client(
+            request,
+            cluster_mode=False,
+            standalone_mode_pubsub=standalone_mode_pubsub_with_callback,
         )
 
         await publishing_client.publish(MESSAGE, CHANNEL_NAME)
         # allow the message to propagate
-        await asyncio.sleep(1)
+        await asyncio.sleep(3)
+
+        # get messages explicitly
+        for i in range(2):
+            async_messages.append(await listening_client_async.get_pubsub_message())
+            try_messages.append(listening_client_try.try_get_pubsub_message())
+
+        # assert no more messages by try_get_pubsub_message
+        assert listening_client_try.try_get_pubsub_message() is None
+
+        # assert 2 messages are received
+        assert len(async_messages) == 2
+        assert len(try_messages) == 2
+        assert len(callback_messages) == 2
+
+        # assert all api flavors produced the the same messages
+        assert async_messages == try_messages
+        assert async_messages == callback_messages
 
         pattern_cnt = 0
         pattern = None
-        for _ in range(2):
-            pubsub_msg = await listening_client.get_pubsub_message()
+        for i in range(2):
+            pubsub_msg = async_messages[i]
             assert pubsub_msg.channel == CHANNEL_NAME
             assert pubsub_msg.message == MESSAGE
             if pubsub_msg.pattern:
@@ -5931,12 +5980,15 @@ class TestPubSub:
         )
         test_sharded = not await check_if_server_version_lt(publishing_client, "7.0.0")
 
-        cluster_mode_pubsub: ClusterClientConfiguration.PubSubSubscriptions = {}
-        cluster_mode_pubsub[ClusterClientConfiguration.PubSubChannelModes.Exact] = {
-            CHANNEL_NAME
-        }
+        cluster_mode_pubsub = ClusterClientConfiguration.PubSubSubscriptions(
+            channels_and_patterns={
+                ClusterClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}
+            },
+            callback=None,
+            context=None,
+        )
         if test_sharded:
-            cluster_mode_pubsub[
+            cluster_mode_pubsub.channels_and_patterns[
                 ClusterClientConfiguration.PubSubChannelModes.Sharded
             ] = {SHARDED_CHANNEL_NAME}
 
