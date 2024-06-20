@@ -90,7 +90,7 @@ jobs:
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
               run: |
-                  echo $SECRING_GPG | base64 -d > "secring.gpg"
+                  echo $SECRING_GPG > "secring.gpg"
                   cat secring.gpg
 
             - name: Build java client
