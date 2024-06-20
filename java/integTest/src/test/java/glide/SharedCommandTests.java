@@ -8,6 +8,7 @@ import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
@@ -30,6 +31,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
@@ -326,6 +328,29 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void set_get_binary_data(BaseClient client) {
+        GlideString key = gs("set_get_binary_data_key");
+        byte[] binvalue = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        assertEquals(client.set(key, gs(binvalue)).get(), "OK");
+        GlideString data = client.get(key).get();
+        assertArrayEquals(data.getBytes(), binvalue);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void set_get_binary_data_with_options(BaseClient client) {
+        SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_DOES_NOT_EXIST).build();
+        GlideString key = gs("set_get_binary_data_with_options");
+        byte[] binvalue = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        assertEquals(client.set(key, gs(binvalue), options).get(), "OK");
+        GlideString data = client.get(key).get();
+        assertArrayEquals(data.getBytes(), binvalue);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void set_only_if_does_not_exists_existing_key(BaseClient client) {
         String key = "set_only_if_does_not_exists_existing_key";
         SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_DOES_NOT_EXIST).build();
@@ -420,6 +445,23 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new String[] {value, value, null, value},
                 client.mget(new String[] {key1, key2, nonExisting, key3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void mset_mget_binary(BaseClient client) {
+        // keys are from different slots
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> keyValueMap = Map.of(key1, value, key2, value, key3, value);
+
+        assertEquals(OK, client.mset(keyValueMap).get());
+        assertArrayEquals(
+                new GlideString[] {gs(value), gs(value), gs(value)},
+                client.mget(new GlideString[] {gs(key1), gs(key2), gs(key3)}).get());
     }
 
     @SneakyThrows
@@ -745,6 +787,25 @@ public class SharedCommandTests {
         assertEquals(2, client.hset(key, fieldValueMap).get());
         assertEquals(fieldValueMap, client.hgetall(key).get());
         assertEquals(Map.of(), client.hgetall("non_existing_key").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hgetall_binary_api(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<String, String> fieldValueMapStrings =
+                Map.of(field1.getString(), value.getString(), field2.getString(), value.getString());
+        HashMap<GlideString, GlideString> fieldValueMap =
+                new HashMap<>(Map.of(field1, value, field2, value));
+
+        assertEquals(2, client.hset(key.getString(), fieldValueMapStrings).get());
+        Map<GlideString, GlideString> allItems = client.hgetall(key).get();
+        assertEquals(value, allItems.get(field1));
+        assertEquals(value, allItems.get(field2));
     }
 
     @SneakyThrows
@@ -4731,9 +4792,9 @@ public class SharedCommandTests {
         // First bit is flipped to 1 and throws 'utf-8' codec can't decode byte 0x9e in position 0:
         // invalid start byte
         // TODO: update once fix is implemented for https://github.com/aws/glide-for-redis/issues/1447
-        // ExecutionException executionException =
-        //        assertThrows(ExecutionException.class, () -> client.get(destination).get());
-        // assertTrue(executionException.getCause() instanceof RuntimeException);
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.get(destination).get());
+        assertTrue(executionException.getCause() instanceof RuntimeException);
         assertEquals(0, client.setbit(key1, 0, 1).get());
         assertEquals(1L, client.bitop(BitwiseOperation.NOT, destination, new String[] {key1}).get());
         assertEquals("\u001e", client.get(destination).get());
@@ -4751,7 +4812,7 @@ public class SharedCommandTests {
 
         // Exception thrown due to the key holding a value with the wrong type
         assertEquals(1, client.sadd(emptyKey1, new String[] {value1}).get());
-        ExecutionException executionException =
+        executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.bitop(BitwiseOperation.AND, destination, new String[] {emptyKey1}).get());
