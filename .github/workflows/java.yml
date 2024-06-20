@@ -89,11 +89,15 @@ jobs:
               working-directory: java/client
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
-              run: echo "$SECRING_GPG" > "secring.gpg"
+              run: |
+                  echo $SECRING_GPG | base64 -d > "secring.gpg"
+                  cat secring.gpg
 
             - name: Build java client
               working-directory: java
-              run: ./gradlew --continue build -Psigning.secretKeyRingFile=secring.gpg -Psigning.password=${{ secrets.GPG_PASSWORD }} -Psigning.keyId=${{ secrets.GPG_ID }}
+              run: |
+                  cat client/secring.gpg
+                  ./gradlew --continue build -Psigning.secretKeyRingFile=secring.gpg -Psigning.password=${{ secrets.GPG_PASSWORD }} -Psigning.keyId=${{ secrets.GPG_ID }}
 
             - name: Ensure no skipped files by linter
               working-directory: java
