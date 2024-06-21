@@ -1875,7 +1875,7 @@ class BaseTransaction:
                 - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
                 - Use `MaxId` to end with the maximum available ID.
             count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
-                By default, if `count` is not provided, all stream entries in the range will be returned.
+                If `count` is not provided, all stream entries in the range will be returned.
 
         Command response:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
