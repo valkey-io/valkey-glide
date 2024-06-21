@@ -601,7 +601,7 @@ public class RedisClusterClient extends BaseClient
                 route,
                 response ->
                         route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleGlideStringResponse(response).getBytes())
+                                ? ClusterValue.ofSingleValue(handleBytesOrNullResponse(response))
                                 : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
     }
 
