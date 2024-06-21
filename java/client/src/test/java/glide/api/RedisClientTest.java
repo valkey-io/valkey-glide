@@ -12,6 +12,7 @@ import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
@@ -33,6 +34,8 @@ import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_RE
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
@@ -79,6 +82,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
@@ -101,6 +105,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
+import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -159,6 +164,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -173,6 +179,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
 import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
@@ -185,6 +192,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
+import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -194,6 +202,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
 import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
@@ -223,11 +232,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.Transaction;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -239,6 +250,7 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
@@ -267,6 +279,7 @@ import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
@@ -520,6 +533,58 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void getex() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<String>submitNewCommand(eq(GetEx), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.getex(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    private static List<Arguments> getGetExOptions() {
+        return List.of(
+                Arguments.of(
+                        // seconds
+                        "test_with_seconds", GetExOptions.Seconds(10L), new String[] {"EX", "10"}),
+                Arguments.of(
+                        // milliseconds
+                        "test_with_milliseconds",
+                        GetExOptions.Milliseconds(1000L),
+                        new String[] {"PX", "1000"}),
+                Arguments.of(
+                        // unix seconds
+                        "test_with_unix_seconds", GetExOptions.UnixSeconds(10L), new String[] {"EXAT", "10"}),
+                Arguments.of(
+                        // unix milliseconds
+                        "test_with_unix_milliseconds",
+                        GetExOptions.UnixMilliseconds(1000L),
+                        new String[] {"PXAT", "1000"}),
+                Arguments.of(
+                        // persist
+                        "test_with_persist", GetExOptions.Persist(), new String[] {"PERSIST"}));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("getGetExOptions")
+    public void getex_options(String testName, GetExOptions options, String[] expectedArgs) {
+        assertArrayEquals(
+                expectedArgs, options.toArgs(), "Expected " + testName + " toArgs() to pass.");
+        System.out.println(expectedArgs);
     }
 
     @SneakyThrows
@@ -3950,67 +4015,67 @@ public class RedisClientTest {
                         // no TRIM option
                         "test_xadd_no_trim",
                         StreamAddOptions.builder().id("id").makeStream(Boolean.FALSE).build(),
-                        new String[] {NO_MAKE_STREAM_REDIS_API, "id"},
-                        Arguments.of(
-                                // MAXLEN with LIMIT
-                                "test_xadd_maxlen_with_limit",
-                                StreamAddOptions.builder()
-                                        .id("id")
-                                        .makeStream(Boolean.TRUE)
-                                        .trim(new MaxLen(5L, 10L))
-                                        .build(),
-                                new String[] {
-                                    TRIM_MAXLEN_REDIS_API,
-                                    TRIM_EXACT_REDIS_API,
-                                    Long.toString(5L),
-                                    TRIM_LIMIT_REDIS_API,
-                                    Long.toString(10L),
-                                    "id"
-                                }),
-                        Arguments.of(
-                                // MAXLEN with non exact match
-                                "test_xadd_maxlen_with_non_exact_match",
-                                StreamAddOptions.builder()
-                                        .makeStream(Boolean.FALSE)
-                                        .trim(new MaxLen(false, 2L))
-                                        .build(),
-                                new String[] {
-                                    NO_MAKE_STREAM_REDIS_API,
-                                    TRIM_MAXLEN_REDIS_API,
-                                    TRIM_NOT_EXACT_REDIS_API,
-                                    Long.toString(2L),
-                                    "*"
-                                }),
-                        Arguments.of(
-                                // MIN ID with LIMIT
-                                "test_xadd_minid_with_limit",
-                                StreamAddOptions.builder()
-                                        .id("id")
-                                        .makeStream(Boolean.TRUE)
-                                        .trim(new MinId("testKey", 10L))
-                                        .build(),
-                                new String[] {
-                                    TRIM_MINID_REDIS_API,
-                                    TRIM_EXACT_REDIS_API,
-                                    Long.toString(5L),
-                                    TRIM_LIMIT_REDIS_API,
-                                    Long.toString(10L),
-                                    "id"
-                                }),
-                        Arguments.of(
-                                // MIN ID with non exact match
-                                "test_xadd_minid_with_non_exact_match",
-                                StreamAddOptions.builder()
-                                        .makeStream(Boolean.FALSE)
-                                        .trim(new MinId(false, "testKey"))
-                                        .build(),
-                                new String[] {
-                                    NO_MAKE_STREAM_REDIS_API,
-                                    TRIM_MINID_REDIS_API,
-                                    TRIM_NOT_EXACT_REDIS_API,
-                                    Long.toString(5L),
-                                    "*"
-                                })));
+                        new String[] {NO_MAKE_STREAM_REDIS_API, "id"}),
+                Arguments.of(
+                        // MAXLEN with LIMIT
+                        "test_xadd_maxlen_with_limit",
+                        StreamAddOptions.builder()
+                                .id("id")
+                                .makeStream(Boolean.TRUE)
+                                .trim(new MaxLen(5L, 10L))
+                                .build(),
+                        new String[] {
+                            TRIM_MAXLEN_REDIS_API,
+                            TRIM_NOT_EXACT_REDIS_API,
+                            Long.toString(5L),
+                            TRIM_LIMIT_REDIS_API,
+                            Long.toString(10L),
+                            "id"
+                        }),
+                Arguments.of(
+                        // MAXLEN with non exact match
+                        "test_xadd_maxlen_with_non_exact_match",
+                        StreamAddOptions.builder()
+                                .makeStream(Boolean.FALSE)
+                                .trim(new MaxLen(false, 2L))
+                                .build(),
+                        new String[] {
+                            NO_MAKE_STREAM_REDIS_API,
+                            TRIM_MAXLEN_REDIS_API,
+                            TRIM_NOT_EXACT_REDIS_API,
+                            Long.toString(2L),
+                            "*"
+                        }),
+                Arguments.of(
+                        // MIN ID with LIMIT
+                        "test_xadd_minid_with_limit",
+                        StreamAddOptions.builder()
+                                .id("id")
+                                .makeStream(Boolean.TRUE)
+                                .trim(new MinId("testKey", 10L))
+                                .build(),
+                        new String[] {
+                            TRIM_MINID_REDIS_API,
+                            TRIM_NOT_EXACT_REDIS_API,
+                            "testKey",
+                            TRIM_LIMIT_REDIS_API,
+                            Long.toString(10L),
+                            "id"
+                        }),
+                Arguments.of(
+                        // MIN ID with non-exact match
+                        "test_xadd_minid_with_non_exact_match",
+                        StreamAddOptions.builder()
+                                .makeStream(Boolean.FALSE)
+                                .trim(new MinId(false, "testKey"))
+                                .build(),
+                        new String[] {
+                            NO_MAKE_STREAM_REDIS_API,
+                            TRIM_MINID_REDIS_API,
+                            TRIM_NOT_EXACT_REDIS_API,
+                            "testKey",
+                            "*"
+                        }));
     }
 
     @SneakyThrows
@@ -4018,7 +4083,8 @@ public class RedisClientTest {
     @MethodSource("getStreamAddOptions")
     public void xadd_with_options_to_arguments(
             String testName, StreamAddOptions options, String[] expectedArgs) {
-        assertArrayEquals(expectedArgs, options.toArgs());
+        assertArrayEquals(
+                expectedArgs, options.toArgs(), "Expected " + testName + " toArgs() to pass.");
     }
 
     @SneakyThrows
@@ -4508,6 +4574,129 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xreadgroup_multiple_keys() {
+        // setup
+        String keyOne = "one";
+        String streamIdOne = "id-one";
+        String keyTwo = "two";
+        String streamIdTwo = "id-two";
+        String groupName = "testGroup";
+        String consumerName = "consumerGroup";
+        String[][] fieldValues = {{"field", "value"}};
+        Map<String, Map<String, String[][]>> completedResult = new LinkedHashMap<>();
+        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        String[] arguments = {
+            READ_GROUP_REDIS_API,
+            groupName,
+            consumerName,
+            READ_STREAMS_REDIS_API,
+            keyOne,
+            keyTwo,
+            streamIdOne,
+            streamIdTwo
+        };
+
+        CompletableFuture<Map<String, Map<String, String[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+                        eq(XReadGroup), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        Map<String, String> keysAndIds = new LinkedHashMap<>();
+        keysAndIds.put(keyOne, streamIdOne);
+        keysAndIds.put(keyTwo, streamIdTwo);
+        CompletableFuture<Map<String, Map<String, String[][]>>> response =
+                service.xreadgroup(keysAndIds, groupName, consumerName);
+        Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xreadgroup_with_options() {
+        // setup
+        String keyOne = "one";
+        String streamIdOne = "id-one";
+        Long block = 2L;
+        Long count = 10L;
+        String groupName = "testGroup";
+        String consumerName = "consumerGroup";
+        String[][] fieldValues = {{"field", "value"}};
+        Map<String, Map<String, String[][]>> completedResult =
+                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+        String[] arguments = {
+            READ_GROUP_REDIS_API,
+            groupName,
+            consumerName,
+            READ_COUNT_REDIS_API,
+            count.toString(),
+            READ_BLOCK_REDIS_API,
+            block.toString(),
+            READ_NOACK_REDIS_API,
+            READ_STREAMS_REDIS_API,
+            keyOne,
+            streamIdOne
+        };
+
+        CompletableFuture<Map<String, Map<String, String[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Map<String, String[][]>>>submitNewCommand(
+                        eq(XReadGroup), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Map<String, String[][]>>> response =
+                service.xreadgroup(
+                        Map.of(keyOne, streamIdOne),
+                        groupName,
+                        consumerName,
+                        StreamReadGroupOptions.builder().block(block).count(count).noack().build());
+        Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xack_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String[] ids = new String[] {"testId"};
+        String[] arguments = concatenateArrays(new String[] {key, groupName}, ids);
+        Long mockResult = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(XAck), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xack(key, groupName, ids);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
     }
 
     @SneakyThrows
@@ -6497,5 +6686,119 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sunion_returns_success() {
+        // setup
+        String[] keys = new String[] {"key1", "key2"};
+        Set<String> value = Set.of("1", "2");
+        CompletableFuture<Set<String>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Set<String>>submitNewCommand(eq(SUnion), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Set<String>> response = service.sunion(keys);
+        Set<String> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void dump_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        byte[] value = "value".getBytes();
+        GlideString[] arguments = new GlideString[] {key};
+
+        CompletableFuture<byte[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<byte[]>submitNewCommand(eq(Dump), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<byte[]> response = service.dump(key);
+        byte[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void restore_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long ttl = 0L;
+        byte[] value = "value".getBytes();
+
+        GlideString[] arg = new GlideString[] {key, gs(Long.toString(ttl).getBytes()), gs(value)};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Restore), eq(arg), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.restore(key, ttl, value);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void restore_with_restoreOptions_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long ttl = 0L;
+        byte[] value = "value".getBytes();
+        Long idletime = 10L;
+        Long frequency = 5L;
+
+        GlideString[] arg =
+                new GlideString[] {
+                    key,
+                    gs(Long.toString(ttl)),
+                    gs(value),
+                    gs("REPLACE"),
+                    gs("ABSTTL"),
+                    gs("IDLETIME"),
+                    gs("10"),
+                    gs("FREQ"),
+                    gs("5")
+                };
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Restore), eq(arg), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response =
+                service.restore(
+                        key,
+                        ttl,
+                        value,
+                        RestoreOptions.builder().replace().absttl().idletime(10L).frequency(5L).build());
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
     }
 }

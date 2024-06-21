@@ -3,28 +3,41 @@
 from __future__ import annotations
 
 import asyncio
+import copy
 import math
 import time
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, Union, cast
+from typing import Any, Dict, List, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
-from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import (
+    BitFieldGet,
+    BitFieldIncrBy,
+    BitFieldOverflow,
+    BitFieldSet,
+    BitmapIndexType,
+    BitOffset,
+    BitOffsetMultiplier,
+    BitOverflowControl,
+    BitwiseOperation,
+    OffsetOptions,
+    SignedEncoding,
+    UnsignedEncoding,
+)
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
+    ExpiryGetEx,
     ExpirySet,
     ExpiryType,
+    ExpiryTypeGetEx,
     FlushMode,
     InfBound,
     InfoSection,
     InsertPosition,
-    StreamAddOptions,
-    TrimByMaxLen,
-    TrimByMinId,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -36,15 +49,27 @@ from glide.async_commands.sorted_set import (
     GeoUnit,
     InfBound,
     LexBoundary,
-    Limit,
-    OrderBy,
     RangeByIndex,
     RangeByLex,
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
 )
-from glide.config import ClusterClientConfiguration, ProtocolVersion, RedisCredentials
+from glide.async_commands.stream import (
+    ExclusiveIdBound,
+    IdBound,
+    MaxId,
+    MinId,
+    StreamAddOptions,
+    TrimByMaxLen,
+    TrimByMinId,
+)
+from glide.config import (
+    ClusterClientConfiguration,
+    ProtocolVersion,
+    RedisClientConfiguration,
+    RedisCredentials,
+)
 from glide.constants import OK, TResult
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from glide.routes import (
@@ -4076,6 +4101,41 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zrevrank(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        string_key = get_random_string(10)
+        member_scores = {"one": 1.0, "two": 2.0, "three": 3.0}
+
+        assert await redis_client.zadd(key, member_scores) == 3
+        assert await redis_client.zrevrank(key, "three") == 0
+        assert await redis_client.zrevrank(key, "non_existing_member") is None
+        assert (
+            await redis_client.zrevrank(non_existing_key, "non_existing_member") is None
+        )
+
+        if not check_if_server_version_lt(redis_client, "7.2.0"):
+            assert await redis_client.zrevrank_withscore(key, "one") == [2, 1.0]
+            assert (
+                await redis_client.zrevrank_withscore(key, "non_existing_member")
+                is None
+            )
+            assert (
+                await redis_client.zrevrank_withscore(
+                    non_existing_key, "non_existing_member"
+                )
+                is None
+            )
+
+        # key exists, but it is not a sorted set
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zrevrank(string_key, "member")
+        with pytest.raises(RequestError):
+            await redis_client.zrevrank_withscore(string_key, "member")
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zdiff(self, redis_client: TRedisClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
@@ -4714,6 +4774,110 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xdel(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        stream_id1 = "0-1"
+        stream_id2 = "0-2"
+        stream_id3 = "0-3"
+
+        assert (
+            await redis_client.xadd(
+                key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id1)
+            )
+            == stream_id1
+        )
+        assert (
+            await redis_client.xadd(
+                key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id2)
+            )
+            == stream_id2
+        )
+        assert await redis_client.xlen(key1) == 2
+
+        # deletes one stream id, and ignores anything invalid
+        assert await redis_client.xdel(key1, [stream_id1, stream_id3]) == 1
+        assert await redis_client.xdel(non_existing_key, [stream_id3]) == 0
+
+        # invalid argument - id list should not be empty
+        with pytest.raises(RequestError):
+            await redis_client.xdel(key1, [])
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xdel(string_key, [stream_id3])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xrange(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        string_key = get_random_string(10)
+        stream_id1 = "0-1"
+        stream_id2 = "0-2"
+        stream_id3 = "0-3"
+
+        assert (
+            await redis_client.xadd(
+                key, [("f1", "v1")], StreamAddOptions(id=stream_id1)
+            )
+            == stream_id1
+        )
+        assert (
+            await redis_client.xadd(
+                key, [("f2", "v2")], StreamAddOptions(id=stream_id2)
+            )
+            == stream_id2
+        )
+        assert await redis_client.xlen(key) == 2
+
+        # get everything from the stream
+        assert await redis_client.xrange(key, MinId(), MaxId()) == {
+            stream_id1: [["f1", "v1"]],
+            stream_id2: [["f2", "v2"]],
+        }
+
+        # returns empty mapping if + before -
+        assert await redis_client.xrange(key, MaxId(), MinId()) == {}
+
+        assert (
+            await redis_client.xadd(
+                key, [("f3", "v3")], StreamAddOptions(id=stream_id3)
+            )
+            == stream_id3
+        )
+        # get the newest entry
+        assert await redis_client.xrange(
+            key, ExclusiveIdBound(stream_id2), ExclusiveIdBound.from_timestamp(5), 1
+        ) == {stream_id3: [["f3", "v3"]]}
+
+        # xrange against an emptied stream
+        assert await redis_client.xdel(key, [stream_id1, stream_id2, stream_id3]) == 3
+        assert await redis_client.xrange(key, MinId(), MaxId(), 10) == {}
+
+        assert await redis_client.xrange(non_existing_key, MinId(), MaxId()) == {}
+
+        # count value < 1 returns None
+        assert await redis_client.xrange(key, MinId(), MaxId(), 0) is None
+        assert await redis_client.xrange(key, MinId(), MaxId(), -1) is None
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo")
+        with pytest.raises(RequestError):
+            await redis_client.xrange(string_key, MinId(), MaxId())
+
+        # invalid start bound
+        with pytest.raises(RequestError):
+            await redis_client.xrange(key, IdBound("not_a_stream_id"), MaxId())
+
+        # invalid end bound
+        with pytest.raises(RequestError):
+            await redis_client.xrange(key, MinId(), IdBound("not_a_stream_id"))
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_pfadd(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.pfadd(key, []) == 1
@@ -5051,6 +5215,205 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bitfield(self, redis_client: TRedisClient):
+        key1 = get_random_string(10)
+        key2 = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        set_key = get_random_string(10)
+        foobar = "foobar"
+        u2 = UnsignedEncoding(2)
+        u7 = UnsignedEncoding(7)
+        i3 = SignedEncoding(3)
+        i8 = SignedEncoding(8)
+        offset1 = BitOffset(1)
+        offset5 = BitOffset(5)
+        offset_multiplier4 = BitOffsetMultiplier(4)
+        offset_multiplier8 = BitOffsetMultiplier(8)
+        overflow_set = BitFieldSet(u2, offset1, -10)
+        overflow_get = BitFieldGet(u2, offset1)
+
+        # binary value: 01100110 01101111 01101111 01100010 01100001 01110010
+        assert await redis_client.set(key1, foobar) == OK
+
+        # SET tests
+        assert await redis_client.bitfield(
+            key1,
+            [
+                # binary value becomes: 0(10)00110 01101111 01101111 01100010 01100001 01110010
+                BitFieldSet(u2, offset1, 2),
+                # binary value becomes: 01000(011) 01101111 01101111 01100010 01100001 01110010
+                BitFieldSet(i3, offset5, 3),
+                # binary value becomes: 01000011 01101111 01101111 0110(0010 010)00001 01110010
+                BitFieldSet(u7, offset_multiplier4, 18),
+                # addressing with SET or INCRBY bits outside the current string length will enlarge the string,
+                # zero-padding it, as needed, for the minimal length needed, according to the most far bit touched.
+                #
+                # binary value becomes:
+                # 01000011 01101111 01101111 01100010 01000001 01110010 00000000 00000000 (00010100)
+                BitFieldSet(i8, offset_multiplier8, 20),
+                BitFieldGet(u2, offset1),
+                BitFieldGet(i3, offset5),
+                BitFieldGet(u7, offset_multiplier4),
+                BitFieldGet(i8, offset_multiplier8),
+            ],
+        ) == [3, -2, 19, 0, 2, 3, 18, 20]
+
+        # INCRBY tests
+        assert await redis_client.bitfield(
+            key1,
+            [
+                # binary value becomes:
+                # 0(11)00011 01101111 01101111 01100010 01000001 01110010 00000000 00000000 00010100
+                BitFieldIncrBy(u2, offset1, 1),
+                # binary value becomes:
+                # 01100(101) 01101111 01101111 01100010 01000001 01110010 00000000 00000000 00010100
+                BitFieldIncrBy(i3, offset5, 2),
+                # binary value becomes:
+                # 01100101 01101111 01101111 0110(0001 111)00001 01110010 00000000 00000000 00010100
+                BitFieldIncrBy(u7, offset_multiplier4, -3),
+                # binary value becomes:
+                # 01100101 01101111 01101111 01100001 11100001 01110010 00000000 00000000 (00011110)
+                BitFieldIncrBy(i8, offset_multiplier8, 10),
+            ],
+        ) == [3, -3, 15, 30]
+
+        # OVERFLOW WRAP is used by default if no OVERFLOW is specified
+        assert await redis_client.bitfield(
+            key2,
+            [
+                overflow_set,
+                BitFieldOverflow(BitOverflowControl.WRAP),
+                overflow_set,
+                overflow_get,
+            ],
+        ) == [0, 2, 2]
+
+        # OVERFLOW affects only SET or INCRBY after OVERFLOW subcommand
+        assert await redis_client.bitfield(
+            key2,
+            [
+                overflow_set,
+                BitFieldOverflow(BitOverflowControl.SAT),
+                overflow_set,
+                overflow_get,
+                BitFieldOverflow(BitOverflowControl.FAIL),
+                overflow_set,
+            ],
+        ) == [2, 2, 3, None]
+
+        # if the key doesn't exist, the operation is performed as though the missing value was a string with all bits
+        # set to 0.
+        assert await redis_client.bitfield(
+            non_existing_key, [BitFieldSet(UnsignedEncoding(2), BitOffset(3), 2)]
+        ) == [0]
+
+        # empty subcommands argument returns an empty list
+        assert await redis_client.bitfield(key1, []) == []
+
+        # invalid argument - offset must be >= 0
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                key1, [BitFieldSet(UnsignedEncoding(5), BitOffset(-1), 1)]
+            )
+
+        # invalid argument - encoding size must be > 0
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                key1, [BitFieldSet(UnsignedEncoding(0), BitOffset(1), 1)]
+            )
+
+        # invalid argument - unsigned encoding size must be < 64
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                key1, [BitFieldSet(UnsignedEncoding(64), BitOffset(1), 1)]
+            )
+
+        # invalid argument - signed encoding size must be < 65
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                key1, [BitFieldSet(SignedEncoding(65), BitOffset(1), 1)]
+            )
+
+        # key exists, but it is not a string
+        assert await redis_client.sadd(set_key, [foobar]) == 1
+        with pytest.raises(RequestError):
+            await redis_client.bitfield(
+                set_key, [BitFieldSet(SignedEncoding(3), BitOffset(1), 2)]
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_bitfield_read_only(self, redis_client: TRedisClient):
+        min_version = "6.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        set_key = get_random_string(10)
+        foobar = "foobar"
+        unsigned_offset_get = BitFieldGet(UnsignedEncoding(2), BitOffset(1))
+
+        # binary value: 01100110 01101111 01101111 01100010 01100001 01110010
+        assert await redis_client.set(key, foobar) == OK
+        assert await redis_client.bitfield_read_only(
+            key,
+            [
+                # Get value in: 0(11)00110 01101111 01101111 01100010 01100001 01110010 00010100
+                unsigned_offset_get,
+                # Get value in: 01100(110) 01101111 01101111 01100010 01100001 01110010 00010100
+                BitFieldGet(SignedEncoding(3), BitOffset(5)),
+                # Get value in: 01100110 01101111 01101(111 0110)0010 01100001 01110010 00010100
+                BitFieldGet(UnsignedEncoding(7), BitOffsetMultiplier(3)),
+                # Get value in: 01100110 01101111 (01101111) 01100010 01100001 01110010 00010100
+                BitFieldGet(SignedEncoding(8), BitOffsetMultiplier(2)),
+            ],
+        ) == [3, -2, 118, 111]
+        # offset is greater than current length of string: the operation is performed like the missing part all consists
+        # of bits set to 0.
+        assert await redis_client.bitfield_read_only(
+            key, [BitFieldGet(UnsignedEncoding(3), BitOffset(100))]
+        ) == [0]
+        # similarly, if the key doesn't exist, the operation is performed as though the missing value was a string with
+        # all bits set to 0.
+        assert await redis_client.bitfield_read_only(
+            non_existing_key, [unsigned_offset_get]
+        ) == [0]
+
+        # empty subcommands argument returns an empty list
+        assert await redis_client.bitfield_read_only(key, []) == []
+
+        # invalid argument - offset must be >= 0
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(
+                key, [BitFieldGet(UnsignedEncoding(5), BitOffset(-1))]
+            )
+
+        # invalid argument - encoding size must be > 0
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(
+                key, [BitFieldGet(UnsignedEncoding(0), BitOffset(1))]
+            )
+
+        # invalid argument - unsigned encoding size must be < 64
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(
+                key, [BitFieldGet(UnsignedEncoding(64), BitOffset(1))]
+            )
+
+        # invalid argument - signed encoding size must be < 65
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(
+                key, [BitFieldGet(SignedEncoding(65), BitOffset(1))]
+            )
+
+        # key exists, but it is not a string
+        assert await redis_client.sadd(set_key, [foobar]) == 1
+        with pytest.raises(RequestError):
+            await redis_client.bitfield_read_only(set_key, [unsigned_offset_get])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_object_encoding(self, redis_client: TRedisClient):
         string_key = get_random_string(10)
         list_key = get_random_string(10)
@@ -5236,6 +5599,40 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+
+    async def test_getex(self, redis_client: TRedisClient):
+        min_version = "6.2.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        value = get_random_string(10)
+
+        assert await redis_client.set(key1, value) == OK
+        assert await redis_client.getex(non_existing_key) is None
+        assert await redis_client.getex(key1) == value
+        assert await redis_client.ttl(key1) == -1
+
+        # setting expiration timer
+        assert (
+            await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 50))
+            == value
+        )
+        assert await redis_client.ttl(key1) != -1
+
+        # setting and clearing expiration timer
+        assert await redis_client.set(key1, value) == OK
+        assert (
+            await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.SEC, 10))
+            == value
+        )
+        assert (
+            await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
+            == value
+        )
+        assert await redis_client.ttl(key1) == -1      
+
     async def test_copy_no_database(self, redis_client: TRedisClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
@@ -5457,6 +5854,50 @@ class TestCommandsUnitTests:
         )
         assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
 
+    def test_get_expiry_cmd_args(self):
+        exp_sec = ExpiryGetEx(ExpiryTypeGetEx.SEC, 5)
+        assert exp_sec.get_cmd_args() == ["EX", "5"]
+
+        exp_sec_timedelta = ExpiryGetEx(ExpiryTypeGetEx.SEC, timedelta(seconds=5))
+        assert exp_sec_timedelta.get_cmd_args() == ["EX", "5"]
+
+        exp_millsec = ExpiryGetEx(ExpiryTypeGetEx.MILLSEC, 5)
+        assert exp_millsec.get_cmd_args() == ["PX", "5"]
+
+        exp_millsec_timedelta = ExpiryGetEx(
+            ExpiryTypeGetEx.MILLSEC, timedelta(seconds=5)
+        )
+        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
+
+        exp_millsec_timedelta = ExpiryGetEx(
+            ExpiryTypeGetEx.MILLSEC, timedelta(seconds=5)
+        )
+        assert exp_millsec_timedelta.get_cmd_args() == ["PX", "5000"]
+
+        exp_unix_sec = ExpiryGetEx(ExpiryTypeGetEx.UNIX_SEC, 1682575739)
+        assert exp_unix_sec.get_cmd_args() == ["EXAT", "1682575739"]
+
+        exp_unix_sec_datetime = ExpiryGetEx(
+            ExpiryTypeGetEx.UNIX_SEC,
+            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
+        )
+        assert exp_unix_sec_datetime.get_cmd_args() == ["EXAT", "1682639759"]
+
+        exp_unix_millisec = ExpiryGetEx(ExpiryTypeGetEx.UNIX_MILLSEC, 1682586559964)
+        assert exp_unix_millisec.get_cmd_args() == ["PXAT", "1682586559964"]
+
+        exp_unix_millisec_datetime = ExpiryGetEx(
+            ExpiryTypeGetEx.UNIX_MILLSEC,
+            datetime(2023, 4, 27, 23, 55, 59, 342380, timezone.utc),
+        )
+        assert exp_unix_millisec_datetime.get_cmd_args() == ["PXAT", "1682639759342"]
+
+        exp_persist = ExpiryGetEx(
+            ExpiryTypeGetEx.PERSIST,
+            None,
+        )
+        assert exp_persist.get_cmd_args() == ["PERSIST"]
+
     def test_expiry_raises_on_value_error(self):
         with pytest.raises(ValueError):
             ExpirySet(ExpiryType.SEC, 5.5)
@@ -5661,30 +6102,75 @@ class TestPubSub:
         MESSAGE = "test-message"
         PATTERN = "*"
 
-        publishing_client: RedisClusterClient = await create_client(
+        publishing_client: RedisClient = await create_client(
             request, cluster_mode=False
         )
 
-        standalone_mode_pubsub: ClusterClientConfiguration.PubSubSubscriptions = {}
-        standalone_mode_pubsub[ClusterClientConfiguration.PubSubChannelModes.Exact] = {
-            CHANNEL_NAME
-        }
-        standalone_mode_pubsub[
-            ClusterClientConfiguration.PubSubChannelModes.Pattern
-        ] = {PATTERN}
+        standalone_mode_pubsub = RedisClientConfiguration.PubSubSubscriptions(
+            channels_and_patterns={
+                RedisClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME},
+                RedisClientConfiguration.PubSubChannelModes.Pattern: {PATTERN},
+            },
+            callback=None,
+            context=None,
+        )
 
-        listening_client = await create_client(
-            request, cluster_mode=False, standalone_mode_pubsub=standalone_mode_pubsub
+        # will be used with get_pubsub_message
+        listening_client_async = await create_client(
+            request,
+            cluster_mode=False,
+            standalone_mode_pubsub=copy.deepcopy(standalone_mode_pubsub),
+        )
+
+        listening_client_try = await create_client(
+            request,
+            cluster_mode=False,
+            standalone_mode_pubsub=copy.deepcopy(standalone_mode_pubsub),
+        )
+
+        async_messages: List[RedisClient.PubSubMsg] = []
+        try_messages: List[RedisClient.PubSubMsg] = []
+        callback_messages: List[RedisClient.PubSubMsg] = []
+
+        def new_message(msg: RedisClient.PubSubMsg, context: Any):
+            received_messages: List[RedisClient.PubSubMsg] = context
+            received_messages.append(msg)
+
+        # create callback client
+        standalone_mode_pubsub_with_callback = copy.deepcopy(standalone_mode_pubsub)
+        standalone_mode_pubsub_with_callback.callback = new_message
+        standalone_mode_pubsub_with_callback.context = callback_messages
+        _ = await create_client(
+            request,
+            cluster_mode=False,
+            standalone_mode_pubsub=standalone_mode_pubsub_with_callback,
         )
 
         await publishing_client.publish(MESSAGE, CHANNEL_NAME)
         # allow the message to propagate
-        await asyncio.sleep(1)
+        await asyncio.sleep(3)
+
+        # get messages explicitly
+        for i in range(2):
+            async_messages.append(await listening_client_async.get_pubsub_message())
+            try_messages.append(listening_client_try.try_get_pubsub_message())
+
+        # assert no more messages by try_get_pubsub_message
+        assert listening_client_try.try_get_pubsub_message() is None
+
+        # assert 2 messages are received
+        assert len(async_messages) == 2
+        assert len(try_messages) == 2
+        assert len(callback_messages) == 2
+
+        # assert all api flavors produced the the same messages
+        assert async_messages == try_messages
+        assert async_messages == callback_messages
 
         pattern_cnt = 0
         pattern = None
-        for _ in range(2):
-            pubsub_msg = await listening_client.get_pubsub_message()
+        for i in range(2):
+            pubsub_msg = async_messages[i]
             assert pubsub_msg.channel == CHANNEL_NAME
             assert pubsub_msg.message == MESSAGE
             if pubsub_msg.pattern:
@@ -5704,12 +6190,15 @@ class TestPubSub:
         )
         test_sharded = not await check_if_server_version_lt(publishing_client, "7.0.0")
 
-        cluster_mode_pubsub: ClusterClientConfiguration.PubSubSubscriptions = {}
-        cluster_mode_pubsub[ClusterClientConfiguration.PubSubChannelModes.Exact] = {
-            CHANNEL_NAME
-        }
+        cluster_mode_pubsub = ClusterClientConfiguration.PubSubSubscriptions(
+            channels_and_patterns={
+                ClusterClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}
+            },
+            callback=None,
+            context=None,
+        )
         if test_sharded:
-            cluster_mode_pubsub[
+            cluster_mode_pubsub.channels_and_patterns[
                 ClusterClientConfiguration.PubSubChannelModes.Sharded
             ] = {SHARDED_CHANNEL_NAME}
 

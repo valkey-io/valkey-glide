@@ -1,19 +1,33 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 
-from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import (
+    BitEncoding,
+    BitFieldGet,
+    BitFieldIncrBy,
+    BitFieldOffset,
+    BitFieldOverflow,
+    BitFieldSet,
+    BitFieldSubCommands,
+    BitmapIndexType,
+    BitOffset,
+    BitOffsetMultiplier,
+    BitOverflowControl,
+    BitwiseOperation,
+    OffsetOptions,
+    SignedEncoding,
+    UnsignedEncoding,
+)
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
+    ExpiryGetEx,
     ExpirySet,
     ExpiryType,
+    ExpiryTypeGetEx,
     FlushMode,
     InfoSection,
     InsertPosition,
-    StreamAddOptions,
-    StreamTrimOptions,
-    TrimByMaxLen,
-    TrimByMinId,
     UpdateOptions,
 )
 from glide.async_commands.redis_modules import json
@@ -31,6 +45,17 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+)
+from glide.async_commands.stream import (
+    ExclusiveIdBound,
+    IdBound,
+    MaxId,
+    MinId,
+    StreamAddOptions,
+    StreamRangeBound,
+    StreamTrimOptions,
+    TrimByMaxLen,
+    TrimByMinId,
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
@@ -88,8 +113,21 @@ __all__ = [
     # Response
     "OK",
     # Commands
+    "BitEncoding",
+    "BitFieldGet",
+    "BitFieldIncrBy",
+    "BitFieldOffset",
+    "BitFieldOverflow",
+    "BitFieldSet",
+    "BitFieldSubCommands",
     "BitmapIndexType",
+    "BitOffset",
+    "BitOffsetMultiplier",
+    "BitOverflowControl",
     "BitwiseOperation",
+    "OffsetOptions",
+    "SignedEncoding",
+    "UnsignedEncoding",
     "Script",
     "ScoreBoundary",
     "ConditionalChange",
@@ -110,13 +148,17 @@ __all__ = [
     "LexBoundary",
     "Limit",
     "ListDirection",
-    "OffsetOptions",
     "RangeByIndex",
     "RangeByLex",
     "RangeByScore",
     "ScoreFilter",
     "OrderBy",
+    "ExclusiveIdBound",
+    "IdBound",
+    "MaxId",
+    "MinId",
     "StreamAddOptions",
+    "StreamRangeBound",
     "StreamTrimOptions",
     "TrimByMaxLen",
     "TrimByMinId",

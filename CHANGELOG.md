@@ -44,6 +44,11 @@
 * Python: Added TOUCH command ([#1582](https://github.com/aws/glide-for-redis/pull/1582))
 * Python: Added BITOP command ([#1596](https://github.com/aws/glide-for-redis/pull/1596))
 * Python: Added BITPOS command ([#1604](https://github.com/aws/glide-for-redis/pull/1604))
+* Python: Added GETEX command ([#1612](https://github.com/aws/glide-for-redis/pull/1612))
+* Python: Added BITFIELD and BITFIELD_RO commands ([#1615](https://github.com/aws/glide-for-redis/pull/1615))
+* Python: Added ZREVRANK command ([#1614](https://github.com/aws/glide-for-redis/pull/1614))
+* Python: Added XDEL command ([#1619](https://github.com/aws/glide-for-redis/pull/1619))
+* Python: Added XRANGE command ([#1624](https://github.com/aws/glide-for-redis/pull/1624))
 * Python: Added COPY command ([#1626](https://github.com/aws/glide-for-redis/pull/1626))
 
 ### Breaking Changes

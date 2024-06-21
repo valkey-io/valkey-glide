@@ -200,6 +200,9 @@ pub enum RequestType {
     XGroupCreateConsumer = 189,
     XGroupDelConsumer = 190,
     RandomKey = 191,
+    GetEx = 192,
+    Dump = 193,
+    Restore = 194,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -403,6 +406,9 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::XGroupCreateConsumer => RequestType::XGroupCreateConsumer,
             ProtobufRequestType::XGroupDelConsumer => RequestType::XGroupDelConsumer,
             ProtobufRequestType::RandomKey => RequestType::RandomKey,
+            ProtobufRequestType::GetEx => RequestType::GetEx,
+            ProtobufRequestType::Dump => RequestType::Dump,
+            ProtobufRequestType::Restore => RequestType::Restore,
         }
     }
 }
@@ -604,6 +610,9 @@ impl RequestType {
             }
             RequestType::XGroupDelConsumer => Some(get_two_word_command("XGROUP", "DELCONSUMER")),
             RequestType::RandomKey => Some(cmd("RANDOMKEY")),
+            RequestType::GetEx => Some(cmd("GETEX")),
+            RequestType::Dump => Some(cmd("DUMP")),
+            RequestType::Restore => Some(cmd("RESTORE")),
         }
     }
 }

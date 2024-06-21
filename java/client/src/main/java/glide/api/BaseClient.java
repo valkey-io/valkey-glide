@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
@@ -30,6 +31,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
@@ -43,6 +45,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
+import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -95,6 +98,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -109,6 +113,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
@@ -119,6 +124,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
+import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -128,6 +134,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
 import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
@@ -169,8 +176,10 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -179,6 +188,7 @@ import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
@@ -194,6 +204,7 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
@@ -208,6 +219,7 @@ import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -324,12 +336,19 @@ public abstract class BaseClient
     @SuppressWarnings("unchecked")
     protected <T> T handleRedisResponse(
             Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws RedisException {
+        boolean encodingUtf8 = flags.contains(ResponseFlags.ENCODING_UTF8);
         boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
         Object value =
-                new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
+                encodingUtf8
+                        ? new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response)
+                        : new BaseCommandResponseResolver(RedisValueResolver::valueFromPointerBinary)
+                                .apply(response);
         if (isNullable && (value == null)) {
             return null;
         }
+
+        value = convertByteArrayToGlideString(value);
+
         if (classType.isInstance(value)) {
             return (T) value;
         }
@@ -342,15 +361,29 @@ public abstract class BaseClient
     }
 
     protected Object handleObjectOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleRedisResponse(
+                Object.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected String handleStringResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleRedisResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected String handleStringOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(String.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleRedisResponse(
+                String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    protected byte[] handleBytesOrNullResponse(Response response) throws RedisException {
+        var result =
+                handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        if (result == null) return null;
+
+        return result.getBytes();
+    }
+
+    protected GlideString handleGlideStringOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Boolean handleBooleanResponse(Response response) throws RedisException {
@@ -374,10 +407,17 @@ public abstract class BaseClient
     }
 
     protected Object[] handleArrayResponse(Response response) throws RedisException {
-        return handleRedisResponse(Object[].class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     protected Object[] handleArrayOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(
+                Object[].class,
+                EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8),
+                response);
+    }
+
+    protected Object[] handleArrayOrNullResponseBinary(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
@@ -388,6 +428,17 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapResponse(Response response) throws RedisException {
+        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of <code>GlideString</code> to <code>V</code>.
+     * @param <V> Value type.
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
+    protected <V> Map<GlideString, V> handleMapResponseBinary(Response response)
+            throws RedisException {
         return handleRedisResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
 
@@ -398,7 +449,8 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
     protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        return handleRedisResponse(
+                Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
     /**
@@ -420,7 +472,7 @@ public abstract class BaseClient
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
-        return handleRedisResponse(Set.class, EnumSet.noneOf(ResponseFlags.class), response);
+        return handleRedisResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
     /** Process a <code>FUNCTION LIST</code> standalone response. */
@@ -458,9 +510,39 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> get(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                Get, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<String> getdel(@NonNull String key) {
         return commandManager.submitNewCommand(
                 GetDel, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> getex(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                GetEx, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> getex(@NonNull String key, @NonNull GetExOptions options) {
+        String[] arguments = ArrayUtils.addFirst(options.toArgs(), key);
+        return commandManager.submitNewCommand(GetEx, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> getdel(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                GetDel, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> set(@NonNull GlideString key, @NonNull GlideString value) {
+        return commandManager.submitNewCommand(
+                Set, new GlideString[] {key, value}, this::handleStringResponse);
     }
 
     @Override
@@ -477,6 +559,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> set(
+            @NonNull GlideString key, @NonNull GlideString value, @NonNull SetOptions options) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(new GlideString[] {key, value}, options.toGlideStringArgs());
+        return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> append(@NonNull String key, @NonNull String value) {
         return commandManager.submitNewCommand(
                 Append, new String[] {key, value}, this::handleLongResponse);
@@ -486,6 +576,14 @@ public abstract class BaseClient
     public CompletableFuture<String[]> mget(@NonNull String[] keys) {
         return commandManager.submitNewCommand(
                 MGet, keys, response -> castArray(handleArrayOrNullResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> mget(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(
+                MGet,
+                keys,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -630,6 +728,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<String, String>> hgetall(@NonNull String key) {
         return commandManager.submitNewCommand(HGetAll, new String[] {key}, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, GlideString>> hgetall(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                HGetAll, new GlideString[] {key}, this::handleMapResponseBinary);
     }
 
     @Override
@@ -1429,6 +1533,29 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
+            @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
+        return xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
+            @NonNull Map<String, String> keysAndIds,
+            @NonNull String group,
+            @NonNull String consumer,
+            @NonNull StreamReadGroupOptions options) {
+        String[] arguments = options.toArgs(group, consumer, keysAndIds);
+        return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> xack(
+            @NonNull String key, @NonNull String group, @NonNull String[] ids) {
+        String[] args = concatenateArrays(new String[] {key, group}, ids);
+        return commandManager.submitNewCommand(XAck, args, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
@@ -1894,5 +2021,63 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<String> watch(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<String>> sunion(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(SUnion, keys, this::handleSetResponse);
+    }
+
+    // Hack: convert all `byte[]` -> `GlideString`. Better doing it here in the Java realm
+    // rather than doing it in the Rust code using JNI calls (performance)
+    private Object convertByteArrayToGlideString(Object o) {
+        if (o == null) return o;
+
+        if (o instanceof byte[]) {
+            o = GlideString.of((byte[]) o);
+        } else if (o.getClass().isArray()) {
+            var array = (Object[]) o;
+            for (var i = 0; i < array.length; i++) {
+                array[i] = convertByteArrayToGlideString(array[i]);
+            }
+        } else if (o instanceof Set) {
+            var set = (Set<?>) o;
+            o = set.stream().map(this::convertByteArrayToGlideString).collect(Collectors.toSet());
+        } else if (o instanceof Map) {
+            var map = (Map<?, ?>) o;
+            o =
+                    map.entrySet().stream()
+                            .collect(
+                                    HashMap::new,
+                                    (m, e) ->
+                                            m.put(
+                                                    convertByteArrayToGlideString(e.getKey()),
+                                                    convertByteArrayToGlideString(e.getValue())),
+                                    HashMap::putAll);
+        }
+        return o;
+    }
+
+    @Override
+    public CompletableFuture<byte[]> dump(@NonNull GlideString key) {
+        GlideString[] arguments = new GlideString[] {key};
+        return commandManager.submitNewCommand(Dump, arguments, this::handleBytesOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> restore(
+            @NonNull GlideString key, long ttl, @NonNull byte[] value) {
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(ttl).getBytes()), gs(value)};
+        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> restore(
+            @NonNull GlideString key,
+            long ttl,
+            @NonNull byte[] value,
+            @NonNull RestoreOptions restoreOptions) {
+        GlideString[] arguments = restoreOptions.toArgs(key, ttl, value);
+        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
     }
 }

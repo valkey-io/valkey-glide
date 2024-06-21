@@ -8,6 +8,7 @@ import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.AFTER;
 import static glide.api.models.commands.LInsertOptions.InsertPosition.BEFORE;
 import static glide.api.models.commands.RangeOptions.InfScoreBound.NEGATIVE_INFINITY;
@@ -30,9 +31,11 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ConditionalChange;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -43,6 +46,7 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
@@ -69,6 +73,7 @@ import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
@@ -291,6 +296,52 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void getex(BaseClient client) {
+
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
+        String key1 = "{key}" + UUID.randomUUID();
+        String value1 = String.valueOf(UUID.randomUUID());
+        String key2 = "{key}" + UUID.randomUUID();
+
+        client.set(key1, value1).get();
+        String data = client.getex(key1).get();
+        assertEquals(data, value1);
+        assertEquals(-1, client.ttl(key1).get());
+
+        data = client.getex(key1, GetExOptions.Seconds(10L)).get();
+        Long ttlValue = client.ttl(key1).get();
+        assertTrue(ttlValue >= 0L);
+
+        // non-existent key
+        data = client.getex(key2).get();
+        assertNull(data);
+
+        // key isn't a string
+        client.sadd(key2, new String[] {"a"}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.getex(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // with option
+        data = client.getex(key1, GetExOptions.Seconds(10L)).get();
+        assertEquals(data, value1);
+
+        // invalid time measurement
+        ExecutionException invalidTimeException =
+                assertThrows(
+                        ExecutionException.class, () -> client.getex(key1, GetExOptions.Seconds(-10L)).get());
+        assertInstanceOf(RequestException.class, invalidTimeException.getCause());
+
+        // setting and clearing expiration timer
+        assertEquals(value1, client.getex(key1, GetExOptions.Seconds(10L)).get());
+        assertEquals(value1, client.getex(key1, GetExOptions.Persist()).get());
+        assertEquals(-1L, client.ttl(key1).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void set_only_if_exists_overwrite(BaseClient client) {
         String key = "set_only_if_exists_overwrite";
         SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).build();
@@ -320,6 +371,29 @@ public class SharedCommandTests {
         client.set(key, ANOTHER_VALUE, options).get();
         String data = client.get(key).get();
         assertEquals(ANOTHER_VALUE, data);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void set_get_binary_data(BaseClient client) {
+        GlideString key = gs("set_get_binary_data_key");
+        byte[] binvalue = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        assertEquals(client.set(key, gs(binvalue)).get(), "OK");
+        GlideString data = client.get(key).get();
+        assertArrayEquals(data.getBytes(), binvalue);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void set_get_binary_data_with_options(BaseClient client) {
+        SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_DOES_NOT_EXIST).build();
+        GlideString key = gs("set_get_binary_data_with_options");
+        byte[] binvalue = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        assertEquals(client.set(key, gs(binvalue), options).get(), "OK");
+        GlideString data = client.get(key).get();
+        assertArrayEquals(data.getBytes(), binvalue);
     }
 
     @SneakyThrows
@@ -419,6 +493,23 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new String[] {value, value, null, value},
                 client.mget(new String[] {key1, key2, nonExisting, key3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void mset_mget_binary(BaseClient client) {
+        // keys are from different slots
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> keyValueMap = Map.of(key1, value, key2, value, key3, value);
+
+        assertEquals(OK, client.mset(keyValueMap).get());
+        assertArrayEquals(
+                new GlideString[] {gs(value), gs(value), gs(value)},
+                client.mget(new GlideString[] {gs(key1), gs(key2), gs(key3)}).get());
     }
 
     @SneakyThrows
@@ -744,6 +835,25 @@ public class SharedCommandTests {
         assertEquals(2, client.hset(key, fieldValueMap).get());
         assertEquals(fieldValueMap, client.hgetall(key).get());
         assertEquals(Map.of(), client.hgetall("non_existing_key").get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hgetall_binary_api(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<String, String> fieldValueMapStrings =
+                Map.of(field1.getString(), value.getString(), field2.getString(), value.getString());
+        HashMap<GlideString, GlideString> fieldValueMap =
+                new HashMap<>(Map.of(field1, value, field2, value));
+
+        assertEquals(2, client.hset(key.getString(), fieldValueMapStrings).get());
+        Map<GlideString, GlideString> allItems = client.hgetall(key).get();
+        assertEquals(value, allItems.get(field1));
+        assertEquals(value, allItems.get(field2));
     }
 
     @SneakyThrows
@@ -3480,7 +3590,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void xgroupCreateConsumer_xgroupDelConsumer(BaseClient client) {
+    public void xgroupCreateConsumer_xgroupDelConsumer_xreadgroup_xack(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String stringKey = UUID.randomUUID().toString();
         String groupName = "group" + UUID.randomUUID();
@@ -3510,8 +3620,52 @@ public class SharedCommandTests {
         // Deletes a consumer that is not created yet returns 0
         assertEquals(0L, client.xgroupDelConsumer(key, groupName, "not_a_consumer").get());
 
-        // TODO use XREADGROUP to mark pending messages for the consumer so that we get non-zero return
+        // Add two stream entries
+        String streamid_1 = client.xadd(key, Map.of("field1", "value1")).get();
+        assertNotNull(streamid_1);
+        String streamid_2 = client.xadd(key, Map.of("field2", "value2")).get();
+        assertNotNull(streamid_2);
+
+        // read the entire stream for the consumer and mark messages as pending
+        var result_1 = client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamid_1, new String[][] {{"field1", "value1"}},
+                                streamid_2, new String[][] {{"field2", "value2"}})),
+                result_1);
+
+        // delete one of the streams
+        assertEquals(1L, client.xdel(key, new String[] {streamid_1}).get());
+
+        // now xreadgroup returns one empty stream and one non-empty stream
+        var result_2 = client.xreadgroup(Map.of(key, "0"), groupName, consumerName).get();
+        assertEquals(2, result_2.get(key).size());
+        assertNull(result_2.get(key).get(streamid_1));
+        assertArrayEquals(new String[][] {{"field2", "value2"}}, result_2.get(key).get(streamid_2));
+
+        String streamid_3 = client.xadd(key, Map.of("field3", "value3")).get();
+        assertNotNull(streamid_3);
+
+        // xack that streamid_1, and streamid_2 was received
+        assertEquals(2L, client.xack(key, groupName, new String[] {streamid_1, streamid_2}).get());
+
+        // Delete the consumer group and expect 1 pending messages (one was received)
         assertEquals(0L, client.xgroupDelConsumer(key, groupName, consumerName).get());
+
+        // xack streamid_1, and streamid_2 already received returns 0L
+        assertEquals(0L, client.xack(key, groupName, new String[] {streamid_1, streamid_2}).get());
+
+        // Consume the last message with the previously deleted consumer (creates the consumer anew)
+        var result_3 = client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get();
+        assertEquals(1, result_3.get(key).size());
+
+        // wrong group, so xack streamid_3 returns 0
+        assertEquals(0L, client.xack(key, "not_a_group", new String[] {streamid_3}).get());
+
+        // Delete the consumer group and expect the pending message
+        assertEquals(1L, client.xgroupDelConsumer(key, groupName, consumerName).get());
 
         // key is a string and cannot be created as a stream
         assertEquals(OK, client.set(stringKey, "not_a_stream").get());
@@ -3525,6 +3679,159 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.xgroupDelConsumer(stringKey, groupName, consumerName).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xreadgroup_return_failures(BaseClient client) {
+        String key = "{key}:1" + UUID.randomUUID();
+        String nonStreamKey = "{key}:3" + UUID.randomUUID();
+        String groupName = "group" + UUID.randomUUID();
+        String zeroStreamId = "0";
+        String consumerName = "consumer" + UUID.randomUUID();
+
+        // setup first entries in streams key1 and key2
+        String timestamp_1_1 =
+                client.xadd(key, Map.of("f1", "v1"), StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
+
+        // create group and consumer for the group
+        assertEquals(
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumerName).get());
+
+        // First key exists, but it is not a stream
+        assertEquals(OK, client.set(nonStreamKey, "bar").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xreadgroup(
+                                                Map.of(nonStreamKey, timestamp_1_1, key, timestamp_1_1),
+                                                groupName,
+                                                consumerName)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Second key exists, but it is not a stream
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xreadgroup(
+                                                Map.of(key, timestamp_1_1, nonStreamKey, timestamp_1_1),
+                                                groupName,
+                                                consumerName)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+            String timeoutKey = "{key}:2" + UUID.randomUUID();
+            String timeoutGroupName = "group" + UUID.randomUUID();
+            String timeoutConsumerName = "consumer" + UUID.randomUUID();
+
+            // Create a group read with the test client
+            // add a single stream entry and consumer
+            // the first call to ">" will return an update consumer group
+            // the second call to ">" will block waiting for new entries
+            // using anything other than ">" won't block, but will return the empty consumer result
+            // see: https://github.com/redis/redis/issues/6587
+            assertEquals(
+                    OK,
+                    testClient
+                            .xgroupCreate(
+                                    timeoutKey,
+                                    timeoutGroupName,
+                                    zeroStreamId,
+                                    StreamGroupOptions.builder().makeStream().build())
+                            .get());
+            assertTrue(
+                    testClient.xgroupCreateConsumer(timeoutKey, timeoutGroupName, timeoutConsumerName).get());
+            String streamid_1 = testClient.xadd(timeoutKey, Map.of("field1", "value1")).get();
+            assertNotNull(streamid_1);
+
+            // read the entire stream for the consumer and mark messages as pending
+            var result_1 =
+                    testClient
+                            .xreadgroup(Map.of(timeoutKey, ">"), timeoutGroupName, timeoutConsumerName)
+                            .get();
+            // returns an null result on the key
+            assertNull(result_1.get(key));
+
+            // subsequent calls to read ">" will block:
+            // ensure that command doesn't time out even if timeout > request timeout
+            long oneSecondInMS = 1000L;
+            assertNull(
+                    testClient
+                            .xreadgroup(
+                                    Map.of(timeoutKey, ">"),
+                                    timeoutGroupName,
+                                    timeoutConsumerName,
+                                    StreamReadGroupOptions.builder().block(oneSecondInMS).build())
+                            .get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .xreadgroup(
+                                            Map.of(timeoutKey, ">"),
+                                            timeoutGroupName,
+                                            timeoutConsumerName,
+                                            StreamReadGroupOptions.builder().block(0L).build())
+                                    .get(3, TimeUnit.SECONDS));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xack_return_failures(BaseClient client) {
+        String key = "{key}:1" + UUID.randomUUID();
+        String nonStreamKey = "{key}:3" + UUID.randomUUID();
+        String groupName = "group" + UUID.randomUUID();
+        String zeroStreamId = "0";
+        String consumerName = "consumer" + UUID.randomUUID();
+
+        // setup first entries in streams key1 and key2
+        String timestamp_1_1 =
+                client.xadd(key, Map.of("f1", "v1"), StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
+
+        // create group and consumer for the group
+        assertEquals(
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumerName).get());
+
+        // Empty entity id list throws a RequestException
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.xack(key, groupName, new String[0]).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Key exists, but it is not a stream
+        assertEquals(OK, client.set(nonStreamKey, "bar").get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xack(nonStreamKey, groupName, new String[] {zeroStreamId}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -4577,9 +4884,9 @@ public class SharedCommandTests {
         // First bit is flipped to 1 and throws 'utf-8' codec can't decode byte 0x9e in position 0:
         // invalid start byte
         // TODO: update once fix is implemented for https://github.com/aws/glide-for-redis/issues/1447
-        // ExecutionException executionException =
-        //        assertThrows(ExecutionException.class, () -> client.get(destination).get());
-        // assertTrue(executionException.getCause() instanceof RuntimeException);
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.get(destination).get());
+        assertTrue(executionException.getCause() instanceof RuntimeException);
         assertEquals(0, client.setbit(key1, 0, 1).get());
         assertEquals(1L, client.bitop(BitwiseOperation.NOT, destination, new String[] {key1}).get());
         assertEquals("\u001e", client.get(destination).get());
@@ -4597,7 +4904,7 @@ public class SharedCommandTests {
 
         // Exception thrown due to the key holding a value with the wrong type
         assertEquals(1, client.sadd(emptyKey1, new String[] {value1}).get());
-        ExecutionException executionException =
+        executionException =
                 assertThrows(
                         ExecutionException.class,
                         () -> client.bitop(BitwiseOperation.AND, destination, new String[] {emptyKey1}).get());
@@ -5420,6 +5727,167 @@ public class SharedCommandTests {
         client.sadd(nonStringKey, new String[] {"setmember"}).get();
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sunion(BaseClient client) {
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String nonSetKey = "{key}-4" + UUID.randomUUID();
+        String[] memberList1 = new String[] {"a", "b", "c"};
+        String[] memberList2 = new String[] {"b", "c", "d", "e"};
+        Set<String> expectedUnion = Set.of("a", "b", "c", "d", "e");
+
+        assertEquals(3, client.sadd(key1, memberList1).get());
+        assertEquals(4, client.sadd(key2, memberList2).get());
+        assertEquals(expectedUnion, client.sunion(new String[] {key1, key2}).get());
+
+        // Key has an empty set
+        assertEquals(Set.of(), client.sunion(new String[] {key3}).get());
+
+        // Empty key with non-empty key returns non-empty key set
+        assertEquals(Set.of(memberList1), client.sunion(new String[] {key1, key3}).get());
+
+        // Exceptions
+        // Empty keys
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sunion(new String[] {}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Non-set key
+        assertEquals(OK, client.set(nonSetKey, "value").get());
+        assertThrows(
+                ExecutionException.class, () -> client.sunion(new String[] {nonSetKey, key1}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void test_dump_restore(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String newKey1 = UUID.randomUUID().toString();
+        String newKey2 = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
+        String value = "oranges";
+
+        assertEquals(OK, client.set(key, value).get());
+
+        // Dump existing key
+        byte[] result = client.dump(gs(key)).get();
+        assertNotNull(result);
+
+        // Dump non-existing key
+        assertNull(client.dump(gs(nonExistingKey)).get());
+
+        // Restore to a new key
+        assertEquals(OK, client.restore(gs(newKey1), 0L, result).get());
+
+        // Restore to an existing key - Error: "Target key name already exists"
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.restore(gs(newKey1), 0L, result).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Restore with checksum error - Error: "payload version or checksum are wrong"
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.restore(gs(newKey2), 0L, value.getBytes()).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void test_dump_restore_withOptions(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String newKey = UUID.randomUUID().toString();
+        String value = "oranges";
+
+        assertEquals(OK, client.set(key, value).get());
+
+        // Dump existing key
+        byte[] data = client.dump(gs(key)).get();
+        assertNotNull(data);
+
+        // Restore without option
+        String result = client.restore(gs(newKey), 0L, data).get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE option
+        result = client.restore(gs(newKey), 0L, data, RestoreOptions.builder().replace().build()).get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE and existing key holding different value
+        assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
+        result = client.restore(gs(key2), 0L, data, RestoreOptions.builder().replace().build()).get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE, ABSTTL, and positive TTL
+        result =
+                client
+                        .restore(gs(newKey), 1000L, data, RestoreOptions.builder().replace().absttl().build())
+                        .get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE, ABSTTL, and negative TTL
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .restore(
+                                                gs(newKey), -10L, data, RestoreOptions.builder().replace().absttl().build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Restore with REPLACE and positive idletime
+        result =
+                client
+                        .restore(gs(newKey), 0L, data, RestoreOptions.builder().replace().idletime(10L).build())
+                        .get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE and negative idletime
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .restore(
+                                                gs(newKey),
+                                                0L,
+                                                data,
+                                                RestoreOptions.builder().replace().idletime(-10L).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Restore with REPLACE and positive frequency
+        result =
+                client
+                        .restore(
+                                gs(newKey), 0L, data, RestoreOptions.builder().replace().frequency(10L).build())
+                        .get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE and negative frequency
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .restore(
+                                                gs(newKey),
+                                                0L,
+                                                data,
+                                                RestoreOptions.builder().replace().frequency(-10L).build())
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }

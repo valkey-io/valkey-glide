@@ -230,6 +230,9 @@ enum RequestType {
     XGroupCreateConsumer = 189;
     XGroupDelConsumer = 190;
     RandomKey = 191;
+    GetEx = 192;
+    Dump = 193;
+    Restore = 194;
 }
 
 message Command {

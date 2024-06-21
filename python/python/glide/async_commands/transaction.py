@@ -3,19 +3,26 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
-from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import (
+    BitFieldGet,
+    BitFieldSubCommands,
+    BitmapIndexType,
+    BitwiseOperation,
+    OffsetOptions,
+    _create_bitfield_args,
+    _create_bitfield_read_only_args,
+)
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
+    ExpiryGetEx,
     ExpirySet,
     FlushMode,
     GeospatialData,
     GeoUnit,
     InfoSection,
     InsertPosition,
-    StreamAddOptions,
-    StreamTrimOptions,
     UpdateOptions,
     _build_sort_args,
 )
@@ -34,6 +41,11 @@ from glide.async_commands.sorted_set import (
     _create_geosearch_args,
     _create_zinter_zunion_cmd_args,
     _create_zrange_args,
+)
+from glide.async_commands.stream import (
+    StreamAddOptions,
+    StreamRangeBound,
+    StreamTrimOptions,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -1787,6 +1799,22 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XAdd, args)
 
+    def xdel(self: TTransaction, key: str, ids: List[str]) -> TTransaction:
+        """
+        Removes the specified entries by id from a stream, and returns the number of entries deleted.
+
+        See https://valkey.io/commands/xdel for more details.
+
+        Args:
+            key (str): The key of the stream.
+            ids (List[str]): An array of entry ids.
+
+        Command response:
+            int: The number of entries removed from the stream. This number may be less than the number of entries in
+                `ids`, if the specified `ids` don't exist in the stream.
+        """
+        return self.append_command(RequestType.XDel, [key] + ids)
+
     def xtrim(
         self: TTransaction,
         key: str,
@@ -1823,6 +1851,41 @@ class BaseTransaction:
             int: The number of entries in the stream. If `key` does not exist, returns 0.
         """
         return self.append_command(RequestType.XLen, [key])
+
+    def xrange(
+        self: TTransaction,
+        key: str,
+        start: StreamRangeBound,
+        end: StreamRangeBound,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Returns stream entries matching a given range of IDs.
+
+        See https://valkey.io/commands/xrange for more details.
+
+        Args:
+            key (str): The key of the stream.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+                If `count` is not provided, all stream entries in the range will be returned.
+
+        Command response:
+            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+                list of pairings with format `[[field, entry], [field, entry], ...]`.
+        """
+        args = [key, start.to_arg(), end.to_arg()]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return self.append_command(RequestType.XRange, args)
 
     def geoadd(
         self: TTransaction,
@@ -2438,6 +2501,45 @@ class BaseTransaction:
         Since: Redis version 7.2.0.
         """
         return self.append_command(RequestType.ZRank, [key, member, "WITHSCORE"])
+
+    def zrevrank(self: TTransaction, key: str, member: str) -> TTransaction:
+        """
+        Returns the rank of `member` in the sorted set stored at `key`, where scores are ordered from the highest to
+        lowest, starting from `0`.
+
+        To get the rank of `member` with its score, see `zrevrank_withscore`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Command response:
+            Optional[int]: The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+        """
+        return self.append_command(RequestType.ZRevRank, [key, member])
+
+    def zrevrank_withscore(self: TTransaction, key: str, member: str) -> TTransaction:
+        """
+        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
+        highest to lowest, starting from `0`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Command response:
+            Optional[List[Union[int, float]]]: A list containing the rank (as `int`) and score (as `float`) of `member`
+                in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+
+        Since: Redis version 7.2.0.
+        """
+        return self.append_command(RequestType.ZRevRank, [key, member, "WITHSCORE"])
 
     def zrem(
         self: TTransaction,
@@ -3195,6 +3297,56 @@ class BaseTransaction:
             RequestType.BitOp, [operation.value, destination] + keys
         )
 
+    def bitfield(
+        self: TTransaction, key: str, subcommands: List[BitFieldSubCommands]
+    ) -> TTransaction:
+        """
+        Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+        `subcommands`.
+
+        See https://valkey.io/commands/bitfield for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldSubCommands]): The subcommands to be performed on the binary value of the string
+                at `key`, which could be any of the following:
+                    - `BitFieldGet`
+                    - `BitFieldSet`
+                    - `BitFieldIncrBy`
+                    - `BitFieldOverflow`
+
+        Command response:
+            List[Optional[int]]: An array of results from the executed subcommands:
+                - `BitFieldGet` returns the value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldSet` returns the old value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldIncrBy` returns the new value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldOverflow` determines the behavior of the "SET" and "INCRBY" subcommands when an overflow or
+                  underflow occurs. "OVERFLOW" does not return a value and does not contribute a value to the list
+                  response.
+        """
+        args = [key] + _create_bitfield_args(subcommands)
+        return self.append_command(RequestType.BitField, args)
+
+    def bitfield_read_only(
+        self: TTransaction, key: str, subcommands: List[BitFieldGet]
+    ) -> TTransaction:
+        """
+        Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+
+        See https://valkey.io/commands/bitfield_ro for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldGet]): The "GET" subcommands to be performed.
+
+        Command response:
+            List[int]: An array of results from the "GET" subcommands.
+
+        Since: Redis version 6.0.0.
+        """
+        args = [key] + _create_bitfield_read_only_args(subcommands)
+        return self.append_command(RequestType.BitFieldReadOnly, args)
+
     def object_encoding(self: TTransaction, key: str) -> TTransaction:
         """
         Returns the internal encoding for the Redis object stored at `key`.
@@ -3303,6 +3455,30 @@ class BaseTransaction:
         if flush_mode is not None:
             args.append(flush_mode.value)
         return self.append_command(RequestType.FlushAll, args)
+
+    def getex(
+        self: TTransaction, key: str, expiry: Optional[ExpiryGetEx] = None
+    ) -> TTransaction:
+        """
+        Get the value of `key` and optionally set its expiration. GETEX is similar to GET.
+        See https://valkey.io/commands/getex for more details.
+
+        Args:
+            key (str): The key to get.
+            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
+
+        Command Response:
+            Optional[str]:
+                If `key` exists, return the value stored at `key`
+                If 'key` does not exist, return 'None'
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key]
+        if expiry is not None:
+            args.extend(expiry.get_cmd_args())
+        return self.append_command(RequestType.GetEx, args)
 
 
 class Transaction(BaseTransaction):
