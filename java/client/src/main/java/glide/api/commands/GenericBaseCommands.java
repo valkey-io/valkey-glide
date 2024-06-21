@@ -1,8 +1,10 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
 import java.util.concurrent.CompletableFuture;
 
@@ -590,4 +592,64 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> copy(String source, String destination, boolean replace);
+
+    /**
+     * Serialize the value stored at <code>key</code> in a Valkey-specific format and return it to the
+     * user.
+     *
+     * @see <a href="https://valkey.io/commands/dump/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return The serialized value of a set.<br>
+     *     If <code>key</code> does not exist, <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * byte[] result = client.dump("myKey").get();
+     *
+     * byte[] response = client.dump("nonExistingKey").get();
+     * assert response.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<byte[]> dump(GlideString key);
+
+    /**
+     * Create a <code>key</code> associated with a <code>value</code> that is obtained by
+     * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
+     *
+     * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
+     *     persist.
+     * @param value The serialized value.
+     * @return Return <code>OK</code> if successfully create a <code>key</code> with a <code>value
+     *      </code>.
+     * @example
+     *     <pre>{@code
+     * String result = client.restore(gs("newKey"), 0, value).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> restore(GlideString key, long ttl, byte[] value);
+
+    /**
+     * Create a <code>key</code> associated with a <code>value</code> that is obtained by
+     * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
+     *
+     * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
+     *     persist.
+     * @param value The serialized value.
+     * @param restoreOptions The restore options. See {@link RestoreOptions}.
+     * @return Return <code>OK</code> if successfully create a <code>key</code> with a <code>value
+     *      </code>.
+     * @example
+     *     <pre>{@code
+     * RestoreOptions options = RestoreOptions.builder().replace().absttl().idletime(10).frequency(10).build()).get();
+     * // Set restore options with replace and absolute TTL modifiers, object idletime and frequency to 10.
+     * String result = client.restore(gs("newKey"), 0, value, options).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> restore(
+            GlideString key, long ttl, byte[] value, RestoreOptions restoreOptions);
 }

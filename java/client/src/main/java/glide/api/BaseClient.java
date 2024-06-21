@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
@@ -30,6 +31,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
@@ -96,6 +98,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -185,6 +188,7 @@ import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
@@ -370,7 +374,15 @@ public abstract class BaseClient
                 String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
-    protected GlideString handleBytesOrNullResponse(Response response) throws RedisException {
+    protected byte[] handleBytesOrNullResponse(Response response) throws RedisException {
+        var result =
+                handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        if (result == null) return null;
+
+        return result.getBytes();
+    }
+
+    protected GlideString handleGlideStringOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
@@ -500,7 +512,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString> get(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                Get, new GlideString[] {key}, this::handleBytesOrNullResponse);
+                Get, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -524,7 +536,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString> getdel(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                GetDel, new GlideString[] {key}, this::handleBytesOrNullResponse);
+                GetDel, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -2044,5 +2056,28 @@ public abstract class BaseClient
                                     HashMap::putAll);
         }
         return o;
+    }
+
+    @Override
+    public CompletableFuture<byte[]> dump(@NonNull GlideString key) {
+        GlideString[] arguments = new GlideString[] {key};
+        return commandManager.submitNewCommand(Dump, arguments, this::handleBytesOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> restore(
+            @NonNull GlideString key, long ttl, @NonNull byte[] value) {
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(ttl).getBytes()), gs(value)};
+        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> restore(
+            @NonNull GlideString key,
+            long ttl,
+            @NonNull byte[] value,
+            @NonNull RestoreOptions restoreOptions) {
+        GlideString[] arguments = restoreOptions.toArgs(key, ttl, value);
+        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
     }
 }
