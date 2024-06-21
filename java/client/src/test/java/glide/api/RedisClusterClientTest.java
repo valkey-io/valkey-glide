@@ -1930,7 +1930,6 @@ public class RedisClusterClientTest {
         testResponse.complete(OK);
 
         // match on protobuf request
-        // TODO maybe use ByteArrayArgumentMatcher
         when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), any()))
                 .thenReturn(testResponse);
 
@@ -1975,7 +1974,6 @@ public class RedisClusterClientTest {
         testResponse.complete(OK);
 
         // match on protobuf request
-        // TODO maybe use ByteArrayArgumentMatcher
         when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), eq(RANDOM), any()))
                 .thenReturn(testResponse);
 
