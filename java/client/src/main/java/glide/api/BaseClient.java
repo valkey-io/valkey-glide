@@ -372,7 +372,11 @@ public abstract class BaseClient
     }
 
     protected byte[] handleBytesOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(byte[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        var result =
+                handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        if (result == null) return null;
+
+        return result.getBytes();
     }
 
     protected GlideString handleGlideStringOrNullResponse(Response response) throws RedisException {
