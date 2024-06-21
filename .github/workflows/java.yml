@@ -100,7 +100,7 @@ jobs:
               working-directory: ./java/client
               run: |
                   SED_FOR_MACOS=`if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.build.CLASSIFIER }}/g' ./build.gradle
+                  sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.host.CLASSIFIER }}/g' build.gradle
 
             - name: Build java client
               working-directory: java
@@ -119,7 +119,7 @@ jobs:
             - name: Bundle JAR
               working-directory: java
               run: |
-                  src_folder=~/.m2/repository/software/amazon/glide/glide-${{ matrix.build.CLASSIFIER }}/0.4.2
+                  src_folder=~/.m2/repository/software/amazon/glide/glide-${{ matrix.host.CLASSIFIER }}/0.4.2
                   cd $src_folder
                   jar -cvf bundle.jar *
 
@@ -134,7 +134,7 @@ jobs:
                       java/integTest/build/reports/**
                       utils/clusters/**
                       benchmarks/results/**
-                      ~/.m2/repository/software/amazon/glide/glide-${{ matrix.build.CLASSIFIER }}/0.4.2/bundle.jar
+                      ~/.m2/repository/software/amazon/glide/glide-${{ matrix.host.CLASSIFIER }}/0.4.2/bundle.jar
 
     build-amazonlinux-latest:
         if: github.repository_owner == 'aws'
