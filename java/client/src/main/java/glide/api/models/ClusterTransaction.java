@@ -45,7 +45,7 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      *
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortClusterOptions The {@link SortClusterOptions}.
-     * @return Command Response - A <code>Array</code> of sorted elements.
+     * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public ClusterTransaction sort(
             @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
