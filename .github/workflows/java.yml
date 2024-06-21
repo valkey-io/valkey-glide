@@ -111,7 +111,8 @@ jobs:
               working-directory: java
               run: |
                   src_folder=~/.m2/repository/software/amazon/glide/glide/0.4.2
-                  jar -cvf bundle.jar $src_folder
+                  cd $src_folder
+                  jar -cvf bundle.jar *
 
             - name: Upload test reports
               if: always()
