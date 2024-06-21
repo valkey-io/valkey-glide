@@ -4820,11 +4820,15 @@ class TestCommands:
         stream_id3 = "0-3"
 
         assert (
-            await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(id=stream_id1))
+            await redis_client.xadd(
+                key, [("f1", "v1")], StreamAddOptions(id=stream_id1)
+            )
             == stream_id1
         )
         assert (
-            await redis_client.xadd(key, [("f2", "v2")], StreamAddOptions(id=stream_id2))
+            await redis_client.xadd(
+                key, [("f2", "v2")], StreamAddOptions(id=stream_id2)
+            )
             == stream_id2
         )
         assert await redis_client.xlen(key) == 2
@@ -4839,7 +4843,9 @@ class TestCommands:
         assert await redis_client.xrange(key, MaxId(), MinId()) == {}
 
         assert (
-            await redis_client.xadd(key, [("f3", "v3")], StreamAddOptions(id=stream_id3))
+            await redis_client.xadd(
+                key, [("f3", "v3")], StreamAddOptions(id=stream_id3)
+            )
             == stream_id3
         )
         # get the newest entry
