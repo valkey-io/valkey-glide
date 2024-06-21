@@ -594,7 +594,7 @@ public interface GenericBaseCommands {
     CompletableFuture<Boolean> copy(String source, String destination, boolean replace);
 
     /**
-     * Serialize the value stored at <code>key</code> in a Redis-specific format and return it to the
+     * Serialize the value stored at <code>key</code> in a Valkey-specific format and return it to the
      * user.
      *
      * @see <a href="https://valkey.io/commands/dump/">valkey.io</a> for details.

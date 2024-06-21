@@ -5687,7 +5687,7 @@ public class SharedCommandTests {
 
         assertEquals(OK, client.set(key, value).get());
 
-        // Dump existed key
+        // Dump existing key
         byte[] result = client.dump(gs(key)).get();
         assertNotNull(result);
 
@@ -5697,7 +5697,7 @@ public class SharedCommandTests {
         // Restore to a new key
         assertEquals(OK, client.restore(gs(newKey1), 0L, result).get());
 
-        // Restore to an existed key - Error: "Target key name already exists"
+        // Restore to an existing key - Error: "Target key name already exists"
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.restore(gs(newKey1), 0L, result).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -5722,7 +5722,7 @@ public class SharedCommandTests {
 
         assertEquals(OK, client.set(key, value).get());
 
-        // Dump existed key
+        // Dump existing key
         byte[] data = client.dump(gs(key)).get();
         assertNotNull(data);
 
@@ -5734,7 +5734,7 @@ public class SharedCommandTests {
         result = client.restore(gs(newKey), 0L, data, RestoreOptions.builder().replace().build()).get();
         assertEquals(OK, result);
 
-        // Restore with REPLACE and existed key holding different value
+        // Restore with REPLACE and existing key holding different value
         assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
         result = client.restore(gs(key2), 0L, data, RestoreOptions.builder().replace().build()).get();
         assertEquals(OK, result);
