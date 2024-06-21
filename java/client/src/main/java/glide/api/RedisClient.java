@@ -285,7 +285,9 @@ public class RedisClient extends BaseClient
     @Override
     public CompletableFuture<byte[]> functionDump() {
         return commandManager.submitNewCommand(
-                FunctionDump, new GlideString[0], response -> handleBytesResponse(response).getBytes());
+                FunctionDump,
+                new GlideString[0],
+                response -> handleGlideStringResponse(response).getBytes());
     }
 
     @Override
@@ -299,7 +301,7 @@ public class RedisClient extends BaseClient
             byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy) {
         return commandManager.submitNewCommand(
                 FunctionRestore,
-                new GlideString[] {gs(payload), gs(policy.toString().getBytes())},
+                new GlideString[] {gs(payload), gs(policy.toString())},
                 this::handleStringResponse);
     }
 

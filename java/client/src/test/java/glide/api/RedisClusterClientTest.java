@@ -67,10 +67,10 @@ import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRout
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
+import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
@@ -168,7 +168,7 @@ public class RedisClusterClientTest {
 
         @Override
         protected <T> T handleRedisResponse(
-                Class<T> classType, Set<ResponseFlags> flags, Response response) {
+                Class<T> classType, EnumSet<ResponseFlags> flags, Response response) {
             @SuppressWarnings("unchecked")
             T returnValue = (T) object;
             return returnValue;
@@ -1948,7 +1948,7 @@ public class RedisClusterClientTest {
     public void functionRestore_with_policy_returns_success() {
         // setup
         byte[] data = new byte[] {42};
-        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString().getBytes())};
+        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString())};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
@@ -1993,7 +1993,7 @@ public class RedisClusterClientTest {
     public void functionRestore_with_policy_and_route_returns_success() {
         // setup
         byte[] data = new byte[] {42};
-        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString().getBytes())};
+        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString())};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 

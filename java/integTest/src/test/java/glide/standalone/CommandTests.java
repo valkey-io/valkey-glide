@@ -777,7 +777,7 @@ public class CommandTests {
         code = generateLuaLibCode(name2, Map.of(name1, "return args[1]", name2, "return #args"), false);
         assertEquals(name2, regularClient.functionLoad(code, true).get());
 
-        // REPLACE policy now fails due name collision
+        // REPLACE policy now fails due to a name collision
         executionException =
                 assertThrows(
                         ExecutionException.class, () -> regularClient.functionRestore(dump, REPLACE).get());

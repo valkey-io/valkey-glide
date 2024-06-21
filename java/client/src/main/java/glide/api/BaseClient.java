@@ -345,7 +345,7 @@ public abstract class BaseClient
      */
     @SuppressWarnings("unchecked")
     protected <T> T handleRedisResponse(
-            Class<T> classType, Set<ResponseFlags> flags, Response response) throws RedisException {
+            Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws RedisException {
         boolean encodingUtf8 = flags.contains(ResponseFlags.ENCODING_UTF8);
         boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
         Object value =
@@ -449,7 +449,7 @@ public abstract class BaseClient
      * @param <V> Value type.
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
-    protected <V> Map<GlideString, V> handleBinaryMapResponse(Response response)
+    protected <V> Map<GlideString, V> handleBinaryStringMapResponse(Response response)
             throws RedisException {
         return handleRedisResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
@@ -745,7 +745,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, GlideString>> hgetall(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                HGetAll, new GlideString[] {key}, this::handleBinaryMapResponse);
+                HGetAll, new GlideString[] {key}, this::handleBinaryStringMapResponse);
     }
 
     @Override

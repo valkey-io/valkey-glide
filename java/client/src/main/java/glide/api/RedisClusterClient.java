@@ -590,7 +590,7 @@ public class RedisClusterClient extends BaseClient
         return commandManager.submitNewCommand(
                 FunctionDump,
                 new GlideString[] {},
-                response -> ClusterValue.ofMultiValueBinary(handleBinaryMapResponse(response)));
+                response -> ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
     }
 
     @Override
@@ -601,8 +601,8 @@ public class RedisClusterClient extends BaseClient
                 route,
                 response ->
                         route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleBytesResponse(response).getBytes())
-                                : ClusterValue.ofMultiValueBinary(handleBinaryMapResponse(response)));
+                                ? ClusterValue.ofSingleValue(handleGlideStringResponse(response).getBytes())
+                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
     }
 
     @Override
@@ -616,7 +616,7 @@ public class RedisClusterClient extends BaseClient
             byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy) {
         return commandManager.submitNewCommand(
                 FunctionRestore,
-                new GlideString[] {gs(payload), gs(policy.toString().getBytes())},
+                new GlideString[] {gs(payload), gs(policy.toString())},
                 this::handleStringResponse);
     }
 
@@ -631,7 +631,7 @@ public class RedisClusterClient extends BaseClient
             byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionRestore,
-                new GlideString[] {gs(payload), gs(policy.toString().getBytes())},
+                new GlideString[] {gs(payload), gs(policy.toString())},
                 route,
                 this::handleStringResponse);
     }

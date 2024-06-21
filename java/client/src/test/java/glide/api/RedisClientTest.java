@@ -5865,7 +5865,7 @@ public class RedisClientTest {
     public void functionRestore_with_policy_returns_success() {
         // setup
         byte[] data = new byte[] {42};
-        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString().getBytes())};
+        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString())};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
