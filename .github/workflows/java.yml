@@ -97,7 +97,7 @@ jobs:
               working-directory: java
               run: |
                   ./gradlew --continue build -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
-                  ./gradlew :client:publishToMavenLocal
+                  ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
             - name: Ensure no skipped files by linter
               working-directory: java
