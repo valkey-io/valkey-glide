@@ -28,10 +28,6 @@ from glide.async_commands.core import (
     FlushMode,
     InfoSection,
     InsertPosition,
-    StreamAddOptions,
-    StreamTrimOptions,
-    TrimByMaxLen,
-    TrimByMinId,
     UpdateOptions,
 )
 from glide.async_commands.redis_modules import json
@@ -49,6 +45,17 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+)
+from glide.async_commands.stream import (
+    ExclusiveIdBound,
+    IdBound,
+    MaxId,
+    MinId,
+    StreamAddOptions,
+    StreamRangeBound,
+    StreamTrimOptions,
+    TrimByMaxLen,
+    TrimByMinId,
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
@@ -146,7 +153,12 @@ __all__ = [
     "RangeByScore",
     "ScoreFilter",
     "OrderBy",
+    "ExclusiveIdBound",
+    "IdBound",
+    "MaxId",
+    "MinId",
     "StreamAddOptions",
+    "StreamRangeBound",
     "StreamTrimOptions",
     "TrimByMaxLen",
     "TrimByMinId",
