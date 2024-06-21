@@ -5599,7 +5599,6 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-
     async def test_getex(self, redis_client: TRedisClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
@@ -5631,8 +5630,10 @@ class TestCommands:
             await redis_client.getex(key1, ExpiryGetEx(ExpiryTypeGetEx.PERSIST, None))
             == value
         )
-        assert await redis_client.ttl(key1) == -1      
+        assert await redis_client.ttl(key1) == -1
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_copy_no_database(self, redis_client: TRedisClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
@@ -5675,11 +5676,12 @@ class TestCommands:
         destination = get_random_string(10)
         value1 = get_random_string(5)
         value2 = get_random_string(5)
+        index0 = 0
         index1 = 1
         index2 = 2
 
         try:
-            assert await redis_client.select(0) == OK
+            assert await redis_client.select(index0) == OK
 
             # neither key exists
             assert (
@@ -5693,11 +5695,11 @@ class TestCommands:
                 await redis_client.copy(source, destination, index1, replace=False)
                 is True
             )
-            assert await redis_client.select(1) == OK
+            assert await redis_client.select(index1) == OK
             assert await redis_client.get(destination) == value1
 
             # new value for source key
-            assert await redis_client.select(0) == OK
+            assert await redis_client.select(index0) == OK
             await redis_client.set(source, value2)
 
             # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
@@ -5711,18 +5713,18 @@ class TestCommands:
             )
 
             # new value only gets copied to DB 2
-            assert await redis_client.select(1) == OK
+            assert await redis_client.select(index1) == OK
             assert await redis_client.get(destination) == value1
-            assert await redis_client.select(2) == OK
+            assert await redis_client.select(index2) == OK
             assert await redis_client.get(destination) == value2
 
             # both exists, with REPLACE, when value isn't the same, source always get copied to destination
-            assert await redis_client.select(0) == OK
+            assert await redis_client.select(index0) == OK
             assert (
                 await redis_client.copy(source, destination, index1, replace=True)
                 is True
             )
-            assert await redis_client.select(1) == OK
+            assert await redis_client.select(index1) == OK
             assert await redis_client.get(destination) == value2
 
             # invalid DB index

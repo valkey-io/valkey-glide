@@ -112,7 +112,7 @@ async def transaction_test(
 
     if not await check_if_server_version_lt(redis_client, "6.2.0"):
         transaction.copy(key, key2, replace=True)
-        args.append(1)
+        args.append(True)
 
     transaction.rename(key, key2)
     args.append(OK)
@@ -719,6 +719,7 @@ class TestTransaction:
         transaction.get(key1)
         result = await redis_client.exec(transaction)
         assert result is not None
+        assert result[2] == True
         assert result[3] == value
 
     @pytest.mark.parametrize("cluster_mode", [True, False])

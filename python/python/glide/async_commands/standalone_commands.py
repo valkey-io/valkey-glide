@@ -488,6 +488,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.set("source", "sheep")
             >>> await client.copy("source", "destination", 1, False)
                 True # Source was copied
+            >>> await client.select(1)
             >>> await client.get("destination")
                 "sheep"
 
