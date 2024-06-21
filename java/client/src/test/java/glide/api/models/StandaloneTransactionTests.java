@@ -60,7 +60,7 @@ public class StandaloneTransactionTests {
                 "key1",
                 SortOptions.builder()
                         .orderBy(DESC)
-                        .alpha(true)
+                        .alpha()
                         .limit(new Limit(0L, 1L))
                         .byPattern("byPattern")
                         .getPatterns(List.of("getPattern1", "getPattern2"))
@@ -102,7 +102,7 @@ public class StandaloneTransactionTests {
                 "key1",
                 SortOptions.builder()
                         .orderBy(DESC)
-                        .alpha(true)
+                        .alpha()
                         .limit(new Limit(0L, 1L))
                         .byPattern("byPattern")
                         .getPatterns(List.of("getPattern1", "getPattern2"))
@@ -148,7 +148,7 @@ public class StandaloneTransactionTests {
                 "key2",
                 SortOptions.builder()
                         .orderBy(DESC)
-                        .alpha(true)
+                        .alpha()
                         .limit(new Limit(0L, 1L))
                         .byPattern("byPattern")
                         .getPatterns(List.of("getPattern1", "getPattern2"))

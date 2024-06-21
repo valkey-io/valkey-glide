@@ -150,7 +150,7 @@ public interface GenericCommands {
      * client.hset("user:2", Map.of("name", "Bob", "age", "25")).get();
      * client.lpush("user_ids", new String[] {"2", "1"}).get();
      * String [] payload = client.sort("user_ids", SortOptions.builder().byPattern("user:*->age")
-     *                  .getPatterns(new String[] {"user:*->name"}).build()).get();
+     *                  .getPattern("user:*->name").build()).get();
      * assertArrayEquals(new String[] {"Bob", "Alice"}, payload); // Returns a list of the names sorted by age
      * }</pre>
      */
@@ -172,7 +172,7 @@ public interface GenericCommands {
      * client.hset("user:2", Map.of("name", "Bob", "age", "25")).get();
      * client.lpush("user_ids", new String[] {"2", "1"}).get();
      * String [] payload = client.sortReadOnly("user_ids", SortOptions.builder().byPattern("user:*->age")
-     *                  .getPatterns(new String[] {"user:*->name"}).build()).get();
+     *                  .getPattern("user:*->name").build()).get();
      * assertArrayEquals(new String[] {"Bob", "Alice"}, payload); // Returns a list of the names sorted by age
      * }</pre>
      */
@@ -195,7 +195,7 @@ public interface GenericCommands {
      * client.hset("user:2", Map.of("name", "Bob", "age", "25")).get();
      * client.lpush("user_ids", new String[] {"2", "1"}).get();
      * Long payload = client.sortStore("user_ids", "destination",
-     *          SortOptions.builder().byPattern("user:*->age").getPatterns(new String[] {"user:*->name"}).build())
+     *          SortOptions.builder().byPattern("user:*->age").getPattern("user:*->name").build())
      *          .get();
      * assertEquals(2, payload);
      * assertArrayEquals(

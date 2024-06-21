@@ -164,7 +164,7 @@ public interface GenericClusterCommands {
      * @example
      *     <pre>{@code
      * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
-     * String[] payload = client.sort("mylist", SortClusterOptions.builder().alpha(true)
+     * String[] payload = client.sort("mylist", SortClusterOptions.builder().alpha()
      *          .orderBy(DESC).limit(new SortBaseOptions.Limit(0L, 3L)).build()).get();
      * assertArrayEquals(new String[] {"a", "3", "2"}, payload); // List is sorted in descending order lexicographically starting
      * }</pre>
@@ -185,7 +185,7 @@ public interface GenericClusterCommands {
      * @example
      *     <pre>{@code
      * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
-     * String[] payload = client.sortReadOnly("mylist", SortClusterOptions.builder().alpha(true)
+     * String[] payload = client.sortReadOnly("mylist", SortClusterOptions.builder().alpha()
      *          .orderBy(DESC).limit(new SortBaseOptions.Limit(0L, 3L)).build()).get();
      * assertArrayEquals(new String[] {"a", "3", "2"}, payload); // List is sorted in descending order lexicographically starting
      * }</pre>
@@ -210,7 +210,7 @@ public interface GenericClusterCommands {
      *     <pre>{@code
      * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
      * Long payload = client.sortStore("mylist", "destination",
-     *          SortClusterOptions.builder().alpha(true).orderBy(DESC)
+     *          SortClusterOptions.builder().alpha().orderBy(DESC)
      *              .limit(new SortBaseOptions.Limit(0L, 3L))build()).get();
      * assertEquals(3, payload);
      * assertArrayEquals(

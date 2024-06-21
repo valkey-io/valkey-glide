@@ -1958,7 +1958,7 @@ public class RedisClusterClientTest {
                 service.sort(
                         key,
                         SortClusterOptions.builder()
-                                .alpha(true)
+                                .alpha()
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
                                 .build());
@@ -2020,7 +2020,7 @@ public class RedisClusterClientTest {
                 service.sortReadOnly(
                         key,
                         SortClusterOptions.builder()
-                                .alpha(true)
+                                .alpha()
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
                                 .build());
@@ -2087,7 +2087,7 @@ public class RedisClusterClientTest {
                         key,
                         destKey,
                         SortClusterOptions.builder()
-                                .alpha(true)
+                                .alpha()
                                 .limit(new Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
                                 .build());

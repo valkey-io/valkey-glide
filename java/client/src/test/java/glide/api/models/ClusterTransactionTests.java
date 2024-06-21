@@ -37,7 +37,7 @@ public class ClusterTransactionTests {
                 "key1",
                 SortClusterOptions.builder()
                         .orderBy(ASC)
-                        .alpha(true)
+                        .alpha()
                         .limit(new SortBaseOptions.Limit(0L, 1L))
                         .build());
         results.add(
@@ -50,7 +50,7 @@ public class ClusterTransactionTests {
                 "key1",
                 SortClusterOptions.builder()
                         .orderBy(ASC)
-                        .alpha(true)
+                        .alpha()
                         .limit(new SortBaseOptions.Limit(0L, 1L))
                         .build());
         results.add(
@@ -64,7 +64,7 @@ public class ClusterTransactionTests {
                 "key2",
                 SortClusterOptions.builder()
                         .orderBy(ASC)
-                        .alpha(true)
+                        .alpha()
                         .limit(new SortBaseOptions.Limit(0L, 1L))
                         .build());
         results.add(

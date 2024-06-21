@@ -6846,7 +6846,7 @@ public class RedisClientTest {
                 service.sort(
                         key,
                         SortOptions.builder()
-                                .alpha(true)
+                                .alpha()
                                 .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
                                 .getPattern(getPattern)
@@ -6925,7 +6925,7 @@ public class RedisClientTest {
                         key,
                         destKey,
                         SortOptions.builder()
-                                .alpha(true)
+                                .alpha()
                                 .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
                                 .getPattern(getPattern)

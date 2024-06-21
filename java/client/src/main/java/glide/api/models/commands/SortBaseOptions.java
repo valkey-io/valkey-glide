@@ -43,7 +43,15 @@ public abstract class SortBaseOptions {
      * sorts elements numerically. Use this when the list, set, or sorted set contains string values
      * that cannot be converted into double precision floating point numbers.
      */
-    private final boolean alpha;
+    private final boolean isAlpha;
+
+    public abstract static class SortBaseOptionsBuilder<
+            C extends SortBaseOptions, B extends SortBaseOptionsBuilder<C, B>> {
+        public B alpha() {
+            this.isAlpha = true;
+            return self();
+        }
+    }
 
     /**
      * The <code>LIMIT</code> argument is commonly used to specify a subset of results from the
@@ -92,7 +100,7 @@ public abstract class SortBaseOptions {
             optionArgs.add(this.orderBy.toString());
         }
 
-        if (alpha) {
+        if (isAlpha) {
             optionArgs.add(ALPHA_COMMAND_STRING);
         }
 

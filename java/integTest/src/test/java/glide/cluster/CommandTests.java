@@ -1648,7 +1648,7 @@ public class CommandTests {
                         .sort(
                                 key2,
                                 SortClusterOptions.builder()
-                                        .alpha(true)
+                                        .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
                                         .build())
@@ -1674,7 +1674,7 @@ public class CommandTests {
                             .sortReadOnly(
                                     key2,
                                     SortClusterOptions.builder()
-                                            .alpha(true)
+                                            .alpha()
                                             .orderBy(DESC)
                                             .limit(new SortBaseOptions.Limit(0L, 4L))
                                             .build())
@@ -1689,7 +1689,7 @@ public class CommandTests {
                                 key2,
                                 key3,
                                 SortClusterOptions.builder()
-                                        .alpha(true)
+                                        .alpha()
                                         .orderBy(DESC)
                                         .limit(new SortBaseOptions.Limit(0L, 4L))
                                         .build())

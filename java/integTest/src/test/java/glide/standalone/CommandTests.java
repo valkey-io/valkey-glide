@@ -811,7 +811,7 @@ public class CommandTests {
         assertArrayEquals(
                 new String[] {null, null, null, null, null},
                 regularClient
-                        .sort(listKey, SortOptions.builder().alpha(true).getPattern("missing").build())
+                        .sort(listKey, SortOptions.builder().alpha().getPattern("missing").build())
                         .get());
 
         // Missing key in the set
@@ -869,8 +869,7 @@ public class CommandTests {
             assertArrayEquals(
                     new String[] {null, null, null, null, null},
                     regularClient
-                            .sortReadOnly(
-                                    listKey, SortOptions.builder().alpha(true).getPattern("missing").build())
+                            .sortReadOnly(listKey, SortOptions.builder().alpha().getPattern("missing").build())
                             .get());
 
             assertArrayEquals(
