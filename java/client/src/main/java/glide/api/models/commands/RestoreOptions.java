@@ -54,25 +54,25 @@ public final class RestoreOptions {
         List<GlideString> resultList = new ArrayList<>();
 
         resultList.add(key);
-        resultList.add(gs(Long.toString(ttl).getBytes()));
+        resultList.add(gs(Long.toString(ttl)));
         resultList.add(gs(value));
 
         if (hasReplace) {
-            resultList.add(gs(REPLACE_REDIS_API.getBytes()));
+            resultList.add(gs(REPLACE_REDIS_API));
         }
 
         if (hasAbsttl) {
-            resultList.add(gs(ABSTTL_REDIS_API.getBytes()));
+            resultList.add(gs(ABSTTL_REDIS_API));
         }
 
         if (idletime != null) {
-            resultList.add(gs(IDLETIME_REDIS_API.getBytes()));
-            resultList.add(gs(Long.toString(idletime).getBytes()));
+            resultList.add(gs(IDLETIME_REDIS_API));
+            resultList.add(gs(Long.toString(idletime)));
         }
 
         if (frequency != null) {
-            resultList.add(gs(FREQ_REDIS_API.getBytes()));
-            resultList.add(gs(Long.toString(frequency).getBytes()));
+            resultList.add(gs(FREQ_REDIS_API));
+            resultList.add(gs(Long.toString(frequency)));
         }
 
         return resultList.toArray(new GlideString[0]);

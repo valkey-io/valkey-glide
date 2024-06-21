@@ -5717,7 +5717,6 @@ public class SharedCommandTests {
         String key = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
         String newKey = UUID.randomUUID().toString();
-        String tempKey = UUID.randomUUID().toString();
         String value = "oranges";
 
         assertEquals(OK, client.set(key, value).get());
