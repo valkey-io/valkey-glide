@@ -23,8 +23,6 @@ from glide.async_commands.core import (
     ExpiryTypeGetEx,
     FlushMode,
     InsertPosition,
-    StreamAddOptions,
-    TrimByMinId,
 )
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -39,6 +37,7 @@ from glide.async_commands.sorted_set import (
     ScoreBoundary,
     ScoreFilter,
 )
+from glide.async_commands.stream import IdBound, StreamAddOptions, TrimByMinId
 from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -471,6 +470,8 @@ async def transaction_test(
     args.append("0-2")
     transaction.xlen(key11)
     args.append(2)
+    transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
+    args.append({"0-1": [["foo", "bar"]]})
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
     transaction.xdel(key11, ["0-2", "0-3"])
