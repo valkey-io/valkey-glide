@@ -6633,20 +6633,20 @@ public class RedisClientTest {
     @Test
     public void dump_returns_success() {
         // setup
-        GlideString key = gs("testKey".getBytes());
-        GlideString value = gs("value".getBytes());
+        GlideString key = gs("testKey");
+        byte[] value = "value".getBytes();
         GlideString[] arguments = new GlideString[] {key};
 
-        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        CompletableFuture<byte[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<GlideString>submitNewCommand(eq(Dump), eq(arguments), any()))
+        when(commandManager.<byte[]>submitNewCommand(eq(Dump), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<GlideString> response = service.dump(key);
-        GlideString payload = response.get();
+        CompletableFuture<byte[]> response = service.dump(key);
+        byte[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -6657,11 +6657,11 @@ public class RedisClientTest {
     @Test
     public void restore_returns_success() {
         // setup
-        GlideString key = gs("testKey".getBytes());
+        GlideString key = gs("testKey");
         long ttl = 0L;
-        GlideString value = gs("value".getBytes());
+        byte[] value = "value".getBytes();
 
-        GlideString[] arg = new GlideString[] {key, gs(Long.toString(ttl).getBytes()), value};
+        GlideString[] arg = new GlideString[] {key, gs(Long.toString(ttl).getBytes()), gs(value)};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -6682,23 +6682,23 @@ public class RedisClientTest {
     @Test
     public void restore_with_restoreOptions_returns_success() {
         // setup
-        GlideString key = gs("testKey".getBytes());
+        GlideString key = gs("testKey");
         long ttl = 0L;
-        GlideString value = gs("value".getBytes());
+        byte[] value = "value".getBytes();
         Long idletime = 10L;
         Long frequency = 5L;
 
         GlideString[] arg =
                 new GlideString[] {
                     key,
-                    gs(Long.toString(ttl).getBytes()),
-                    value,
-                    gs("REPLACE".getBytes()),
-                    gs("ABSTTL".getBytes()),
-                    gs("IDLETIME".getBytes()),
-                    gs("10".getBytes()),
-                    gs("FREQ".getBytes()),
-                    gs("5".getBytes())
+                    gs(Long.toString(ttl)),
+                    gs(value),
+                    gs("REPLACE"),
+                    gs("ABSTTL"),
+                    gs("IDLETIME"),
+                    gs("10"),
+                    gs("FREQ"),
+                    gs("5")
                 };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();

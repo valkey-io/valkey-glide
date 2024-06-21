@@ -603,13 +603,13 @@ public interface GenericBaseCommands {
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
      * @example
      *     <pre>{@code
-     * GlideString result = client.dump("myKey").get();
+     * byte[] result = client.dump("myKey").get();
      *
-     * GlideString response = client.dump("nonExistingKey").get();
+     * byte[] response = client.dump("nonExistingKey").get();
      * assert response.equals(null);
      * }</pre>
      */
-    CompletableFuture<GlideString> dump(GlideString key);
+    CompletableFuture<byte[]> dump(GlideString key);
 
     /**
      * Create a <code>key</code> associated with a <code>value</code> that is obtained by
@@ -624,11 +624,11 @@ public interface GenericBaseCommands {
      *      </code>.
      * @example
      *     <pre>{@code
-     * String result = client.restore("newKey", 0, "value").get();
+     * String result = client.restore(gs("newKey"), 0, value).get();
      * assert result.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> restore(GlideString key, long ttl, GlideString value);
+    CompletableFuture<String> restore(GlideString key, long ttl, byte[] value);
 
     /**
      * Create a <code>key</code> associated with a <code>value</code> that is obtained by
@@ -646,10 +646,10 @@ public interface GenericBaseCommands {
      *     <pre>{@code
      * RestoreOptions options = RestoreOptions.builder().replace().absttl().idletime(10).frequency(10).build()).get();
      * // Set restore options with replace and absolute TTL modifiers, object idletime and frequency to 10.
-     * String result = client.restore("newKey", 0, "value", options);
+     * String result = client.restore(gs("newKey"), 0, value, options).get();
      * assert result.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> restore(
-            GlideString key, long ttl, GlideString value, RestoreOptions restoreOptions);
+            GlideString key, long ttl, byte[] value, RestoreOptions restoreOptions);
 }

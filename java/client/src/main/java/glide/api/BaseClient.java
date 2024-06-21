@@ -371,7 +371,11 @@ public abstract class BaseClient
                 String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
-    protected GlideString handleBytesOrNullResponse(Response response) throws RedisException {
+    protected byte[] handleBytesOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(byte[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+    }
+
+    protected GlideString handleGlideStringOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
@@ -501,7 +505,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString> get(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                Get, new GlideString[] {key}, this::handleBytesOrNullResponse);
+                Get, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -513,7 +517,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString> getdel(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                GetDel, new GlideString[] {key}, this::handleBytesOrNullResponse);
+                GetDel, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -2029,15 +2033,15 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<GlideString> dump(@NonNull GlideString key) {
+    public CompletableFuture<byte[]> dump(@NonNull GlideString key) {
         GlideString[] arguments = new GlideString[] {key};
         return commandManager.submitNewCommand(Dump, arguments, this::handleBytesOrNullResponse);
     }
 
     @Override
     public CompletableFuture<String> restore(
-            @NonNull GlideString key, long ttl, @NonNull GlideString value) {
-        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(ttl).getBytes()), value};
+            @NonNull GlideString key, long ttl, @NonNull byte[] value) {
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(ttl).getBytes()), gs(value)};
         return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
     }
 
@@ -2045,7 +2049,7 @@ public abstract class BaseClient
     public CompletableFuture<String> restore(
             @NonNull GlideString key,
             long ttl,
-            @NonNull GlideString value,
+            @NonNull byte[] value,
             @NonNull RestoreOptions restoreOptions) {
         GlideString[] arguments = restoreOptions.toArgs(key, ttl, value);
         return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);

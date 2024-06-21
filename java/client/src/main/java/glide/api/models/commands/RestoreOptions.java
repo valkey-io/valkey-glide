@@ -10,7 +10,7 @@ import java.util.List;
 import lombok.*;
 
 /**
- * Optional arguments to {@link GenericBaseCommands#restore(GlideString, long, GlideString,
+ * Optional arguments to {@link GenericBaseCommands#restore(GlideString, long, byte[],
  * RestoreOptions)}
  *
  * @see <a href="https://valkey.io/commands/restore/">valkey.io</a>
@@ -46,16 +46,16 @@ public final class RestoreOptions {
 
     /**
      * Creates the argument to be used in {@link GenericBaseCommands#restore(GlideString, long,
-     * GlideString, RestoreOptions)}
+     * byte[], RestoreOptions)}
      *
      * @return a GlideString array that holds the sub commands and their arguments.
      */
-    public GlideString[] toArgs(GlideString key, long ttl, GlideString value) {
+    public GlideString[] toArgs(GlideString key, long ttl, byte[] value) {
         List<GlideString> resultList = new ArrayList<>();
 
         resultList.add(key);
         resultList.add(gs(Long.toString(ttl).getBytes()));
-        resultList.add(value);
+        resultList.add(gs(value));
 
         if (hasReplace) {
             resultList.add(gs(REPLACE_REDIS_API.getBytes()));
