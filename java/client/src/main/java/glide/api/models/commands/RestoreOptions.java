@@ -48,7 +48,7 @@ public final class RestoreOptions {
      * Creates the argument to be used in {@link GenericBaseCommands#restore(GlideString, long,
      * GlideString, RestoreOptions)}
      *
-     * @return a byte array that holds the sub commands and their arguments.
+     * @return a GlideString array that holds the sub commands and their arguments.
      */
     public GlideString[] toArgs(GlideString key, long ttl, GlideString value) {
         List<GlideString> resultList = new ArrayList<>();
