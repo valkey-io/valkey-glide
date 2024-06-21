@@ -347,24 +347,18 @@ public class TransactionTests {
                 .lpush(genericKey1, new String[] {"2", "1"})
                 .sort(
                         genericKey1,
-                        SortOptions.builder()
-                                .byPattern("user:*->age")
-                                .getPatterns(new String[] {"user:*->name"})
-                                .build())
+                        SortOptions.builder().byPattern("user:*->age").getPattern("user:*->name").build())
                 .sort(
                         genericKey1,
                         SortOptions.builder()
                                 .orderBy(DESC)
                                 .byPattern("user:*->age")
-                                .getPatterns(new String[] {"user:*->name"})
+                                .getPattern("user:*->name")
                                 .build())
                 .sortStore(
                         genericKey1,
                         genericKey2,
-                        SortOptions.builder()
-                                .byPattern("user:*->age")
-                                .getPatterns(new String[] {"user:*->name"})
-                                .build())
+                        SortOptions.builder().byPattern("user:*->age").getPattern("user:*->name").build())
                 .lrange(genericKey2, 0, -1)
                 .sortStore(
                         genericKey1,
@@ -372,7 +366,7 @@ public class TransactionTests {
                         SortOptions.builder()
                                 .orderBy(DESC)
                                 .byPattern("user:*->age")
-                                .getPatterns(new String[] {"user:*->name"})
+                                .getPattern("user:*->name")
                                 .build())
                 .lrange(genericKey2, 0, -1);
 
@@ -395,16 +389,13 @@ public class TransactionTests {
             transaction2
                     .sortReadOnly(
                             genericKey1,
-                            SortOptions.builder()
-                                    .byPattern("user:*->age")
-                                    .getPatterns(new String[] {"user:*->name"})
-                                    .build())
+                            SortOptions.builder().byPattern("user:*->age").getPattern("user:*->name").build())
                     .sortReadOnly(
                             genericKey1,
                             SortOptions.builder()
                                     .orderBy(DESC)
                                     .byPattern("user:*->age")
-                                    .getPatterns(new String[] {"user:*->name"})
+                                    .getPattern("user:*->name")
                                     .build());
 
             expectedResults =

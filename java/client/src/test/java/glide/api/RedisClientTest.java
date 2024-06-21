@@ -6849,7 +6849,7 @@ public class RedisClientTest {
                                 .alpha(true)
                                 .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
-                                .getPatterns(new String[] {getPattern})
+                                .getPattern(getPattern)
                                 .byPattern(byPattern)
                                 .build());
         String[] payload = response.get();
@@ -6879,11 +6879,7 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String[]> response =
                 service.sortReadOnly(
-                        key,
-                        SortOptions.builder()
-                                .getPatterns(new String[] {getPattern})
-                                .byPattern(byPattern)
-                                .build());
+                        key, SortOptions.builder().getPattern(getPattern).byPattern(byPattern).build());
         String[] payload = response.get();
 
         // verify
@@ -6932,7 +6928,7 @@ public class RedisClientTest {
                                 .alpha(true)
                                 .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
-                                .getPatterns(new String[] {getPattern})
+                                .getPattern(getPattern)
                                 .byPattern(byPattern)
                                 .build());
         Long payload = response.get();

@@ -143,19 +143,14 @@ public interface GenericCommands {
      *
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
-     * @return A <code>Array</code> of sorted elements.
+     * @return An <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
      * client.hset("user:1", Map.of("name", "Alice", "age", "30")).get();
      * client.hset("user:2", Map.of("name", "Bob", "age", "25")).get();
      * client.lpush("user_ids", new String[] {"2", "1"}).get();
-     * String [] payload = client.sort(
-     *      "user_ids",
-     *      SortOptions
-     *          .builder()
-     *              .byPattern("user:*->age")
-     *                  .getPatterns(new String[] {"user:*->name"})
-     *                      .build()).get();
+     * String [] payload = client.sort("user_ids", SortOptions.builder().byPattern("user:*->age")
+     *                  .getPatterns(new String[] {"user:*->name"}).build()).get();
      * assertArrayEquals(new String[] {"Bob", "Alice"}, payload); // Returns a list of the names sorted by age
      * }</pre>
      */
@@ -170,19 +165,14 @@ public interface GenericCommands {
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
-     * @return A <code>Array</code> of sorted elements.
+     * @return An <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
      * client.hset("user:1", Map.of("name", "Alice", "age", "30")).get();
      * client.hset("user:2", Map.of("name", "Bob", "age", "25")).get();
      * client.lpush("user_ids", new String[] {"2", "1"}).get();
-     * String [] payload = client.sortReadOnly(
-     *      "user_ids",
-     *      SortOptions
-     *          .builder()
-     *              .byPattern("user:*->age")
-     *                  .getPatterns(new String[] {"user:*->name"})
-     *                      .build()).get();
+     * String [] payload = client.sortReadOnly("user_ids", SortOptions.builder().byPattern("user:*->age")
+     *                  .getPatterns(new String[] {"user:*->name"}).build()).get();
      * assertArrayEquals(new String[] {"Bob", "Alice"}, payload); // Returns a list of the names sorted by age
      * }</pre>
      */
@@ -204,14 +194,8 @@ public interface GenericCommands {
      * client.hset("user:1", Map.of("name", "Alice", "age", "30")).get();
      * client.hset("user:2", Map.of("name", "Bob", "age", "25")).get();
      * client.lpush("user_ids", new String[] {"2", "1"}).get();
-     * Long payload = client
-     *      .sortStore(
-     *          "user_ids",
-     *          "destination",
-     *          SortOptions.builder()
-     *              .byPattern("user:*->age")
-     *              .getPatterns(new String[] {"user:*->name"})
-     *              .build())
+     * Long payload = client.sortStore("user_ids", "destination",
+     *          SortOptions.builder().byPattern("user:*->age").getPatterns(new String[] {"user:*->name"}).build())
      *          .get();
      * assertEquals(2, payload);
      * assertArrayEquals(

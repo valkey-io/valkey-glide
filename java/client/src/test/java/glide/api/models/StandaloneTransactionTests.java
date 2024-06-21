@@ -43,7 +43,7 @@ public class StandaloneTransactionTests {
                 "key1",
                 SortOptions.builder()
                         .byPattern("byPattern")
-                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .getPatterns(List.of("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -63,7 +63,7 @@ public class StandaloneTransactionTests {
                         .alpha(true)
                         .limit(new Limit(0L, 1L))
                         .byPattern("byPattern")
-                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .getPatterns(List.of("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -85,7 +85,7 @@ public class StandaloneTransactionTests {
                 "key1",
                 SortOptions.builder()
                         .byPattern("byPattern")
-                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .getPatterns(List.of("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -105,7 +105,7 @@ public class StandaloneTransactionTests {
                         .alpha(true)
                         .limit(new Limit(0L, 1L))
                         .byPattern("byPattern")
-                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .getPatterns(List.of("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -128,7 +128,7 @@ public class StandaloneTransactionTests {
                 "key2",
                 SortOptions.builder()
                         .byPattern("byPattern")
-                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .getPatterns(List.of("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(
@@ -151,7 +151,7 @@ public class StandaloneTransactionTests {
                         .alpha(true)
                         .limit(new Limit(0L, 1L))
                         .byPattern("byPattern")
-                        .getPatterns(new String[] {"getPattern1", "getPattern2"})
+                        .getPatterns(List.of("getPattern1", "getPattern2"))
                         .build());
         results.add(
                 Pair.of(

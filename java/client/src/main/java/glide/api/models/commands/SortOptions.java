@@ -4,6 +4,7 @@ package glide.api.models.commands;
 import glide.api.commands.GenericCommands;
 import java.util.ArrayList;
 import java.util.List;
+import lombok.Singular;
 import lombok.experimental.SuperBuilder;
 
 /**
@@ -47,10 +48,12 @@ public class SortOptions extends SortBaseOptions {
      * getPatterns</code> is <code>name_*</code>, the command will return the values of the keys
      * <code>name_&lt;element&gt;</code> for each sorted element. Multiple <code>getPatterns</code>
      * arguments can be provided to retrieve multiple attributes. The special value <code>#</code> can
-     * be used to include the actual element from `key` being sorted. If not provided, only the sorted
-     * elements themselves are returned.
+     * be used to include the actual element from <code>key</code> being sorted. If not provided, only
+     * the sorted elements themselves are returned.<br>
+     *
+     * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for more information.
      */
-    private final String[] getPatterns;
+    @Singular private final List<String> getPatterns;
 
     /**
      * Creates the arguments to be used in <code>SORT</code> and <code>SORT_RO</code> commands.
@@ -65,9 +68,8 @@ public class SortOptions extends SortBaseOptions {
         }
 
         if (getPatterns != null) {
-            for (int i = 0; i < getPatterns.length; i++) {
-                optionArgs.addAll(List.of(GET_COMMAND_STRING, getPatterns[i]));
-            }
+            getPatterns.stream()
+                    .forEach(getPattern -> optionArgs.addAll(List.of(GET_COMMAND_STRING, getPattern)));
         }
 
         return optionArgs.toArray(new String[0]);

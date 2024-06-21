@@ -12,7 +12,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
 import glide.api.models.commands.SortOptions;
-import glide.api.models.configuration.ReadFrom;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -126,7 +125,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      *
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
-     * @return Command Response - A <code>Array</code> of sorted elements.
+     * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public Transaction sort(@NonNull String key, @NonNull SortOptions sortOptions) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortOptions.toArgs(), key));
@@ -138,12 +137,11 @@ public class Transaction extends BaseTransaction<Transaction> {
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
      * and apply transformations on sorted elements.<br>
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortOptions The {@link SortOptions}.
-     * @return Command Response - A <code>Array</code> of sorted elements.
+     * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public Transaction sortReadOnly(@NonNull String key, @NonNull SortOptions sortOptions) {
         ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortOptions.toArgs(), key));

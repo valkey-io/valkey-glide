@@ -153,24 +153,19 @@ public interface GenericClusterCommands {
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * <br>
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
      * To store the result into a new key, see {@link #sortStore(String, String, SortClusterOptions)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortClusterOptions The {@link SortClusterOptions}.
-     * @return A <code>Array</code> of sorted elements.
+     * @return An <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
      * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
-     * String[] payload = client.sort(
-     *      "mylist",
-     *      SortClusterOptions.builder()
-     *          .alpha(true)
-     *          .orderBy(DESC)
-     *          .limit(new SortBaseOptions.Limit(0L, 3L))
-     *          .build())
-     *      .get();
+     * String[] payload = client.sort("mylist", SortClusterOptions.builder().alpha(true)
+     *          .orderBy(DESC).limit(new SortBaseOptions.Limit(0L, 3L)).build()).get();
      * assertArrayEquals(new String[] {"a", "3", "2"}, payload); // List is sorted in descending order lexicographically starting
      * }</pre>
      */
@@ -186,18 +181,12 @@ public interface GenericClusterCommands {
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
      * @param sortClusterOptions The {@link SortClusterOptions}.
-     * @return A <code>Array</code> of sorted elements.
+     * @return An <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
      * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
-     * String[] payload = client.sortReadOnly(
-     *      "mylist",
-     *      SortClusterOptions.builder()
-     *          .alpha(true)
-     *          .orderBy(DESC)
-     *          .limit(new SortBaseOptions.Limit(0L, 3L))
-     *          .build())
-     *      .get();
+     * String[] payload = client.sortReadOnly("mylist", SortClusterOptions.builder().alpha(true)
+     *          .orderBy(DESC).limit(new SortBaseOptions.Limit(0L, 3L)).build()).get();
      * assertArrayEquals(new String[] {"a", "3", "2"}, payload); // List is sorted in descending order lexicographically starting
      * }</pre>
      */
@@ -209,7 +198,7 @@ public interface GenericClusterCommands {
      * different criteria, apply transformations on sorted elements, and store the result in a new
      * key.<br>
      * To get the sort result without storing it into a key, see {@link #sort(String,
-     * SortClusterOptions)} and {@link #sortReadOnly(String, SortClusterOptions)}.
+     * SortClusterOptions)} or {@link #sortReadOnly(String, SortClusterOptions)}.
      *
      * @apiNote When in cluster mode, <code>key</code> and <code>destination</code> must map to the
      *     same hash slot.
@@ -220,16 +209,9 @@ public interface GenericClusterCommands {
      * @example
      *     <pre>{@code
      * client.lpush("mylist", new String[] {"3", "1", "2", "a"}).get();
-     * Long payload = client
-     *      .sortStore(
-     *          "mylist",
-     *          "destination",
-     *          SortClusterOptions.builder()
-     *              .alpha(true)
-     *              .orderBy(DESC)
-     *              .limit(new SortBaseOptions.Limit(0L, 3L))
-     *              .build())
-     *      .get();
+     * Long payload = client.sortStore("mylist", "destination",
+     *          SortClusterOptions.builder().alpha(true).orderBy(DESC)
+     *              .limit(new SortBaseOptions.Limit(0L, 3L))build()).get();
      * assertEquals(3, payload);
      * assertArrayEquals(
      *      new String[] {"a", "3", "2"},

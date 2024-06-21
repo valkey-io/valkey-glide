@@ -1,19 +1,13 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import glide.api.commands.GenericClusterCommands;
-import glide.api.commands.GenericCommands;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Optional arguments to {@link GenericClusterCommands#sort(String, SortClusterOptions)}, {@link
- * GenericClusterCommands#sortReadOnly(String, SortClusterOptions)}, {@link
- * GenericClusterCommands#sortStore(String, String, SortClusterOptions)}, {@link
- * GenericCommands#sort(String, SortOptions)}, {@link GenericCommands#sortReadOnly(String,
- * SortOptions)}, and {@link GenericCommands#sortStore(String, String, SortOptions)}
+ * Optional arguments to sort, sortReadOnly, and sortStore commands
  *
  * @see <a href="https://redis.io/commands/sort/">redis.io</a> and <a
  *     href="https://redis.io/docs/latest/commands/sort_ro/">redis.io</a>
@@ -36,8 +30,8 @@ public abstract class SortBaseOptions {
     public static final String STORE_COMMAND_STRING = "STORE";
 
     /**
-     * Limiting the range of the query by setting offset and result count. See `Limit` class for more
-     * information.
+     * Limiting the range of the query by setting offset and result count. See {@link Limit} class for
+     * more information.
      */
     private final Limit limit;
 

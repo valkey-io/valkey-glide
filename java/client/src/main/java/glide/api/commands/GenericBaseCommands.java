@@ -656,9 +656,10 @@ public interface GenericBaseCommands {
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * <br>
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String)}.
+     * To store the result into a new key, see {@link #sortStore(String, String)}.<br>
      *
      * @param key The key of the list, set, or sorted set to be sorted.
      * @return An <code>Array</code> of sorted elements.
@@ -679,7 +680,7 @@ public interface GenericBaseCommands {
      *
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @return A <code>Array</code> of sorted elements.
+     * @return An <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
      * client.lpush("mylist", new String[] {"3", "1", "2"}).get();
@@ -693,7 +694,7 @@ public interface GenericBaseCommands {
      * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
      * different criteria, apply transformations on sorted elements, and store the result in a new
      * key.<br>
-     * To get the sort result without storing it into a key, see {@link #sort(String)} and {@link
+     * To get the sort result without storing it into a key, see {@link #sort(String)} or {@link
      * #sortReadOnly(String)}.
      *
      * @apiNote When in cluster mode, <code>key</code> and <code>destination</code> must map to the

@@ -4757,12 +4757,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * <br>
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String)}.
+     * To store the result into a new key, see {@link #sortStore(String, String)}.<br>
      *
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @return Command Response - A <code>Array</code> of sorted elements.
+     * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public T sort(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
@@ -4774,12 +4775,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * <br>
      * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
-     * and apply transformations on sorted elements.<br>
-     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     * and apply transformations on sorted elements.
      *
      * @since Redis 7.0 and above.
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @return Command Response - A <code>Array</code> of sorted elements.
+     * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public T sortReadOnly(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
@@ -4792,7 +4792,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
      * different criteria, apply transformations on sorted elements, and store the result in a new
      * key.<br>
-     * To get the sort result without storing it into a key, see {@link #sort(String)} and {@link
+     * To get the sort result without storing it into a key, see {@link #sort(String)} or {@link
      * #sortReadOnly(String)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
