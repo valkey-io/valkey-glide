@@ -125,7 +125,7 @@ jobs:
                       java/integTest/build/reports/**
                       utils/clusters/**
                       benchmarks/results/**
-                      java/bundle.jar
+                      ~/.m2/repository/software/amazon/glide/glide/0.4.2/bundle.jar
 
     build-amazonlinux-latest:
         if: github.repository_owner == 'aws'
