@@ -181,7 +181,7 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
             groupId = 'software.amazon.glide'
-            artifactId = 'glide'
+            artifactId = 'glide-placeholder'
             version = "0.4.2"
             pom {
                 name = 'glide-for-valkey'
