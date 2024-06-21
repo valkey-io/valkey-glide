@@ -99,7 +99,14 @@ jobs:
               shell: bash
               working-directory: ./java/client
               run: |
-                  SED_FOR_MACOS=`if [[ "${{ inputs.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  SED_FOR_MACOS=`if [[ "${{ matrix.host.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
+                  sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.host.CLASSIFIER }}/g' build.gradle
+
+            - name: Replace placeholders in build.gradle for examples
+              shell: bash
+              working-directory: ./java/examples
+              run: |
+                  SED_FOR_MACOS=`if [[ "${{ matrix.host.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
                   sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.host.CLASSIFIER }}/g' build.gradle
 
             - name: Build java client
