@@ -201,6 +201,58 @@ Development on the Java wrapper may involve changes in either the Java or Rust c
     cargo fmt --manifest-path ./Cargo.toml --all
     ```
 
+### Implementing a command
+
+- A node is an instance of a Redis server, and a redis cluster is composed of multiple nodes working in tandem.
+- The redis commands can either have a standalone or cluster implementation dependent on their specifications.
+- A cluster command will require a note to indicate a node will follow a specific routing.
+Refer to https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec for more details on how hash slots work for cluster commands.
+
+When starting a command, check the redis_request.proto and request_type.rs to see whether the command has already been implemented in another language such as Python or Node.js.
+
+The BaseClient.java (standalone and cluster) will implement methods from the following interfaces listed in the java/client/src/main/java/glide/api/commands.
+The return types of these methods are in the form of a CompletableFuture<>, which is meant to fulfill the purpose of the synchronous and asynchronous features of the program.
+The BaseClient.java can implement both standalone and cluster commands.
+
+When implementing a command, it requires both a unit test and an integration test. The objective of the UT is to mock the expected result.
+
+Implement a unit test in:
+- RedisClientTest.java for standalone.
+- RedisClientTest.java, and RedisClusterClientTest.java for cluster commands.
+These files are found in the java/client/src/test/java/glide/api path.
+
+Implement an integration tests in the following files
+- TransactionTests.java (standalone and cluster)
+- TransactionTestsUtilities.java (standalone and cluster)
+- SharedCommandTests.java (standalone)
+- CommandTests.java (cluster)
+
+For commands that have options, create a separate file for the optional values.
+
+BaseTransaction.java will add the command to the Transactions list. BaseClient will submit the command to Transactions to execute.
+Refer to https://redis.io/docs/latest/develop/interact/transactions/ for more details about how Transactions work in Redis.
+
+Javadocs
+BaseTransactions.java and the methods within the command interfaces will both contain documentation on how the command operates.
+In the command interface it should contain
+- Detail on when the Redis started supporting the command (if it wasn't initially implemented in version 1.0.0)
+- A link to Redis command.
+- Information about the function parameters.
+- The command's return type. In the BaseTransaction.java file, include "Command Response" before specifying the return type.
+
+FFI naming and signatures
+Javac will create the name of the signature in rust convention which can be called on native code.
+- In the command line write:
+```bash
+javac -h . RedisValueResolver.java
+```
+the results can be found in the glide_ffi_resolvers_RedisValueResolver.h file.
+In this project, only the function name and signature name is necessary.
+
+Module Information
+- The module-info.java (glide.api) contains a list of all of the directories the user can access.
+- Ensure to update the exports list if there are more directories the user will need to access.
+
 ### FFI and features
 - Names of the FFI defined in lib.rs have to correspond to the paths of real Java classes that expose native functions.
 - lib.rs method names explicitly point to the native functions defined there.
