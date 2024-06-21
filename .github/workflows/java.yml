@@ -97,6 +97,7 @@ jobs:
               working-directory: java
               run: |
                   ./gradlew --continue build -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+                  ./gradlew :client:publishToMavenLocal
 
             - name: Ensure no skipped files by linter
               working-directory: java
@@ -105,6 +106,12 @@ jobs:
             - uses: ./.github/workflows/test-benchmark
               with:
                   language-flag: -java
+
+            - name: Bundle JAR
+              working-directory: java
+              run: |
+                  src_folder=~/.m2/repository/software/amazon/glide/glide/0.0.1
+                  jar -cvf bundle.jar src_folder
 
             - name: Upload test reports
               if: always()
@@ -117,6 +124,7 @@ jobs:
                       java/integTest/build/reports/**
                       utils/clusters/**
                       benchmarks/results/**
+                      java/bundle.jar
 
     build-amazonlinux-latest:
         if: github.repository_owner == 'aws'
