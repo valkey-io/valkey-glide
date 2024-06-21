@@ -2067,13 +2067,13 @@ public class RedisClusterClientTest {
         String[] args =
                 new String[] {
                     key,
-                    STORE_COMMAND_STRING,
-                    destKey,
                     LIMIT_COMMAND_STRING,
                     limitOffset.toString(),
                     limitCount.toString(),
                     DESC.toString(),
-                    ALPHA_COMMAND_STRING
+                    ALPHA_COMMAND_STRING,
+                    STORE_COMMAND_STRING,
+                    destKey
                 };
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(result);

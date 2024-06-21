@@ -6901,8 +6901,6 @@ public class RedisClientTest {
         String[] args =
                 new String[] {
                     key,
-                    STORE_COMMAND_STRING,
-                    destKey,
                     LIMIT_COMMAND_STRING,
                     limitOffset.toString(),
                     limitCount.toString(),
@@ -6911,7 +6909,9 @@ public class RedisClientTest {
                     BY_COMMAND_STRING,
                     byPattern,
                     GET_COMMAND_STRING,
-                    getPattern
+                    getPattern,
+                    STORE_COMMAND_STRING,
+                    destKey
                 };
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(result);

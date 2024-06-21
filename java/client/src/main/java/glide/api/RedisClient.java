@@ -352,7 +352,7 @@ public class RedisClient extends BaseClient
             @NonNull String key, @NonNull String destination, @NonNull SortOptions sortOptions) {
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         String[] arguments =
-                ArrayUtils.addFirst(concatenateArrays(storeArguments, sortOptions.toArgs()), key);
+                concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments);
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 }

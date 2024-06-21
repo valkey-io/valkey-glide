@@ -5,6 +5,7 @@ import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.GenericCommands.DB_REDIS_API;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
@@ -166,8 +167,7 @@ public class Transaction extends BaseTransaction<Transaction> {
             @NonNull String key, @NonNull String destination, @NonNull SortOptions sortOptions) {
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         ArgsArray arguments =
-                buildArgs(
-                        ArrayUtils.addFirst(ArrayUtils.addAll(storeArguments, sortOptions.toArgs()), key));
+                buildArgs(concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments));
         protobufTransaction.addCommands(buildCommand(Sort, arguments));
         return this;
     }

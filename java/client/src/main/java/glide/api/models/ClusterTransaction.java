@@ -2,6 +2,7 @@
 package glide.api.models;
 
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
@@ -95,8 +96,7 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         RedisRequestOuterClass.Command.ArgsArray commandArgs =
                 buildArgs(
-                        ArrayUtils.addFirst(
-                                ArrayUtils.addAll(storeArguments, sortClusterOptions.toArgs()), key));
+                        concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments));
         protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
         return this;
     }

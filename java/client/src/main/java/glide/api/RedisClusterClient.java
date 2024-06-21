@@ -732,7 +732,7 @@ public class RedisClusterClient extends BaseClient
             @NonNull SortClusterOptions sortClusterOptions) {
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         String[] arguments =
-                ArrayUtils.addFirst(concatenateArrays(storeArguments, sortClusterOptions.toArgs()), key);
+                concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments);
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 }

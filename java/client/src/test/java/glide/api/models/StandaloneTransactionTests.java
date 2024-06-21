@@ -135,14 +135,14 @@ public class StandaloneTransactionTests {
                         Sort,
                         buildArgs(
                                 "key1",
-                                STORE_COMMAND_STRING,
-                                "key2",
                                 BY_COMMAND_STRING,
                                 "byPattern",
                                 GET_COMMAND_STRING,
                                 "getPattern1",
                                 GET_COMMAND_STRING,
-                                "getPattern2")));
+                                "getPattern2",
+                                STORE_COMMAND_STRING,
+                                "key2")));
         transaction.sortStore(
                 "key1",
                 "key2",
@@ -158,8 +158,6 @@ public class StandaloneTransactionTests {
                         Sort,
                         buildArgs(
                                 "key1",
-                                STORE_COMMAND_STRING,
-                                "key2",
                                 LIMIT_COMMAND_STRING,
                                 "0",
                                 "1",
@@ -170,7 +168,9 @@ public class StandaloneTransactionTests {
                                 GET_COMMAND_STRING,
                                 "getPattern1",
                                 GET_COMMAND_STRING,
-                                "getPattern2")));
+                                "getPattern2",
+                                STORE_COMMAND_STRING,
+                                "key2")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

@@ -256,7 +256,6 @@ public class ClusterTransactionTests {
     public void sort() {
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
-        String[] ascendingList = new String[] {"1", "2", "3"};
         String[] descendingList = new String[] {"3", "2", "1"};
         ClusterTransaction transaction = new ClusterTransaction();
         transaction

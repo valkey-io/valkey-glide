@@ -72,13 +72,13 @@ public class ClusterTransactionTests {
                         Sort,
                         buildArgs(
                                 "key1",
-                                STORE_COMMAND_STRING,
-                                "key2",
                                 LIMIT_COMMAND_STRING,
                                 "0",
                                 "1",
                                 ASC.toString(),
-                                ALPHA_COMMAND_STRING)));
+                                ALPHA_COMMAND_STRING,
+                                STORE_COMMAND_STRING,
+                                "key2")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
