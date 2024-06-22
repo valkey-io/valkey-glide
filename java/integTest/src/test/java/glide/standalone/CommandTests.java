@@ -18,9 +18,13 @@ import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
+import static glide.api.models.commands.SortBaseOptions.Limit;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -31,10 +35,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -736,5 +742,179 @@ public class CommandTests {
         // no keys in database
         assertEquals(OK, regularClient.flushall().get());
         assertNull(regularClient.randomKey().get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void sort() {
+        String setKey1 = "setKey1";
+        String setKey2 = "setKey2";
+        String setKey3 = "setKey3";
+        String setKey4 = "setKey4";
+        String setKey5 = "setKey5";
+        String[] setKeys = new String[] {setKey1, setKey2, setKey3, setKey4, setKey5};
+        String listKey = "listKey";
+        String storeKey = "storeKey";
+        String nameField = "name";
+        String ageField = "age";
+        String[] names = new String[] {"Alice", "Bob", "Charlie", "Dave", "Eve"};
+        String[] namesSortedByAge = new String[] {"Dave", "Bob", "Alice", "Charlie", "Eve"};
+        String[] ages = new String[] {"30", "25", "35", "20", "40"};
+        String[] userIDs = new String[] {"3", "1", "5", "4", "2"};
+        String namePattern = "setKey*->name";
+        String agePattern = "setKey*->age";
+        String missingListKey = "100000";
+
+        for (int i = 0; i < setKeys.length; i++) {
+            assertEquals(
+                    2, regularClient.hset(setKeys[i], Map.of(nameField, names[i], ageField, ages[i])).get());
+        }
+
+        assertEquals(5, regularClient.rpush(listKey, userIDs).get());
+        assertArrayEquals(
+                new String[] {"Alice", "Bob"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
+                        .get());
+        assertArrayEquals(
+                new String[] {"Eve", "Dave"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder()
+                                        .limit(new Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(
+                new String[] {"Eve", "40", "Charlie", "35"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder()
+                                        .limit(new Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .byPattern(agePattern)
+                                        .getPatterns(List.of(namePattern, agePattern))
+                                        .build())
+                        .get());
+
+        // Non-existent key in the BY pattern will result in skipping the sorting operation
+        assertArrayEquals(
+                userIDs,
+                regularClient.sort(listKey, SortOptions.builder().byPattern("noSort").build()).get());
+
+        // Non-existent key in the GET pattern results in nulls
+        assertArrayEquals(
+                new String[] {null, null, null, null, null},
+                regularClient
+                        .sort(listKey, SortOptions.builder().alpha().getPattern("missing").build())
+                        .get());
+
+        // Missing key in the set
+        assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
+        assertArrayEquals(
+                new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertEquals(missingListKey, regularClient.lpop(listKey).get());
+
+        // SORT_RO
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(
+                    new String[] {"Alice", "Bob"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
+                            .get());
+            assertArrayEquals(
+                    new String[] {"Eve", "Dave"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder()
+                                            .limit(new Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .getPattern(namePattern)
+                                            .build())
+                            .get());
+            assertArrayEquals(
+                    new String[] {"Eve", "40", "Charlie", "35"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder()
+                                            .limit(new Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .byPattern(agePattern)
+                                            .getPatterns(List.of(namePattern, agePattern))
+                                            .build())
+                            .get());
+
+            // Non-existent key in the BY pattern will result in skipping the sorting operation
+            assertArrayEquals(
+                    userIDs,
+                    regularClient
+                            .sortReadOnly(listKey, SortOptions.builder().byPattern("noSort").build())
+                            .get());
+
+            // Non-existent key in the GET pattern results in nulls
+            assertArrayEquals(
+                    new String[] {null, null, null, null, null},
+                    regularClient
+                            .sortReadOnly(listKey, SortOptions.builder().alpha().getPattern("missing").build())
+                            .get());
+
+            assertArrayEquals(
+                    namesSortedByAge,
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+
+            // Missing key in the set
+            assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
+            assertArrayEquals(
+                    new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+            assertEquals(missingListKey, regularClient.lpop(listKey).get());
+        }
+
+        // SORT with STORE
+        assertEquals(
+                5,
+                regularClient
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptions.builder()
+                                        .limit(new Limit(0L, -1L))
+                                        .orderBy(ASC)
+                                        .byPattern(agePattern)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
+        assertEquals(
+                5,
+                regularClient
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
     }
 }

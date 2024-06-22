@@ -49,6 +49,7 @@
 * Python: Added ZREVRANK command ([#1614](https://github.com/aws/glide-for-redis/pull/1614))
 * Python: Added XDEL command ([#1619](https://github.com/aws/glide-for-redis/pull/1619))
 * Python: Added XRANGE command ([#1624](https://github.com/aws/glide-for-redis/pull/1624))
+* Python: Added COPY command ([#1626](https://github.com/aws/glide-for-redis/pull/1626))
 * Python: Added XREVRANGE command ([#1625](https://github.com/aws/glide-for-redis/pull/1625))
 
 ### Breaking Changes

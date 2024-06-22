@@ -5890,4 +5890,37 @@ public class SharedCommandTests {
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sort(BaseClient client) {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String[] key1LpushArgs = {"2", "1", "4", "3"};
+        String[] key1AscendingList = {"1", "2", "3", "4"};
+        String[] key2LpushArgs = {"2", "1", "a", "x", "c", "4", "3"};
+
+        assertArrayEquals(new String[0], client.sort(key3).get());
+        assertEquals(4, client.lpush(key1, key1LpushArgs).get());
+        assertArrayEquals(key1AscendingList, client.sort(key1).get());
+
+        // SORT_R0
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(new String[0], client.sortReadOnly(key3).get());
+            assertArrayEquals(key1AscendingList, client.sortReadOnly(key1).get());
+        }
+
+        // SORT with STORE
+        assertEquals(4, client.sortStore(key1, key3).get());
+        assertArrayEquals(key1AscendingList, client.lrange(key3, 0, -1).get());
+
+        // Exceptions
+        // SORT with strings require ALPHA
+        assertEquals(7, client.lpush(key2, key2LpushArgs).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sort(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
 }
