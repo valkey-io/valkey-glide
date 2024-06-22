@@ -129,6 +129,7 @@ jobs:
                   src_folder=~/.m2/repository/software/amazon/glide/glide-${{ matrix.host.CLASSIFIER }}/0.4.2
                   cd $src_folder
                   jar -cvf bundle.jar *
+                  ls -ltr
 
             - name: Upload test reports
               if: always()
