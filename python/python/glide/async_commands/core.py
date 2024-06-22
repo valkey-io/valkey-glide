@@ -2683,7 +2683,8 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`.
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range
+                arguments are not applicable.
 
         Examples:
             >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
@@ -2701,6 +2702,55 @@ class CoreCommands(Protocol):
         return cast(
             Optional[Mapping[str, List[List[str]]]],
             await self._execute_command(RequestType.XRange, args),
+        )
+
+    async def xrevrange(
+        self,
+        key: str,
+        end: StreamRangeBound,
+        start: StreamRangeBound,
+        count: Optional[int] = None,
+    ) -> Optional[Mapping[str, List[List[str]]]]:
+        """
+        Returns stream entries matching a given range of IDs in reverse order. Equivalent to `XRANGE` but returns the
+        entries in reverse order.
+
+        See https://valkey.io/commands/xrevrange for more details.
+
+        Args:
+            key (str): The key of the stream.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+                If `count` is not provided, all stream entries in the range will be returned.
+
+        Returns:
+            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range
+                arguments are not applicable.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
+            >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
+            >>> await client.xrevrange("mystream", MaxId(), MinId())
+                {
+                    "0-2": [["field2", "value2"], ["field2", "value3"]],
+                    "0-1": [["field1", "value1"]],
+                }  # Indicates the stream IDs and their associated field-value pairs for all stream entries in "mystream".
+        """
+        args = [key, end.to_arg(), start.to_arg()]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return cast(
+            Optional[Mapping[str, List[List[str]]]],
+            await self._execute_command(RequestType.XRevRange, args),
         )
 
     async def geoadd(

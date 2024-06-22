@@ -1879,13 +1879,51 @@ class BaseTransaction:
 
         Command response:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`.
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range arguments
+                are not applicable.
         """
         args = [key, start.to_arg(), end.to_arg()]
         if count is not None:
             args.extend(["COUNT", str(count)])
 
         return self.append_command(RequestType.XRange, args)
+
+    def xrevrange(
+        self: TTransaction,
+        key: str,
+        end: StreamRangeBound,
+        start: StreamRangeBound,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Returns stream entries matching a given range of IDs in reverse order. Equivalent to `XRANGE` but returns the
+        entries in reverse order.
+
+        See https://valkey.io/commands/xrevrange for more details.
+
+        Args:
+            key (str): The key of the stream.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+                If `count` is not provided, all stream entries in the range will be returned.
+
+        Command response:
+            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range arguments
+                are not applicable.
+        """
+        args = [key, end.to_arg(), start.to_arg()]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return self.append_command(RequestType.XRevRange, args)
 
     def geoadd(
         self: TTransaction,
