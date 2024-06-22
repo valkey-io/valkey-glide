@@ -476,6 +476,8 @@ async def transaction_test(
     args.append(2)
     transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
     args.append({"0-1": [["foo", "bar"]]})
+    transaction.xrevrange(key11, IdBound("0-1"), IdBound("0-1"))
+    args.append({"0-1": [["foo", "bar"]]})
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
     transaction.xdel(key11, ["0-2", "0-3"])
