@@ -114,7 +114,7 @@ jobs:
               run: |
                   #./gradlew --continue build -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
                   ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
-                  ls -ltr ~/.m2/repository/software/amazon/glide/glide-${{ matrix.host.CLASSIFIER }}
+                  ls -ltr ~/.m2/repository/software/amazon/glide
             - name: Ensure no skipped files by linter
               working-directory: java
               run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
