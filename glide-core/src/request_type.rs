@@ -203,6 +203,7 @@ pub enum RequestType {
     GetEx = 192,
     Dump = 193,
     Restore = 194,
+    SortReadOnly = 195,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -409,6 +410,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::GetEx => RequestType::GetEx,
             ProtobufRequestType::Dump => RequestType::Dump,
             ProtobufRequestType::Restore => RequestType::Restore,
+            ProtobufRequestType::SortReadOnly => RequestType::SortReadOnly,
         }
     }
 }
@@ -613,6 +615,7 @@ impl RequestType {
             RequestType::GetEx => Some(cmd("GETEX")),
             RequestType::Dump => Some(cmd("DUMP")),
             RequestType::Restore => Some(cmd("RESTORE")),
+            RequestType::SortReadOnly => Some(cmd("SORT_RO")),
         }
     }
 }
