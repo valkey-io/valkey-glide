@@ -1880,18 +1880,17 @@ public class RedisClusterClientTest {
     @Test
     public void functionDump_returns_success() {
         // setup
-        ClusterValue<byte[]> value = ClusterValue.ofMultiValue(Map.of("node", new byte[] {42}));
-        CompletableFuture<ClusterValue<byte[]>> testResponse = new CompletableFuture<>();
+        byte[] value = new byte[] {42};
+        CompletableFuture<byte[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<ClusterValue<byte[]>>submitNewCommand(
-                        eq(FunctionDump), eq(new GlideString[0]), any()))
+        when(commandManager.<byte[]>submitNewCommand(eq(FunctionDump), eq(new GlideString[0]), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<ClusterValue<byte[]>> response = service.functionDump();
-        ClusterValue<byte[]> payload = response.get();
+        CompletableFuture<byte[]> response = service.functionDump();
+        byte[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

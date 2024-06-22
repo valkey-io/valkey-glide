@@ -272,19 +272,18 @@ public interface ScriptingAndFunctionsClusterCommands {
 
     /**
      * Returns the serialized payload of all loaded libraries.<br>
-     * The command will be routed to all primary nodes.
+     * The command will be routed to a random node.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-dump/">redis.io</a> for details.
      * @return The serialized payload of all loaded libraries.
      * @example
      *     <pre>{@code
-     * ClusterValue<byte[]> data = client.functionDump().get();
-     * // data contains the serialized dump from all primary nodes
-     * // now data could be saved to restore loaded functions on any Redis instance
+     * byte[] data = client.functionDump().get();
+     * // data can be used to restore loaded functions on any Redis instance
      * }</pre>
      */
-    CompletableFuture<ClusterValue<byte[]>> functionDump();
+    CompletableFuture<byte[]> functionDump();
 
     /**
      * Returns the serialized payload of all loaded libraries.
@@ -297,7 +296,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @example
      *     <pre>{@code
      * byte[] data = client.functionDump(RANDOM).get().getSingleValue();
-     * // now data could be saved to restore loaded functions on any Redis instance
+     * // data can be used to restore loaded functions on any Redis instance
      * }</pre>
      */
     CompletableFuture<ClusterValue<byte[]>> functionDump(Route route);

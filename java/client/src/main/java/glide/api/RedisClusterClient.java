@@ -586,11 +586,9 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<ClusterValue<byte[]>> functionDump() {
+    public CompletableFuture<byte[]> functionDump() {
         return commandManager.submitNewCommand(
-                FunctionDump,
-                new GlideString[] {},
-                response -> ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
+                FunctionDump, new GlideString[] {}, response -> handleBytesOrNullResponse(response));
     }
 
     @Override
