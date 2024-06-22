@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
@@ -18,25 +20,34 @@ import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
 import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
 import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
+import static redis_request.RedisRequestOuterClass.RequestType.Sort;
+import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
+import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.commands.ConnectionManagementCommands;
 import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
+import glide.api.commands.TransactionsCommands;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -54,7 +65,8 @@ public class RedisClient extends BaseClient
         implements GenericCommands,
                 ServerManagementCommands,
                 ConnectionManagementCommands,
-                ScriptingAndFunctionsCommands {
+                ScriptingAndFunctionsCommands,
+                TransactionsCommands {
 
     protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -171,6 +183,17 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> flushdb() {
+        return commandManager.submitNewCommand(FlushDB, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> flushdb(@NonNull FlushMode mode) {
+        return commandManager.submitNewCommand(
+                FlushDB, new String[] {mode.toString()}, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> lolwut() {
         return commandManager.submitNewCommand(Lolwut, new String[0], this::handleStringResponse);
     }
@@ -255,6 +278,16 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> fcall(@NonNull String function) {
+        return fcall(function, new String[0], new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(@NonNull String function) {
+        return fcallReadOnly(function, new String[0], new String[0]);
+    }
+
+    @Override
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, long destinationDB) {
         String[] arguments =
@@ -271,5 +304,55 @@ public class RedisClient extends BaseClient
             arguments = ArrayUtils.add(arguments, REPLACE_REDIS_API);
         }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionKill() {
+        return commandManager.submitNewCommand(FunctionKill, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, Object>>> functionStats() {
+        return commandManager.submitNewCommand(
+                FunctionStats,
+                new String[0],
+                response -> handleFunctionStatsResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> unwatch() {
+        return commandManager.submitNewCommand(UnWatch, new String[0], this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> randomKey() {
+        return commandManager.submitNewCommand(
+                RandomKey, new String[0], this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> sort(@NonNull String key, @NonNull SortOptions sortOptions) {
+        String[] arguments = ArrayUtils.addFirst(sortOptions.toArgs(), key);
+        return commandManager.submitNewCommand(
+                Sort, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> sortReadOnly(
+            @NonNull String key, @NonNull SortOptions sortOptions) {
+        String[] arguments = ArrayUtils.addFirst(sortOptions.toArgs(), key);
+        return commandManager.submitNewCommand(
+                SortReadOnly,
+                arguments,
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Long> sortStore(
+            @NonNull String key, @NonNull String destination, @NonNull SortOptions sortOptions) {
+        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
+        String[] arguments =
+                concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments);
+        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 }

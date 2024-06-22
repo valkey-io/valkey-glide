@@ -2,8 +2,10 @@
 package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
-import static glide.TestConfiguration.STANDALONE_PORTS;
 import static glide.TestUtilities.checkFunctionListResponse;
+import static glide.TestUtilities.checkFunctionStatsResponse;
+import static glide.TestUtilities.commonClientConfig;
+import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
@@ -16,9 +18,13 @@ import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
+import static glide.api.models.commands.SortBaseOptions.Limit;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -29,8 +35,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
 import glide.api.models.commands.InfoOptions;
-import glide.api.models.configuration.NodeAddress;
-import glide.api.models.configuration.RedisClientConfiguration;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -58,11 +63,7 @@ public class CommandTests {
     @SneakyThrows
     public static void init() {
         regularClient =
-                RedisClient.CreateClient(
-                                RedisClientConfiguration.builder()
-                                        .address(NodeAddress.builder().port(STANDALONE_PORTS[0]).build())
-                                        .build())
-                        .get();
+                RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get();
     }
 
     @AfterAll
@@ -348,17 +349,40 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void dbsize() {
+    public void dbsize_and_flushdb() {
         assertEquals(OK, regularClient.flushall().get());
         assertEquals(OK, regularClient.select(0).get());
 
+        // fill DB and check size
         int numKeys = 10;
         for (int i = 0; i < numKeys; i++) {
             assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
         }
         assertEquals(10L, regularClient.dbsize().get());
 
+        // check another empty DB
         assertEquals(OK, regularClient.select(1).get());
+        assertEquals(0L, regularClient.dbsize().get());
+
+        // check non-empty
+        assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
+        assertEquals(1L, regularClient.dbsize().get());
+
+        // flush and check again
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, regularClient.flushdb(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.flushdb(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, regularClient.flushdb(ASYNC).get());
+        }
+        assertEquals(0L, regularClient.dbsize().get());
+
+        // switch to DB 0 and flush and check
+        assertEquals(OK, regularClient.select(0).get());
+        assertEquals(10L, regularClient.dbsize().get());
+        assertEquals(OK, regularClient.flushdb().get());
         assertEquals(0L, regularClient.dbsize().get());
     }
 
@@ -381,7 +405,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, regularClient.flushall(SYNC).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, regularClient.flushall(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.flushall(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, regularClient.flushall(ASYNC).get());
+        }
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter = (Object[]) regularClient.customCommand(new String[] {"keys", "*"}).get();
@@ -400,9 +431,16 @@ public class CommandTests {
 
         String libName = "mylib1c";
         String funcName = "myfunc1c";
-        String code = generateLuaLibCode(libName, List.of(funcName));
+        // function $funcName returns first argument
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
         assertEquals(libName, regularClient.functionLoad(code, false).get());
-        // TODO test function with FCALL when fixed in redis-rs and implemented
+
+        var functionResult =
+                regularClient.fcall(funcName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals("one", functionResult);
+        functionResult =
+                regularClient.fcallReadOnly(funcName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals("one", functionResult);
 
         var flist = regularClient.functionList(false).get();
         var expectedDescription =
@@ -414,7 +452,7 @@ public class CommandTests {
         var expectedFlags =
                 new HashMap<String, Set<String>>() {
                     {
-                        put(funcName, Set.of());
+                        put(funcName, Set.of("no-writes"));
                     }
                 };
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
@@ -433,11 +471,15 @@ public class CommandTests {
         // re-load library with overwriting
         assertEquals(libName, regularClient.functionLoad(code, true).get());
         String newFuncName = "myfunc2c";
-        String newCode = generateLuaLibCode(libName, List.of(funcName, newFuncName));
+        // function $funcName returns first argument
+        // function $newFuncName returns argument array len
+        String newCode =
+                generateLuaLibCode(
+                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), true);
         assertEquals(libName, regularClient.functionLoad(newCode, true).get());
 
         // load new lib and delete it - first lib remains loaded
-        String anotherLib = generateLuaLibCode("anotherLib", List.of("anotherFunc"));
+        String anotherLib = generateLuaLibCode("anotherLib", Map.of("anotherFunc", ""), false);
         assertEquals("anotherLib", regularClient.functionLoad(anotherLib, true).get());
         assertEquals(OK, regularClient.functionDelete("anotherLib").get());
 
@@ -450,14 +492,20 @@ public class CommandTests {
 
         flist = regularClient.functionList(libName, false).get();
         expectedDescription.put(newFuncName, null);
-        expectedFlags.put(newFuncName, Set.of());
+        expectedFlags.put(newFuncName, Set.of("no-writes"));
         checkFunctionListResponse(flist, libName, expectedDescription, expectedFlags, Optional.empty());
 
         flist = regularClient.functionList(libName, true).get();
         checkFunctionListResponse(
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
-        // TODO test with FCALL
+        functionResult =
+                regularClient.fcall(newFuncName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals(2L, functionResult);
+        functionResult =
+                regularClient.fcallReadOnly(newFuncName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals(2L, functionResult);
+
         assertEquals(OK, regularClient.functionFlush(ASYNC).get());
     }
 
@@ -507,5 +555,366 @@ public class CommandTests {
         finally {
             regularClient.select(0).get();
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void functionStats_and_functionKill() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "functionStats_and_functionKill";
+        String funcName = "deadlock";
+        String code = createLuaLibWithLongRunningFunction(libName, funcName, 15, true);
+        String error = "";
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        try {
+            // nothing to kill
+            var exception =
+                    assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+            // load the lib
+            assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+            try (var testClient =
+                    RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
+                // call the function without await
+                var promise = testClient.fcall(funcName);
+
+                int timeout = 5200; // ms
+                while (timeout > 0) {
+                    var stats = regularClient.functionStats().get();
+                    if (stats.get("running_script") != null) {
+                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "0"}, 1, 1);
+                        break;
+                    }
+                    Thread.sleep(100);
+                    timeout -= 100;
+                }
+                if (timeout == 0) {
+                    error += "Can't find a running function.";
+                }
+
+                // redis kills a function with 5 sec delay
+                assertEquals(OK, regularClient.functionKill().get());
+
+                exception =
+                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+                exception = assertThrows(ExecutionException.class, promise::get);
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().contains("Script killed by user"));
+            }
+        } finally {
+            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+            // test to fail.
+            try {
+                regularClient.functionKill().get();
+                // should throw `notbusy` error, because the function should be killed before
+                error += "Function should be killed before.";
+            } catch (Exception ignored) {
+            }
+        }
+
+        assertEquals(OK, regularClient.functionDelete(libName).get());
+
+        assertTrue(error.isEmpty(), "Something went wrong during the test");
+    }
+
+    @Test
+    @SneakyThrows
+    public void functionStats_and_functionKill_write_function() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "functionStats_and_functionKill_write_function";
+        String funcName = "deadlock_write_function";
+        String key = libName;
+        String code = createLuaLibWithLongRunningFunction(libName, funcName, 6, false);
+        String error = "";
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        try {
+            // nothing to kill
+            var exception =
+                    assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+            assertInstanceOf(RequestException.class, exception.getCause());
+            assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+
+            // load the lib
+            assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+            try (var testClient =
+                    RedisClient.CreateClient(commonClientConfig().requestTimeout(7000).build()).get()) {
+                // call the function without await
+                var promise = testClient.fcall(funcName, new String[] {key}, new String[0]);
+
+                int timeout = 5200; // ms
+                while (timeout > 0) {
+                    var stats = regularClient.functionStats().get();
+                    if (stats.get("running_script") != null) {
+                        checkFunctionStatsResponse(stats, new String[] {"FCALL", funcName, "1", key}, 1, 1);
+                        break;
+                    }
+                    Thread.sleep(100);
+                    timeout -= 100;
+                }
+                if (timeout == 0) {
+                    error += "Can't find a running function.";
+                }
+
+                // can't kill a write function
+                exception =
+                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().toLowerCase().contains("unkillable"));
+
+                assertEquals("Timed out 6 sec", promise.get());
+
+                exception =
+                        assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
+                assertInstanceOf(RequestException.class, exception.getCause());
+                assertTrue(exception.getMessage().toLowerCase().contains("notbusy"));
+            }
+        } finally {
+            // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+            // test to fail.
+            try {
+                regularClient.functionKill().get();
+                // should throw `notbusy` error, because the function should be killed before
+                error += "Function should finish prior to the test end.";
+            } catch (Exception ignored) {
+            }
+        }
+
+        assertTrue(error.isEmpty(), "Something went wrong during the test");
+    }
+
+    @Test
+    @SneakyThrows
+    public void functionStats() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "functionStats";
+        String funcName = libName;
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        // function $funcName returns first argument
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
+
+        var response = regularClient.functionStats().get();
+        checkFunctionStatsResponse(response, new String[0], 1, 1);
+
+        code =
+                generateLuaLibCode(
+                        libName + "_2",
+                        Map.of(funcName + "_2", "return 'OK'", funcName + "_3", "return 42"),
+                        false);
+        assertEquals(libName + "_2", regularClient.functionLoad(code, true).get());
+
+        response = regularClient.functionStats().get();
+        checkFunctionStatsResponse(response, new String[0], 2, 3);
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        response = regularClient.functionStats().get();
+        checkFunctionStatsResponse(response, new String[0], 0, 0);
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomkey() {
+        String key1 = "{key}" + UUID.randomUUID();
+        String key2 = "{key}" + UUID.randomUUID();
+
+        assertEquals(OK, regularClient.set(key1, "a").get());
+        assertEquals(OK, regularClient.set(key2, "b").get());
+
+        String randomKey = regularClient.randomKey().get();
+        assertEquals(1L, regularClient.exists(new String[] {randomKey}).get());
+
+        // no keys in database
+        assertEquals(OK, regularClient.flushall().get());
+        assertNull(regularClient.randomKey().get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void sort() {
+        String setKey1 = "setKey1";
+        String setKey2 = "setKey2";
+        String setKey3 = "setKey3";
+        String setKey4 = "setKey4";
+        String setKey5 = "setKey5";
+        String[] setKeys = new String[] {setKey1, setKey2, setKey3, setKey4, setKey5};
+        String listKey = "listKey";
+        String storeKey = "storeKey";
+        String nameField = "name";
+        String ageField = "age";
+        String[] names = new String[] {"Alice", "Bob", "Charlie", "Dave", "Eve"};
+        String[] namesSortedByAge = new String[] {"Dave", "Bob", "Alice", "Charlie", "Eve"};
+        String[] ages = new String[] {"30", "25", "35", "20", "40"};
+        String[] userIDs = new String[] {"3", "1", "5", "4", "2"};
+        String namePattern = "setKey*->name";
+        String agePattern = "setKey*->age";
+        String missingListKey = "100000";
+
+        for (int i = 0; i < setKeys.length; i++) {
+            assertEquals(
+                    2, regularClient.hset(setKeys[i], Map.of(nameField, names[i], ageField, ages[i])).get());
+        }
+
+        assertEquals(5, regularClient.rpush(listKey, userIDs).get());
+        assertArrayEquals(
+                new String[] {"Alice", "Bob"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
+                        .get());
+        assertArrayEquals(
+                new String[] {"Eve", "Dave"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder()
+                                        .limit(new Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(
+                new String[] {"Eve", "40", "Charlie", "35"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder()
+                                        .limit(new Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .byPattern(agePattern)
+                                        .getPatterns(List.of(namePattern, agePattern))
+                                        .build())
+                        .get());
+
+        // Non-existent key in the BY pattern will result in skipping the sorting operation
+        assertArrayEquals(
+                userIDs,
+                regularClient.sort(listKey, SortOptions.builder().byPattern("noSort").build()).get());
+
+        // Non-existent key in the GET pattern results in nulls
+        assertArrayEquals(
+                new String[] {null, null, null, null, null},
+                regularClient
+                        .sort(listKey, SortOptions.builder().alpha().getPattern("missing").build())
+                        .get());
+
+        // Missing key in the set
+        assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
+        assertArrayEquals(
+                new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertEquals(missingListKey, regularClient.lpop(listKey).get());
+
+        // SORT_RO
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(
+                    new String[] {"Alice", "Bob"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
+                            .get());
+            assertArrayEquals(
+                    new String[] {"Eve", "Dave"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder()
+                                            .limit(new Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .getPattern(namePattern)
+                                            .build())
+                            .get());
+            assertArrayEquals(
+                    new String[] {"Eve", "40", "Charlie", "35"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder()
+                                            .limit(new Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .byPattern(agePattern)
+                                            .getPatterns(List.of(namePattern, agePattern))
+                                            .build())
+                            .get());
+
+            // Non-existent key in the BY pattern will result in skipping the sorting operation
+            assertArrayEquals(
+                    userIDs,
+                    regularClient
+                            .sortReadOnly(listKey, SortOptions.builder().byPattern("noSort").build())
+                            .get());
+
+            // Non-existent key in the GET pattern results in nulls
+            assertArrayEquals(
+                    new String[] {null, null, null, null, null},
+                    regularClient
+                            .sortReadOnly(listKey, SortOptions.builder().alpha().getPattern("missing").build())
+                            .get());
+
+            assertArrayEquals(
+                    namesSortedByAge,
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+
+            // Missing key in the set
+            assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
+            assertArrayEquals(
+                    new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+            assertEquals(missingListKey, regularClient.lpop(listKey).get());
+        }
+
+        // SORT with STORE
+        assertEquals(
+                5,
+                regularClient
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptions.builder()
+                                        .limit(new Limit(0L, -1L))
+                                        .orderBy(ASC)
+                                        .byPattern(agePattern)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
+        assertEquals(
+                5,
+                regularClient
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
     }
 }

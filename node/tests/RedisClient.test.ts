@@ -17,12 +17,14 @@ import { RedisCluster } from "../../utils/TestUtils.js";
 import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
+    convertStringArrayToBuffer,
     flushAndCloseClient,
     getClientConfigurationOption,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
-    convertStringArrayToBuffer,
+    intoString,
+    checkSimple,
 } from "./TestUtilities";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -108,9 +110,13 @@ describe("RedisClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = await client.info();
-            expect(result).toEqual(expect.stringContaining("# Server"));
-            expect(result).toEqual(expect.stringContaining("# Replication"));
-            expect(result).toEqual(
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("# Server"),
+            );
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("# Replication"),
+            );
+            expect(intoString(result)).toEqual(
                 expect.not.stringContaining("# Latencystats"),
             );
         },
@@ -123,20 +129,20 @@ describe("RedisClient", () => {
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             let selectResult = await client.select(0);
-            expect(selectResult).toEqual("OK");
+            checkSimple(selectResult).toEqual("OK");
 
             const key = uuidv4();
             const value = uuidv4();
             const result = await client.set(key, value);
-            expect(result).toEqual("OK");
+            checkSimple(result).toEqual("OK");
 
             selectResult = await client.select(1);
-            expect(selectResult).toEqual("OK");
+            checkSimple(selectResult).toEqual("OK");
             expect(await client.get(key)).toEqual(null);
 
             selectResult = await client.select(0);
-            expect(selectResult).toEqual("OK");
-            expect(await client.get(key)).toEqual(value);
+            checkSimple(selectResult).toEqual("OK");
+            checkSimple(await client.get(key)).toEqual(value);
         },
     );
 
@@ -151,7 +157,7 @@ describe("RedisClient", () => {
             transaction.select(0);
             const result = await client.exec(transaction);
             expectedRes.push("OK");
-            expect(result).toEqual(expectedRes);
+            expect(intoString(result)).toEqual(intoString(expectedRes));
         },
     );
 
@@ -177,6 +183,117 @@ describe("RedisClient", () => {
 
             client1.close();
             client2.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object freq transaction test_%p",
+        async (protocol) => {
+            const client = await RedisClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+            const maxmemoryPolicyKey = "maxmemory-policy";
+            const config = await client.configGet([maxmemoryPolicyKey]);
+            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+
+            try {
+                const transaction = new Transaction();
+                transaction.configSet({
+                    [maxmemoryPolicyKey]: "allkeys-lfu",
+                });
+                transaction.set(key, "foo");
+                transaction.objectFreq(key);
+
+                const response = await client.exec(transaction);
+                expect(response).not.toBeNull();
+
+                if (response != null) {
+                    expect(response.length).toEqual(3);
+                    expect(response[0]).toEqual("OK");
+                    expect(response[1]).toEqual("OK");
+                    expect(response[2]).toBeGreaterThanOrEqual(0);
+                }
+            } finally {
+                expect(
+                    await client.configSet({
+                        [maxmemoryPolicyKey]: maxmemoryPolicy,
+                    }),
+                ).toEqual("OK");
+            }
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object idletime transaction test_%p",
+        async (protocol) => {
+            const client = await RedisClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+            const maxmemoryPolicyKey = "maxmemory-policy";
+            const config = await client.configGet([maxmemoryPolicyKey]);
+            const maxmemoryPolicy = String(config[maxmemoryPolicyKey]);
+
+            try {
+                const transaction = new Transaction();
+                transaction.configSet({
+                    // OBJECT IDLETIME requires a non-LFU maxmemory-policy
+                    [maxmemoryPolicyKey]: "allkeys-random",
+                });
+                transaction.set(key, "foo");
+                transaction.objectIdletime(key);
+
+                const response = await client.exec(transaction);
+                expect(response).not.toBeNull();
+
+                if (response != null) {
+                    expect(response.length).toEqual(3);
+                    // transaction.configSet({[maxmemoryPolicyKey]: "allkeys-random"});
+                    expect(response[0]).toEqual("OK");
+                    // transaction.set(key, "foo");
+                    expect(response[1]).toEqual("OK");
+                    // transaction.objectIdletime(key);
+                    expect(response[2]).toBeGreaterThanOrEqual(0);
+                }
+            } finally {
+                expect(
+                    await client.configSet({
+                        [maxmemoryPolicyKey]: maxmemoryPolicy,
+                    }),
+                ).toEqual("OK");
+            }
+
+            client.close();
+        },
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        "object refcount transaction test_%p",
+        async (protocol) => {
+            const client = await RedisClient.createClient(
+                getClientConfigurationOption(cluster.getAddresses(), protocol),
+            );
+
+            const key = uuidv4();
+            const transaction = new Transaction();
+            transaction.set(key, "foo");
+            transaction.objectRefcount(key);
+
+            const response = await client.exec(transaction);
+            expect(response).not.toBeNull();
+
+            if (response != null) {
+                expect(response.length).toEqual(2);
+                expect(response[0]).toEqual("OK"); // transaction.set(key, "foo");
+                expect(response[1]).toBeGreaterThanOrEqual(1); // transaction.objectRefcount(key);
+            }
+
+            client.close();
         },
     );
 

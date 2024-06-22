@@ -1,12 +1,16 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.GlideString.gs;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
+import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
@@ -29,10 +33,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Decr;
 import static redis_request.RedisRequestOuterClass.RequestType.DecrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.Del;
+import static redis_request.RedisRequestOuterClass.RequestType.Dump;
 import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
+import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -40,6 +47,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
+import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -58,12 +66,14 @@ import static redis_request.RedisRequestOuterClass.RequestType.HVals;
 import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
+import static redis_request.RedisRequestOuterClass.RequestType.LCS;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -72,6 +82,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LSet;
 import static redis_request.RedisRequestOuterClass.RequestType.LTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
@@ -89,6 +100,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
+import static redis_request.RedisRequestOuterClass.RequestType.Restore;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.SCard;
 import static redis_request.RedisRequestOuterClass.RequestType.SDiff;
@@ -103,19 +115,31 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
+import static redis_request.RedisRequestOuterClass.RequestType.Sort;
+import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Watch;
+import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
+import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
+import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -150,23 +174,30 @@ import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.HyperLogLogBaseCommands;
 import glide.api.commands.ListBaseCommands;
+import glide.api.commands.ScriptingAndFunctionsBaseCommands;
 import glide.api.commands.SetBaseCommands;
 import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
+import glide.api.commands.TransactionsBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.LexRange;
 import glide.api.models.commands.RangeOptions.RangeQuery;
 import glide.api.models.commands.RangeOptions.ScoreRange;
 import glide.api.models.commands.RangeOptions.ScoredRangeQuery;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
+import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
@@ -175,7 +206,10 @@ import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.exceptions.RedisException;
@@ -188,14 +222,15 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
-import java.util.Arrays;
 import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
+import java.util.stream.Collectors;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
@@ -215,7 +250,9 @@ public abstract class BaseClient
                 SortedSetBaseCommands,
                 StreamBaseCommands,
                 HyperLogLogBaseCommands,
-                GeospatialIndicesBaseCommands {
+                GeospatialIndicesBaseCommands,
+                ScriptingAndFunctionsBaseCommands,
+                TransactionsBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
@@ -313,6 +350,9 @@ public abstract class BaseClient
         if (isNullable && (value == null)) {
             return null;
         }
+
+        value = convertByteArrayToGlideString(value);
+
         if (classType.isInstance(value)) {
             return (T) value;
         }
@@ -339,7 +379,15 @@ public abstract class BaseClient
     }
 
     protected byte[] handleBytesOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(byte[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        var result =
+                handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+        if (result == null) return null;
+
+        return result.getBytes();
+    }
+
+    protected GlideString handleGlideStringOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     protected Boolean handleBooleanResponse(Response response) throws RedisException {
@@ -373,6 +421,10 @@ public abstract class BaseClient
                 response);
     }
 
+    protected Object[] handleArrayOrNullResponseBinary(Response response) throws RedisException {
+        return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+    }
+
     /**
      * @param response A Protobuf response
      * @return A map of <code>String</code> to <code>V</code>.
@@ -385,6 +437,17 @@ public abstract class BaseClient
 
     /**
      * @param response A Protobuf response
+     * @return A map of <code>GlideString</code> to <code>V</code>.
+     * @param <V> Value type.
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
+    protected <V> Map<GlideString, V> handleMapResponseBinary(Response response)
+            throws RedisException {
+        return handleRedisResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
+    }
+
+    /**
+     * @param response A Protobuf response
      * @return A map of <code>String</code> to <code>V</code> or <code>null</code>
      * @param <V> Value type.
      */
@@ -392,6 +455,23 @@ public abstract class BaseClient
     protected <V> Map<String, V> handleMapOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(
                 Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of a map of <code>String[][]</code>
+     */
+    protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
+            throws RedisException {
+        Map<String, Object> mapResponse = handleMapOrNullResponse(response);
+        if (mapResponse == null) {
+            return null;
+        }
+        return mapResponse.entrySet().stream()
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
     }
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
@@ -411,6 +491,17 @@ public abstract class BaseClient
         return data;
     }
 
+    /** Process a <code>FUNCTION STATS</code> standalone response. */
+    protected Map<String, Map<String, Object>> handleFunctionStatsResponse(
+            Map<String, Map<String, Object>> response) {
+        Map<String, Object> runningScriptInfo = response.get("running_script");
+        if (runningScriptInfo != null) {
+            Object[] command = (Object[]) runningScriptInfo.get("command");
+            runningScriptInfo.put("command", castArray(command, String.class));
+        }
+        return response;
+    }
+
     @Override
     public CompletableFuture<Long> del(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);
@@ -423,9 +514,9 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<byte[]> get(@NonNull byte[] key) {
+    public CompletableFuture<GlideString> get(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                Get, Arrays.asList(key), this::handleBytesOrNullResponse);
+                Get, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -435,9 +526,27 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> set(@NonNull byte[] key, @NonNull byte[] value) {
+    public CompletableFuture<String> getex(@NonNull String key) {
         return commandManager.submitNewCommand(
-                Set, Arrays.asList(key, value), this::handleStringResponse);
+                GetEx, new String[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> getex(@NonNull String key, @NonNull GetExOptions options) {
+        String[] arguments = ArrayUtils.addFirst(options.toArgs(), key);
+        return commandManager.submitNewCommand(GetEx, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> getdel(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                GetDel, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> set(@NonNull GlideString key, @NonNull GlideString value) {
+        return commandManager.submitNewCommand(
+                Set, new GlideString[] {key, value}, this::handleStringResponse);
     }
 
     @Override
@@ -454,6 +563,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> set(
+            @NonNull GlideString key, @NonNull GlideString value, @NonNull SetOptions options) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(new GlideString[] {key, value}, options.toGlideStringArgs());
+        return commandManager.submitNewCommand(Set, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> append(@NonNull String key, @NonNull String value) {
         return commandManager.submitNewCommand(
                 Append, new String[] {key, value}, this::handleLongResponse);
@@ -463,6 +580,14 @@ public abstract class BaseClient
     public CompletableFuture<String[]> mget(@NonNull String[] keys) {
         return commandManager.submitNewCommand(
                 MGet, keys, response -> castArray(handleArrayOrNullResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> mget(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(
+                MGet,
+                keys,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -610,6 +735,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, GlideString>> hgetall(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                HGetAll, new GlideString[] {key}, this::handleMapResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<Long> hincrBy(@NonNull String key, @NonNull String field, long amount) {
         return commandManager.submitNewCommand(
                 HIncrBy, new String[] {key, field, Long.toString(amount)}, this::handleLongResponse);
@@ -679,6 +810,39 @@ public abstract class BaseClient
                 LPop,
                 new String[] {key, Long.toString(count)},
                 response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Long> lpos(@NonNull String key, @NonNull String element) {
+        return commandManager.submitNewCommand(
+                LPos, new String[] {key, element}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpos(
+            @NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
+        String[] arguments = concatenateArrays(new String[] {key, element}, options.toArgs());
+        return commandManager.submitNewCommand(LPos, arguments, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long[]> lposCount(
+            @NonNull String key, @NonNull String element, long count) {
+        return commandManager.submitNewCommand(
+                LPos,
+                new String[] {key, element, COUNT_REDIS_API, Long.toString(count)},
+                response -> castArray(handleArrayResponse(response), Long.class));
+    }
+
+    @Override
+    public CompletableFuture<Long[]> lposCount(
+            @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key, element, COUNT_REDIS_API, Long.toString(count)}, options.toArgs());
+
+        return commandManager.submitNewCommand(
+                LPos, arguments, response -> castArray(handleArrayResponse(response), Long.class));
     }
 
     @Override
@@ -1163,19 +1327,9 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String[]> zunion(
-            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        String[] arguments = concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs());
+    public CompletableFuture<String[]> zunion(@NonNull KeyArray keys) {
         return commandManager.submitNewCommand(
-                ZUnion, arguments, response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<String[]> zunion(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        return commandManager.submitNewCommand(
-                ZUnion,
-                keysOrWeightedKeys.toArgs(),
-                response -> castArray(handleArrayResponse(response), String.class));
+                ZUnion, keys.toArgs(), response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -1196,19 +1350,9 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String[]> zinter(
-            @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
-        String[] arguments = concatenateArrays(keysOrWeightedKeys.toArgs(), aggregate.toArgs());
+    public CompletableFuture<String[]> zinter(@NonNull KeyArray keys) {
         return commandManager.submitNewCommand(
-                ZInter, arguments, response -> castArray(handleArrayResponse(response), String.class));
-    }
-
-    @Override
-    public CompletableFuture<String[]> zinter(@NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
-        return commandManager.submitNewCommand(
-                ZInter,
-                keysOrWeightedKeys.toArgs(),
-                response -> castArray(handleArrayResponse(response), String.class));
+                ZInter, keys.toArgs(), response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
@@ -1290,6 +1434,19 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
+            @NonNull Map<String, String> keysAndIds) {
+        return xread(keysAndIds, StreamReadOptions.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
+            @NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
+        String[] arguments = options.toArgs(keysAndIds);
+        return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> xtrim(@NonNull String key, @NonNull StreamTrimOptions options) {
         String[] arguments = ArrayUtils.addFirst(options.toArgs(), key);
         return commandManager.submitNewCommand(XTrim, arguments, this::handleLongResponse);
@@ -1307,19 +1464,99 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Map<String, String[]>> xrange(
+    public CompletableFuture<Map<String, String[][]>> xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end), key);
         return commandManager.submitNewCommand(
-                XRange, arguments, response -> castMapOfArrays(handleMapResponse(response), String.class));
+                XRange, arguments, response -> castMapOf2DArray(handleMapResponse(response), String.class));
     }
 
     @Override
-    public CompletableFuture<Map<String, String[]>> xrange(
+    public CompletableFuture<Map<String, String[][]>> xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end, long count) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end, count), key);
         return commandManager.submitNewCommand(
-                XRange, arguments, response -> castMapOfArrays(handleMapResponse(response), String.class));
+                XRange, arguments, response -> castMapOf2DArray(handleMapResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[][]>> xrevrange(
+            @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start) {
+        String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(end, start), key);
+        return commandManager.submitNewCommand(
+                XRevRange,
+                arguments,
+                response -> castMapOf2DArray(handleMapResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[][]>> xrevrange(
+            @NonNull String key, @NonNull StreamRange end, @NonNull StreamRange start, long count) {
+        String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(end, start, count), key);
+        return commandManager.submitNewCommand(
+                XRevRange,
+                arguments,
+                response -> castMapOf2DArray(handleMapResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupCreate(
+            @NonNull String key, @NonNull String groupname, @NonNull String id) {
+        return commandManager.submitNewCommand(
+                XGroupCreate, new String[] {key, groupname, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupCreate(
+            @NonNull String key,
+            @NonNull String groupname,
+            @NonNull String id,
+            @NonNull StreamGroupOptions options) {
+        String[] arguments = concatenateArrays(new String[] {key, groupname, id}, options.toArgs());
+        return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> xgroupDestroy(@NonNull String key, @NonNull String groupname) {
+        return commandManager.submitNewCommand(
+                XGroupDestroy, new String[] {key, groupname}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> xgroupCreateConsumer(
+            @NonNull String key, @NonNull String group, @NonNull String consumer) {
+        return commandManager.submitNewCommand(
+                XGroupCreateConsumer, new String[] {key, group, consumer}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> xgroupDelConsumer(
+            @NonNull String key, @NonNull String group, @NonNull String consumer) {
+        return commandManager.submitNewCommand(
+                XGroupDelConsumer, new String[] {key, group, consumer}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
+            @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
+        return xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
+            @NonNull Map<String, String> keysAndIds,
+            @NonNull String group,
+            @NonNull String consumer,
+            @NonNull StreamReadGroupOptions options) {
+        String[] arguments = options.toArgs(group, consumer, keysAndIds);
+        return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> xack(
+            @NonNull String key, @NonNull String group, @NonNull String[] ids) {
+        String[] args = concatenateArrays(new String[] {key, group}, ids);
+        return commandManager.submitNewCommand(XAck, args, this::handleLongResponse);
     }
 
     @Override
@@ -1736,6 +1973,22 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> fcall(
+            @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        String[] args =
+                concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
+        return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(
+            @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
+        String[] args =
+                concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
+        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, boolean replace) {
         String[] arguments = new String[] {source, destination};
@@ -1749,5 +2002,108 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> copy(@NonNull String source, @NonNull String destination) {
         String[] arguments = new String[] {source, destination};
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> msetnx(@NonNull Map<String, String> keyValueMap) {
+        String[] args = convertMapToKeyValueStringArray(keyValueMap);
+        return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> lcs(@NonNull String key1, @NonNull String key2) {
+        String[] arguments = new String[] {key1, key2};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lcsLen(@NonNull String key1, @NonNull String key2) {
+        String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> watch(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<String>> sunion(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(SUnion, keys, this::handleSetResponse);
+    }
+
+    // Hack: convert all `byte[]` -> `GlideString`. Better doing it here in the Java realm
+    // rather than doing it in the Rust code using JNI calls (performance)
+    private Object convertByteArrayToGlideString(Object o) {
+        if (o == null) return o;
+
+        if (o instanceof byte[]) {
+            o = GlideString.of((byte[]) o);
+        } else if (o.getClass().isArray()) {
+            var array = (Object[]) o;
+            for (var i = 0; i < array.length; i++) {
+                array[i] = convertByteArrayToGlideString(array[i]);
+            }
+        } else if (o instanceof Set) {
+            var set = (Set<?>) o;
+            o = set.stream().map(this::convertByteArrayToGlideString).collect(Collectors.toSet());
+        } else if (o instanceof Map) {
+            var map = (Map<?, ?>) o;
+            o =
+                    map.entrySet().stream()
+                            .collect(
+                                    HashMap::new,
+                                    (m, e) ->
+                                            m.put(
+                                                    convertByteArrayToGlideString(e.getKey()),
+                                                    convertByteArrayToGlideString(e.getValue())),
+                                    HashMap::putAll);
+        }
+        return o;
+    }
+
+    @Override
+    public CompletableFuture<byte[]> dump(@NonNull GlideString key) {
+        GlideString[] arguments = new GlideString[] {key};
+        return commandManager.submitNewCommand(Dump, arguments, this::handleBytesOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> restore(
+            @NonNull GlideString key, long ttl, @NonNull byte[] value) {
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(ttl).getBytes()), gs(value)};
+        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> restore(
+            @NonNull GlideString key,
+            long ttl,
+            @NonNull byte[] value,
+            @NonNull RestoreOptions restoreOptions) {
+        GlideString[] arguments = restoreOptions.toArgs(key, ttl, value);
+        return commandManager.submitNewCommand(Restore, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> sort(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                Sort,
+                new String[] {key},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> sortReadOnly(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                SortReadOnly,
+                new String[] {key},
+                response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Long> sortStore(@NonNull String key, @NonNull String destination) {
+        return commandManager.submitNewCommand(
+                Sort, new String[] {key, STORE_COMMAND_STRING, destination}, this::handleLongResponse);
     }
 }

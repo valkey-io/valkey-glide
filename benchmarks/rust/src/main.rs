@@ -236,7 +236,7 @@ async fn get_connection(args: &Args) -> Client {
         ..Default::default()
     };
 
-    glide_core::client::Client::new(connection_request)
+    glide_core::client::Client::new(connection_request, None)
         .await
         .unwrap()
 }

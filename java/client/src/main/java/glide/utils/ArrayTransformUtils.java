@@ -5,6 +5,7 @@ import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -103,17 +104,35 @@ public class ArrayTransformUtils {
      * @param mapOfArrays Map of Array values to cast.
      * @param clazz The class of the array values to cast to.
      * @return A Map of arrays of type U[], containing the key/values from the input Map.
-     * @param <T> The base type from which the elements are being cast.
-     * @param <U> The subtype of T to which the elements are cast.
+     * @param <T> The target type which the elements are cast.
      */
-    @SuppressWarnings("unchecked")
-    public static <T, U extends T> Map<String, U[]> castMapOfArrays(
-            Map<String, T[]> mapOfArrays, Class<U> clazz) {
+    public static <T> Map<String, T[]> castMapOfArrays(
+            Map<String, Object[]> mapOfArrays, Class<T> clazz) {
         if (mapOfArrays == null) {
             return null;
         }
         return mapOfArrays.entrySet().stream()
-                .collect(Collectors.toMap(k -> k.getKey(), e -> castArray(e.getValue(), clazz)));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> castArray(e.getValue(), clazz)));
+    }
+
+    /**
+     * Maps a Map of Object[][] with value type T[][] to value of U[][].
+     *
+     * @param mapOfArrays Map of 2D Array values to cast.
+     * @param clazz The class of the array values to cast to.
+     * @return A Map of arrays of type U[][], containing the key/values from the input Map.
+     * @param <T> The target type which the elements are cast.
+     */
+    public static <T> Map<String, T[][]> castMapOf2DArray(
+            Map<String, Object[][]> mapOfArrays, Class<T> clazz) {
+        if (mapOfArrays == null) {
+            return null;
+        }
+        return mapOfArrays.entrySet().stream()
+                .collect(
+                        HashMap::new,
+                        (m, e) -> m.put(e.getKey(), castArrayofArrays(e.getValue(), clazz)),
+                        HashMap::putAll);
     }
 
     /**

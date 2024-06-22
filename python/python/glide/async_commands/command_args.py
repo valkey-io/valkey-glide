@@ -31,7 +31,11 @@ class Limit:
 
 class OrderBy(Enum):
     """
-    SORT order options: options for sorting elements.
+    Enumeration representing sorting order options.
+
+    This enum is used for the following commands:
+    - `SORT`: General sorting in ascending or descending order.
+    - `GEOSEARCH`: Sorting items based on their proximity to a center point.
     """
 
     ASC = "ASC"
@@ -42,4 +46,20 @@ class OrderBy(Enum):
     DESC = "DESC"
     """
     DESC: Sort in descending order.
+    """
+
+
+class ListDirection(Enum):
+    """
+    Enumeration representing element popping or adding direction for List commands.
+    """
+
+    LEFT = "LEFT"
+    """
+    LEFT: Represents the option that elements should be popped from or added to the left side of a list.
+    """
+
+    RIGHT = "RIGHT"
+    """
+    RIGHT: Represents the option that elements should be popped from or added to the right side of a list.
     """

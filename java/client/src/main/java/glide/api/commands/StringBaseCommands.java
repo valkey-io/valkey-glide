@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.ConditionalSet;
 import glide.api.models.commands.SetOptions.SetOptionsBuilder;
@@ -14,6 +16,9 @@ import java.util.concurrent.CompletableFuture;
  * @see <a href="https://redis.io/commands/?group=string">String Commands</a>
  */
 public interface StringBaseCommands {
+
+    /** Redis API keyword used to indicate that the length of the lcs should be returned. */
+    public static final String LEN_REDIS_API = "LEN";
 
     /**
      * Gets the value associated with the given <code>key</code>, or <code>null</code> if no such
@@ -44,14 +49,14 @@ public interface StringBaseCommands {
      *     <code>key</code> as a <code>String</code>. Otherwise, return <code>null</code>.
      * @example
      *     <pre>{@code
-     * byte[] value = client.get("key").get();
-     * assert Arrays.equals(value, "value".getBytes());
+     * GlideString value = client.get(gs("key")).get();
+     * assert Arrays.equals(value.getString(), "value");
      *
      * String value = client.get("non_existing_key").get();
      * assert value.equals(null);
      * }</pre>
      */
-    CompletableFuture<byte[]> get(byte[] key);
+    CompletableFuture<GlideString> get(GlideString key);
 
     /**
      * Gets a string value associated with the given <code>key</code> and deletes the key.
@@ -70,6 +75,59 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> getdel(String key);
+
+    /**
+     * Gets the value associated with the given <code>key</code>.
+     *
+     * @since Redis 6.2.0.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
+     *     Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String value = client.getex("key").get();
+     * assert value.equals("value");
+     * }</pre>
+     */
+    CompletableFuture<String> getex(String key);
+
+    /**
+     * Gets the value associated with the given <code>key</code>.
+     *
+     * @since Redis 6.2.0.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @param options The {@link GetExOptions} options.
+     * @return If <code>key</code> exists, return the <code>value</code> of the <code>key</code>.
+     *     Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.set("key", "value").get();
+     * assert response.equals(OK);
+     * String value = client.getex("key", GetExOptions.Seconds(10L)).get();
+     * assert value.equals("value");
+     * }</pre>
+     */
+    CompletableFuture<String> getex(String key, GetExOptions options);
+
+    /**
+     * Gets a string value associated with the given <code>key</code> and deletes the key.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/getdel/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return If <code>key</code> exists, returns the <code>value</code> of <code>key</code>.
+     *     Otherwise, return <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * GlideString value = client.getdel(gs("key")).get();
+     * assert assert Arrays.equals(value.getString(), "value");
+     *
+     * String value = client.getdel("key").get();
+     * assert value.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<GlideString> getdel(GlideString key);
 
     /**
      * Sets the given <code>key</code> with the given value.
@@ -95,11 +153,11 @@ public interface StringBaseCommands {
      * @return Response from Redis containing <code>"OK"</code>.
      * @example
      *     <pre>{@code
-     * String value = client.set("key".getBytes(), "value".getBytes()).get();
-     * assert value.equals("OK");
+     * GlideString value = client.set(gs("key"), gs("value")).get();
+     * assert value.getString().equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> set(byte[] key, byte[] value);
+    CompletableFuture<String> set(GlideString key, GlideString value);
 
     /**
      * Sets the given key with the given value. Return value is dependent on the passed options.
@@ -123,6 +181,27 @@ public interface StringBaseCommands {
     CompletableFuture<String> set(String key, String value, SetOptions options);
 
     /**
+     * Sets the given key with the given value. Return value is dependent on the passed options.
+     *
+     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
+     * @param key The key to store.
+     * @param value The value to store with the given key.
+     * @param options The Set options.
+     * @return Response from Redis containing a <code>String</code> or <code>null</code> response. If
+     *     the value is successfully set, return <code>"OK"</code>. If value isn't set because of
+     *     {@link ConditionalSet#ONLY_IF_EXISTS} or {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST}
+     *     conditions, return <code>null</code>. If {@link SetOptionsBuilder#returnOldValue(boolean)}
+     *     is set, return the old value as a <code>String</code>.
+     * @example
+     *     <pre>{@code
+     * SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).expiry(Seconds(5L)).build();
+     * String value = client.set("key".getBytes(), "value".getBytes(), options).get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> set(GlideString key, GlideString value, SetOptions options);
+
+    /**
      * Retrieves the values of multiple <code>keys</code>.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
@@ -141,6 +220,24 @@ public interface StringBaseCommands {
     CompletableFuture<String[]> mget(String[] keys);
 
     /**
+     * Retrieves the values of multiple <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
+     * @see <a href="https://redis.io/commands/mget/">redis.io</a> for details.
+     * @param keys A list of keys to retrieve values for.
+     * @return An array of values corresponding to the provided <code>keys</code>.<br>
+     *     If a <code>key</code>is not found, its corresponding value in the list will be <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * GlideString[] values = client.mget(new GlideString[] {"key1", "key2"}).get();
+     * assert values.equals(new GlideString[] {"value1", "value2"});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> mget(GlideString[] keys);
+
+    /**
      * Sets multiple keys to multiple values in a single operation.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>
@@ -155,6 +252,23 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> mset(Map<String, String> keyValueMap);
+
+    /**
+     * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+     * more keys already exist, the entire operation fails.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://redis.io/commands/msetnx/">redis.io</a> for details.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
+     * @example
+     *     <pre>{@code
+     * Boolean result = client.msetnx(Map.of("key1", "value1", "key2", "value2"}).get();
+     * assert result;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> msetnx(Map<String, String> keyValueMap);
 
     /**
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
@@ -316,4 +430,46 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> append(String key, String value);
+
+    /**
+     * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
+     * key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return A <code>String</code> containing the longest common subsequence between the 2 strings.
+     *     An empty <code>String</code> is returned if the keys do not exist or have no common
+     *     subsequences.
+     * @example
+     *     <pre>{@code
+     * // testKey1 = abcd, testKey2 = axcd
+     * String result = client.lcs("testKey1", "testKey2").get();
+     * assert result.equals("acd");
+     * }</pre>
+     */
+    CompletableFuture<String> lcs(String key1, String key2);
+
+    /**
+     * Returns the length of the longest common subsequence between strings stored at <code>key1
+     * </code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return The length of the longest common subsequence between the 2 strings.
+     * @example
+     *     <pre>{@code
+     * // testKey1 = abcd, testKey2 = axcd
+     * Long result = client.lcs("testKey1", "testKey2").get();
+     * assert result.equals(3L);
+     * }</pre>
+     */
+    CompletableFuture<Long> lcsLen(String key1, String key2);
 }

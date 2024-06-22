@@ -2,7 +2,7 @@
 
 import asyncio
 import threading
-from typing import List, Optional, Tuple, Type, Union, cast
+from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 
 import async_timeout
 from glide.async_commands.cluster_commands import ClusterCommands
@@ -16,6 +16,7 @@ from glide.exceptions import (
     ExecAbortError,
     RequestError,
     TimeoutError,
+    WrongConfiguration,
 )
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
@@ -60,6 +61,9 @@ class BaseRedisClient(CoreCommands):
         self.socket_path: Optional[str] = None
         self._reader_task: Optional[asyncio.Task] = None
         self._is_closed: bool = False
+        self._pubsub_futures: List[asyncio.Future] = []
+        self._pubsub_lock = threading.Lock()
+        self._pending_push_notifications: List[Response] = list()
 
     @classmethod
     async def create(cls, config: BaseClientConfiguration) -> Self:
@@ -140,6 +144,14 @@ class BaseRedisClient(CoreCommands):
             if not response_future.done():
                 err_message = "" if err_message is None else err_message
                 response_future.set_exception(ClosingError(err_message))
+        try:
+            self._pubsub_lock.acquire()
+            for pubsub_future in self._pubsub_futures:
+                if not response_future.done() and not pubsub_future.cancelled():
+                    pubsub_future.set_exception(ClosingError(""))
+        finally:
+            self._pubsub_lock.release()
+
         self._writer.close()
         await self._writer.wait_closed()
         self.__del__()
@@ -243,6 +255,121 @@ class BaseRedisClient(CoreCommands):
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
+    async def get_pubsub_message(self) -> CoreCommands.PubSubMsg:
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+
+        if not self.config._is_pubsub_configured():
+            raise WrongConfiguration(
+                "The operation will never complete since there was no pubsbub subscriptions applied to the client."
+            )
+
+        if self.config._get_pubsub_callback_and_context()[0] is not None:
+            raise WrongConfiguration(
+                "The operation will never complete since messages will be passed to the configured callback."
+            )
+
+        # locking might not be required
+        response_future: asyncio.Future = asyncio.Future()
+        try:
+            self._pubsub_lock.acquire()
+            self._pubsub_futures.append(response_future)
+            self._complete_pubsub_futures_safe()
+        finally:
+            self._pubsub_lock.release()
+        return await response_future
+
+    def try_get_pubsub_message(self) -> Optional[CoreCommands.PubSubMsg]:
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+
+        if not self.config._is_pubsub_configured():
+            raise WrongConfiguration(
+                "The operation will never succeed since there was no pubsbub subscriptions applied to the client."
+            )
+
+        if self.config._get_pubsub_callback_and_context()[0] is not None:
+            raise WrongConfiguration(
+                "The operation will never succeed since messages will be passed to the configured callback."
+            )
+
+        # locking might not be required
+        msg: Optional[CoreCommands.PubSubMsg] = None
+        try:
+            self._pubsub_lock.acquire()
+            self._complete_pubsub_futures_safe()
+            while len(self._pending_push_notifications) and not msg:
+                push_notification = self._pending_push_notifications.pop(0)
+                msg = self._notification_to_pubsub_message_safe(push_notification)
+        finally:
+            self._pubsub_lock.release()
+        return msg
+
+    def _cancel_pubsub_futures_with_exception_safe(self, exception: ConnectionError):
+        while len(self._pubsub_futures):
+            next_future = self._pubsub_futures.pop(0)
+            if not next_future.cancelled():
+                next_future.set_exception(exception)
+
+    def _notification_to_pubsub_message_safe(
+        self, response: Response
+    ) -> Optional[CoreCommands.PubSubMsg]:
+        pubsub_message = None
+        push_notification = cast(
+            Dict[str, Any], value_from_pointer(response.resp_pointer)
+        )
+        message_kind = push_notification["kind"]
+        if message_kind == "Disconnect":
+            # cancel all futures since we dont know how many (if any) messages wont arrive
+            # TODO: consider cancelling a single future
+            self._cancel_pubsub_futures_with_exception_safe(
+                ConnectionError(
+                    "Warning, transport disconnect occured, messages might be lost"
+                )
+            )
+        elif (
+            message_kind == "Message"
+            or message_kind == "PMessage"
+            or message_kind == "SMessage"
+        ):
+            values: List = push_notification["values"]
+            if message_kind == "PMessage":
+                pubsub_message = BaseRedisClient.PubSubMsg(
+                    message=values[2], channel=values[1], pattern=values[0]
+                )
+            else:
+                pubsub_message = BaseRedisClient.PubSubMsg(
+                    message=values[1], channel=values[0], pattern=None
+                )
+        elif (
+            message_kind == "PSubscribe"
+            or message_kind == "Subscribe"
+            or message_kind == "SSubscribe"
+            or message_kind == "Unsubscribe"
+        ):
+            pass
+        else:
+            err_msg = f"Unsupported push message: '{message_kind}'"
+            ClientLogger.log(LogLevel.ERROR, "pubsub message", err_msg)
+            # cancel all futures since its a serious
+            # TODO: consider cancelling a single future
+            self._cancel_pubsub_futures_with_exception_safe(ConnectionError(err_msg))
+
+        return pubsub_message
+
+    def _complete_pubsub_futures_safe(self):
+        while len(self._pending_push_notifications) and len(self._pubsub_futures):
+            next_push_notification = self._pending_push_notifications.pop(0)
+            pubsub_message = self._notification_to_pubsub_message_safe(
+                next_push_notification
+            )
+            if pubsub_message:
+                self._pubsub_futures.pop(0).set_result(pubsub_message)
+
     async def _write_request_await_response(self, request: RedisRequest):
         # Create a response future for this request and add it to the available
         # futures map
@@ -257,6 +384,53 @@ class BaseRedisClient(CoreCommands):
         except IndexError:
             # The list is empty
             return len(self._available_futures)
+
+    async def _process_response(self, response: Response) -> None:
+        res_future = self._available_futures.pop(response.callback_idx, None)
+        if not res_future or response.HasField("closing_error"):
+            err_msg = (
+                response.closing_error
+                if response.HasField("closing_error")
+                else f"Client Error - closing due to unknown error. callback index:  {response.callback_idx}"
+            )
+            if res_future is not None:
+                res_future.set_exception(ClosingError(err_msg))
+            await self.close(err_msg)
+            raise ClosingError(err_msg)
+        else:
+            self._available_callback_indexes.append(response.callback_idx)
+            if response.HasField("request_error"):
+                error_type = get_request_error_class(response.request_error.type)
+                res_future.set_exception(error_type(response.request_error.message))
+            elif response.HasField("resp_pointer"):
+                res_future.set_result(value_from_pointer(response.resp_pointer))
+            elif response.HasField("constant_response"):
+                res_future.set_result(OK)
+            else:
+                res_future.set_result(None)
+
+    async def _process_push(self, response: Response) -> None:
+        if response.HasField("closing_error") or not response.HasField("resp_pointer"):
+            err_msg = (
+                response.closing_error
+                if response.HasField("closing_error")
+                else "Client Error - push notification without resp_pointer"
+            )
+            await self.close(err_msg)
+            raise ClosingError(err_msg)
+
+        try:
+            self._pubsub_lock.acquire()
+            callback, context = self.config._get_pubsub_callback_and_context()
+            if callback:
+                pubsub_message = self._notification_to_pubsub_message_safe(response)
+                if pubsub_message:
+                    callback(pubsub_message, context)
+            else:
+                self._pending_push_notifications.append(response)
+                self._complete_pubsub_futures_safe()
+        finally:
+            self._pubsub_lock.release()
 
     async def _reader_loop(self) -> None:
         # Socket reader loop
@@ -280,32 +454,10 @@ class BaseRedisClient(CoreCommands):
                     remaining_read_bytes = read_bytes[offset:]
                     break
                 response = cast(Response, response)
-                res_future = self._available_futures.pop(response.callback_idx, None)
-                if not res_future or response.HasField("closing_error"):
-                    err_msg = (
-                        response.closing_error
-                        if response.HasField("closing_error")
-                        else f"Client Error - closing due to unknown error. callback index:  {response.callback_idx}"
-                    )
-                    if res_future is not None:
-                        res_future.set_exception(ClosingError(err_msg))
-                    await self.close(err_msg)
-                    raise ClosingError(err_msg)
+                if response.is_push:
+                    await self._process_push(response=response)
                 else:
-                    self._available_callback_indexes.append(response.callback_idx)
-                    if response.HasField("request_error"):
-                        error_type = get_request_error_class(
-                            response.request_error.type
-                        )
-                        res_future.set_exception(
-                            error_type(response.request_error.message)
-                        )
-                    elif response.HasField("resp_pointer"):
-                        res_future.set_result(value_from_pointer(response.resp_pointer))
-                    elif response.HasField("constant_response"):
-                        res_future.set_result(OK)
-                    else:
-                        res_future.set_result(None)
+                    await self._process_response(response=response)
 
 
 class RedisClusterClient(BaseRedisClient, ClusterCommands):
@@ -325,8 +477,6 @@ class RedisClient(BaseRedisClient, StandaloneCommands):
     For full documentation, see
     https://github.com/aws/babushka/wiki/Python-wrapper#redis-standalone
     """
-
-    pass
 
 
 TRedisClient = Union[RedisClient, RedisClusterClient]

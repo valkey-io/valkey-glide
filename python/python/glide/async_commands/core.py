@@ -1,6 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
@@ -16,9 +17,23 @@ from typing import (
     get_args,
 )
 
-from glide.async_commands.command_args import Limit, OrderBy
+from glide.async_commands.bitmap import (
+    BitFieldGet,
+    BitFieldSubCommands,
+    BitmapIndexType,
+    BitwiseOperation,
+    OffsetOptions,
+    _create_bitfield_args,
+    _create_bitfield_read_only_args,
+)
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
+    GeoSearchByBox,
+    GeoSearchByRadius,
+    GeoSearchCount,
+    GeospatialData,
+    GeoUnit,
     InfBound,
     LexBoundary,
     RangeByIndex,
@@ -26,8 +41,14 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+    _create_geosearch_args,
     _create_zinter_zunion_cmd_args,
     _create_zrange_args,
+)
+from glide.async_commands.stream import (
+    StreamAddOptions,
+    StreamRangeBound,
+    StreamTrimOptions,
 )
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -62,6 +83,23 @@ class ExpiryType(Enum):
     UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Redis API
     UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Redis API
     KEEP_TTL = 4, Type[None]  # Equivalent to `KEEPTTL` in the Redis API
+
+
+class ExpiryTypeGetEx(Enum):
+    """GetEx option: The type of the expiry.
+    - EX - Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
+    - PX - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
+    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+    - UNIX_MILLSEC - Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the
+        Redis API.
+    - PERSIST - Remove the time to live associated with the key. Equivalent to `PERSIST` in the Redis API.
+    """
+
+    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Redis API
+    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Redis API
+    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Redis API
+    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Redis API
+    PERSIST = 4, Type[None]  # Equivalent to `PERSIST` in the Redis API
 
 
 class InfoSection(Enum):
@@ -136,174 +174,6 @@ class UpdateOptions(Enum):
     GREATER_THAN = "GT"
 
 
-class GeospatialData:
-    def __init__(self, longitude: float, latitude: float):
-        """
-        Represents a geographic position defined by longitude and latitude.
-
-        The exact limits, as specified by EPSG:900913 / EPSG:3785 / OSGEO:41001 are the following:
-            - Valid longitudes are from -180 to 180 degrees.
-            - Valid latitudes are from -85.05112878 to 85.05112878 degrees.
-
-        Args:
-            longitude (float): The longitude coordinate.
-            latitude (float): The latitude coordinate.
-        """
-        self.longitude = longitude
-        self.latitude = latitude
-
-
-class StreamTrimOptions(ABC):
-    """
-    Abstract base class for stream trim options.
-    """
-
-    @abstractmethod
-    def __init__(
-        self,
-        exact: bool,
-        threshold: Union[str, int],
-        method: str,
-        limit: Optional[int] = None,
-    ):
-        """
-        Initialize stream trim options.
-
-        Args:
-            exact (bool): If `true`, the stream will be trimmed exactly.
-                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (Union[str, int]): Threshold for trimming.
-            method (str): Method for trimming (e.g., MINID, MAXLEN).
-            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
-                Note: If `exact` is set to `True`, `limit` cannot be specified.
-        """
-        if exact and limit:
-            raise ValueError(
-                "If `exact` is set to `True`, `limit` cannot be specified."
-            )
-        self.exact = exact
-        self.threshold = threshold
-        self.method = method
-        self.limit = limit
-
-    def to_args(self) -> List[str]:
-        """
-        Convert options to arguments for Redis command.
-
-        Returns:
-            List[str]: List of arguments for Redis command.
-        """
-        option_args = [
-            self.method,
-            "=" if self.exact else "~",
-            str(self.threshold),
-        ]
-        if self.limit is not None:
-            option_args.extend(["LIMIT", str(self.limit)])
-        return option_args
-
-
-class TrimByMinId(StreamTrimOptions):
-    """
-    Stream trim option to trim by minimum ID.
-    """
-
-    def __init__(self, exact: bool, threshold: str, limit: Optional[int] = None):
-        """
-        Initialize trim option by minimum ID.
-
-        Args:
-            exact (bool): If `true`, the stream will be trimmed exactly.
-                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (str): Threshold for trimming by minimum ID.
-            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
-                Note: If `exact` is set to `True`, `limit` cannot be specified.
-        """
-        super().__init__(exact, threshold, "MINID", limit)
-
-
-class TrimByMaxLen(StreamTrimOptions):
-    """
-    Stream trim option to trim by maximum length.
-    """
-
-    def __init__(self, exact: bool, threshold: int, limit: Optional[int] = None):
-        """
-        Initialize trim option by maximum length.
-
-        Args:
-            exact (bool): If `true`, the stream will be trimmed exactly.
-                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (int): Threshold for trimming by maximum length.
-            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
-                Note: If `exact` is set to `True`, `limit` cannot be specified.
-        """
-        super().__init__(exact, threshold, "MAXLEN", limit)
-
-
-class StreamAddOptions:
-    """
-    Options for adding entries to a stream.
-    """
-
-    def __init__(
-        self,
-        id: Optional[str] = None,
-        make_stream: bool = True,
-        trim: Optional[StreamTrimOptions] = None,
-    ):
-        """
-        Initialize stream add options.
-
-        Args:
-            id (Optional[str]): ID for the new entry. If set, the new entry will be added with this ID. If not specified, '*' is used.
-            make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
-            trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream. See `StreamTrimOptions`.
-        """
-        self.id = id
-        self.make_stream = make_stream
-        self.trim = trim
-
-    def to_args(self) -> List[str]:
-        """
-        Convert options to arguments for Redis command.
-
-        Returns:
-            List[str]: List of arguments for Redis command.
-        """
-        option_args = []
-        if not self.make_stream:
-            option_args.append("NOMKSTREAM")
-        if self.trim:
-            option_args.extend(self.trim.to_args())
-        option_args.append(self.id if self.id else "*")
-
-        return option_args
-
-
-class GeoUnit(Enum):
-    """
-    Enumeration representing distance units options for the `GEODIST` command.
-    """
-
-    METERS = "m"
-    """
-    Represents distance in meters.
-    """
-    KILOMETERS = "km"
-    """
-    Represents distance in kilometers.
-    """
-    MILES = "mi"
-    """
-    Represents distance in miles.
-    """
-    FEET = "ft"
-    """
-    Represents distance in feet.
-    """
-
-
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -357,9 +227,79 @@ class ExpirySet:
         return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
 
 
+class ExpiryGetEx:
+    """GetEx option: Represents the expiry type and value to be executed with "GetEx" command."""
+
+    def __init__(
+        self,
+        expiry_type: ExpiryTypeGetEx,
+        value: Optional[Union[int, datetime, timedelta]],
+    ) -> None:
+        """
+        Args:
+            - expiry_type (ExpiryType): The expiry type.
+            - value (Optional[Union[int, datetime, timedelta]]): The value of the expiration type. The type of expiration
+                determines the type of expiration value:
+                - SEC: Union[int, timedelta]
+                - MILLSEC: Union[int, timedelta]
+                - UNIX_SEC: Union[int, datetime]
+                - UNIX_MILLSEC: Union[int, datetime]
+                - PERSIST: Type[None]
+        """
+        self.set_expiry_type_and_value(expiry_type, value)
+
+    def set_expiry_type_and_value(
+        self,
+        expiry_type: ExpiryTypeGetEx,
+        value: Optional[Union[int, datetime, timedelta]],
+    ):
+        if not isinstance(value, get_args(expiry_type.value[1])):
+            raise ValueError(
+                f"The value of {expiry_type} should be of type {expiry_type.value[1]}"
+            )
+        self.expiry_type = expiry_type
+        if self.expiry_type == ExpiryTypeGetEx.SEC:
+            self.cmd_arg = "EX"
+            if isinstance(value, timedelta):
+                value = int(value.total_seconds())
+        elif self.expiry_type == ExpiryTypeGetEx.MILLSEC:
+            self.cmd_arg = "PX"
+            if isinstance(value, timedelta):
+                value = int(value.total_seconds() * 1000)
+        elif self.expiry_type == ExpiryTypeGetEx.UNIX_SEC:
+            self.cmd_arg = "EXAT"
+            if isinstance(value, datetime):
+                value = int(value.timestamp())
+        elif self.expiry_type == ExpiryTypeGetEx.UNIX_MILLSEC:
+            self.cmd_arg = "PXAT"
+            if isinstance(value, datetime):
+                value = int(value.timestamp() * 1000)
+        elif self.expiry_type == ExpiryTypeGetEx.PERSIST:
+            self.cmd_arg = "PERSIST"
+        self.value = str(value) if value else None
+
+    def get_cmd_args(self) -> List[str]:
+        return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
+
+
 class InsertPosition(Enum):
     BEFORE = "BEFORE"
     AFTER = "AFTER"
+
+
+class FlushMode(Enum):
+    """
+    Defines flushing mode for:
+
+    `FLUSHALL` command and `FUNCTION FLUSH` command.
+
+    See https://valkey.io/commands/flushall/ and https://valkey.io/commands/function-flush/ for details
+
+    SYNC was introduced in version 6.2.0.
+    """
+
+    ASYNC = "ASYNC"
+    SYNC = "SYNC"
 
 
 def _build_sort_args(
@@ -503,6 +443,43 @@ class CoreCommands(Protocol):
         """
         return cast(
             Optional[str], await self._execute_command(RequestType.GetDel, [key])
+        )
+
+    async def getrange(self, key: str, start: int, end: int) -> str:
+        """
+        Returns the substring of the string value stored at `key`, determined by the offsets `start` and `end` (both are inclusive).
+        Negative offsets can be used in order to provide an offset starting from the end of the string.
+        So `-1` means the last character, `-2` the penultimate and so forth.
+
+        If `key` does not exist, an empty string is returned. If `start` or `end`
+        are out of range, returns the substring within the valid range of the string.
+
+        See https://valkey.io/commands/getrange/ for more details.
+
+        Args:
+            key (str): The key of the string.
+            start (int): The starting offset.
+            end (int): The ending offset.
+
+        Returns:
+            str: A substring extracted from the value stored at `key`.
+
+        Examples:
+            >>> await client.set("mykey", "This is a string")
+            >>> await client.getrange("mykey", 0, 3)
+                "This"
+            >>> await client.getrange("mykey", -3, -1)
+                "ing"  # extracted last 3 characters of a string
+            >>> await client.getrange("mykey", 0, 100)
+                "This is a string"
+            >>> await client.getrange("non_existing", 5, 6)
+                ""
+        """
+        return cast(
+            str,
+            await self._execute_command(
+                RequestType.GetRange, [key, str(start), str(end)]
+            ),
         )
 
     async def append(self, key: str, value: str) -> int:
@@ -733,6 +710,36 @@ class CoreCommands(Protocol):
             parameters.extend(pair)
         return cast(TOK, await self._execute_command(RequestType.MSet, parameters))
 
+    async def msetnx(self, key_value_map: Mapping[str, str]) -> bool:
+        """
+        Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
+        more keys already exist, the entire operation fails.
+
+        Note:
+            When in cluster mode, all keys in `key_value_map` must map to the same hash slot.
+
+        See https://valkey.io/commands/msetnx/ for more details.
+
+        Args:
+            key_value_map (Mapping[str, str]): A key-value map consisting of keys and their respective values to set.
+
+        Returns:
+            bool: True if all keys were set. False if no key was set.
+
+        Examples:
+            >>> await client.msetnx({"key1": "value1", "key2": "value2"})
+                True
+            >>> await client.msetnx({"key2": "value4", "key3": "value5"})
+                False
+        """
+        parameters: List[str] = []
+        for pair in key_value_map.items():
+            parameters.extend(pair)
+        return cast(
+            bool,
+            await self._execute_command(RequestType.MSetNX, parameters),
+        )
+
     async def mget(self, keys: List[str]) -> List[Optional[str]]:
         """
         Retrieve the values of multiple keys.
@@ -799,6 +806,29 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.DecrBy, [key, str(amount)])
         )
 
+    async def touch(self, keys: List[str]) -> int:
+        """
+        Updates the last access time of specified keys.
+
+        See https://valkey.io/commands/touch/ for details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+
+        Args:
+            keys (List[str]): The keys to update last access time.
+
+        Returns:
+            int: The number of keys that were updated, a key is ignored if it doesn't exist.
+
+        Examples:
+            >>> await client.set("myKey1", "value1")
+            >>> await client.set("myKey2", "value2")
+            >>> await client.touch(["myKey1", "myKey2", "nonExistentKey"])
+                2  # Last access time of 2 keys has been updated.
+        """
+        return cast(int, await self._execute_command(RequestType.Touch, keys))
+
     async def hset(self, key: str, field_value_map: Mapping[str, str]) -> int:
         """
         Sets the specified fields to their respective values in the hash stored at `key`.
@@ -838,7 +868,7 @@ class CoreCommands(Protocol):
             Returns None if `field` is not presented in the hash or `key` does not exist.
 
         Examples:
-            >>> await client.hset("my_hash", "field")
+            >>> await client.hset("my_hash", "field", "value")
             >>> await client.hget("my_hash", "field")
                 "value"
             >>> await client.hget("my_hash", "nonexistent_field")
@@ -1152,6 +1182,29 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def hstrlen(self, key: str, field: str) -> int:
+        """
+        Returns the string length of the value associated with `field` in the hash stored at `key`.
+
+        See https://valkey.io/commands/hstrlen/ for more details.
+
+        Args:
+            key (str): The key of the hash.
+            field (str): The field in the hash.
+
+        Returns:
+            int: The string length or 0 if `field` or `key` does not exist.
+
+        Examples:
+            >>> await client.hset("my_hash", "field", "value")
+            >>> await client.hstrlen("my_hash", "my_field")
+                5
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.HStrlen, [key, field]),
+        )
+
     async def lpush(self, key: str, elements: List[str]) -> int:
         """
         Insert all the specified values at the head of the list stored at `key`.
@@ -1275,6 +1328,83 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.BLPop, keys + [str(timeout)]),
         )
 
+    async def lmpop(
+        self, keys: List[str], direction: ListDirection, count: Optional[int] = None
+    ) -> Optional[Mapping[str, List[str]]]:
+        """
+        Pops one or more elements from the first non-empty list from the provided `keys`.
+
+        When in cluster mode, all `keys` must map to the same hash slot.
+
+        See https://valkey.io/commands/lmpop/ for details.
+
+        Args:
+            keys (List[str]): An array of keys of lists.
+            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+
+        Returns:
+            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
+
+        Examples:
+            >>> await client.lpush("testKey", ["one", "two", "three"])
+            >>> await client.lmpop(["testKey"], ListDirection.LEFT, 2)
+               {"testKey": ["three", "two"]}
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(len(keys)), *keys, direction.value]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return cast(
+            Optional[Mapping[str, List[str]]],
+            await self._execute_command(RequestType.LMPop, args),
+        )
+
+    async def blmpop(
+        self,
+        keys: List[str],
+        direction: ListDirection,
+        timeout: float,
+        count: Optional[int] = None,
+    ) -> Optional[Mapping[str, List[str]]]:
+        """
+        Blocks the connection until it pops one or more elements from the first non-empty list from the provided `keys`.
+
+        `BLMPOP` is the blocking variant of `LMPOP`.
+
+        Notes:
+            1. When in cluster mode, all `keys` must map to the same hash slot.
+            2. `BLMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/blmpop/ for details.
+
+        Args:
+            keys (List[str]): An array of keys of lists.
+            direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+            count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
+
+        Returns:
+            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
+
+        Examples:
+            >>> await client.lpush("testKey", ["one", "two", "three"])
+            >>> await client.blmpop(["testKey"], ListDirection.LEFT, 0.1, 2)
+               {"testKey": ["three", "two"]}
+
+        Since: Redis version 7.0.0.
+        """
+        args = [str(timeout), str(len(keys)), *keys, direction.value]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return cast(
+            Optional[Mapping[str, List[str]]],
+            await self._execute_command(RequestType.BLMPop, args),
+        )
+
     async def lrange(self, key: str, start: int, end: int) -> List[str]:
         """
         Retrieve the specified elements of the list stored at `key` within the given range.
@@ -1340,6 +1470,33 @@ class CoreCommands(Protocol):
         return cast(
             Optional[str],
             await self._execute_command(RequestType.LIndex, [key, str(index)]),
+        )
+
+    async def lset(self, key: str, index: int, element: str) -> TOK:
+        """
+        Sets the list element at `index` to `element`.
+
+        The index is zero-based, so `0` means the first element, `1` the second element and so on.
+        Negative indices can be used to designate elements starting at the tail of the list.
+        Here, `-1` means the last element, `-2` means the penultimate and so forth.
+
+        See https://valkey.io/commands/lset/ for details.
+
+        Args:
+            key (str): The key of the list.
+            index (int): The index of the element in the list to be set.
+            element (str): The new element to set at the specified index.
+
+        Returns:
+            TOK: A simple `OK` response.
+
+        Examples:
+            >>> await client.lset("testKey", 1, "two")
+                OK
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.LSet, [key, str(index), element]),
         )
 
     async def rpush(self, key: str, elements: List[str]) -> int:
@@ -1493,6 +1650,101 @@ class CoreCommands(Protocol):
             int,
             await self._execute_command(
                 RequestType.LInsert, [key, position.value, pivot, element]
+            ),
+        )
+
+    async def lmove(
+        self,
+        source: str,
+        destination: str,
+        where_from: ListDirection,
+        where_to: ListDirection,
+    ) -> Optional[str]:
+        """
+        Atomically pops and removes the left/right-most element to the list stored at `source`
+        depending on `where_from`, and pushes the element at the first/last element of the list
+        stored at `destination` depending on `where_to`.
+
+        When in cluster mode, both `source` and `destination` must map to the same hash slot.
+
+        See https://valkey.io/commands/lmove/ for details.
+
+        Args:
+            source (str): The key to the source list.
+            destination (str): The key to the destination list.
+            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+
+        Returns:
+            Optional[str]: The popped element, or None if `source` does not exist.
+
+        Examples:
+            >>> client.lpush("testKey1", ["two", "one"])
+            >>> client.lpush("testKey2", ["four", "three"])
+            >>> await client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT)
+            "one"
+            >>> updated_array1 = await client.lrange("testKey1", 0, -1)
+            ["two"]
+            >>> await client.lrange("testKey2", 0, -1)
+            ["one", "three", "four"]
+
+        Since: Redis version 6.2.0.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(
+                RequestType.LMove,
+                [source, destination, where_from.value, where_to.value],
+            ),
+        )
+
+    async def blmove(
+        self,
+        source: str,
+        destination: str,
+        where_from: ListDirection,
+        where_to: ListDirection,
+        timeout: float,
+    ) -> Optional[str]:
+        """
+        Blocks the connection until it pops atomically and removes the left/right-most element to the
+        list stored at `source` depending on `where_from`, and pushes the element at the first/last element
+        of the list stored at `destination` depending on `where_to`.
+        `BLMOVE` is the blocking variant of `LMOVE`.
+
+        Notes:
+            1. When in cluster mode, both `source` and `destination` must map to the same hash slot.
+            2. `BLMOVE` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
+
+        See https://valkey.io/commands/blmove/ for details.
+
+        Args:
+            source (str): The key to the source list.
+            destination (str): The key to the destination list.
+            where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
+            timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
+
+        Returns:
+            Optional[str]: The popped element, or None if `source` does not exist or if the operation timed-out.
+
+        Examples:
+            >>> await client.lpush("testKey1", ["two", "one"])
+            >>> await client.lpush("testKey2", ["four", "three"])
+            >>> await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1)
+            "one"
+            >>> await client.lrange("testKey1", 0, -1)
+            ["two"]
+            >>> updated_array2 = await client.lrange("testKey2", 0, -1)
+            ["one", "three", "four"]
+
+        Since: Redis version 6.2.0.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(
+                RequestType.BLMove,
+                [source, destination, where_from.value, where_to.value, str(timeout)],
             ),
         )
 
@@ -1680,6 +1932,32 @@ class CoreCommands(Protocol):
                 RequestType.SMove, [source, destination, member]
             ),
         )
+
+    async def sunion(self, keys: List[str]) -> Set[str]:
+        """
+        Gets the union of all the given sets.
+
+        See https://valkey.io/commands/sunion for more details.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot.
+
+        Args:
+            keys (List[str]): The keys of the sets.
+
+        Returns:
+            Set[str]: A set of members which are present in at least one of the given sets.
+                If none of the sets exist, an empty set will be returned.
+
+        Examples:
+            >>> await client.sadd("my_set1", ["member1", "member2"])
+            >>> await client.sadd("my_set2", ["member2", "member3"])
+            >>> await client.sunion(["my_set1", "my_set2"])
+                {"member1", "member2", "member3"} # sets "my_set1" and "my_set2" have three unique members
+            >>> await client.sunion(["my_set1", "non_existing_set"])
+                {"member1", "member2"}
+        """
+        return cast(Set[str], await self._execute_command(RequestType.SUnion, keys))
 
     async def sunionstore(
         self,
@@ -2119,6 +2397,61 @@ class CoreCommands(Protocol):
         )
         return cast(bool, await self._execute_command(RequestType.PExpireAt, args))
 
+    async def expiretime(self, key: str) -> int:
+        """
+        Returns the absolute Unix timestamp (since January 1, 1970) at which
+        the given `key` will expire, in seconds.
+        To get the expiration with millisecond precision, use `pexpiretime`.
+
+        See https://valkey.io/commands/expiretime/ for details.
+
+        Args:
+            key (str): The `key` to determine the expiration value of.
+
+        Returns:
+            int: The expiration Unix timestamp in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
+
+        Examples:
+            >>> await client.expiretime("my_key")
+                -2 # 'my_key' doesn't exist.
+            >>> await client.set("my_key", "value")
+            >>> await client.expiretime("my_key")
+                -1 # 'my_key' has no associate expiration.
+            >>> await client.expire("my_key", 60)
+            >>> await client.expiretime("my_key")
+                1718614954
+
+        Since: Redis version 7.0.0.
+        """
+        return cast(int, await self._execute_command(RequestType.ExpireTime, [key]))
+
+    async def pexpiretime(self, key: str) -> int:
+        """
+        Returns the absolute Unix timestamp (since January 1, 1970) at which
+        the given `key` will expire, in milliseconds.
+
+        See https://valkey.io/commands/pexpiretime/ for details.
+
+        Args:
+            key (str): The `key` to determine the expiration value of.
+
+        Returns:
+            int: The expiration Unix timestamp in milliseconds, -2 if `key` does not exist, or -1 if `key` exists but has no associated expiration.
+
+        Examples:
+            >>> await client.pexpiretime("my_key")
+                -2 # 'my_key' doesn't exist.
+            >>> await client.set("my_key", "value")
+            >>> await client.pexpiretime("my_key")
+                -1 # 'my_key' has no associate expiration.
+            >>> await client.expire("my_key", 60)
+            >>> await client.pexpiretime("my_key")
+                1718615446670
+
+        Since: Redis version 7.0.0.
+        """
+        return cast(int, await self._execute_command(RequestType.PExpireTime, [key]))
+
     async def ttl(self, key: str) -> int:
         """
         Returns the remaining time to live of `key` that has a timeout.
@@ -2249,6 +2582,29 @@ class CoreCommands(Protocol):
 
         return cast(Optional[str], await self._execute_command(RequestType.XAdd, args))
 
+    async def xdel(self, key: str, ids: List[str]) -> int:
+        """
+        Removes the specified entries by id from a stream, and returns the number of entries deleted.
+
+        See https://valkey.io/commands/xdel for more details.
+
+        Args:
+            key (str): The key of the stream.
+            ids (List[str]): An array of entry ids.
+
+        Returns:
+            int: The number of entries removed from the stream. This number may be less than the number of entries in
+                `ids`, if the specified `ids` don't exist in the stream.
+
+        Examples:
+            >>> await client.xdel("key", ["1538561698944-0", "1538561698944-1"])
+                2  # Stream marked 2 entries as deleted.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.XDel, [key] + ids),
+        )
+
     async def xtrim(
         self,
         key: str,
@@ -2298,6 +2654,53 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(RequestType.XLen, [key]),
+        )
+
+    async def xrange(
+        self,
+        key: str,
+        start: StreamRangeBound,
+        end: StreamRangeBound,
+        count: Optional[int] = None,
+    ) -> Optional[Mapping[str, List[List[str]]]]:
+        """
+        Returns stream entries matching a given range of IDs.
+
+        See https://valkey.io/commands/xrange for more details.
+
+        Args:
+            key (str): The key of the stream.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+                If `count` is not provided, all stream entries in the range will be returned.
+
+        Returns:
+            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+                list of pairings with format `[[field, entry], [field, entry], ...]`.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
+            >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
+            >>> await client.xrange("mystream", MinId(), MaxId())
+                {
+                    "0-1": [["field1", "value1"]],
+                    "0-2": [["field2", "value2"], ["field2", "value3"]],
+                }  # Indicates the stream IDs and their associated field-value pairs for all stream entries in "mystream".
+        """
+        args = [key, start.to_arg(), end.to_arg()]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return cast(
+            Optional[Mapping[str, List[List[str]]]],
+            await self._execute_command(RequestType.XRange, args),
         )
 
     async def geoadd(
@@ -2444,6 +2847,157 @@ class CoreCommands(Protocol):
         return cast(
             List[Optional[List[float]]],
             await self._execute_command(RequestType.GeoPos, [key] + members),
+        )
+
+    async def geosearch(
+        self,
+        key: str,
+        search_from: Union[str, GeospatialData],
+        seach_by: Union[GeoSearchByRadius, GeoSearchByBox],
+        order_by: Optional[OrderBy] = None,
+        count: Optional[GeoSearchCount] = None,
+        with_coord: bool = False,
+        with_dist: bool = False,
+        with_hash: bool = False,
+    ) -> List[Union[str, List[Union[str, float, int, List[float]]]]]:
+        """
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area.
+
+        See https://valkey.io/commands/geosearch/ for more details.
+
+        Args:
+            key (str): The key of the sorted set representing geospatial data.
+            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
+                from the sorted set or as a geospatial data (see `GeospatialData`).
+            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                For circular area search, see `GeoSearchByRadius`.
+                For rectengal area search, see `GeoSearchByBox`.
+            order_by (Optional[OrderBy]): Specifies the order in which the results should be returned.
+                    - `ASC`: Sorts items from the nearest to the farthest, relative to the center point.
+                    - `DESC`: Sorts items from the farthest to the nearest, relative to the center point.
+                If not specified, the results would be unsorted.
+            count (Optional[GeoSearchCount]): Specifies the maximum number of results to return. See `GeoSearchCount`.
+                If not specified, return all results.
+            with_coord (bool): Whether to include coordinates of the returned items. Defaults to False.
+            with_dist (bool): Whether to include distance from the center in the returned items.
+                The distance is returned in the same unit as specified for the `search_by` arguments. Defaults to False.
+            with_hash (bool): Whether to include geohash of the returned items. Defaults to False.
+
+        Returns:
+            List[Union[str, List[Union[str, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
+            If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, we're each sub array represents a single item in the following order:
+                (str): The member (location) name.
+                (float): The distance from the center as a floating point number, in the same unit specified in the radius, if `with_dist` is set to True.
+                (int): The Geohash integer, if `with_hash` is set to True.
+                List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
+
+        Examples:
+            >>> await client.geoadd("my_geo_sorted_set", {"edge1": GeospatialData(12.758489, 38.788135), "edge2": GeospatialData(17.241510, 38.788135)}})
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geosearch("my_geo_sorted_set", "Catania", GeoSearchByRadius(175, GeoUnit.MILES), OrderBy.DESC)
+                ['Palermo', 'Catania'] # Returned the locations names within the radius of 175 miles, with the center being 'Catania' from farthest to nearest.
+            >>> await client.geosearch("my_geo_sorted_set", GeospatialData(15, 37), GeoSearchByBox(400, 400, GeoUnit.KILOMETERS), OrderBy.DESC, with_coord=true, with_dist=true, with_hash=true)
+                [
+                    [
+                        "Catania",
+                        [56.4413, 3479447370796909, [15.087267458438873, 37.50266842333162]],
+                    ],
+                    [
+                        "Palermo",
+                        [190.4424, 3479099956230698, [13.361389338970184, 38.1155563954963]],
+                    ],
+                    [
+                        "edge2",
+                        [279.7403, 3481342659049484, [17.241510450839996, 38.78813451624225]],
+                    ],
+                    [
+                        "edge1",
+                        [279.7405, 3479273021651468, [12.75848776102066, 38.78813451624225]],
+                    ],
+                ]  # Returns locations within the square box of 400 km, with the center being a specific point, from nearest to farthest with the dist, hash and coords.
+
+        Since: Redis version 6.2.0.
+        """
+        args = _create_geosearch_args(
+            [key],
+            search_from,
+            seach_by,
+            order_by,
+            count,
+            with_coord,
+            with_dist,
+            with_hash,
+        )
+
+        return cast(
+            List[Union[str, List[Union[str, float, int, List[float]]]]],
+            await self._execute_command(RequestType.GeoSearch, args),
+        )
+
+    async def geosearchstore(
+        self,
+        destination: str,
+        source: str,
+        search_from: Union[str, GeospatialData],
+        search_by: Union[GeoSearchByRadius, GeoSearchByBox],
+        count: Optional[GeoSearchCount] = None,
+        store_dist: bool = False,
+    ) -> int:
+        """
+        Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area and stores the result in `destination`.
+        If `destination` already exists, it is overwritten. Otherwise, a new sorted set will be created.
+
+        To get the result directly, see `geosearch`.
+
+        Note:
+            When in cluster mode, both `source` and `destination` must map to the same hash slot.
+
+        Args:
+            destination (str): The key to store the search results.
+            source (str): The key of the sorted set representing geospatial data to search from.
+            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
+                from the sorted set or as a geospatial data (see `GeospatialData`).
+            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                For circular area search, see `GeoSearchByRadius`.
+                For rectangular area search, see `GeoSearchByBox`.
+            count (Optional[GeoSearchCount]): Specifies the maximum number of results to store. See `GeoSearchCount`.
+                If not specified, stores all results.
+            store_dist (bool): Determines what is stored as the sorted set score. Defaults to False.
+                - If set to False, the geohash of the location will be stored as the sorted set score.
+                - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted set score.
+                    The distance is represented as a floating-point number in the same unit specified for that shape.
+
+        Returns:
+            int: The number of elements in the resulting sorted set stored at `destination`.
+
+        Examples:
+            >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
+            >>> await client.geosearchstore("my_dest_sorted_set", "my_geo_sorted_set", "Catania", GeoSearchByRadius(175, GeoUnit.MILES))
+                2 # Number of elements stored in "my_dest_sorted_set".
+            >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
+                {"Palermo": 3479099956230698.0, "Catania": 3479447370796909.0} # The elements within te search area, with their geohash as score.
+            >>> await client.geosearchstore("my_dest_sorted_set", "my_geo_sorted_set", GeospatialData(15, 37), GeoSearchByBox(400, 400, GeoUnit.KILOMETERS), store_dist=True)
+                2 # Number of elements stored in "my_dest_sorted_set", with distance as score.
+            >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
+                {"Catania": 56.4412578701582, "Palermo": 190.44242984775784} # The elements within te search area, with the distance as score.
+
+        Since: Redis version 6.2.0.
+        """
+        args = _create_geosearch_args(
+            [destination, source],
+            search_from,
+            search_by,
+            None,
+            count,
+            False,
+            False,
+            False,
+            store_dist,
+        )
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.GeoSearchStore, args),
         )
 
     async def zadd(
@@ -2632,6 +3186,38 @@ class CoreCommands(Protocol):
             int,
             await self._execute_command(
                 RequestType.ZCount, [key, score_min, score_max]
+            ),
+        )
+
+    async def zincrby(self, key: str, increment: float, member: str) -> float:
+        """
+        Increments the score of `member` in the sorted set stored at `key` by `increment`.
+        If `member` does not exist in the sorted set, it is added with `increment` as its score.
+        If `key` does not exist, a new sorted set is created with the specified member as its sole member.
+
+        See https://valkey.io/commands/zincrby/ for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            increment (float): The score increment.
+            member (str): A member of the sorted set.
+
+        Returns:
+            float: The new score of `member`.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member": 10.5, "member2": 8.2})
+            >>> await client.zincrby("my_sorted_set", 1.2, "member")
+                11.7  # The member existed in the set before score was altered, the new score is 11.7.
+            >>> await client.zincrby("my_sorted_set", -1.7, "member")
+                10.0 # Negetive increment, decrements the score.
+            >>> await client.zincrby("my_sorted_set", 5.5, "non_existing_member")
+                5.5  # A new memeber is added to the sorted set with the score being 5.5.
+        """
+        return cast(
+            float,
+            await self._execute_command(
+                RequestType.ZIncrBy, [key, str(increment), member]
             ),
         )
 
@@ -2943,6 +3529,65 @@ class CoreCommands(Protocol):
         return cast(
             Optional[List[Union[int, float]]],
             await self._execute_command(RequestType.ZRank, [key, member, "WITHSCORE"]),
+        )
+
+    async def zrevrank(self, key: str, member: str) -> Optional[int]:
+        """
+        Returns the rank of `member` in the sorted set stored at `key`, where scores are ordered from the highest to
+        lowest, starting from `0`.
+
+        To get the rank of `member` with its score, see `zrevrank_withscore`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Returns:
+            Optional[int]: The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2, "member3": 9.6})
+            >>> await client.zrevrank("my_sorted_set", "member2")
+                2  # "member2" has the third-highest score in the sorted set "my_sorted_set"
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ZRevRank, [key, member]),
+        )
+
+    async def zrevrank_withscore(
+        self, key: str, member: str
+    ) -> Optional[List[Union[int, float]]]:
+        """
+        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
+        highest to lowest, starting from `0`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Returns:
+            Optional[List[Union[int, float]]]: A list containing the rank (as `int`) and score (as `float`) of `member`
+                in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2, "member3": 9.6})
+            >>> await client.zrevrank("my_sorted_set", "member2")
+                [2, 8.2]  # "member2" with score 8.2 has the third-highest score in the sorted set "my_sorted_set"
+
+        Since: Redis version 7.2.0.
+        """
+        return cast(
+            Optional[List[Union[int, float]]],
+            await self._execute_command(
+                RequestType.ZRevRank, [key, member, "WITHSCORE"]
+            ),
         )
 
     async def zrem(
@@ -3861,6 +4506,276 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def bitcount(self, key: str, options: Optional[OffsetOptions] = None) -> int:
+        """
+        Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
+        optionally be provided to count the number of bits in a specific string interval.
+
+        See https://valkey.io/commands/bitcount for more details.
+
+        Args:
+            key (str): The key for the string to count the set bits of.
+            options (Optional[OffsetOptions]): The offset options.
+
+        Returns:
+            int: If `options` is provided, returns the number of set bits in the string interval specified by `options`.
+                If `options` is not provided, returns the number of set bits in the string stored at `key`.
+                Otherwise, if `key` is missing, returns `0` as it is treated as an empty string.
+
+        Examples:
+            >>> await client.bitcount("my_key1")
+                2  # The string stored at "my_key1" contains 2 set bits.
+            >>> await client.bitcount("my_key2", OffsetOptions(1, 3))
+                2  # The second to fourth bytes of the string stored at "my_key2" contain 2 set bits.
+            >>> await client.bitcount("my_key3", OffsetOptions(1, 1, BitmapIndexType.BIT))
+                1  # Indicates that the second bit of the string stored at "my_key3" is set.
+            >>> await client.bitcount("my_key3", OffsetOptions(-1, -1, BitmapIndexType.BIT))
+                1  # Indicates that the last bit of the string stored at "my_key3" is set.
+        """
+        args = [key]
+        if options is not None:
+            args = args + options.to_args()
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.BitCount, args),
+        )
+
+    async def setbit(self, key: str, offset: int, value: int) -> int:
+        """
+        Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
+        with `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less
+        than `2^32` and greater than or equal to `0`. If a key is non-existent then the bit at `offset` is set to
+        `value` and the preceding bits are set to `0`.
+
+        See https://valkey.io/commands/setbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to be set.
+            value (int): The bit value to set at `offset`. The value must be `0` or `1`.
+
+        Returns:
+            int: The bit value that was previously stored at `offset`.
+
+        Examples:
+            >>> await client.setbit("string_key", 1, 1)
+                0  # The second bit value was 0 before setting to 1.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.SetBit, [key, str(offset), str(value)]
+            ),
+        )
+
+    async def getbit(self, key: str, offset: int) -> int:
+        """
+        Returns the bit value at `offset` in the string value stored at `key`.
+        `offset` should be greater than or equal to zero.
+
+        See https://valkey.io/commands/getbit for more details.
+
+        Args:
+            key (str): The key of the string.
+            offset (int): The index of the bit to return.
+
+        Returns:
+            int: The bit at the given `offset` of the string. Returns `0` if the key is empty or if the `offset` exceeds
+                the length of the string.
+
+        Examples:
+            >>> await client.getbit("my_key", 1)
+                1  # Indicates that the second bit of the string stored at "my_key" is set to 1.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.GetBit, [key, str(offset)]),
+        )
+
+    async def bitpos(self, key: str, bit: int, start: Optional[int] = None) -> int:
+        """
+        Returns the position of the first bit matching the given `bit` value. The optional starting offset
+        `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
+        The offset can also be a negative number indicating an offset starting at the end of the list, with `-1` being
+        the last byte of the list, `-2` being the penultimate, and so on.
+
+        See https://valkey.io/commands/bitpos for more details.
+
+        Args:
+            key (str): The key of the string.
+            bit (int): The bit value to match. Must be `0` or `1`.
+            start (Optional[int]): The starting offset.
+
+        Returns:
+            int: The position of the first occurrence of `bit` in the binary value of the string held at `key`.
+                If `start` was provided, the search begins at the offset indicated by `start`.
+
+        Examples:
+            >>> await client.set("key1", "A1")  # "A1" has binary value 01000001 00110001
+            >>> await client.bitpos("key1", 1)
+                1  # The first occurrence of bit value 1 in the string stored at "key1" is at the second position.
+            >>> await client.bitpos("key1", 1, -1)
+                10  # The first occurrence of bit value 1, starting at the last byte in the string stored at "key1", is at the eleventh position.
+        """
+        args = [key, str(bit)] if start is None else [key, str(bit), str(start)]
+        return cast(
+            int,
+            await self._execute_command(RequestType.BitPos, args),
+        )
+
+    async def bitpos_interval(
+        self,
+        key: str,
+        bit: int,
+        start: int,
+        end: int,
+        index_type: Optional[BitmapIndexType] = None,
+    ) -> int:
+        """
+        Returns the position of the first bit matching the given `bit` value. The offsets are zero-based indexes, with
+        `0` being the first element of the list, `1` being the next, and so on. These offsets can also be negative
+        numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
+        being the penultimate, and so on.
+
+        If you are using Redis 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
+        `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
+        are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
+        specified, `start=0` and `end=2` means to look at the first three bytes.
+
+        See https://valkey.io/commands/bitpos for more details.
+
+        Args:
+            key (str): The key of the string.
+            bit (int): The bit value to match. Must be `0` or `1`.
+            start (int): The starting offset.
+            end (int): The ending offset.
+            index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
+                using Redis version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
+                If no index type is provided, the indexes will be assumed to be byte indexes.
+
+        Returns:
+            int: The position of the first occurrence from the `start` to the `end` offsets of the `bit` in the binary
+                value of the string held at `key`.
+
+        Examples:
+            >>> await client.set("key1", "A12")  # "A12" has binary value 01000001 00110001 00110010
+            >>> await client.bitpos_interval("key1", 1, 1, -1)
+                10  # The first occurrence of bit value 1 in the second byte to the last byte of the string stored at "key1" is at the eleventh position.
+            >>> await client.bitpos_interval("key1", 1, 2, 9, BitmapIndexType.BIT)
+                7  # The first occurrence of bit value 1 in the third to tenth bits of the string stored at "key1" is at the eighth position.
+        """
+        if index_type is not None:
+            args = [key, str(bit), str(start), str(end), index_type.value]
+        else:
+            args = [key, str(bit), str(start), str(end)]
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.BitPos, args),
+        )
+
+    async def bitop(
+        self, operation: BitwiseOperation, destination: str, keys: List[str]
+    ) -> int:
+        """
+        Perform a bitwise operation between multiple keys (containing string values) and store the result in the
+        `destination`.
+
+        See https://valkey.io/commands/bitop for more details.
+
+        Note:
+            When in cluster mode, `destination` and all `keys` must map to the same hash slot.
+
+        Args:
+            operation (BitwiseOperation): The bitwise operation to perform.
+            destination (str): The key that will store the resulting string.
+            keys (List[str]): The list of keys to perform the bitwise operation on.
+
+        Returns:
+            int: The size of the string stored in `destination`.
+
+        Examples:
+            >>> await client.set("key1", "A")  # "A" has binary value 01000001
+            >>> await client.set("key1", "B")  # "B" has binary value 01000010
+            >>> await client.bitop(BitwiseOperation.AND, "destination", ["key1", "key2"])
+                1  # The size of the resulting string stored in "destination" is 1
+            >>> await client.get("destination")
+                "@"  # "@" has binary value 01000000
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.BitOp, [operation.value, destination] + keys
+            ),
+        )
+
+    async def bitfield(
+        self, key: str, subcommands: List[BitFieldSubCommands]
+    ) -> List[Optional[int]]:
+        """
+        Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+        `subcommands`.
+
+        See https://valkey.io/commands/bitfield for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldSubCommands]): The subcommands to be performed on the binary value of the string
+                at `key`, which could be any of the following:
+                    - `BitFieldGet`
+                    - `BitFieldSet`
+                    - `BitFieldIncrBy`
+                    - `BitFieldOverflow`
+
+        Returns:
+            List[Optional[int]]: An array of results from the executed subcommands:
+                - `BitFieldGet` returns the value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldSet` returns the old value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldIncrBy` returns the new value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldOverflow` determines the behavior of the "SET" and "INCRBY" subcommands when an overflow or
+                  underflow occurs. "OVERFLOW" does not return a value and does not contribute a value to the list
+                  response.
+
+        Examples:
+            >>> await client.set("my_key", "A")  # "A" has binary value 01000001
+            >>> await client.bitfield("my_key", [BitFieldSet(UnsignedEncoding(2), Offset(1), 3), BitFieldGet(UnsignedEncoding(2), Offset(1))])
+                [2, 3]  # The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
+        """
+        args = [key] + _create_bitfield_args(subcommands)
+        return cast(
+            List[Optional[int]],
+            await self._execute_command(RequestType.BitField, args),
+        )
+
+    async def bitfield_read_only(
+        self, key: str, subcommands: List[BitFieldGet]
+    ) -> List[int]:
+        """
+        Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+
+        See https://valkey.io/commands/bitfield_ro for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldGet]): The "GET" subcommands to be performed.
+
+        Returns:
+            List[int]: An array of results from the "GET" subcommands.
+
+        Examples:
+            >>> await client.set("my_key", "A")  # "A" has binary value 01000001
+            >>> await client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
+                [2]  # The value at offset 1 with an unsigned encoding of 2 is 3.
+
+        Since: Redis version 6.0.0.
+        """
+        args = [key] + _create_bitfield_read_only_args(subcommands)
+        return cast(
+            List[int],
+            await self._execute_command(RequestType.BitFieldReadOnly, args),
+        )
+
     async def object_encoding(self, key: str) -> Optional[str]:
         """
         Returns the internal encoding for the Redis object stored at `key`.
@@ -3947,3 +4862,143 @@ class CoreCommands(Protocol):
             Optional[int],
             await self._execute_command(RequestType.ObjectRefCount, [key]),
         )
+
+    async def srandmember(self, key: str) -> Optional[str]:
+        """
+        Returns a random element from the set value stored at 'key'.
+
+        See https://valkey.io/commands/srandmember for more details.
+
+        Args:
+            key (str): The key from which to retrieve the set member.
+
+        Returns:
+            str: A random element from the set, or None if 'key' does not exist.
+
+        Examples:
+            >>> await client.sadd("my_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.srandmember("my_set")
+            "member1"  # "member1" is a random member of "my_set".
+            >>> await client.srandmember("non_existing_set")
+            None  # "non_existing_set" is not an existing key, so None was returned.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.SRandMember, [key]),
+        )
+
+    async def srandmember_count(self, key: str, count: int) -> List[str]:
+        """
+        Returns one or more random elements from the set value stored at 'key'.
+
+        See https://valkey.io/commands/srandmember for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            count (int): The number of members to return.
+                If `count` is positive, returns unique members.
+                If `count` is negative, allows for duplicates members.
+
+        Returns:
+            List[str]: A list of members from the set.
+                If the set does not exist or is empty, the response will be an empty list.
+
+        Examples:
+            >>> await client.sadd("my_set", {"member1": 1.0, "member2": 2.0})
+            >>> await client.srandmember("my_set", -3)
+                ["member1", "member1", "member2"]  # "member1" and "member2" are random members of "my_set".
+            >>> await client.srandmember("non_existing_set", 3)
+                []  # "non_existing_set" is not an existing key, so an empty list was returned.
+        """
+        return cast(
+            List[str],
+            await self._execute_command(RequestType.SRandMember, [key, str(count)]),
+        )
+
+    async def getex(
+        self,
+        key: str,
+        expiry: Optional[ExpiryGetEx] = None,
+    ) -> Optional[str]:
+        """
+        Get the value of `key` and optionally set its expiration. `GETEX` is similar to `GET`.
+        See https://valkey.io/commands/getex for more details.
+
+        Args:
+            key (str): The key to get.
+            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
+
+        Returns:
+            Optional[str]:
+                If `key` exists, return the value stored at `key`
+                If `key` does not exist, return `None`
+
+        Examples:
+            >>> await client.set("key", "value")
+                'OK'
+            >>> await client.getex("key")
+                'value'
+            >>> await client.getex("key", ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
+                'value'
+            >>> time.sleep(1)
+            >>> await client.getex("key")
+                None
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key]
+        if expiry is not None:
+            args.extend(expiry.get_cmd_args())
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.GetEx, args),
+        )
+
+    @dataclass
+    class PubSubMsg:
+        """Describes incoming pubsub message
+
+        Attributes:
+            message (str): Incoming message.
+            channel (str): Name of an channel that triggered the message.
+            pattern (Optional[str]): Pattern that triggered the message.
+        """
+
+        message: str
+        channel: str
+        pattern: Optional[str]
+
+    async def get_pubsub_message(self) -> PubSubMsg:
+        """
+        Returns the next pubsub message.
+        Throws WrongConfiguration in cases:
+        1. No pubsub subscriptions are configured for the client
+        2. Callback is configured with the pubsub subsciptions
+
+        See https://valkey.io/docs/topics/pubsub/ for more details.
+
+        Returns:
+            PubSubMsg: The next pubsub message
+
+        Examples:
+            >>> pubsub_msg = await listening_client.get_pubsub_message()
+        """
+        ...
+
+    def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
+        """
+        Tries to returns the next pubsub message.
+        Throws WrongConfiguration in cases:
+        1. No pubsub subscriptions are configured for the client
+        2. Callback is configured with the pubsub subsciptions
+
+        See https://valkey.io/docs/topics/pubsub/ for more details.
+
+        Returns:
+            Optional[PubSubMsg]: The next pubsub message or None
+
+        Examples:
+            >>> pubsub_msg = listening_client.try_get_pubsub_message()
+        """
+        ...

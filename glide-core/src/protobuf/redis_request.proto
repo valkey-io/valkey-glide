@@ -193,12 +193,17 @@ enum RequestType {
     FunctionList = 151;
     FunctionDelete = 152;
     FunctionFlush = 153;
+    FCall = 154;
     LMPop = 155;
     ExpireTime = 156;
     PExpireTime = 157;
     BLMPop = 158;
     XLen = 159;
     Sort = 160;
+    FunctionKill = 161;
+    FunctionStats = 162;
+    FCallReadOnly = 163;
+    FlushDB = 164;
     LSet = 165;
     XDel = 166;
     XRange = 167;
@@ -210,7 +215,25 @@ enum RequestType {
     BitFieldReadOnly = 173;
     Move = 174;
     SInterCard = 175;
+    XRevRange = 176;
     Copy = 178;
+    MSetNX = 179;
+    LPos = 180;
+    LCS = 181;
+    GeoSearch = 182;
+    Watch = 183;
+    UnWatch = 184;
+    GeoSearchStore = 185;
+    SUnion = 186;
+    Publish = 187;
+    SPublish = 188;
+    XGroupCreateConsumer = 189;
+    XGroupDelConsumer = 190;
+    RandomKey = 191;
+    GetEx = 192;
+    Dump = 193;
+    Restore = 194;
+    SortReadOnly = 195;
 }
 
 message Command {

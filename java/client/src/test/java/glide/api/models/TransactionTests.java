@@ -18,15 +18,23 @@ import static glide.api.models.commands.RangeOptions.InfScoreBound.POSITIVE_INFI
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
 import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
 import static glide.api.models.commands.ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -59,11 +67,15 @@ import static redis_request.RedisRequestOuterClass.RequestType.Exists;
 import static redis_request.RedisRequestOuterClass.RequestType.Expire;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireAt;
 import static redis_request.RedisRequestOuterClass.RequestType.ExpireTime;
+import static redis_request.RedisRequestOuterClass.RequestType.FCall;
+import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
+import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
@@ -71,6 +83,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
+import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -90,12 +103,14 @@ import static redis_request.RedisRequestOuterClass.RequestType.Incr;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrBy;
 import static redis_request.RedisRequestOuterClass.RequestType.IncrByFloat;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
+import static redis_request.RedisRequestOuterClass.RequestType.LCS;
 import static redis_request.RedisRequestOuterClass.RequestType.LIndex;
 import static redis_request.RedisRequestOuterClass.RequestType.LInsert;
 import static redis_request.RedisRequestOuterClass.RequestType.LLen;
 import static redis_request.RedisRequestOuterClass.RequestType.LMPop;
 import static redis_request.RedisRequestOuterClass.RequestType.LMove;
 import static redis_request.RedisRequestOuterClass.RequestType.LPop;
+import static redis_request.RedisRequestOuterClass.RequestType.LPos;
 import static redis_request.RedisRequestOuterClass.RequestType.LPush;
 import static redis_request.RedisRequestOuterClass.RequestType.LPushX;
 import static redis_request.RedisRequestOuterClass.RequestType.LRange;
@@ -106,6 +121,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.MGet;
 import static redis_request.RedisRequestOuterClass.RequestType.MSet;
+import static redis_request.RedisRequestOuterClass.RequestType.MSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectEncoding;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectFreq;
 import static redis_request.RedisRequestOuterClass.RequestType.ObjectIdleTime;
@@ -122,6 +138,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
+import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
 import static redis_request.RedisRequestOuterClass.RequestType.Rename;
 import static redis_request.RedisRequestOuterClass.RequestType.RenameNX;
 import static redis_request.RedisRequestOuterClass.RequestType.SAdd;
@@ -138,20 +155,31 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
+import static redis_request.RedisRequestOuterClass.RequestType.Sort;
+import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
+import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
+import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.ZCard;
@@ -182,7 +210,9 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import com.google.protobuf.ByteString;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -212,7 +242,10 @@ import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -240,6 +273,12 @@ public class TransactionTests {
 
         transaction.get("key");
         results.add(Pair.of(Get, buildArgs("key")));
+
+        transaction.getex("key");
+        results.add(Pair.of(GetEx, buildArgs("key")));
+
+        transaction.getex("key", GetExOptions.Seconds(10L));
+        results.add(Pair.of(GetEx, buildArgs("key", "EX", "10")));
 
         transaction.set("key", "value");
         results.add(Pair.of(Set, buildArgs("key", "value")));
@@ -270,6 +309,9 @@ public class TransactionTests {
 
         transaction.mset(Map.of("key", "value"));
         results.add(Pair.of(MSet, buildArgs("key", "value")));
+
+        transaction.msetnx(Map.of("key", "value"));
+        results.add(Pair.of(MSetNX, buildArgs("key", "value")));
 
         transaction.mget(new String[] {"key"});
         results.add(Pair.of(MGet, buildArgs("key")));
@@ -347,6 +389,18 @@ public class TransactionTests {
 
         transaction.lpush("key", new String[] {"element1", "element2"});
         results.add(Pair.of(LPush, buildArgs("key", "element1", "element2")));
+
+        transaction.lpos("key", "element1");
+        results.add(Pair.of(LPos, buildArgs("key", "element1")));
+
+        transaction.lpos("key", "element1", LPosOptions.builder().rank(1L).build());
+        results.add(Pair.of(LPos, buildArgs("key", "element1", "RANK", "1")));
+
+        transaction.lposCount("key", "element1", 1L);
+        results.add(Pair.of(LPos, buildArgs("key", "element1", "COUNT", "1")));
+
+        transaction.lposCount("key", "element1", 1L, LPosOptions.builder().rank(1L).build());
+        results.add(Pair.of(LPos, buildArgs("key", "element1", "COUNT", "1", "RANK", "1")));
 
         transaction.lpop("key");
         results.add(Pair.of(LPop, buildArgs("key")));
@@ -623,20 +677,6 @@ public class TransactionTests {
                                 AGGREGATE_REDIS_API,
                                 Aggregate.MAX.toString())));
 
-        transaction.zunion(new WeightedKeys(weightedKeys), Aggregate.MAX);
-        results.add(
-                Pair.of(
-                        ZUnion,
-                        buildArgs(
-                                "2",
-                                "key1",
-                                "key2",
-                                WEIGHTS_REDIS_API,
-                                "10.0",
-                                "20.0",
-                                AGGREGATE_REDIS_API,
-                                Aggregate.MAX.toString())));
-
         transaction.zunionWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
@@ -663,20 +703,6 @@ public class TransactionTests {
         transaction.zinterWithScores(new KeyArray(new String[] {"key1", "key2"}));
         results.add(Pair.of(ZInter, buildArgs("2", "key1", "key2", WITH_SCORES_REDIS_API)));
 
-        transaction.zinter(new WeightedKeys(weightedKeys), Aggregate.MAX);
-        results.add(
-                Pair.of(
-                        ZInter,
-                        buildArgs(
-                                "2",
-                                "key1",
-                                "key2",
-                                WEIGHTS_REDIS_API,
-                                "10.0",
-                                "20.0",
-                                AGGREGATE_REDIS_API,
-                                Aggregate.MAX.toString())));
-
         transaction.zinterWithScores(new WeightedKeys(weightedKeys), Aggregate.MAX);
         results.add(
                 Pair.of(
@@ -701,6 +727,22 @@ public class TransactionTests {
         transaction.xtrim("key", new MinId(true, "id"));
         results.add(Pair.of(XTrim, buildArgs("key", TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "id")));
 
+        transaction.xread(Map.of("key", "id"));
+        results.add(Pair.of(XRead, buildArgs(READ_STREAMS_REDIS_API, "key", "id")));
+
+        transaction.xread(Map.of("key", "id"), StreamReadOptions.builder().block(1L).count(2L).build());
+        results.add(
+                Pair.of(
+                        XRead,
+                        buildArgs(
+                                READ_COUNT_REDIS_API,
+                                "2",
+                                READ_BLOCK_REDIS_API,
+                                "1",
+                                READ_STREAMS_REDIS_API,
+                                "key",
+                                "id")));
+
         transaction.xlen("key");
         results.add(Pair.of(XLen, buildArgs("key")));
 
@@ -722,6 +764,75 @@ public class TransactionTests {
                                 RANGE_COUNT_REDIS_API,
                                 "99")));
 
+        transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN);
+        results.add(
+                Pair.of(XRevRange, buildArgs("key", MAXIMUM_RANGE_REDIS_API, MINIMUM_RANGE_REDIS_API)));
+
+        transaction.xrevrange("key", InfRangeBound.MAX, InfRangeBound.MIN, 99L);
+        results.add(
+                Pair.of(
+                        XRevRange,
+                        buildArgs(
+                                "key",
+                                MAXIMUM_RANGE_REDIS_API,
+                                MINIMUM_RANGE_REDIS_API,
+                                RANGE_COUNT_REDIS_API,
+                                "99")));
+
+        transaction.xgroupCreate("key", "group", "id");
+        results.add(Pair.of(XGroupCreate, buildArgs("key", "group", "id")));
+
+        transaction.xgroupCreate(
+                "key",
+                "group",
+                "id",
+                StreamGroupOptions.builder().makeStream().entriesRead("entry").build());
+        results.add(
+                Pair.of(
+                        XGroupCreate,
+                        buildArgs(
+                                "key", "group", "id", MAKE_STREAM_REDIS_API, ENTRIES_READ_REDIS_API, "entry")));
+
+        transaction.xgroupDestroy("key", "group");
+        results.add(Pair.of(XGroupDestroy, buildArgs("key", "group")));
+
+        transaction.xgroupCreateConsumer("key", "group", "consumer");
+        results.add(Pair.of(XGroupCreateConsumer, buildArgs("key", "group", "consumer")));
+
+        transaction.xgroupDelConsumer("key", "group", "consumer");
+        results.add(Pair.of(XGroupDelConsumer, buildArgs("key", "group", "consumer")));
+
+        transaction.xreadgroup(Map.of("key", "id"), "group", "consumer");
+        results.add(
+                Pair.of(
+                        XReadGroup,
+                        buildArgs(
+                                READ_GROUP_REDIS_API, "group", "consumer", READ_STREAMS_REDIS_API, "key", "id")));
+
+        transaction.xreadgroup(
+                Map.of("key", "id"),
+                "group",
+                "consumer",
+                StreamReadGroupOptions.builder().block(1L).count(2L).noack().build());
+        results.add(
+                Pair.of(
+                        XReadGroup,
+                        buildArgs(
+                                READ_GROUP_REDIS_API,
+                                "group",
+                                "consumer",
+                                READ_COUNT_REDIS_API,
+                                "2",
+                                READ_BLOCK_REDIS_API,
+                                "1",
+                                READ_NOACK_REDIS_API,
+                                READ_STREAMS_REDIS_API,
+                                "key",
+                                "id")));
+
+        transaction.xack("key", "group", new String[] {"12345-1", "98765-4"});
+        results.add(Pair.of(XAck, buildArgs("key", "group", "12345-1", "98765-4")));
+
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
 
@@ -731,6 +842,10 @@ public class TransactionTests {
         transaction.flushall().flushall(ASYNC);
         results.add(Pair.of(FlushAll, buildArgs()));
         results.add(Pair.of(FlushAll, buildArgs(ASYNC.toString())));
+
+        transaction.flushdb().flushdb(ASYNC);
+        results.add(Pair.of(FlushDB, buildArgs()));
+        results.add(Pair.of(FlushDB, buildArgs(ASYNC.toString())));
 
         transaction.lolwut().lolwut(5).lolwut(new int[] {1, 2}).lolwut(6, new int[] {42});
         results.add(Pair.of(Lolwut, buildArgs()));
@@ -758,6 +873,9 @@ public class TransactionTests {
 
         transaction.type("key");
         results.add(Pair.of(Type, buildArgs("key")));
+
+        transaction.randomKey();
+        results.add(Pair.of(RandomKey, buildArgs()));
 
         transaction.rename("key", "newKey");
         results.add(Pair.of(Rename, buildArgs("key", "newKey")));
@@ -854,6 +972,19 @@ public class TransactionTests {
         transaction.functionList(true).functionList("*", false);
         results.add(Pair.of(FunctionList, buildArgs(WITH_CODE_REDIS_API)));
         results.add(Pair.of(FunctionList, buildArgs(LIBRARY_NAME_REDIS_API, "*")));
+
+        transaction.fcall("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
+        results.add(Pair.of(FCall, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
+        transaction.fcall("func", new String[] {"arg1", "arg2"});
+        results.add(Pair.of(FCall, buildArgs("func", "0", "arg1", "arg2")));
+
+        transaction.fcallReadOnly("func", new String[] {"key1", "key2"}, new String[] {"arg1", "arg2"});
+        results.add(Pair.of(FCallReadOnly, buildArgs("func", "2", "key1", "key2", "arg1", "arg2")));
+        transaction.fcallReadOnly("func", new String[] {"arg1", "arg2"});
+        results.add(Pair.of(FCallReadOnly, buildArgs("func", "0", "arg1", "arg2")));
+
+        transaction.functionStats();
+        results.add(Pair.of(FunctionStats, buildArgs()));
 
         transaction.geodist("key", "Place", "Place2");
         results.add(Pair.of(GeoDist, buildArgs("key", "Place", "Place2")));
@@ -959,6 +1090,22 @@ public class TransactionTests {
 
         transaction.copy("key1", "key2", true);
         results.add(Pair.of(Copy, buildArgs("key1", "key2", REPLACE_REDIS_API)));
+
+        transaction.lcs("key1", "key2");
+        results.add(Pair.of(LCS, buildArgs("key1", "key2")));
+
+        transaction.lcsLen("key1", "key2");
+        results.add(Pair.of(LCS, buildArgs("key1", "key2", "LEN")));
+
+        transaction.sunion(new String[] {"key1", "key2"});
+        results.add(Pair.of(SUnion, buildArgs("key1", "key2")));
+
+        transaction.sort("key1");
+        results.add(Pair.of(Sort, buildArgs("key1")));
+        transaction.sortReadOnly("key1");
+        results.add(Pair.of(SortReadOnly, buildArgs("key1")));
+        transaction.sortStore("key1", "key2");
+        results.add(Pair.of(Sort, buildArgs("key1", STORE_COMMAND_STRING, "key2")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

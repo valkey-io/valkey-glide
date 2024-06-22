@@ -10,6 +10,7 @@ import {
     BaseClient,
     BaseClientConfiguration,
     ClusterTransaction,
+    InsertPosition,
     Logger,
     ProtocolVersion,
     RedisClient,
@@ -22,6 +23,61 @@ import { checkIfServerVersionLessThan } from "./SharedTests";
 beforeAll(() => {
     Logger.init("info");
 });
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+function intoArrayInternal(obj: any, builder: Array<string>) {
+    if (obj == null) {
+        builder.push("null");
+    } else if (typeof obj === "string") {
+        builder.push(obj);
+    } else if (obj instanceof Uint8Array) {
+        builder.push(obj.toString());
+    } else if (obj instanceof Array) {
+        for (const item of obj) {
+            intoArrayInternal(item, builder);
+        }
+    } else if (obj instanceof Set) {
+        const arr = Array.from(obj);
+        arr.sort();
+
+        for (const item of arr) {
+            intoArrayInternal(item, builder);
+        }
+    } else if (obj instanceof Map) {
+        for (const [key, value] of obj) {
+            intoArrayInternal(key, builder);
+            intoArrayInternal(value, builder);
+        }
+    } else if (typeof obj[Symbol.iterator] === "function") {
+        // iterable, recurse into children
+        for (const item of obj) {
+            intoArrayInternal(item, builder);
+        }
+    } else {
+        for (const [k, v] of Object.entries(obj)) {
+            intoArrayInternal(k, builder);
+            intoArrayInternal(v, builder);
+        }
+    }
+}
+
+/**
+ * accept any variable `v` and convert it into String, recursively
+ */
+export function intoString(v: any): string {
+    const builder: Array<string> = [];
+    intoArrayInternal(v, builder);
+    return builder.join("");
+}
+
+/**
+ * accept any variable `v` and convert it into array of string
+ */
+export function intoArray(v: any): Array<string> {
+    const result: Array<string> = [];
+    intoArrayInternal(v, result);
+    return result;
+}
 
 /**
  * Convert array of strings into array of `Uint8Array`
@@ -36,6 +92,23 @@ export function convertStringArrayToBuffer(value: string[]): Uint8Array[] {
     return bytesarr;
 }
 
+export class Checker {
+    left: string;
+
+    constructor(left: any) {
+        this.left = intoString(left);
+    }
+
+    toEqual(right: any) {
+        right = intoString(right);
+        return expect(this.left).toEqual(right);
+    }
+}
+
+export function checkSimple(left: any): Checker {
+    return new Checker(left);
+}
+
 export type Client = {
     set: (key: string, value: string) => Promise<string | "OK" | null>;
     get: (key: string) => Promise<string | null>;
@@ -46,9 +119,9 @@ export async function GetAndSetRandomValue(client: Client) {
     // Adding random repetition, to prevent the inputs from always having the same alignment.
     const value = uuidv4() + "0".repeat(Math.random() * 7);
     const setResult = await client.set(key, value);
-    expect(setResult).toEqual("OK");
+    expect(intoString(setResult)).toEqual("OK");
     const result = await client.get(key);
-    expect(result).toEqual(value);
+    expect(intoString(result)).toEqual(value);
 }
 
 export function flushallOnPort(port: number): Promise<void> {
@@ -229,12 +302,15 @@ export async function transactionTest(
     const key9 = "{key}" + uuidv4();
     const key10 = "{key}" + uuidv4();
     const key11 = "{key}" + uuidv4(); // hyper log log
+    const key12 = "{key}" + uuidv4();
+    const key13 = "{key}" + uuidv4();
+    const key14 = "{key}" + uuidv4(); // sorted set
     const field = uuidv4();
     const value = uuidv4();
     const args: ReturnType[] = [];
     baseTransaction.set(key1, "bar");
     args.push("OK");
-    baseTransaction.object_encoding(key1);
+    baseTransaction.objectEncoding(key1);
     args.push("embstr");
     baseTransaction.type(key1);
     args.push("string");
@@ -293,6 +369,13 @@ export async function transactionTest(
     args.push([field + "3", field + "2"]);
     baseTransaction.lpopCount(key5, 2);
     args.push([field + "3", field + "2"]);
+    baseTransaction.linsert(
+        key5,
+        InsertPosition.Before,
+        "nonExistingPivot",
+        "element",
+    );
+    args.push(0);
     baseTransaction.rpush(key6, [field + "1", field + "2", field + "3"]);
     args.push(3);
     baseTransaction.lindex(key6, 0);
@@ -302,6 +385,8 @@ export async function transactionTest(
     baseTransaction.rpopCount(key6, 2);
     args.push([field + "2", field + "1"]);
     baseTransaction.sadd(key7, ["bar", "foo"]);
+    args.push(2);
+    baseTransaction.sunionstore(key7, [key7, key7]);
     args.push(2);
     baseTransaction.sinter([key7, key7]);
     args.push(new Set(["bar", "foo"]));
@@ -349,6 +434,12 @@ export async function transactionTest(
     args.push(["member2", "member3", "member4", "member5"]);
     baseTransaction.zrangeWithScores(key8, { start: 0, stop: -1 });
     args.push({ member2: 3, member3: 3.5, member4: 4, member5: 5 });
+    baseTransaction.zadd(key12, { one: 1, two: 2 });
+    args.push(2);
+    baseTransaction.zadd(key13, { one: 1, two: 2, tree: 3.5 });
+    args.push(3);
+    baseTransaction.zinterstore(key12, [key12, key13]);
+    args.push(2);
     baseTransaction.zcount(key8, { value: 2 }, "positiveInfinity");
     args.push(4);
     baseTransaction.zpopmin(key8);
@@ -362,13 +453,25 @@ export async function transactionTest(
         "negativeInfinity",
         "positiveInfinity",
     );
-    args.push(1);
+    args.push(1); // key8 is now empty
+
+    if (!(await checkIfServerVersionLessThan("7.0.0"))) {
+        baseTransaction.zadd(key14, { one: 1.0, two: 2.0 });
+        args.push(2);
+        baseTransaction.zintercard([key8, key14]);
+        args.push(0);
+        baseTransaction.zintercard([key8, key14], 1);
+        args.push(0);
+    }
+
     baseTransaction.xadd(key9, [["field", "value1"]], { id: "0-1" });
     args.push("0-1");
     baseTransaction.xadd(key9, [["field", "value2"]], { id: "0-2" });
     args.push("0-2");
     baseTransaction.xadd(key9, [["field", "value3"]], { id: "0-3" });
     args.push("0-3");
+    baseTransaction.xlen(key9);
+    args.push(3);
     baseTransaction.xread({ [key9]: "0-1" });
     args.push({
         [key9]: {
@@ -398,5 +501,7 @@ export async function transactionTest(
     args.push([key6, field + "1"]);
     baseTransaction.pfadd(key11, ["a", "b", "c"]);
     args.push(1);
+    baseTransaction.pfcount([key11]);
+    args.push(3);
     return args;
 }

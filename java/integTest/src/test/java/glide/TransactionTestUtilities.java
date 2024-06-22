@@ -2,6 +2,7 @@
 package glide;
 
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.generateLuaLibCode;
 import static glide.api.BaseClient.OK;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
@@ -12,6 +13,8 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GetExOptions;
+import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
@@ -34,7 +37,10 @@ import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange.IdBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.HashMap;
 import java.util.Map;
@@ -100,6 +106,8 @@ public class TransactionTestUtilities {
         String genericKey2 = "{GenericKey}-2-" + UUID.randomUUID();
         String genericKey3 = "{GenericKey}-3-" + UUID.randomUUID();
         String genericKey4 = "{GenericKey}-4-" + UUID.randomUUID();
+        String[] ascendingList = new String[] {"1", "2", "3"};
+        String[] descendingList = new String[] {"3", "2", "1"};
 
         transaction
                 .set(genericKey1, value1)
@@ -121,7 +129,11 @@ public class TransactionTestUtilities {
                 .expireAt(genericKey1, 42) // expire (delete) key immediately
                 .pexpire(genericKey1, 42)
                 .pexpireAt(genericKey1, 42)
-                .ttl(genericKey2);
+                .ttl(genericKey2)
+                .lpush(genericKey3, new String[] {"3", "1", "2"})
+                .sort(genericKey3)
+                .sortStore(genericKey3, genericKey4)
+                .lrange(genericKey4, 0, -1);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
@@ -131,7 +143,8 @@ public class TransactionTestUtilities {
                     .pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
                     .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                     .expiretime(genericKey1)
-                    .pexpiretime(genericKey1);
+                    .pexpiretime(genericKey1)
+                    .sortReadOnly(genericKey3);
         }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
@@ -164,6 +177,10 @@ public class TransactionTestUtilities {
                     false, // pexpire(genericKey1, 42)
                     false, // pexpireAt(genericKey1, 42)
                     -2L, // ttl(genericKey2)
+                    3L, // lpush(genericKey3, new String[] {"3", "1", "2"})
+                    ascendingList, // sort(genericKey3)
+                    3L, // sortStore(genericKey3, genericKey4)
+                    ascendingList, // lrange(genericKey4, 0, -1)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -178,6 +195,7 @@ public class TransactionTestUtilities {
                                 false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                                 -2L, // expiretime(genericKey1)
                                 -2L, // pexpiretime(genericKey1)
+                                ascendingList, // sortReadOnly(genericKey3)
                             });
         }
 
@@ -199,9 +217,17 @@ public class TransactionTestUtilities {
         String stringKey1 = "{StringKey}-1-" + UUID.randomUUID();
         String stringKey2 = "{StringKey}-2-" + UUID.randomUUID();
         String stringKey3 = "{StringKey}-3-" + UUID.randomUUID();
+        String stringKey4 = "{StringKey}-4-" + UUID.randomUUID();
+        String stringKey5 = "{StringKey}-5-" + UUID.randomUUID();
+        String stringKey6 = "{StringKey}-6-" + UUID.randomUUID();
+        String stringKey7 = "{StringKey}-7-" + UUID.randomUUID();
+        String stringKey8 = "{StringKey}-8-" + UUID.randomUUID();
+        String stringKey9 = "{StringKey}-9-" + UUID.randomUUID();
 
         transaction
+                .flushall()
                 .set(stringKey1, value1)
+                .randomKey()
                 .get(stringKey1)
                 .getdel(stringKey1)
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
@@ -215,25 +241,84 @@ public class TransactionTestUtilities {
                 .decrBy(stringKey3, 2)
                 .incrByFloat(stringKey3, 0.5)
                 .setrange(stringKey3, 0, "GLIDE")
-                .getrange(stringKey3, 0, 5);
+                .getrange(stringKey3, 0, 5)
+                .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                .mget(new String[] {stringKey4, stringKey5})
+                .del(new String[] {stringKey5})
+                .msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                .mget(new String[] {stringKey4, stringKey5});
 
-        return new Object[] {
-            OK, // set(stringKey1, value1)
-            value1, // get(stringKey1)
-            value1, // getdel(stringKey1)
-            null, // set(stringKey2, value2, returnOldValue(true))
-            (long) value1.length(), // strlen(key2)
-            Long.valueOf(value2.length() * 2), // append(key2, value2)
-            OK, // mset(Map.of(stringKey1, value2, stringKey2, value1))
-            new String[] {value2, value1}, // mget(new String[] {stringKey1, stringKey2})
-            1L, // incr(stringKey3)
-            3L, // incrBy(stringKey3, 2)
-            2L, // decr(stringKey3)
-            0L, // decrBy(stringKey3, 2)
-            0.5, // incrByFloat(stringKey3, 0.5)
-            5L, // setrange(stringKey3, 0, "GLIDE")
-            "GLIDE" // getrange(stringKey3, 0, 5)
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .set(stringKey6, "abcd")
+                    .set(stringKey7, "bcde")
+                    .set(stringKey8, "wxyz")
+                    .lcs(stringKey6, stringKey7)
+                    .lcs(stringKey6, stringKey8)
+                    .lcsLen(stringKey6, stringKey7)
+                    .lcsLen(stringKey6, stringKey8);
+        }
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            transaction
+                    .set(stringKey9, value1)
+                    .getex(stringKey9)
+                    .getex(stringKey9, GetExOptions.Seconds(20L));
+        }
+
+        var expectedResults =
+                new Object[] {
+                    OK, // flushall()
+                    OK, // set(stringKey1, value1)
+                    stringKey1, // randomKey()
+                    value1, // get(stringKey1)
+                    value1, // getdel(stringKey1)
+                    null, // set(stringKey2, value2, returnOldValue(true))
+                    (long) value1.length(), // strlen(key2)
+                    Long.valueOf(value2.length() * 2), // append(key2, value2)
+                    OK, // mset(Map.of(stringKey1, value2, stringKey2, value1))
+                    new String[] {value2, value1}, // mget(new String[] {stringKey1, stringKey2})
+                    1L, // incr(stringKey3)
+                    3L, // incrBy(stringKey3, 2)
+                    2L, // decr(stringKey3)
+                    0L, // decrBy(stringKey3, 2)
+                    0.5, // incrByFloat(stringKey3, 0.5)
+                    5L, // setrange(stringKey3, 0, "GLIDE")
+                    "GLIDE", // getrange(stringKey3, 0, 5)
+                    true, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                    new String[] {"foo", "bar"}, // mget({stringKey4, stringKey5})
+                    1L, // del(stringKey5)
+                    false, // msetnx(Map.of(stringKey4, "foo", stringKey5, "bar"))
+                    new String[] {"foo", null}, // mget({stringKey4, stringKey5})
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey6, "abcd")
+                                OK, // set(stringKey6, "bcde")
+                                OK, // set(stringKey6, "wxyz")
+                                "bcd", // lcs(stringKey6, stringKey7)
+                                "", // lcs(stringKey6, stringKey8)
+                                3L, // lcsLEN(stringKey6, stringKey7)
+                                0L, // lcsLEN(stringKey6, stringKey8)
+                            });
+        }
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey9, value1)
+                                value1, // getex(stringKey1)
+                                value1, // getex(stringKey1,GetExOptions.Seconds(20L))
+                            });
+        }
+
+        return expectedResults;
     }
 
     private static Object[] hashCommands(BaseTransaction<?> transaction) {
@@ -300,7 +385,12 @@ public class TransactionTestUtilities {
                 .ltrim(listKey1, 1, -1)
                 .lrange(listKey1, 0, -2)
                 .lpop(listKey1)
-                .lpopCount(listKey1, 2)
+                .lpopCount(listKey1, 2) // listKey1 is now empty
+                .rpush(listKey1, new String[] {value1, value1, value2, value3, value3})
+                .lpos(listKey1, value1)
+                .lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())
+                .lposCount(listKey1, value1, 1L)
+                .lposCount(listKey1, value1, 0L, LPosOptions.builder().rank(1L).build())
                 .rpush(listKey2, new String[] {value1, value2, value2})
                 .rpop(listKey2)
                 .rpopCount(listKey2, 2)
@@ -347,6 +437,11 @@ public class TransactionTestUtilities {
                     new String[] {value3, value2}, // lrange(listKey1, 0, -2)
                     value3, // lpop(listKey1)
                     new String[] {value2, value1}, // lpopCount(listKey1, 2)
+                    5L, // lpush(listKey1, new String[] {value1, value1, value2, value3, value3})
+                    0L, // lpos(listKey1, value1)
+                    1L, // lpos(listKey1, value1, LPosOptions.builder().rank(2L).build())
+                    new Long[] {0L}, // lposCount(listKey1, value1, 1L)
+                    new Long[] {0L, 1L}, // lposCount(listKey1, value1, 0L, LPosOptions.rank(2L))
                     3L, // rpush(listKey2, new String[] {value1, value2, value2})
                     value2, // rpop(listKey2)
                     new String[] {value2, value1}, // rpopCount(listKey2, 2)
@@ -358,7 +453,7 @@ public class TransactionTestUtilities {
                     new String[] {listKey3, value1}, // brpop(new String[] { listKey3 }, 0.01)
                     2L, // lpush(listKey5, new String[] {value2, value3})
                     OK, // lset(listKey5, 0, value1)
-                    new String[] {value1, value2} // lrange(listKey5, 0, -1)
+                    new String[] {value1, value2}, // lrange(listKey5, 0, -1)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -412,6 +507,7 @@ public class TransactionTestUtilities {
                 .smismember(setKey1, new String[] {"baz", "foo"})
                 .sinter(new String[] {setKey1, setKey1})
                 .sadd(setKey2, new String[] {"a", "b"})
+                .sunion(new String[] {setKey2, setKey1})
                 .sunionstore(setKey3, new String[] {setKey2, setKey1})
                 .sdiffstore(setKey3, new String[] {setKey2, setKey1})
                 .sinterstore(setKey3, new String[] {setKey2, setKey1})
@@ -442,6 +538,7 @@ public class TransactionTestUtilities {
                     new Boolean[] {true, false}, // smismembmer(setKey1, new String[] {"baz", "foo"})
                     Set.of("baz"), // sinter(new String[] { setKey1, setKey1 })
                     2L, // sadd(setKey2, new String[] { "a", "b" })
+                    Set.of("a", "b", "baz"), // sunion(new String[] {setKey2, setKey1})
                     3L, // sunionstore(setKey3, new String[] { setKey2, setKey1 })
                     2L, // sdiffstore(setKey3, new String[] { setKey2, setKey1 })
                     0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
@@ -473,6 +570,9 @@ public class TransactionTestUtilities {
         String zSetKey1 = "{ZSetKey}-1-" + UUID.randomUUID();
         String zSetKey2 = "{ZSetKey}-2-" + UUID.randomUUID();
         String zSetKey3 = "{ZSetKey}-3-" + UUID.randomUUID();
+        String zSetKey4 = "{ZSetKey}-4-" + UUID.randomUUID();
+        String zSetKey5 = "{ZSetKey}-4-" + UUID.randomUUID();
+        String zSetKey6 = "{ZSetKey}-5-" + UUID.randomUUID();
 
         transaction
                 .zadd(zSetKey1, Map.of("one", 1.0, "two", 2.0, "three", 3.0))
@@ -495,38 +595,42 @@ public class TransactionTestUtilities {
                 .zremrangebyrank(zSetKey1, 5, 10)
                 .zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
                 .zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
-                .zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
                 .zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
-                .zdiff(new String[] {zSetKey2, zSetKey1})
-                .zdiffWithScores(new String[] {zSetKey2, zSetKey1})
-                .zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zunion(new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zunion(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
-                .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zunionWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
-                .zinterstore(zSetKey1, new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zinter(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
-                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                .zinterWithScores(new KeyArray(new String[] {zSetKey2, zSetKey1}), Aggregate.MAX)
                 .bzpopmax(new String[] {zSetKey2}, .1)
                 .zrandmember(zSetKey2)
                 .zrandmemberWithCount(zSetKey2, 1)
                 .zrandmemberWithCountWithScores(zSetKey2, 1)
-                .bzpopmin(new String[] {zSetKey2}, .1)
-                // zSetKey2 is now empty
-                .zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.));
+                .bzpopmin(new String[] {zSetKey2}, .1);
+        // zSetKey2 is now empty
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            transaction
+                    .zadd(zSetKey5, Map.of("one", 1.0, "two", 2.0))
+                    // zSetKey6 is empty
+                    .zdiffstore(zSetKey6, new String[] {zSetKey6, zSetKey6})
+                    .zdiff(new String[] {zSetKey5, zSetKey6})
+                    .zdiffWithScores(new String[] {zSetKey5, zSetKey6})
+                    .zunionstore(zSetKey5, new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zunion(new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zunionWithScores(new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zunionWithScores(new KeyArray(new String[] {zSetKey5, zSetKey6}), Aggregate.MAX)
+                    .zinterstore(zSetKey6, new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zinter(new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zinterWithScores(new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                    .zinterWithScores(new KeyArray(new String[] {zSetKey5, zSetKey6}), Aggregate.MAX);
+        }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
                     .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
+                    .zadd(zSetKey4, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
                     .zmpop(new String[] {zSetKey3}, MAX)
                     .zmpop(new String[] {zSetKey3}, MIN, 2)
                     .bzmpop(new String[] {zSetKey3}, MAX, .1)
                     .bzmpop(new String[] {zSetKey3}, MIN, .1, 2)
                     .zadd(zSetKey3, Map.of("a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.))
-                    .zintercard(new String[] {zSetKey2, zSetKey3})
-                    .zintercard(new String[] {zSetKey2, zSetKey3}, 2);
+                    .zintercard(new String[] {zSetKey4, zSetKey3})
+                    .zintercard(new String[] {zSetKey4, zSetKey3}, 2);
         }
 
         var expectedResults =
@@ -550,41 +654,49 @@ public class TransactionTestUtilities {
                     0L, // zremrangebyrank(zSetKey1, 5, 10)
                     0L, // zremrangebylex(zSetKey1, new LexBoundary("j"), InfLexBound.POSITIVE_INFINITY)
                     0L, // zremrangebyscore(zSetKey1, new ScoreBoundary(5), InfScoreBound.POSITIVE_INFINITY)
-                    0L, // zdiffstore(zSetKey1, new String[] {zSetKey1, zSetKey1})
                     2L, // zadd(zSetKey2, Map.of("one", 1.0, "two", 2.0))
-                    new String[] {"one", "two"}, // zdiff(new String[] {zSetKey2, zSetKey1})
-                    Map.of("one", 1.0, "two", 2.0), // zdiffWithScores(new String[] {zSetKey2, zSetKey1})
-                    2L, // zunionstore(zSetKey2, new KeyArray(new String[] {zSetKey2, zSetKey1}))
-                    new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}))
-                    new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX);
-                    Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}));
-                    Map.of("one", 1.0, "two", 2.0), // zunionWithScores(KeyArray({zSetKey2, zSetKey1}), MAX)
-                    0L, // zinterstore(zSetKey1, new String[] {zSetKey2, zSetKey1})
-                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}))
-                    new String[0], // zinter(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
-                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}))
-                    Map.of(), // zinterWithScores(new KeyArray({zSetKey2, zSetKey1}), Aggregate.MAX)
                     new Object[] {zSetKey2, "two", 2.0}, // bzpopmax(new String[] { zsetKey2 }, .1)
-                    "one", // .zrandmember(zSetKey2)
+                    "one", // zrandmember(zSetKey2)
                     new String[] {"one"}, // .zrandmemberWithCount(zSetKey2, 1)
                     new Object[][] {{"one", 1.0}}, // .zrandmemberWithCountWithScores(zSetKey2, 1);
                     new Object[] {zSetKey2, "one", 1.0}, // bzpopmin(new String[] { zsetKey2 }, .1)
-                    4L, // zadd(zSetKey2, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
                 };
 
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                2L, // zadd(zSetKey5, Map.of("one", 1.0, "two", 2.0))
+                                0L, // zdiffstore(zSetKey6, new String[] {zSetKey6, zSetKey6})
+                                new String[] {"one", "two"}, // zdiff(new String[] {zSetKey5, zSetKey6})
+                                Map.of("one", 1.0, "two", 2.0), // zdiffWithScores({zSetKey5, zSetKey6})
+                                2L, // zunionstore(zSetKey5, new KeyArray(new String[] {zSetKey5, zSetKey6}))
+                                new String[] {"one", "two"}, // zunion(new KeyArray({zSetKey5, zSetKey6}))
+                                Map.of("one", 1.0, "two", 2.0), // zunionWithScores({zSetKey5, zSetKey6})
+                                Map.of("one", 1.0, "two", 2.0), // zunionWithScores({zSetKey5, zSetKey6}, MAX)
+                                0L, // zinterstore(zSetKey6, new String[] {zSetKey5, zSetKey6})
+                                new String[0], // zinter(new KeyArray({zSetKey5, zSetKey6}))
+                                Map.of(), // zinterWithScores(new KeyArray({zSetKey5, zSetKey6}))
+                                Map.of(), // zinterWithScores(new KeyArray({zSetKey5, zSetKey6}), Aggregate.MAX)
+                            });
+        }
+
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            return concatenateArrays(
-                    expectedResults,
-                    new Object[] {
-                        7L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
-                        new Object[] {zSetKey3, Map.of("g", 7.)}, // zmpop(zSetKey3, MAX)
-                        new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
-                        new Object[] {zSetKey3, Map.of("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
-                        new Object[] {zSetKey3, Map.of("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
-                        6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
-                        4L, // zintercard(new String[] {zSetKey2, zSetKey3})
-                        2L, // zintercard(new String[] {zSetKey2, zSetKey3}, 2)
-                    });
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                7L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                                4L, // zadd(zSetKey4, Map.of("a", 1., "b", 2., "c", 3., "d", 4.))
+                                new Object[] {zSetKey3, Map.of("g", 7.)}, // zmpop(zSetKey3, MAX)
+                                new Object[] {zSetKey3, Map.of("a", 1., "b", 2.)}, // zmpop(zSetKey3, MIN, 2)
+                                new Object[] {zSetKey3, Map.of("f", 6.)}, // bzmpop(zSetKey3, MAX, .1)
+                                new Object[] {zSetKey3, Map.of("c", 3., "d", 4.)}, // bzmpop(zSetKey3, MIN, .1, 2)
+                                6L, // zadd(zSetKey3, "a", 1., "b", 2., "c", 3., "d", 4., "e", 5., "f", 6., "g", 7.)
+                                4L, // zintercard(new String[] {zSetKey4, zSetKey3})
+                                2L, // zintercard(new String[] {zSetKey4, zSetKey3}, 2)
+                            });
         }
         return expectedResults;
     }
@@ -597,6 +709,8 @@ public class TransactionTestUtilities {
                 .lolwut(1)
                 .flushall()
                 .flushall(ASYNC)
+                .flushdb()
+                .flushdb(ASYNC)
                 .dbsize();
 
         return new Object[] {
@@ -606,6 +720,8 @@ public class TransactionTestUtilities {
             "Redis ver. " + REDIS_VERSION + '\n', // lolwut(1)
             OK, // flushall()
             OK, // flushall(ASYNC)
+            OK, // flushdb()
+            OK, // flushdb(ASYNC)
             0L, // dbsize()
         };
     }
@@ -644,15 +760,36 @@ public class TransactionTestUtilities {
 
     private static Object[] streamCommands(BaseTransaction<?> transaction) {
         final String streamKey1 = "{streamKey}-1-" + UUID.randomUUID();
+        final String groupName1 = "{groupName}-1-" + UUID.randomUUID();
+        final String groupName2 = "{groupName}-2-" + UUID.randomUUID();
+        final String consumer1 = "{consumer}-1-" + UUID.randomUUID();
 
         transaction
                 .xadd(streamKey1, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
                 .xadd(streamKey1, Map.of("field2", "value2"), StreamAddOptions.builder().id("0-2").build())
                 .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
                 .xlen(streamKey1)
+                .xread(Map.of(streamKey1, "0-2"))
+                .xread(Map.of(streamKey1, "0-2"), StreamReadOptions.builder().count(1L).build())
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
+                .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
+                .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
                 .xtrim(streamKey1, new MinId(true, "0-2"))
+                .xgroupCreate(streamKey1, groupName1, "0-2")
+                .xgroupCreate(
+                        streamKey1, groupName2, "0-0", StreamGroupOptions.builder().makeStream().build())
+                .xgroupCreateConsumer(streamKey1, groupName1, consumer1)
+                .xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1)
+                .xreadgroup(
+                        Map.of(streamKey1, "0-3"),
+                        groupName1,
+                        consumer1,
+                        StreamReadGroupOptions.builder().count(2L).build())
+                .xack(streamKey1, groupName1, new String[] {"0-3"})
+                .xgroupDelConsumer(streamKey1, groupName1, consumer1)
+                .xgroupDestroy(streamKey1, groupName1)
+                .xgroupDestroy(streamKey1, groupName2)
                 .xdel(streamKey1, new String[] {"0-3", "0-5"});
 
         return new Object[] {
@@ -660,9 +797,37 @@ public class TransactionTestUtilities {
             "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
             "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
             3L, // xlen(streamKey1)
-            Map.of("0-1", new String[] {"field1", "value1"}), // .xrange(streamKey1, "0-1", "0-1")
-            Map.of("0-1", new String[] {"field1", "value1"}), // .xrange(streamKey1, "0-1", "0-1", 1l)
+            Map.of(
+                    streamKey1,
+                    Map.of("0-3", new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"));
+            Map.of(
+                    streamKey1,
+                    Map.of(
+                            "0-3",
+                            new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"), options);
+            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1")
+            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1", 1l)
+            Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1")
+            Map.of(
+                    "0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1", 1l)
             1L, // xtrim(streamKey1, new MinId(true, "0-2"))
+            OK, // xgroupCreate(streamKey1, groupName1, "0-0")
+            OK, // xgroupCreate(streamKey1, groupName1, "0-0", options)
+            true, // xgroupCreateConsumer(streamKey1, groupName1, consumer1)
+            Map.of(
+                    streamKey1,
+                    Map.of(
+                            "0-3",
+                            new String[][] {
+                                {"field3", "value3"}
+                            })), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1);
+            Map.of(
+                    streamKey1,
+                    Map.of()), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1, options);
+            1L, // xack(streamKey1, groupName1, new String[] {"0-3"})
+            0L, // xgroupDelConsumer(streamKey1, groupName1, consumer1)
+            true, // xgroupDestroy(streamKey1, groupName1)
+            true, // xgroupDestroy(streamKey1, groupName2)
             1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"});
         };
     }
@@ -702,15 +867,18 @@ public class TransactionTestUtilities {
             return new Object[0];
         }
 
-        final String code =
-                "#!lua name=mylib1T \n"
-                        + " redis.register_function('myfunc1T', function(keys, args) return args[1] end)";
+        final String libName = "mylib1T";
+        final String funcName = "myfunc1T";
+
+        // function $funcName returns first argument
+        final String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
+
         var expectedFuncData =
                 new HashMap<String, Object>() {
                     {
-                        put("name", "myfunc1T");
+                        put("name", funcName);
                         put("description", null);
-                        put("flags", Set.of());
+                        put("flags", Set.of("no-writes"));
                     }
                 };
 
@@ -718,7 +886,7 @@ public class TransactionTestUtilities {
                 new Map[] {
                     Map.<String, Object>of(
                             "library_name",
-                            "mylib1T",
+                            libName,
                             "engine",
                             "LUA",
                             "functions",
@@ -727,25 +895,52 @@ public class TransactionTestUtilities {
                             code)
                 };
 
+        var expectedFunctionStatsNonEmpty =
+                new HashMap<String, Map<String, Object>>() {
+                    {
+                        put("running_script", null);
+                        put("engines", Map.of("LUA", Map.of("libraries_count", 1L, "functions_count", 1L)));
+                    }
+                };
+        var expectedFunctionStatsEmpty =
+                new HashMap<String, Map<String, Object>>() {
+                    {
+                        put("running_script", null);
+                        put("engines", Map.of("LUA", Map.of("libraries_count", 0L, "functions_count", 0L)));
+                    }
+                };
+
         transaction
                 .functionFlush(SYNC)
                 .functionList(false)
                 .functionLoad(code, false)
                 .functionLoad(code, true)
+                .functionStats()
+                .fcall(funcName, new String[0], new String[] {"a", "b"})
+                .fcall(funcName, new String[] {"a", "b"})
+                .fcallReadOnly(funcName, new String[0], new String[] {"a", "b"})
+                .fcallReadOnly(funcName, new String[] {"a", "b"})
                 .functionList("otherLib", false)
-                .functionList("mylib1T", true)
-                .functionDelete("mylib1T")
-                .functionList(true);
+                .functionList(libName, true)
+                .functionDelete(libName)
+                .functionList(true)
+                .functionStats();
 
         return new Object[] {
             OK, // functionFlush(SYNC)
             new Map[0], // functionList(false)
-            "mylib1T", // functionLoad(code, false)
-            "mylib1T", // functionLoad(code, true)
+            libName, // functionLoad(code, false)
+            libName, // functionLoad(code, true)
+            expectedFunctionStatsNonEmpty, // functionStats()
+            "a", // fcall(funcName, new String[0], new String[]{"a", "b"})
+            "a", // fcall(funcName, new String[] {"a", "b"})
+            "a", // fcallReadOnly(funcName, new String[0], new String[]{"a", "b"})
+            "a", // fcallReadOnly(funcName, new String[] {"a", "b"})
             new Map[0], // functionList("otherLib", false)
-            expectedLibData, // functionList("mylib1T", true)
-            OK, // functionDelete("mylib1T")
+            expectedLibData, // functionList(libName, true)
+            OK, // functionDelete(libName)
             new Map[0], // functionList(true)
+            expectedFunctionStatsEmpty, // functionStats()
         };
     }
 

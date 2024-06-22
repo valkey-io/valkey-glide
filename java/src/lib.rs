@@ -34,7 +34,7 @@ fn redis_value_to_java<'local>(
                 let utf8_str = String::from_utf8(data)?;
                 Ok(JObject::from(env.new_string(utf8_str)?))
             } else {
-                Ok(JObject::from(env.byte_array_from_slice(data.as_ref())?))
+                Ok(JObject::from(env.byte_array_from_slice(&data)?))
             }
         }
         Value::Array(array) => {

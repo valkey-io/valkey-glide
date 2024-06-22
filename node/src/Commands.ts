@@ -9,7 +9,7 @@ import { redis_request } from "./ProtobufMessage";
 
 import RequestType = redis_request.RequestType;
 
-function isLargeCommand(args: string[]) {
+function isLargeCommand(args: BulkString[]) {
     let lenSum = 0;
 
     for (const arg of args) {
@@ -23,14 +23,20 @@ function isLargeCommand(args: string[]) {
     return false;
 }
 
+type BulkString = string | Uint8Array;
+
 /**
  * Convert a string array into Uint8Array[]
  */
-function toBuffersArray(args: string[]) {
+function toBuffersArray(args: BulkString[]) {
     const argsBytes: Uint8Array[] = [];
 
-    for (const str of args) {
-        argsBytes.push(Buffer.from(str));
+    for (const arg of args) {
+        if (typeof arg == "string") {
+            argsBytes.push(Buffer.from(arg));
+        } else {
+            argsBytes.push(arg);
+        }
     }
 
     return argsBytes;
@@ -56,7 +62,7 @@ export function parseInfoResponse(response: string): Record<string, string> {
 
 function createCommand(
     requestType: redis_request.RequestType,
-    args: string[],
+    args: BulkString[],
 ): redis_request.Command {
     const singleCommand = redis_request.Command.create({
         requestType,
@@ -137,8 +143,8 @@ export type SetOptions = {
  * @internal
  */
 export function createSet(
-    key: string,
-    value: string,
+    key: BulkString,
+    value: BulkString,
     options?: SetOptions,
 ): redis_request.Command {
     const args = [key, value];
@@ -602,6 +608,16 @@ export function createSInter(keys: string[]): redis_request.Command {
 /**
  * @internal
  */
+export function createSUnionStore(
+    destination: string,
+    keys: string[],
+): redis_request.Command {
+    return createCommand(RequestType.SUnionStore, [destination].concat(keys));
+}
+
+/**
+ * @internal
+ */
 export function createSIsMember(
     key: string,
     member: string,
@@ -828,6 +844,50 @@ export function createZAdd(
 }
 
 /**
+ * `KeyWeight` - pair of variables represents a weighted key for the `ZINTERSTORE` and `ZUNIONSTORE` sorted sets commands.
+ */
+export type KeyWeight = [string, number];
+/**
+ * `AggregationType` - representing aggregation types for `ZINTERSTORE` and `ZUNIONSTORE` sorted set commands.
+ */
+export type AggregationType = "SUM" | "MIN" | "MAX";
+
+/**
+ * @internal
+ */
+export function createZInterstore(
+    destination: string,
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+): redis_request.Command {
+    const args = createZCmdStoreArgs(destination, keys, aggregationType);
+    return createCommand(RequestType.ZInterStore, args);
+}
+
+function createZCmdStoreArgs(
+    destination: string,
+    keys: string[] | KeyWeight[],
+    aggregationType?: AggregationType,
+): string[] {
+    const args: string[] = [destination, keys.length.toString()];
+
+    if (typeof keys[0] === "string") {
+        args.push(...(keys as string[]));
+    } else {
+        const weightsKeys = keys.map(([key]) => key);
+        args.push(...(weightsKeys as string[]));
+        const weights = keys.map(([, weight]) => weight.toString());
+        args.push("WEIGHTS", ...weights);
+    }
+
+    if (aggregationType) {
+        args.push("AGGREGATE", aggregationType);
+    }
+
+    return args;
+}
+
+/**
  * @internal
  */
 export function createZRem(
@@ -842,6 +902,23 @@ export function createZRem(
  */
 export function createZCard(key: string): redis_request.Command {
     return createCommand(RequestType.ZCard, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createZInterCard(
+    keys: string[],
+    limit?: number,
+): redis_request.Command {
+    let args: string[] = keys;
+    args.unshift(keys.length.toString());
+
+    if (limit != undefined) {
+        args = args.concat(["LIMIT", limit.toString()]);
+    }
+
+    return createCommand(RequestType.ZInterCard, args);
 }
 
 /**
@@ -1054,6 +1131,32 @@ export function createLIndex(
     index: number,
 ): redis_request.Command {
     return createCommand(RequestType.LIndex, [key, index.toString()]);
+}
+
+/**
+ * Defines where to insert new elements into a list.
+ */
+export enum InsertPosition {
+    /**
+     * Insert new element before the pivot.
+     */
+    Before = "before",
+    /**
+     * Insert new element after the pivot.
+     */
+    After = "after",
+}
+
+/**
+ * @internal
+ */
+export function createLInsert(
+    key: string,
+    position: InsertPosition,
+    pivot: string,
+    element: string,
+): redis_request.Command {
+    return createCommand(RequestType.LInsert, [key, position, pivot, element]);
 }
 
 /**
@@ -1341,6 +1444,13 @@ export function createXRead(
 /**
  * @internal
  */
+export function createXLen(key: string): redis_request.Command {
+    return createCommand(RequestType.XLen, [key]);
+}
+
+/**
+ * @internal
+ */
 export function createRename(
     key: string,
     newKey: string,
@@ -1372,6 +1482,34 @@ export function createPfAdd(
 /**
  * @internal
  */
+export function createPfCount(keys: string[]): redis_request.Command {
+    return createCommand(RequestType.PfCount, keys);
+}
+
+/**
+ * @internal
+ */
 export function createObjectEncoding(key: string): redis_request.Command {
     return createCommand(RequestType.ObjectEncoding, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createObjectFreq(key: string): redis_request.Command {
+    return createCommand(RequestType.ObjectFreq, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createObjectIdletime(key: string): redis_request.Command {
+    return createCommand(RequestType.ObjectIdleTime, [key]);
+}
+
+/**
+ * @internal
+ */
+export function createObjectRefcount(key: string): redis_request.Command {
+    return createCommand(RequestType.ObjectRefCount, [key]);
 }

@@ -31,6 +31,8 @@ pub(crate) enum ExpectedReturnType<'a> {
     ArrayOfMemberScorePairs,
     ZMPopReturnType,
     KeyWithMemberAndScore,
+    FunctionStatsReturnType,
+    GeoSearchReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -372,6 +374,84 @@ pub(crate) fn convert_to_expected_type(
             )
                 .into()),
         },
+        // Used by GEOSEARCH.
+        // When all options are specified (withcoord, withdist, withhash) , the response looks like this: [[name (str), [dist (str), hash (int), [lon (str), lat (str)]]]] for RESP2.
+        // RESP3 return type is: [[name (str), [dist (str), hash (int), [lon (float), lat (float)]]]].
+        // We also want to convert dist into float.
+        /* from this:
+        > GEOSEARCH Sicily FROMLONLAT 15 37 BYBOX 400 400 km ASC WITHCOORD WITHDIST WITHHASH
+        1) 1) "Catania"
+            2) "56.4413"
+            3) (integer) 3479447370796909
+            4) 1) "15.08726745843887329"
+                2) "37.50266842333162032"
+        to this:
+        > GEOSEARCH Sicily FROMLONLAT 15 37 BYBOX 400 400 km ASC WITHCOORD WITHDIST WITHHASH
+        1) 1) "Catania"
+            2) (double) 56.4413
+            3) (integer) 3479447370796909
+            4) 1) (double) 15.08726745843887329
+                2) (double) 37.50266842333162032
+         */
+        ExpectedReturnType::GeoSearchReturnType => match value {
+            Value::Array(array) => {
+                let mut converted_array = Vec::with_capacity(array.len());
+                for item in &array {
+                    if let Value::Array(inner_array) = item {
+                        if let Some((name, rest)) = inner_array.split_first() {
+                            let rest = rest.iter().map(|v| {
+                                match v {
+                                    Value::Array(coord) => {
+                                        // This is the [lon (str), lat (str)] that should be converted into [lon (float), lat (float)].
+                                        if coord.len() != 2 {
+                                            Err((
+                                                ErrorKind::TypeError,
+                                                "Inner Array must contain exactly two elements, longitude and latitude",
+                                            ).into())
+                                        } else {
+                                            coord.iter()
+                                                .map(|elem| convert_to_expected_type(elem.clone(), Some(ExpectedReturnType::Double)))
+                                                .collect::<Result<Vec<_>, _>>()
+                                                .map(Value::Array)
+                                        }
+                                    }
+                                    Value::BulkString(dist) => {
+                                        // This is the conversion of dist from string to float
+                                        convert_to_expected_type(
+                                            Value::BulkString(dist.clone()),
+                                            Some(ExpectedReturnType::Double),
+                                        )
+                                    }
+                                    _ => Ok(v.clone()), // Hash is both integer for RESP2/3
+                                }
+                            }).collect::<Result<Vec<Value>, _>>()?;
+
+                            converted_array
+                                .push(Value::Array(vec![name.clone(), Value::Array(rest)]));
+                        } else {
+                            return Err((
+                                ErrorKind::TypeError,
+                                "Response couldn't be converted to GeoSeatch return type, Inner Array must contain at least one element",
+                            )
+                                .into());
+                        }
+                    } else {
+                        return Err((
+                            ErrorKind::TypeError,
+                            "Response couldn't be converted to GeoSeatch return type, Expected an array as an inner element",
+                        )
+                            .into());
+                    }
+                }
+                Ok(Value::Array(converted_array))
+            }
+
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to GeoSeatch return type, Expected an array as the outer elemen.",
+            )
+                .into()),
+        },
         // `FUNCTION LIST` returns an array of maps with nested list of maps.
         // In RESP2 these maps are represented by arrays - we're going to convert them.
         /* RESP2 response
@@ -441,6 +521,87 @@ pub(crate) fn convert_to_expected_type(
                 format!("(response was {:?})", get_value_type(&value)),
             )
                 .into()),
+        },
+        // `FUNCTION STATS` returns nested maps with different types of data
+        /* RESP2 response example
+        1) "running_script"
+        2) 1) "name"
+           2) "<function name>"
+           3) "command"
+           4) 1) "fcall"
+              2) "<function name>"
+              ... rest `fcall` args ...
+           5) "duration_ms"
+           6) (integer) 24529
+        3) "engines"
+        4) 1) "LUA"
+           2) 1) "libraries_count"
+              2) (integer) 3
+              3) "functions_count"
+              4) (integer) 5
+
+        1) "running_script"
+        2) (nil)
+        3) "engines"
+        4) ...
+
+        RESP3 response example
+        1# "running_script" =>
+           1# "name" => "<function name>"
+           2# "command" =>
+              1) "fcall"
+              2) "<function name>"
+              ... rest `fcall` args ...
+           3# "duration_ms" => (integer) 5000
+        2# "engines" =>
+           1# "LUA" =>
+              1# "libraries_count" => (integer) 3
+              2# "functions_count" => (integer) 5
+        */
+        // First part of the response (`running_script`) is converted as `Map[str, any]`
+        // Second part is converted as `Map[str, Map[str, int]]`
+        ExpectedReturnType::FunctionStatsReturnType => match value {
+            // TODO reuse https://github.com/Bit-Quill/glide-for-redis/pull/331 and https://github.com/aws/glide-for-redis/pull/1489
+            Value::Map(map) => {
+                if map[0].0 == Value::BulkString(b"running_script".into()) {
+                    // already a RESP3 response - do nothing
+                    Ok(Value::Map(map))
+                } else {
+                    // cluster (multi-node) response - go recursive
+                    convert_map_entries(
+                        map,
+                        Some(ExpectedReturnType::BulkString),
+                        Some(ExpectedReturnType::FunctionStatsReturnType),
+                    )
+                }
+            }
+            Value::Array(mut array) if array.len() == 4 => {
+                let mut result: Vec<(Value, Value)> = Vec::with_capacity(2);
+                let running_script_info = array.remove(1);
+                let running_script_converted = match running_script_info {
+                    Value::Nil => Ok(Value::Nil),
+                    Value::Array(inner_map_as_array) => {
+                        convert_array_to_map_by_type(inner_map_as_array, None, None)
+                    }
+                    _ => Err((ErrorKind::TypeError, "Response couldn't be converted").into()),
+                };
+                result.push((array.remove(0), running_script_converted?));
+                let Value::Array(engines_info) = array.remove(1) else {
+                    return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                };
+                let engines_info_converted = convert_array_to_map_by_type(
+                    engines_info,
+                    Some(ExpectedReturnType::BulkString),
+                    Some(ExpectedReturnType::Map {
+                        key_type: &None,
+                        value_type: &None,
+                    }),
+                );
+                result.push((array.remove(0), engines_info_converted?));
+
+                Ok(Value::Map(result))
+            }
+            _ => Err((ErrorKind::TypeError, "Response couldn't be converted").into()),
         },
     }
 }
@@ -630,6 +791,7 @@ fn convert_to_array_of_pairs(
     value_expected_return_type: Option<ExpectedReturnType>,
 ) -> RedisResult<Value> {
     match response {
+        Value::Nil => Ok(response),
         Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Array(_)) => {
             // The server response is an empty array or a RESP3 array of pairs. In RESP3, the values in the pairs are
             // already of the correct type, so we do not need to convert them and `response` is in the correct format.
@@ -683,13 +845,15 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
 
     // TODO use enum to avoid mistakes
     match command.as_slice() {
-        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" | b"XRANGE" => {
-            Some(ExpectedReturnType::Map {
-                key_type: &None,
-                value_type: &None,
-            })
-        }
-        b"XREAD" => Some(ExpectedReturnType::Map {
+        b"HGETALL" | b"CONFIG GET" | b"FT.CONFIG GET" | b"HELLO" => Some(ExpectedReturnType::Map {
+            key_type: &None,
+            value_type: &None,
+        }),
+        b"XRANGE" | b"XREVRANGE" => Some(ExpectedReturnType::Map {
+            key_type: &Some(ExpectedReturnType::BulkString),
+            value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+        }),
+        b"XREAD" | b"XREADGROUP" => Some(ExpectedReturnType::Map {
             key_type: &Some(ExpectedReturnType::BulkString),
             value_type: &Some(ExpectedReturnType::Map {
                 key_type: &Some(ExpectedReturnType::BulkString),
@@ -697,12 +861,23 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             }),
         }),
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
-        b"HEXISTS" | b"HSETNX" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT"
-        | b"SISMEMBER" | b"PERSIST" | b"SMOVE" | b"RENAMENX" | b"MOVE" | b"COPY" => {
-            Some(ExpectedReturnType::Boolean)
-        }
+        b"HEXISTS"
+        | b"HSETNX"
+        | b"EXPIRE"
+        | b"EXPIREAT"
+        | b"PEXPIRE"
+        | b"PEXPIREAT"
+        | b"SISMEMBER"
+        | b"PERSIST"
+        | b"SMOVE"
+        | b"RENAMENX"
+        | b"MOVE"
+        | b"COPY"
+        | b"MSETNX"
+        | b"XGROUP DESTROY"
+        | b"XGROUP CREATECONSUMER" => Some(ExpectedReturnType::Boolean),
         b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
-        b"SMEMBERS" | b"SINTER" | b"SDIFF" => Some(ExpectedReturnType::Set),
+        b"SMEMBERS" | b"SINTER" | b"SDIFF" | b"SUNION" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
@@ -738,6 +913,17 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMaps(
             &ExpectedReturnType::ArrayOfMaps(&ExpectedReturnType::StringOrSet),
         )),
+        b"FUNCTION STATS" => Some(ExpectedReturnType::FunctionStatsReturnType),
+        b"GEOSEARCH" => {
+            if cmd.position(b"WITHDIST").is_some()
+                || cmd.position(b"WITHHASH").is_some()
+                || cmd.position(b"WITHCOORD").is_some()
+            {
+                Some(ExpectedReturnType::GeoSearchReturnType)
+            } else {
+                None
+            }
+        }
         _ => None,
     }
 }
@@ -989,9 +1175,49 @@ mod tests {
     }
 
     #[test]
+    fn convert_xrange_xrevrange() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XRANGE").arg("key").arg("start").arg("end")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::BulkString),
+                value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+            })
+        ));
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XREVRANGE").arg("key").arg("end").arg("start")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::BulkString),
+                value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+            })
+        ));
+    }
+
+    #[test]
     fn convert_xread() {
         assert!(matches!(
             expected_type_for_cmd(redis::cmd("XREAD").arg("streams").arg("key").arg("id")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::BulkString),
+                value_type: &Some(ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::BulkString),
+                    value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+                }),
+            })
+        ));
+    }
+
+    #[test]
+    fn convert_xreadgroup() {
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("XREADGROUP")
+                    .arg("GROUP")
+                    .arg("group")
+                    .arg("consumer")
+                    .arg("streams")
+                    .arg("key")
+                    .arg("id")
+            ),
             Some(ExpectedReturnType::Map {
                 key_type: &Some(ExpectedReturnType::BulkString),
                 value_type: &Some(ExpectedReturnType::Map {
@@ -1274,6 +1500,184 @@ mod tests {
                 ),
             ]),
             *value,
+        );
+    }
+
+    #[test]
+    fn convert_function_stats() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("FUNCTION").arg("STATS")),
+            Some(ExpectedReturnType::FunctionStatsReturnType)
+        ));
+
+        let resp2_response_non_empty_first_part_data = vec![
+            Value::BulkString(b"running_script".into()),
+            Value::Array(vec![
+                Value::BulkString(b"name".into()),
+                Value::BulkString(b"<function name>".into()),
+                Value::BulkString(b"command".into()),
+                Value::Array(vec![
+                    Value::BulkString(b"fcall".into()),
+                    Value::BulkString(b"<function name>".into()),
+                    Value::BulkString(b"... rest `fcall` args ...".into()),
+                ]),
+                Value::BulkString(b"duration_ms".into()),
+                Value::Int(24529),
+            ]),
+        ];
+
+        let resp2_response_empty_first_part_data =
+            vec![Value::BulkString(b"running_script".into()), Value::Nil];
+
+        let resp2_response_second_part_data = vec![
+            Value::BulkString(b"engines".into()),
+            Value::Array(vec![
+                Value::BulkString(b"LUA".into()),
+                Value::Array(vec![
+                    Value::BulkString(b"libraries_count".into()),
+                    Value::Int(3),
+                    Value::BulkString(b"functions_count".into()),
+                    Value::Int(5),
+                ]),
+            ]),
+        ];
+        let resp2_response_with_non_empty_first_part = Value::Array(
+            [
+                resp2_response_non_empty_first_part_data.clone(),
+                resp2_response_second_part_data.clone(),
+            ]
+            .concat(),
+        );
+
+        let resp2_response_with_empty_first_part = Value::Array(
+            [
+                resp2_response_empty_first_part_data.clone(),
+                resp2_response_second_part_data.clone(),
+            ]
+            .concat(),
+        );
+
+        let resp2_cluster_response = Value::Map(vec![
+            (
+                Value::BulkString(b"node1".into()),
+                resp2_response_with_non_empty_first_part.clone(),
+            ),
+            (
+                Value::BulkString(b"node2".into()),
+                resp2_response_with_empty_first_part.clone(),
+            ),
+            (
+                Value::BulkString(b"node3".into()),
+                resp2_response_with_empty_first_part.clone(),
+            ),
+        ]);
+
+        let resp3_response_non_empty_first_part_data = vec![(
+            Value::BulkString(b"running_script".into()),
+            Value::Map(vec![
+                (
+                    Value::BulkString(b"name".into()),
+                    Value::BulkString(b"<function name>".into()),
+                ),
+                (
+                    Value::BulkString(b"command".into()),
+                    Value::Array(vec![
+                        Value::BulkString(b"fcall".into()),
+                        Value::BulkString(b"<function name>".into()),
+                        Value::BulkString(b"... rest `fcall` args ...".into()),
+                    ]),
+                ),
+                (Value::BulkString(b"duration_ms".into()), Value::Int(24529)),
+            ]),
+        )];
+
+        let resp3_response_empty_first_part_data =
+            vec![(Value::BulkString(b"running_script".into()), Value::Nil)];
+
+        let resp3_response_second_part_data = vec![(
+            Value::BulkString(b"engines".into()),
+            Value::Map(vec![(
+                Value::BulkString(b"LUA".into()),
+                Value::Map(vec![
+                    (Value::BulkString(b"libraries_count".into()), Value::Int(3)),
+                    (Value::BulkString(b"functions_count".into()), Value::Int(5)),
+                ]),
+            )]),
+        )];
+
+        let resp3_response_with_non_empty_first_part = Value::Map(
+            [
+                resp3_response_non_empty_first_part_data.clone(),
+                resp3_response_second_part_data.clone(),
+            ]
+            .concat(),
+        );
+
+        let resp3_response_with_empty_first_part = Value::Map(
+            [
+                resp3_response_empty_first_part_data.clone(),
+                resp3_response_second_part_data.clone(),
+            ]
+            .concat(),
+        );
+
+        let resp3_cluster_response = Value::Map(vec![
+            (
+                Value::BulkString(b"node1".into()),
+                resp3_response_with_non_empty_first_part.clone(),
+            ),
+            (
+                Value::BulkString(b"node2".into()),
+                resp3_response_with_empty_first_part.clone(),
+            ),
+            (
+                Value::BulkString(b"node3".into()),
+                resp3_response_with_empty_first_part.clone(),
+            ),
+        ]);
+
+        let conversion_type = Some(ExpectedReturnType::FunctionStatsReturnType);
+        // resp2 -> resp3 conversion with non-empty `running_script` block
+        assert_eq!(
+            convert_to_expected_type(
+                resp2_response_with_non_empty_first_part.clone(),
+                conversion_type
+            ),
+            Ok(resp3_response_with_non_empty_first_part.clone())
+        );
+        // resp2 -> resp3 conversion with empty `running_script` block
+        assert_eq!(
+            convert_to_expected_type(
+                resp2_response_with_empty_first_part.clone(),
+                conversion_type
+            ),
+            Ok(resp3_response_with_empty_first_part.clone())
+        );
+        // resp2 -> resp3 cluster response
+        assert_eq!(
+            convert_to_expected_type(resp2_cluster_response.clone(), conversion_type),
+            Ok(resp3_cluster_response.clone())
+        );
+        // resp3 -> resp3 conversion with non-empty `running_script` block
+        assert_eq!(
+            convert_to_expected_type(
+                resp3_response_with_non_empty_first_part.clone(),
+                conversion_type
+            ),
+            Ok(resp3_response_with_non_empty_first_part.clone())
+        );
+        // resp3 -> resp3 conversion with empty `running_script` block
+        assert_eq!(
+            convert_to_expected_type(
+                resp3_response_with_empty_first_part.clone(),
+                conversion_type
+            ),
+            Ok(resp3_response_with_empty_first_part.clone())
+        );
+        // resp3 -> resp3 cluster response
+        assert_eq!(
+            convert_to_expected_type(resp3_cluster_response.clone(), conversion_type),
+            Ok(resp3_cluster_response.clone())
         );
     }
 
@@ -1892,5 +2296,83 @@ mod tests {
             Some(ExpectedReturnType::Set)
         ));
         assert!(expected_type_for_cmd(redis::cmd("SPOP").arg("key1")).is_none());
+    }
+    #[test]
+    fn test_convert_to_geo_search_return_type() {
+        let array = Value::Array(vec![
+            Value::Array(vec![
+                Value::BulkString(b"name1".to_vec()),
+                Value::BulkString(b"1.23".to_vec()), // dist (float)
+                Value::Int(123456),                  // hash (int)
+                Value::Array(vec![
+                    Value::BulkString(b"10.0".to_vec()), // lon (float)
+                    Value::BulkString(b"20.0".to_vec()), // lat (float)
+                ]),
+            ]),
+            Value::Array(vec![
+                Value::BulkString(b"name2".to_vec()),
+                Value::BulkString(b"2.34".to_vec()), // dist (float)
+                Value::Int(654321),                  // hash (int)
+                Value::Array(vec![
+                    Value::BulkString(b"30.0".to_vec()), // lon (float)
+                    Value::BulkString(b"40.0".to_vec()), // lat (float)
+                ]),
+            ]),
+        ]);
+
+        // Expected output value after conversion
+        let expected_result = Value::Array(vec![
+            Value::Array(vec![
+                Value::BulkString(b"name1".to_vec()),
+                Value::Array(vec![
+                    Value::Double(1.23), // dist (float)
+                    Value::Int(123456),  // hash (int)
+                    Value::Array(vec![
+                        Value::Double(10.0), // lon (float)
+                        Value::Double(20.0), // lat (float)
+                    ]),
+                ]),
+            ]),
+            Value::Array(vec![
+                Value::BulkString(b"name2".to_vec()),
+                Value::Array(vec![
+                    Value::Double(2.34), // dist (float)
+                    Value::Int(654321),  // hash (int)
+                    Value::Array(vec![
+                        Value::Double(30.0), // lon (float)
+                        Value::Double(40.0), // lat (float)
+                    ]),
+                ]),
+            ]),
+        ]);
+
+        let result =
+            convert_to_expected_type(array.clone(), Some(ExpectedReturnType::GeoSearchReturnType))
+                .unwrap();
+        assert_eq!(result, expected_result);
+    }
+    #[test]
+    fn test_geosearch_return_type() {
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("GEOSEARCH")
+                    .arg("WITHDIST")
+                    .arg("WITHHASH")
+                    .arg("WITHCOORD")
+            ),
+            Some(ExpectedReturnType::GeoSearchReturnType)
+        ));
+
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("WITHDIST").arg("WITHHASH")),
+            Some(ExpectedReturnType::GeoSearchReturnType)
+        ));
+
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("WITHDIST")),
+            Some(ExpectedReturnType::GeoSearchReturnType)
+        ));
+
+        assert!(expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("key")).is_none());
     }
 }
