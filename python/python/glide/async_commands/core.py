@@ -2683,7 +2683,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns `null` if the range
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range
                 arguments are not applicable.
 
         Examples:
@@ -2732,7 +2732,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns `null` if the range
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range
                 arguments are not applicable.
 
         Examples:
