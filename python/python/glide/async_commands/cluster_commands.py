@@ -42,6 +42,11 @@ class ClusterCommands(CoreCommands):
             RequestType.CustomCommand, command_args, route
         )
 
+    async def fcall(self, function: str, arguments: Optional[List[str]] = None, route: Optional[Route] = None) -> TClusterResponse[Optional[TResult]]:
+        """
+        
+        """
+
     async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
