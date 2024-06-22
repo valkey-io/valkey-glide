@@ -181,7 +181,7 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
             groupId = 'software.amazon.glide'
-            artifactId = 'glide-mac-x86_64'
+            artifactId = 'glide-placeholder'
             version = "0.4.2"
             pom {
                 name = 'glide-for-valkey'
@@ -228,5 +228,5 @@ tasks.withType(Test) {
 
 jar {
     archiveBaseName = "glide"
-    archiveClassifier = "mac-x86_64"
+    archiveClassifier = "placeholder"
 }
