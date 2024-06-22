@@ -4,8 +4,10 @@ package glide.cluster;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -15,6 +17,7 @@ import glide.TestConfiguration;
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
+import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -246,5 +249,41 @@ public class ClusterTransactionTests {
         assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
         assertEquals(foobarString, clusterClient.get(key1).get());
         assertEquals(foobarString, clusterClient.get(key2).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void sort() {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String[] descendingList = new String[] {"3", "2", "1"};
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction
+                .lpush(key1, new String[] {"3", "1", "2"})
+                .sort(key1, SortClusterOptions.builder().orderBy(DESC).build())
+                .sortStore(key1, key2, SortClusterOptions.builder().orderBy(DESC).build())
+                .lrange(key2, 0, -1);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction.sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build());
+        }
+
+        Object[] results = clusterClient.exec(transaction).get();
+        Object[] expectedResult =
+                new Object[] {
+                    3L, // lpush(key1, new String[] {"3", "1", "2"})
+                    descendingList, // sort(key1, SortClusterOptions.builder().orderBy(DESC).build())
+                    3L, // sortStore(key1, key2, DESC))
+                    descendingList, // lrange(key2, 0, -1)
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedResult =
+                    concatenateArrays(
+                            expectedResult, new Object[] {descendingList} // sortReadOnly(key1, DESC)
+                            );
+        }
+
+        assertDeepEquals(expectedResult, results);
     }
 }
