@@ -588,7 +588,7 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<byte[]> functionDump() {
         return commandManager.submitNewCommand(
-                FunctionDump, new GlideString[] {}, response -> handleBytesOrNullResponse(response));
+                FunctionDump, new GlideString[] {}, this::handleBytesOrNullResponse);
     }
 
     @Override
