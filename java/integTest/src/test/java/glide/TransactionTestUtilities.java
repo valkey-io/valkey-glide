@@ -106,6 +106,8 @@ public class TransactionTestUtilities {
         String genericKey2 = "{GenericKey}-2-" + UUID.randomUUID();
         String genericKey3 = "{GenericKey}-3-" + UUID.randomUUID();
         String genericKey4 = "{GenericKey}-4-" + UUID.randomUUID();
+        String[] ascendingList = new String[] {"1", "2", "3"};
+        String[] descendingList = new String[] {"3", "2", "1"};
 
         transaction
                 .set(genericKey1, value1)
@@ -127,7 +129,11 @@ public class TransactionTestUtilities {
                 .expireAt(genericKey1, 42) // expire (delete) key immediately
                 .pexpire(genericKey1, 42)
                 .pexpireAt(genericKey1, 42)
-                .ttl(genericKey2);
+                .ttl(genericKey2)
+                .lpush(genericKey3, new String[] {"3", "1", "2"})
+                .sort(genericKey3)
+                .sortStore(genericKey3, genericKey4)
+                .lrange(genericKey4, 0, -1);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
@@ -137,7 +143,8 @@ public class TransactionTestUtilities {
                     .pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
                     .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                     .expiretime(genericKey1)
-                    .pexpiretime(genericKey1);
+                    .pexpiretime(genericKey1)
+                    .sortReadOnly(genericKey3);
         }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
@@ -170,6 +177,10 @@ public class TransactionTestUtilities {
                     false, // pexpire(genericKey1, 42)
                     false, // pexpireAt(genericKey1, 42)
                     -2L, // ttl(genericKey2)
+                    3L, // lpush(genericKey3, new String[] {"3", "1", "2"})
+                    ascendingList, // sort(genericKey3)
+                    3L, // sortStore(genericKey3, genericKey4)
+                    ascendingList, // lrange(genericKey4, 0, -1)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -184,6 +195,7 @@ public class TransactionTestUtilities {
                                 false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                                 -2L, // expiretime(genericKey1)
                                 -2L, // pexpiretime(genericKey1)
+                                ascendingList, // sortReadOnly(genericKey3)
                             });
         }
 
