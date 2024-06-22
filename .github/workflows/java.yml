@@ -130,6 +130,8 @@ jobs:
                   cd $src_folder
                   jar -cvf bundle.jar *
                   ls -ltr
+                  cd -
+                  cp $src_folder/bundle.jar .
 
             - name: Upload test reports
               if: always()
@@ -142,7 +144,7 @@ jobs:
                       java/integTest/build/reports/**
                       utils/clusters/**
                       benchmarks/results/**
-                      ~/.m2/repository/software/amazon/glide/glide-${{ matrix.host.CLASSIFIER }}/0.4.2/bundle.jar
+                      java/bundle.jar
 
     build-amazonlinux-latest:
         if: github.repository_owner == 'aws'
