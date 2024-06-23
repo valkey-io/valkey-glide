@@ -13,8 +13,8 @@ from glide.async_commands.core import (
 )
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
 from glide.async_commands.utils.utils import (
-    convert_bytes_to_string_dict,
     convert_bytes_to_string_cluster_response,
+    convert_bytes_to_string_dict,
 )
 from glide.constants import (
     TOK,
