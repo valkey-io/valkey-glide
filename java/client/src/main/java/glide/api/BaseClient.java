@@ -1762,7 +1762,8 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> bitcount(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(BitCount, new GlideString[] {key}, this::handleLongResponse);
+        return commandManager.submitNewCommand(
+                BitCount, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1777,7 +1778,9 @@ public abstract class BaseClient
     public CompletableFuture<Long> bitcount(@NonNull GlideString key, long start, long end) {
         return commandManager.submitNewCommand(
                 BitCount,
-                new GlideString[] {key, gs(Long.toString(start).getBytes()), gs(Long.toString(end).getBytes())},
+                new GlideString[] {
+                    key, gs(Long.toString(start).getBytes()), gs(Long.toString(end).getBytes())
+                },
                 this::handleLongResponse);
     }
 
@@ -1793,7 +1796,12 @@ public abstract class BaseClient
     public CompletableFuture<Long> bitcount(
             @NonNull GlideString key, long start, long end, @NonNull BitmapIndexType options) {
         GlideString[] arguments =
-                new GlideString[] {key, gs(Long.toString(start).getBytes()), gs(Long.toString(end).getBytes()), gs(options.toString().getBytes())};
+                new GlideString[] {
+                    key,
+                    gs(Long.toString(start).getBytes()),
+                    gs(Long.toString(end).getBytes()),
+                    gs(options.toString().getBytes())
+                };
         return commandManager.submitNewCommand(BitCount, arguments, this::handleLongResponse);
     }
 

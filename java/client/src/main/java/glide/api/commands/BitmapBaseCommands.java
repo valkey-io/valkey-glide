@@ -1,10 +1,10 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import glide.api.models.GlideString;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldIncrby;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow;
@@ -148,6 +148,7 @@ public interface BitmapBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> bitcount(GlideString key, long start, long end, BitmapIndexType options);
+
     /**
      * Sets or clears the bit at <code>offset</code> in the string value stored at <code>key</code>.
      * The <code>offset</code> is a zero-based index, with <code>0</code> being the first element of

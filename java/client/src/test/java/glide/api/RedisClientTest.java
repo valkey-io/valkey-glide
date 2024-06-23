@@ -5839,6 +5839,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void bitcount_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long bitcount = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitcount);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(BitCount), eq(new GlideString[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitcount(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(1L, payload);
+        assertEquals(bitcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bitcount_indices_returns_success() {
         // setup
         String key = "testKey";
@@ -5862,6 +5885,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void bitcount_indices_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long bitcount = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitcount);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(BitCount), eq(new GlideString[] {key, gs("1"), gs("2")}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitcount(key, 1, 2);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bitcount_indices_with_option_returns_success() {
         // setup
         String key = "testKey";
@@ -5872,6 +5918,29 @@ public class RedisClientTest {
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(
                         eq(BitCount), eq(new String[] {key, "1", "2", "BIT"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitcount(key, 1, 2, BitmapIndexType.BIT);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitcount_indices_with_option_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long bitcount = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitcount);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(BitCount), eq(new GlideString[] {key, gs("1"), gs("2"), gs("BIT")}), any()))
                 .thenReturn(testResponse);
 
         // exercise
