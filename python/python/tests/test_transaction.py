@@ -516,9 +516,9 @@ async def transaction_test(
     transaction.xread({key11: "0-1"})
     args.append({key11: {"0-2": [["foo", "bar"]]}})
     transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
-    args.append({"0-1": [["foo", "bar"]]})
+    args.append({b"0-1": [[b"foo", b"bar"]]})
     transaction.xrevrange(key11, IdBound("0-1"), IdBound("0-1"))
-    args.append({"0-1": [["foo", "bar"]]})
+    args.append({b"0-1": [[b"foo", b"bar"]]})
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
 
@@ -838,7 +838,7 @@ class TestTransaction:
         result = await redis_client.exec(transaction)
         assert result is not None
         assert result[2] == True
-        assert result[3] == value
+        assert result[3] == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

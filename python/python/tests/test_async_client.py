@@ -90,6 +90,7 @@ from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
     compare_maps,
+    convert_bytes_to_string_dict,
     convert_str_to_bytes_list,
     convert_str_to_bytes_set,
     generate_lua_lib_code,
@@ -4898,13 +4899,13 @@ class TestCommands:
             await redis_client.xadd(
                 key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id1)
             )
-            == stream_id1
+            == stream_id1.encode()
         )
         assert (
             await redis_client.xadd(
                 key1, [("f1", "foo1"), ("f2", "foo2")], StreamAddOptions(stream_id2)
             )
-            == stream_id2
+            == stream_id2.encode()
         )
         assert await redis_client.xlen(key1) == 2
 
@@ -4935,22 +4936,24 @@ class TestCommands:
             await redis_client.xadd(
                 key, [("f1", "v1")], StreamAddOptions(id=stream_id1)
             )
-            == stream_id1
+            == stream_id1.encode()
         )
         assert (
             await redis_client.xadd(
                 key, [("f2", "v2")], StreamAddOptions(id=stream_id2)
             )
-            == stream_id2
+            == stream_id2.encode()
         )
         assert await redis_client.xlen(key) == 2
 
         # get everything from the stream
-        assert await redis_client.xrange(key, MinId(), MaxId()) == {
+        result = await redis_client.xrange(key, MinId(), MaxId())
+        assert convert_bytes_to_string_dict(result) == {
             stream_id1: [["f1", "v1"]],
             stream_id2: [["f2", "v2"]],
         }
-        assert await redis_client.xrevrange(key, MaxId(), MinId()) == {
+        result = await redis_client.xrevrange(key, MaxId(), MinId())
+        assert convert_bytes_to_string_dict(result) == {
             stream_id2: [["f2", "v2"]],
             stream_id1: [["f1", "v1"]],
         }
@@ -4964,16 +4967,18 @@ class TestCommands:
             await redis_client.xadd(
                 key, [("f3", "v3")], StreamAddOptions(id=stream_id3)
             )
-            == stream_id3
+            == stream_id3.encode()
         )
 
         # get the newest entry
-        assert await redis_client.xrange(
+        result = await redis_client.xrange(
             key, ExclusiveIdBound(stream_id2), ExclusiveIdBound.from_timestamp(5), 1
-        ) == {stream_id3: [["f3", "v3"]]}
-        assert await redis_client.xrevrange(
+        )
+        assert convert_bytes_to_string_dict(result) == {stream_id3: [["f3", "v3"]]}
+        result = await redis_client.xrevrange(
             key, ExclusiveIdBound.from_timestamp(5), ExclusiveIdBound(stream_id2), 1
-        ) == {stream_id3: [["f3", "v3"]]}
+        )
+        assert convert_bytes_to_string_dict(result) == {stream_id3: [["f3", "v3"]]}
 
         # xrange/xrevrange against an emptied stream
         assert await redis_client.xdel(key, [stream_id1, stream_id2, stream_id3]) == 3
@@ -7133,6 +7138,7 @@ class TestCommands:
         destination = f"{{testKey}}:2-{get_random_string(10)}"
         value1 = get_random_string(5)
         value2 = get_random_string(5)
+        value1_encoded = value1.encode()
 
         # neither key exists
         assert await redis_client.copy(source, destination, replace=False) is False
@@ -7141,7 +7147,7 @@ class TestCommands:
         # source exists, destination does not
         await redis_client.set(source, value1)
         assert await redis_client.copy(source, destination, replace=False) is True
-        assert await redis_client.get(destination) == value1
+        assert await redis_client.get(destination) == value1_encoded
 
         # new value for source key
         await redis_client.set(source, value2)
@@ -7149,11 +7155,11 @@ class TestCommands:
         # both exists, no REPLACE
         assert await redis_client.copy(source, destination) is False
         assert await redis_client.copy(source, destination, replace=False) is False
-        assert await redis_client.get(destination) == value1
+        assert await redis_client.get(destination) == value1_encoded
 
         # both exists, with REPLACE
         assert await redis_client.copy(source, destination, replace=True) is True
-        assert await redis_client.get(destination) == value2
+        assert await redis_client.get(destination) == value2.encode()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7166,6 +7172,8 @@ class TestCommands:
         destination = get_random_string(10)
         value1 = get_random_string(5)
         value2 = get_random_string(5)
+        value1_encoded = value1.encode()
+        value2_encoded = value2.encode()
         index0 = 0
         index1 = 1
         index2 = 2
@@ -7186,7 +7194,7 @@ class TestCommands:
                 is True
             )
             assert await redis_client.select(index1) == OK
-            assert await redis_client.get(destination) == value1
+            assert await redis_client.get(destination) == value1_encoded
 
             # new value for source key
             assert await redis_client.select(index0) == OK
@@ -7204,9 +7212,9 @@ class TestCommands:
 
             # new value only gets copied to DB 2
             assert await redis_client.select(index1) == OK
-            assert await redis_client.get(destination) == value1
+            assert await redis_client.get(destination) == value1_encoded
             assert await redis_client.select(index2) == OK
-            assert await redis_client.get(destination) == value2
+            assert await redis_client.get(destination) == value2_encoded
 
             # both exists, with REPLACE, when value isn't the same, source always get copied to destination
             assert await redis_client.select(index0) == OK
@@ -7215,7 +7223,7 @@ class TestCommands:
                 is True
             )
             assert await redis_client.select(index1) == OK
-            assert await redis_client.get(destination) == value2
+            assert await redis_client.get(destination) == value2_encoded
 
             # invalid DB index
             with pytest.raises(RequestError):
