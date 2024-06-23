@@ -92,11 +92,11 @@ async def transaction_test(
     key24 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # string
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
-    value_bytes = value.encode("utf-8")
+    value_bytes = value.encode()
     value2 = get_random_string(5)
-    value2_bytes = value2.encode("utf-8")
+    value2_bytes = value2.encode()
     value3 = get_random_string(5)
-    value3_bytes = value3.encode("utf-8")
+    value3_bytes = value3.encode()
     lib_name = f"mylib1C{get_random_string(5)}"
     func_name = f"myfunc1c{get_random_string(5)}"
     code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
@@ -213,7 +213,7 @@ async def transaction_test(
     transaction.hvals(key4)
     args.append([value_bytes, value2_bytes])
     transaction.hkeys(key4)
-    args.append([key.encode("utf-8"), key2.encode("utf-8")])
+    args.append([key.encode(), key2.encode()])
     transaction.hsetnx(key4, key, value)
     args.append(False)
     transaction.hincrby(key4, key3, 5)
@@ -226,8 +226,14 @@ async def transaction_test(
     transaction.hmget(key4, [key, "nonExistingField", key2])
     args.append([value_bytes, None, value2_bytes])
     transaction.hgetall(key4)
-    key3_bytes = key3.encode("utf-8")
-    args.append({key.encode("utf-8"): value_bytes, key2.encode("utf-8"): value2_bytes, key3_bytes: b"10.5"})
+    key3_bytes = key3.encode()
+    args.append(
+        {
+            key.encode(): value_bytes,
+            key2.encode(): value2_bytes,
+            key3_bytes: b"10.5",
+        }
+    )
     transaction.hdel(key4, [key, key2])
     args.append(2)
     transaction.hrandfield(key4)
@@ -268,9 +274,9 @@ async def transaction_test(
         transaction.lpush(key5, [value, value2])
         args.append(2)
         transaction.lmpop([key5], ListDirection.LEFT)
-        args.append({key5.encode("utf-8"): [value2_bytes]})
+        args.append({key5.encode(): [value2_bytes]})
         transaction.blmpop([key5], ListDirection.LEFT, 0.1)
-        args.append({key5.encode("utf-8"): [value_bytes]})
+        args.append({key5.encode(): [value_bytes]})
 
     transaction.rpush(key6, [value, value2, value2])
     args.append(3)
@@ -286,9 +292,9 @@ async def transaction_test(
     transaction.lpush(key9, [value, value2, value3])
     args.append(3)
     transaction.blpop([key9], 1)
-    args.append([key9.encode("utf-8"), value3_bytes])
+    args.append([key9.encode(), value3_bytes])
     transaction.brpop([key9], 1)
-    args.append([key9.encode("utf-8"), value_bytes])
+    args.append([key9.encode(), value_bytes])
     transaction.lset(key9, 0, value2)
     args.append(OK)
 
@@ -368,9 +374,9 @@ async def transaction_test(
     transaction.zrangestore(key8, key8, RangeByIndex(0, -1))
     args.append(3)
     transaction.bzpopmin([key8], 0.5)
-    args.append([key8.encode("utf-8"), b"two", 2.0])
+    args.append([key8.encode(), b"two", 2.0])
     transaction.bzpopmax([key8], 0.5)
-    args.append([key8.encode("utf-8"), b"four", 4.0])
+    args.append([key8.encode(), b"four", 4.0])
     # key8 now only contains one member ("three")
     transaction.zrandmember(key8)
     args.append(b"three")
@@ -612,9 +618,9 @@ async def transaction_test(
         transaction.zadd(key16, {"a": 1, "b": 2, "c": 3, "d": 4})
         args.append(4)
         transaction.bzmpop([key16], ScoreFilter.MAX, 0.1)
-        args.append([key16.encode("utf-8"), {b"d": 4.0}])
+        args.append([key16.encode(), {b"d": 4.0}])
         transaction.bzmpop([key16], ScoreFilter.MIN, 0.1, 2)
-        args.append([key16.encode("utf-8"), {b"a": 1.0, b"b": 2.0}])
+        args.append([key16.encode(), {b"a": 1.0, b"b": 2.0}])
 
         transaction.mset({key23: "abcd1234", key24: "bcdef1234"})
         args.append(OK)
@@ -720,9 +726,7 @@ class TestTransaction:
         expected = await transaction_test(transaction, keyslot, redis_client)
         result = await redis_client.exec(transaction)
         assert isinstance(result, list)
-        # for i in range(len(result)):
-        #     result[i] = result[i].decode("utf-8") if isinstance(result[i], bytes) else result[i]
-        result[0] = result[0].decode("utf-8")
+        result[0] = result[0].decode()
         assert isinstance(result[0], str)
         assert "# Memory" in result[0]
         assert result[1:] == expected
@@ -805,10 +809,10 @@ class TestTransaction:
         expected = await transaction_test(transaction, keyslot, redis_client)
         result = await redis_client.exec(transaction)
         assert isinstance(result, list)
-        result[0] = result[0].decode("utf-8")
+        result[0] = result[0].decode()
         assert isinstance(result[0], str)
         assert "# Memory" in result[0]
-        assert result[1:5] == [OK, False, OK, value.encode("utf-8")]
+        assert result[1:5] == [OK, False, OK, value.encode()]
         assert result[5:12] == [2, 2, 2, [b"Bob", b"Alice"], 2, OK, None]
         assert result[12:] == expected
 

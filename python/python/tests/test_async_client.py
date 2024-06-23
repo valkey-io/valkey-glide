@@ -1538,13 +1538,17 @@ class TestCommands:
         assert await redis_client.lset(key, 0, element) == OK
 
         values = [element] + values[:-1][::-1]
-        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(values)
+        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(
+            values
+        )
 
         # assert lset with a negative index for the last element in the list
         assert await redis_client.lset(key, -1, element) == OK
 
         values[-1] = element
-        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(values)
+        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(
+            values
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1692,7 +1696,9 @@ class TestCommands:
             await redis_client.sunion([])
 
         # non-existing key returns the set of existing keys
-        assert await redis_client.sunion([key1, non_existing_key]) == convert_str_to_bytes_set(set(member1_list))
+        assert await redis_client.sunion(
+            [key1, non_existing_key]
+        ) == convert_str_to_bytes_set(set(member1_list))
 
         # non-set key
         assert await redis_client.set(key2, "value") == OK
@@ -2455,30 +2461,24 @@ class TestCommands:
         ) == convert_str_to_bytes_list(members[:2][::-1])
 
         # Test search by radius, unit: miles, from a geospatial data
-        assert (
-            await redis_client.geosearch(
-                key,
-                GeospatialData(15, 37),
-                GeoSearchByRadius(175, GeoUnit.MILES),
-                OrderBy.DESC,
-            )
-            == convert_str_to_bytes_list(members[::-1])
-        )
+        assert await redis_client.geosearch(
+            key,
+            GeospatialData(15, 37),
+            GeoSearchByRadius(175, GeoUnit.MILES),
+            OrderBy.DESC,
+        ) == convert_str_to_bytes_list(members[::-1])
 
         # Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
-        assert (
-            await redis_client.geosearch(
-                key,
-                GeospatialData(15, 37),
-                GeoSearchByRadius(200, GeoUnit.KILOMETERS),
-                OrderBy.ASC,
-                count=GeoSearchCount(2),
-                with_coord=True,
-                with_dist=True,
-                with_hash=True,
-            )
-            == convert_str_to_bytes_list(result)
-        )
+        assert await redis_client.geosearch(
+            key,
+            GeospatialData(15, 37),
+            GeoSearchByRadius(200, GeoUnit.KILOMETERS),
+            OrderBy.ASC,
+            count=GeoSearchCount(2),
+            with_coord=True,
+            with_dist=True,
+            with_hash=True,
+        ) == convert_str_to_bytes_list(result)
 
         # Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
         assert (
@@ -7910,7 +7910,7 @@ class TestScripts:
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         script = Script("return 'Hello'")
-        assert await redis_client.invoke_script(script) == "Hello".encode("utf-8")
+        assert await redis_client.invoke_script(script) == "Hello".encode()
 
         script = Script("return redis.call('SET', KEYS[1], ARGV[1])")
         assert (
@@ -7923,5 +7923,9 @@ class TestScripts:
             == "OK"
         )
         script = Script("return redis.call('GET', KEYS[1])")
-        assert await redis_client.invoke_script(script, keys=[key1]) == "value1".encode("utf-8")
-        assert await redis_client.invoke_script(script, keys=[key2]) == "value2".encode("utf-8")
+        assert (
+            await redis_client.invoke_script(script, keys=[key1]) == "value1".encode()
+        )
+        assert (
+            await redis_client.invoke_script(script, keys=[key2]) == "value2".encode()
+        )

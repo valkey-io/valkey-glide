@@ -80,8 +80,12 @@ async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> 
 
 
 def compare_maps(
-    map1: Optional[Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]],
-    map2: Optional[Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]],
+    map1: Optional[
+        Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]
+    ],
+    map2: Optional[
+        Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]
+    ],
 ) -> bool:
     """
     Compare two maps by converting them to JSON strings and checking for equality, including property order.
@@ -120,11 +124,11 @@ def compare_maps(
 
 def convert_str_to_bytes_list(lst):
     return [
-        elem.encode("utf-8")
-        if isinstance(elem, str)
-        else convert_str_to_bytes_list(elem)
-        if isinstance(elem, list)
-        else elem
+        (
+            elem.encode("utf-8")
+            if isinstance(elem, str)
+            else convert_str_to_bytes_list(elem) if isinstance(elem, list) else elem
+        )
         for elem in lst
     ]
 
