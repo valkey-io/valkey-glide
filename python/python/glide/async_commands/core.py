@@ -1793,7 +1793,7 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SRem, [key] + members))
 
-    async def smembers(self, key: str) -> Set[Union[str, bytes]]:
+    async def smembers(self, key: str) -> Set[str]:
         """
         Retrieve all the members of the set value stored at `key`.
         See https://redis.io/commands/smembers/ for details.
