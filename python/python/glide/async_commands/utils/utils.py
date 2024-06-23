@@ -2,7 +2,7 @@ from typing import Any, Dict, Mapping, Optional, Union
 from glide.constants import TClusterDecodedResponse, TClusterResponse
 
 
-def convert_byte_string_dict(
+def convert_bytes_to_string_dict(
     byte_string_dict: Optional[Union[Mapping[bytes, Any], Dict[bytes, Any]]]
 ) -> Optional[Dict[str, Any]]:
     """
@@ -33,7 +33,7 @@ def convert_byte_string_dict(
     return convert(byte_string_dict)
 
 
-def convert_cluster_response(
+def convert_bytes_to_string_cluster_response(
     cluster_response: Optional[TClusterResponse],
 ) -> Optional[TClusterDecodedResponse]:
     """
@@ -52,6 +52,6 @@ def convert_cluster_response(
         return None
 
     if isinstance(cluster_response, dict):
-        return convert_byte_string_dict(cluster_response)
+        return convert_bytes_to_string_dict(cluster_response)
 
     return cluster_response

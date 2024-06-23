@@ -4,7 +4,7 @@ import string
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
 from glide.async_commands.core import InfoSection
-from glide.async_commands.utils.utils import convert_byte_string_dict
+from glide.async_commands.utils.utils import convert_bytes_to_string_dict
 from glide.constants import TResult
 from glide.glide_client import TGlideClient
 from packaging import version
@@ -80,15 +80,15 @@ async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> 
 
 
 def compare_maps(
-    map1: Optional[Union[Mapping[str | bytes, TResult], Dict[str | bytes, TResult]]],
-    map2: Optional[Union[Mapping[str | bytes, TResult], Dict[str | bytes, TResult]]],
+    map1: Optional[Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]],
+    map2: Optional[Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]],
 ) -> bool:
     """
     Compare two maps by converting them to JSON strings and checking for equality, including property order.
 
     Args:
-        map1 (Optional[Union[Mapping[str, TResult], Dict[str, TResult]]]): The first map to compare.
-        map2 (Optional[Union[Mapping[str, TResult], Dict[str, TResult]]]): The second map to compare.
+        map1 (Optional[Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]]): The first map to compare.
+        map2 (Optional[Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]]): The second map to compare.
 
     Returns:
         bool: True if the maps are equal, False otherwise.
@@ -113,8 +113,8 @@ def compare_maps(
         return True
     if map1 is None or map2 is None:
         return False
-    return json.dumps(convert_byte_string_dict(map1)) == json.dumps(
-        convert_byte_string_dict(map2)
+    return json.dumps(convert_bytes_to_string_dict(map1)) == json.dumps(
+        convert_bytes_to_string_dict(map2)
     )
 
 

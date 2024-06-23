@@ -13,8 +13,8 @@ from glide.async_commands.core import (
 )
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
 from glide.async_commands.utils.utils import (
-    convert_byte_string_dict,
-    convert_cluster_response,
+    convert_bytes_to_string_dict,
+    convert_bytes_to_string_cluster_response,
 )
 from glide.constants import (
     TOK,
@@ -78,7 +78,7 @@ class ClusterCommands(CoreCommands):
         if isinstance(result_bytes, bytes):
             result_str = result_bytes.decode("utf-8")
         elif isinstance(result_bytes, dict):
-            result_str = convert_byte_string_dict(result_bytes)
+            result_str = convert_bytes_to_string_dict(result_bytes)
 
         return cast(
             TClusterResponse[str],
@@ -228,7 +228,7 @@ class ClusterCommands(CoreCommands):
         result_bytes = await self._execute_command(
             RequestType.ConfigGet, parameters, route
         )
-        result_str = convert_cluster_response(result_bytes)
+        result_str = convert_bytes_to_string_cluster_response(result_bytes)
         return cast(
             TClusterDecodedResponse[Dict[str, str]],
             result_str,
