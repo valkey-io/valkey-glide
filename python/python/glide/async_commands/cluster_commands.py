@@ -44,8 +44,38 @@ class ClusterCommands(CoreCommands):
 
     async def fcall(self, function: str, arguments: Optional[List[str]] = None, route: Optional[Route] = None) -> TClusterResponse[Optional[TResult]]:
         """
+        Invokes a previously loaded function.
+        See https://redis.io/commands/fcall/ for more details.
+
+        Note:
+            When in cluster mode, all `keys` must map to the same hash slot. and `newkey` must map to the same hash slot.
+            If no `keys` are given, command will be routed to a random node.
         
+        Args:
+            function (str): The function name.
+            arguments (List[str]): A list of `function` arguments. `Arguments`
+                should not represent names of keys.
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TClusterResponse[Optional[TResult]]:
+                If a single node route is requested, returns a Optional[TResult] representing the function's return value.
+                Otherwise, returns a dict of [str , Optional[TResult]] where each key contains the address of
+                the queried node and the value contains the function's return value.
+
+        Example:
+            >>> await client.fcall("Deep_Thought", ["Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], RandomNode())
+                'new_value' # Returns the function's return value.
+
+        Since: Redis version 7.0.0.
         """
+        args = [function, "0"]
+        args.extend(arguments)
+        return cast(
+            TClusterResponse[Optional[TResult]],
+            await self._execute_command(RequestType.FCall, args, route),
+        )
 
     async def info(
         self,
