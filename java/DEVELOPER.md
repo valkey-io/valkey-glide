@@ -41,13 +41,6 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
-# Install protobuf compiler
-PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v26.1/protoc-26.1-linux-x86_64.zip
-unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
-export PATH="$PATH:$HOME/.local/bin"
-# Check that the protobuf compiler version 26.1 or higher is installed
-protoc --version
 ```
 
 **Dependencies installation for CentOS**
@@ -57,13 +50,6 @@ sudo yum update -y
 sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-devel unzip
 # Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-# Check that the protobuf compiler version 26.1 or higher is installed
-protoc --version
-# Install protobuf compiler
-PB_REL="https://github.com/protocolbuffers/protobuf/releases"
-curl -LO $PB_REL/download/v26.1/protoc-26.1-linux-x86_64.zip
-unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
-export PATH="$PATH:$HOME/.local/bin"
 # Check that the protobuf compiler version 26.1 or higher is installed
 protoc --version
 ```
@@ -119,11 +105,9 @@ Before starting this step, make sure you've installed all software dependencies.
 ### Troubleshooting
 
 Some troubleshooting issues:
-
-- Failed to find cargo after rustup: gradlew may need to be restarted to recognize the new path. If clearing the gradle cache doesn't work, you may need to restart your machine.
-- If build fails because cargo build compiler fails, make sure submodules are updated using git submodule update.
+- Failed to find `cargo` after `rustup`: `gradle` daemon may need to be restarted via `./grardlew --stop` to recognize the new `$PATH`. If that doesn't work, you may need to restart your machine.
+- If build fails because of rust compiler fails, make sure submodules are updated using `git submodule update`.
 - If protobuf 26.0 or earlier is detected, upgrade to the latest protobuf release.
-
 
 ### Test
 
@@ -208,54 +192,55 @@ Development on the Java wrapper may involve changes in either the Java or Rust c
 - A cluster command will require a note to indicate a node will follow a specific routing.
 Refer to https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec for more details on how hash slots work for cluster commands.
 
-When starting a command, check the redis_request.proto and request_type.rs to see whether the command has already been implemented in another language such as Python or Node.js.
+When you start implementing a new command, check the [redis_request](glide-core/src/protobuf/redis_request.proto) and [request_type](glide-core/src/request_type.rs) files to see whether the command has already been implemented in another language such as Python or Node.js.
 
-The BaseClient.java (standalone and cluster) will implement methods from the following interfaces listed in the java/client/src/main/java/glide/api/commands.
-The return types of these methods are in the form of a CompletableFuture<>, which is meant to fulfill the purpose of the synchronous and asynchronous features of the program.
-The BaseClient.java can implement both standalone and cluster commands.
+Standalone and cluster clients both extend `BaseClient.java` and implement methods from the interfaces listed in `java/client/src/main/java/glide/api/commands`.
+The return types of these methods are in the form of a `CompletableFuture`, which fulfill the purpose of the asynchronous features of the program.
+[BaseClient](java/client/src/main/java/glide/api/commands) - BaseClient.java
 
 When implementing a command, it requires both a unit test and an integration test. The objective of the UT is to mock the expected result.
 
-Implement a unit test in:
-- RedisClientTest.java for standalone.
-- RedisClientTest.java, and RedisClusterClientTest.java for cluster commands.
+### Tests
+
+Implement unit tests in:
+- [RedisClientTest.java](java/client/src/test/java/glide/api/RedisClientTest.java) for standalone.
+- [RedisClientTest.java](java/client/src/test/java/glide/api/RedisClientTest.java), and '[RedisClusterClientTest](java/client/src/test/java/glide/api/RedisClusterClientTest.java) for cluster commands.
 These files are found in the java/client/src/test/java/glide/api path.
 
-Implement an integration tests in the following files
-- TransactionTests.java (standalone and cluster)
-- TransactionTestsUtilities.java (standalone and cluster)
-- SharedCommandTests.java (standalone)
-- CommandTests.java (cluster)
+Implement integration tests in the following files:
+- [TransactionTests](java/client/src/test/java/glide/api/models/TransactionTests.java) (standalone and cluster)
+- [TransactionTestsUtilities](java/integTest/src/test/java/glide/TransactionTestUtilities.java) (standalone and cluster)
+- [SharedCommandTests](java/integTest/src/test/java/glide/SharedCommandTests.java) (standalone)
+- [CommandTests.java](java/integTest/src/test/java/glide/cluster/CommandTests.java) (cluster)
 
 For commands that have options, create a separate file for the optional values.
 
-BaseTransaction.java will add the command to the Transactions list. BaseClient will submit the command to Transactions to execute.
+[BaseTransaction](java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions list. [BaseClient](java/client/src/main/java/glide/api/commands) will submit the command to Transactions to execute.
 Refer to https://redis.io/docs/latest/develop/interact/transactions/ for more details about how Transactions work in Redis.
 
-Javadocs
-BaseTransactions.java and the methods within the command interfaces will both contain documentation on how the command operates.
+### Javadocs
+
+[BaseTransaction](java/client/src/main/java/glide/api/models/BaseTransaction.java) and the methods within the command interfaces will both contain documentation on how the command operates.
 In the command interface it should contain
-- Detail on when the Redis started supporting the command (if it wasn't initially implemented in version 1.0.0)
+- Detail on when the Redis started supporting the command (if it wasn't initially implemented in 6.0.0 or before).
 - A link to Redis command.
 - Information about the function parameters.
-- The command's return type. In the BaseTransaction.java file, include "Command Response" before specifying the return type.
+- The command's return type. In the [BaseTransaction](java/client/src/main/java/glide/api/models/BaseTransaction.java) file, include "Command Response" before specifying the return type.
 
-FFI naming and signatures
+### FFI naming and signatures, and features
+
 Javac will create the name of the signature in rust convention which can be called on native code.
 - In the command line write:
 ```bash
 javac -h . RedisValueResolver.java
 ```
-the results can be found in the glide_ffi_resolvers_RedisValueResolver.h file.
-In this project, only the function name and signature name is necessary.
+The results can be found in the [glide_ffi_resolvers_RedisValueResolver](java/client/src/main/java/glide/ffi/resolvers/glide_ffi_resolvers_RedisValueResolver) file.
+In this project, only the function name and signature name is necessary. lib.rs method names explicitly point to the native functions defined there.
 
-Module Information
-- The module-info.java (glide.api) contains a list of all of the directories the user can access.
+### Module Information
+
+- The [module-info.java](java/client/src/main/java) (glide.api) contains a list of all of the directories the user can access.
 - Ensure to update the exports list if there are more directories the user will need to access.
-
-### FFI and features
-- Names of the FFI defined in lib.rs have to correspond to the paths of real Java classes that expose native functions.
-- lib.rs method names explicitly point to the native functions defined there.
 
 ### Recommended extensions for VS Code
 
