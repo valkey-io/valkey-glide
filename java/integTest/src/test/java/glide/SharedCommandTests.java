@@ -216,6 +216,21 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void appendBinary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString value = gs(String.valueOf(UUID.randomUUID()));
+
+        // Append on non-existing string(similar to SET)
+        assertEquals(value.getString().length(), client.append(key, value).get());
+
+        assertEquals(value.getString().length() * 2L, client.append(key, value).get());
+        GlideString value2 = gs(value.getString() + value.getString());
+        assertEquals(value2, client.get(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void del_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
@@ -1269,6 +1284,10 @@ public class SharedCommandTests {
 
         Set<String> expectedMembers = Set.of("member1", "member2", "member4");
         assertEquals(expectedMembers, client.smembers(key).get());
+
+        Set<GlideString> expectedMembersBin = Set.of(gs("member1"), gs("member2"), gs("member4"));
+        assertEquals(expectedMembersBin, client.smembers(gs(key)).get());
+
         assertEquals(1, client.srem(key, new String[] {"member1"}).get());
         assertEquals(2, client.scard(key).get());
     }
