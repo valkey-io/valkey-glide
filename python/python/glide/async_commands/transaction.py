@@ -1880,7 +1880,7 @@ class BaseTransaction:
 
         Command response:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range arguments
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range arguments
                 are not applicable.
         """
         args = [key, start.to_arg(), end.to_arg()]
@@ -1917,7 +1917,7 @@ class BaseTransaction:
 
         Command response:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range arguments
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range arguments
                 are not applicable.
         """
         args = [key, end.to_arg(), start.to_arg()]
