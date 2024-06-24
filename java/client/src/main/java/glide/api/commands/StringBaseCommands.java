@@ -432,6 +432,23 @@ public interface StringBaseCommands {
     CompletableFuture<Long> append(String key, String value);
 
     /**
+     * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
+     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
+     * this special case.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param value The value to append.
+     * @return The length of the string after appending the value.
+     * @example
+     *     <pre>{@code
+     * Long value = client.append(gs("key"), gs("value")).get();
+     * assert value.equals(5L);
+     * }</pre>
+     */
+    CompletableFuture<Long> append(GlideString key, GlideString value);
+
+    /**
      * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
      * key2</code>.
      *
