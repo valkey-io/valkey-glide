@@ -272,6 +272,23 @@ public interface HashBaseCommands {
     CompletableFuture<Long> hstrlen(String key, String field);
 
     /**
+     * Returns the string length of the value associated with <code>field</code> in the hash stored at
+     * <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/hstrlen/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash.
+     * @return The string length or <code>0</code> if <code>field</code> or <code>key</code> does not
+     *     exist.
+     * @example
+     *     <pre>{@code
+     * Long strlen = client.hstrlen(gs("my_hash"), gs("my_field")).get();
+     * assert strlen >= 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hstrlen(GlideString key, GlideString field);
+
+    /**
      * Returns a random field name from the hash value stored at <code>key</code>.
      *
      * @since Redis 6.2 and above.

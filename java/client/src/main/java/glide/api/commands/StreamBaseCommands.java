@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamGroupOptions;
@@ -150,6 +151,21 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xlen(String key);
+
+    /**
+     * Returns the number of entries in the stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xlen/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return The number of entries in the stream. If <code>key</code> does not exist, return <code>0
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Long num = client.xlen(gs("key")).get();
+     * assert num == 2L; // Stream has 2 entries
+     * }</pre>
+     */
+    CompletableFuture<Long> xlen(GlideString key);
 
     /**
      * Removes the specified entries by id from a stream, and returns the number of entries deleted.
