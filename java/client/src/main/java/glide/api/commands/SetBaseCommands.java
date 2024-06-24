@@ -34,6 +34,24 @@ public interface SetBaseCommands {
     CompletableFuture<Long> sadd(String key, String[] members);
 
     /**
+     * Adds specified members to the set stored at <code>key</code>. Specified members that are
+     * already a member of this set are ignored.
+     *
+     * @see <a href="https://redis.io/commands/sadd/">redis.io</a> for details.
+     * @param key The <code>key</code> where members will be added to its set.
+     * @param members A list of members to add to the set stored at <code>key</code>.
+     * @return The number of members that were added to the set, excluding members already present.
+     * @remarks If <code>key</code> does not exist, a new set is created before adding <code>members
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Long result = client.sadd(gs("my_set"), new GlideString[]{gs("member1"), gs("member2")}).get();
+     * assert result == 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sadd(GlideString key, GlideString[] members);
+
+    /**
      * Removes specified members from the set stored at <code>key</code>. Specified members that are
      * not a member of this set are ignored.
      *
@@ -50,6 +68,24 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> srem(String key, String[] members);
+
+    /**
+     * Removes specified members from the set stored at <code>key</code>. Specified members that are
+     * not a member of this set are ignored.
+     *
+     * @see <a href="https://redis.io/commands/srem/">redis.io</a> for details.
+     * @param key The <code>key</code> from which members will be removed.
+     * @param members A list of members to remove from the set stored at <code>key</code>.
+     * @return The number of members that were removed from the set, excluding non-existing members.
+     * @remarks If <code>key</code> does not exist, it is treated as an empty set and this command
+     *     returns <code>0</code>.
+     * @example
+     *     <pre>{@code
+     * Long result = client.srem(gs("my_set"), new GlideString[]{gs("member1"), gs("member2")}).get();
+     * assert result == 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> srem(GlideString key, GlideString[] members);
 
     /**
      * Retrieves all the members of the set value stored at <code>key</code>.
@@ -131,6 +167,27 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> smove(String source, String destination, String member);
+
+    /**
+     * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
+     * </code>, removing it from the source set. Creates a new destination set if needed. The
+     * operation is atomic.
+     *
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
+     * @see <a href="https://redis.io/commands/smove/">redis.io</a> for details.
+     * @param source The key of the set to remove the element from.
+     * @param destination The key of the set to add the element to.
+     * @param member The set element to move.
+     * @return <code>true</code> on success, or <code>false</code> if the <code>source</code> set does
+     *     not exist or the element is not a member of the source set.
+     * @example
+     *     <pre>{@code
+     * Boolean moved = client.smove(gs("set1"), gs("set2"), gs("element")).get();
+     * assert moved;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> smove(GlideString source, GlideString destination, GlideString member);
 
     /**
      * Returns if <code>member</code> is a member of the set stored at <code>key</code>.

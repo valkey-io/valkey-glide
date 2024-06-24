@@ -933,6 +933,16 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> ltrim(@NonNull GlideString key, long start, long end) {
+        return commandManager.submitNewCommand(
+                LTrim,
+                new GlideString[] {
+                    key, gs(Long.toString(start).getBytes()), gs(Long.toString(end).getBytes())
+                },
+                this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> llen(@NonNull String key) {
         return commandManager.submitNewCommand(LLen, new String[] {key}, this::handleLongResponse);
     }
@@ -975,6 +985,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> sadd(@NonNull GlideString key, @NonNull GlideString[] members) {
+        GlideString[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(SAdd, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> sismember(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 SIsMember, new String[] {key, member}, this::handleBooleanResponse);
@@ -983,6 +999,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> srem(@NonNull String key, @NonNull String[] members) {
         String[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(SRem, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> srem(@NonNull GlideString key, @NonNull GlideString[] members) {
+        GlideString[] arguments = ArrayUtils.addFirst(members, key);
         return commandManager.submitNewCommand(SRem, arguments, this::handleLongResponse);
     }
 
@@ -1025,6 +1047,13 @@ public abstract class BaseClient
             @NonNull String source, @NonNull String destination, @NonNull String member) {
         return commandManager.submitNewCommand(
                 SMove, new String[] {source, destination, member}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> smove(
+            @NonNull GlideString source, @NonNull GlideString destination, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                SMove, new GlideString[] {source, destination, member}, this::handleBooleanResponse);
     }
 
     @Override

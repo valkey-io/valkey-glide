@@ -257,6 +257,32 @@ public interface ListBaseCommands {
     CompletableFuture<String> ltrim(String key, long start, long end);
 
     /**
+     * Trims an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on.<br>
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Always <code>OK</code>.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
+     *     element of the list.<br>
+     *     If <code>key</code> does not exist, OK will be returned without changes to the database.
+     * @example
+     *     <pre>{@code
+     * String payload = client.ltrim(gs("my_list"), 0, 1).get();
+     * assert payload.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> ltrim(GlideString key, long start, long end);
+
+    /**
      * Returns the length of the list stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/llen/">redis.io</a> for details.
