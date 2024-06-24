@@ -378,6 +378,26 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Double> zscore(String key, String member);
 
     /**
+     * Returns the score of <code>member</code> in the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose score is to be retrieved.
+     * @return The score of the member.<br>
+     *     If <code>member</code> does not exist in the sorted set, <code>null</code> is returned.<br>
+     *     If <code>key</code> does not exist, <code>null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Double num1 = client.zscore(gs("mySortedSet"), gs("member")).get();
+     * assert num1 == 10.5; // Indicates that the score of "member" in the sorted set "mySortedSet" is 10.5.
+     *
+     * Double num2 = client.zscore(gs("mySortedSet"), gs("nonExistingMember")).get();
+     * assert num2 == null;
+     * }</pre>
+     */
+    CompletableFuture<Double> zscore(GlideString key, GlideString member);
+
+    /**
      * Returns the specified range of elements in the sorted set stored at <code>key</code>.<br>
      * <code>ZRANGE</code> can perform different types of range queries: by index (rank), by the
      * score, or by lexicographical order.<br>

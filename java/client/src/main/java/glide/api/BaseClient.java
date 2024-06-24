@@ -1178,6 +1178,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Double> zscore(@NonNull GlideString key, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                ZScore, new GlideString[] {key, member}, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zrank(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 ZRank, new String[] {key, member}, this::handleLongOrNullResponse);
