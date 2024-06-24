@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamGroupOptions;
@@ -512,4 +513,23 @@ public interface StreamBaseCommands {
      * </pre>
      */
     CompletableFuture<Long> xack(String key, String group, String[] ids);
+
+    /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
+     * This command should be called on a pending message so that such message does not get processed again.
+     *
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param ids Stream entry ID to acknowledge and purge messages.
+     * @return The number of messages that were successfully acknowledged.
+     * @example
+     *     <pre>{@code
+     * GlideString entryId = client.xadd(gs("mystream"), Map.of(gs("myfield"), gs("mydata")).get();
+     * // read messages from streamId
+     * var readResult = client.xreadgroup(Map.of(gs("mystream"), entryId), gs("mygroup"), gs("my0consumer")).get();
+     * // acknowledge messages on stream
+     * assert 1L == client.xack(gs("mystream"), gs("mygroup"), new GlideString[] {entryId}).get();
+     * </pre>
+     */
+    CompletableFuture<Long> xack(GlideString key, GlideString group, GlideString[] ids);
 }

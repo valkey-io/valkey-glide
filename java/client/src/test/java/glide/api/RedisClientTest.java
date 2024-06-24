@@ -4710,6 +4710,32 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xack_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString[] ids = new GlideString[] {gs("testId")};
+        GlideString[] arguments = concatenateArrays(new GlideString[] {key, groupName}, ids);
+        Long mockResult = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(XAck), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xack(key, groupName, ids);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void type_returns_success() {
         // setup
         String key = "testKey";
@@ -5493,6 +5519,32 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void geodist_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member1 = gs("Catania");
+        GlideString member2 = gs("Palermo");
+        GlideString[] arguments = new GlideString[] {key, member1, member2};
+        Double value = 166274.1516;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(GeoDist), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.geodist(key, member1, member2);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void geodist_with_metrics_returns_success() {
         // setup
         String key = "testKey";
@@ -5500,6 +5552,34 @@ public class RedisClientTest {
         String member2 = "Palermo";
         GeoUnit geoUnit = GeoUnit.KILOMETERS;
         String[] arguments = new String[] {key, member1, member2, GeoUnit.KILOMETERS.getRedisApi()};
+        Double value = 166.2742;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(GeoDist), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.geodist(key, member1, member2, geoUnit);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geodist_with_metrics_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member1 = gs("Catania");
+        GlideString member2 = gs("Palermo");
+        GeoUnit geoUnit = GeoUnit.KILOMETERS;
+        GlideString[] arguments =
+                new GlideString[] {key, member1, member2, gs(GeoUnit.KILOMETERS.getRedisApi().getBytes())};
         Double value = 166.2742;
 
         CompletableFuture<Double> testResponse = new CompletableFuture<>();
@@ -5907,6 +5987,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void setbit_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long value = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(SetBit), eq(new GlideString[] {key, gs("8"), gs("1")}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.setbit(key, 8, 1);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void blmpop_returns_success() {
         // setup
         String key = "testKey";
@@ -5985,6 +6088,29 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(GetBit), eq(new String[] {key, "8"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.getbit(key, 8);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bit, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void getbit_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long bit = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bit);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(GetBit), eq(new GlideString[] {key, gs("8")}), any()))
                 .thenReturn(testResponse);
 
         // exercise

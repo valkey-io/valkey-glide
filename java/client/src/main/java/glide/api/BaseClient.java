@@ -1560,6 +1560,13 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> xack(
+            @NonNull GlideString key, @NonNull GlideString group, @NonNull GlideString[] ids) {
+        GlideString[] args = concatenateArrays(new GlideString[] {key, group}, ids);
+        return commandManager.submitNewCommand(XAck, args, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
@@ -1743,8 +1750,26 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Double> geodist(
+            @NonNull GlideString key,
+            @NonNull GlideString member1,
+            @NonNull GlideString member2,
+            @NonNull GeoUnit geoUnit) {
+        GlideString[] arguments =
+                new GlideString[] {key, member1, member2, gs(geoUnit.getRedisApi().getBytes())};
+        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> geodist(
             @NonNull String key, @NonNull String member1, @NonNull String member2) {
         String[] arguments = new String[] {key, member1, member2};
+        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> geodist(
+            @NonNull GlideString key, @NonNull GlideString member1, @NonNull GlideString member2) {
+        GlideString[] arguments = new GlideString[] {key, member1, member2};
         return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
     }
 
@@ -1783,8 +1808,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> setbit(@NonNull GlideString key, long offset, long value) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    key, gs(Long.toString(offset).getBytes()), gs(Long.toString(value).getBytes())
+                };
+        return commandManager.submitNewCommand(SetBit, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> getbit(@NonNull String key, long offset) {
         String[] arguments = new String[] {key, Long.toString(offset)};
+        return commandManager.submitNewCommand(GetBit, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> getbit(@NonNull GlideString key, long offset) {
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(offset).getBytes())};
         return commandManager.submitNewCommand(GetBit, arguments, this::handleLongResponse);
     }
 
