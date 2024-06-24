@@ -3595,6 +3595,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zunion_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        KeyArrayBinary keyArray = new KeyArrayBinary(keys);
+        GlideString[] arguments = keyArray.toArgs();
+        GlideString[] value = new GlideString[] {gs("elem1"), gs("elem2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(ZUnion), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.zunion(keyArray);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zunionstore_returns_success() {
         // setup
         String destination = "destinationKey";

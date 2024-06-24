@@ -198,6 +198,7 @@ import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary;
 import glide.api.models.commands.ZAddOptions;
@@ -1349,6 +1350,12 @@ public abstract class BaseClient
     public CompletableFuture<String[]> zunion(@NonNull KeyArray keys) {
         return commandManager.submitNewCommand(
                 ZUnion, keys.toArgs(), response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> zunion(@NonNull KeyArrayBinary keys) {
+        return commandManager.submitNewCommand(
+                ZUnion, keys.toArgs(), response -> castArray(handleArrayResponse(response), GlideString.class));
     }
 
     @Override

@@ -1165,6 +1165,28 @@ public interface SortedSetBaseCommands {
     CompletableFuture<String[]> zunion(KeyArray keys);
 
     /**
+     * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>
+     * To get the elements with their scores, see {@link #zunionWithScores}.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keys</code> must map to the same hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zunion/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets.
+     * @return The resulting sorted set from the union.
+     * @example
+     *     <pre>{@code
+     * KeyArrayBinary keyArray = new KeyArray(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")});
+     * GlideString[] payload = client.zunion(keyArray).get()
+     * assert payload.equals(new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
+     *
+     * WeightedKeys weightedKeys = new WeightedKeys(List.of(Pair.of("mySortedSet1", 2.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * GlideString[] payload = client.zunion(weightedKeys).get()
+     * assert payload.equals(new GlideString[] {gs("elem1"), gs("elem2"), gs("elem3")});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> zunion(KeyArrayBinary keys);
+
+    /**
      * Returns the union of members and their scores from sorted sets specified by the given <code>
      * keysOrWeightedKeys</code>.
      *
