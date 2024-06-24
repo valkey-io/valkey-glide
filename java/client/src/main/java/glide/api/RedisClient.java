@@ -44,6 +44,7 @@ import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.commands.TransactionsCommands;
+import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
@@ -283,8 +284,18 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> fcall(@NonNull GlideString function) {
+        return fcall(function, new GlideString[0], new GlideString[0]);
+    }
+
+    @Override
     public CompletableFuture<Object> fcallReadOnly(@NonNull String function) {
         return fcallReadOnly(function, new String[0], new String[0]);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(@NonNull GlideString function) {
+        return fcallReadOnly(function, new GlideString[0], new GlideString[0]);
     }
 
     @Override

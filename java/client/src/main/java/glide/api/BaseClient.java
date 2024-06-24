@@ -1981,10 +1981,32 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object> fcall(
+            @NonNull GlideString function,
+            @NonNull GlideString[] keys,
+            @NonNull GlideString[] arguments) {
+        GlideString[] args =
+                concatenateArrays(
+                        new GlideString[] {function, gs(Long.toString(keys.length))}, keys, arguments);
+        return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Object> fcallReadOnly(
             @NonNull String function, @NonNull String[] keys, @NonNull String[] arguments) {
         String[] args =
                 concatenateArrays(new String[] {function, Long.toString(keys.length)}, keys, arguments);
+        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object> fcallReadOnly(
+            @NonNull GlideString function,
+            @NonNull GlideString[] keys,
+            @NonNull GlideString[] arguments) {
+        GlideString[] args =
+                concatenateArrays(
+                        new GlideString[] {function, gs(Long.toString(keys.length))}, keys, arguments);
         return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
     }
 

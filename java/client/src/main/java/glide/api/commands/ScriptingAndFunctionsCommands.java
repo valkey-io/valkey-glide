@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.configuration.ReadFrom;
 import java.util.Map;
@@ -147,6 +148,23 @@ public interface ScriptingAndFunctionsCommands {
     CompletableFuture<Object> fcall(String function);
 
     /**
+     * Invokes a previously loaded function.<br>
+     * This command is routed to primary nodes only.<br>
+     * To route to a replica please refer to {@link #fcallReadOnly}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * Object response = client.fcall(gs("Deep_Thought")).get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcall(GlideString function);
+
+    /**
      * Invokes a previously loaded read-only function.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
      *
@@ -161,6 +179,22 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<Object> fcallReadOnly(String function);
+
+    /**
+     * Invokes a previously loaded read-only function.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * Object response = client.fcallReadOnly(gs("Deep_Thought")).get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcallReadOnly(GlideString function);
 
     /**
      * Kills a function that is currently executing.<br>

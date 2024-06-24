@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
@@ -285,6 +286,23 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<Object> fcall(String function);
 
     /**
+     * Invokes a previously loaded function.<br>
+     * The command will be routed to a primary random node.<br>
+     * To route to a replica please refer to {@link #fcallReadOnly(String)}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * Object response = client.fcall(gs("Deep_Thought")).get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcall(GlideString function);
+
+    /**
      * Invokes a previously loaded function.
      *
      * @since Redis 7.0 and above.
@@ -302,6 +320,25 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<Object>> fcall(String function, Route route);
+
+    /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> response = client.fcall(gs("Deep_Thought"), ALL_NODES).get();
+     * for (Object nodeResponse : response.getMultiValue().values()) {
+     *   assert nodeResponse == 42L;
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> fcall(GlideString function, Route route);
 
     /**
      * Invokes a previously loaded function.<br>
@@ -324,6 +361,26 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<Object> fcall(String function, String[] arguments);
 
     /**
+     * Invokes a previously loaded function.<br>
+     * The command will be routed to a random primary node.<br>
+     * To route to a replica please refer to {@link #fcallReadOnly(String, String[])}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * GlideString[] args = new GlideString[] { gs("Answer"), gs("to"), gs("the"), gs("Ultimate"), gs("Question"), gs("of"), gs("Life,"), gs("the"), gs("Universe,"), gs("and"), gs("Everything")};
+     * Object response = client.fcall(gs("Deep_Thought"), args).get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcall(GlideString function, GlideString[] arguments);
+
+    /**
      * Invokes a previously loaded function.
      *
      * @since Redis 7.0 and above.
@@ -344,6 +401,27 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<ClusterValue<Object>> fcall(String function, String[] arguments, Route route);
 
     /**
+     * Invokes a previously loaded function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
+     * @example
+     *     <pre>{@code
+     * GlideString[] args = new GlideString[] { gs("Answer"), gs("to"), gs("the"), gs("Ultimate"), gs("Question"), gs("of"), gs("Life,"), gs("the"), gs("Universe,"), gs("and"), gs("Everything")};
+     * ClusterValue<Object> response = client.fcall(gs("Deep_Thought"), args, RANDOM).get();
+     * assert response.getSingleValue() == 42L;
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> fcall(
+            GlideString function, GlideString[] arguments, Route route);
+
+    /**
      * Invokes a previously loaded read-only function.<br>
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
@@ -358,6 +436,22 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<Object> fcallReadOnly(String function);
+
+    /**
+     * Invokes a previously loaded read-only function.<br>
+     * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * Object response = client.fcallReadOnly(gs("Deep_Thought")).get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcallReadOnly(GlideString function);
 
     /**
      * Invokes a previously loaded read-only function.
@@ -379,6 +473,25 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<ClusterValue<Object>> fcallReadOnly(String function, Route route);
 
     /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> response = client.fcallReadOnly(gs("Deep_Thought"), ALL_NODES).get();
+     * for (Object nodeResponse : response.getMultiValue().values()) {
+     *   assert nodeResponse == 42L;
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> fcallReadOnly(GlideString function, Route route);
+
+    /**
      * Invokes a previously loaded function.<br>
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
@@ -396,6 +509,25 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<Object> fcallReadOnly(String function, String[] arguments);
+
+    /**
+     * Invokes a previously loaded function.<br>
+     * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * GlideString[] args = new GlideString[] { gs("Answer"), gs("to"), gs("the"), gs("Ultimate"), gs("Question"), gs("of"), gs("Life,"), gs("the"), gs("Universe,"), gs("and"), gs("Everything")};
+     * Object response = client.fcallReadOnly(gs("Deep_Thought"), args).get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcallReadOnly(GlideString function, GlideString[] arguments);
 
     /**
      * Invokes a previously loaded read-only function.
@@ -417,6 +549,27 @@ public interface ScriptingAndFunctionsClusterCommands {
      */
     CompletableFuture<ClusterValue<Object>> fcallReadOnly(
             String function, String[] arguments, Route route);
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
+     * @example
+     *     <pre>{@code
+     * GlideString[] args = new GlideString[] { gs("Answer"), gs("to"), gs("the"), gs("Ultimate"), gs("Question"), gs("of"), gs("Life,"), gs("the"), gs("Universe,"), gs("and"), gs("Everything")};
+     * ClusterValue<Object> response = client.fcallReadOnly(gs("Deep_Thought"), args, RANDOM).get();
+     * assert response.getSingleValue() == 42L;
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> fcallReadOnly(
+            GlideString function, GlideString[] arguments, Route route);
 
     /**
      * Kills a function that is currently executing.<br>
