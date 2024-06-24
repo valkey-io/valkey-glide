@@ -50,8 +50,6 @@ sudo yum update -y
 sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-devel unzip
 # Install rust
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-# Check that the protobuf compiler version 26.1 or higher is installed
-protoc --version
 ```
 **Dependencies installation for MacOS**
 
@@ -64,8 +62,6 @@ source "$HOME/.cargo/env"
 protoc --version
 # Install protobuf compiler
 brew install protobuf
-# Check that the protobuf compiler version 26.1 or higher is installed
-protoc --version
 ```
 
 #### Building and installation steps
@@ -100,6 +96,33 @@ Before starting this step, make sure you've installed all software dependencies.
 
     ```bash
     ./gradlew :client:buildAllRelease
+    ```
+4. Install the rust linter
+    Rust
+    ```bash
+    # Run from the `java` folder
+    # will only need to run during the installation process
+    rustup component add clippy rustfmt
+    cargo clippy --all-features --all-targets -- -D warnings
+    cargo fmt --manifest-path ./Cargo.toml --all
+    ```
+
+### Linters
+
+Development on the Java wrapper may involve changes in either the Java or Rust code. Each language has distinct linter tests that must be passed before committing changes.
+
+#### Language-specific Linters
+
+**Java:**
+
+-   Spotless
+
+#### Running the linters
+
+    Spotless
+    ```bash
+    # Run from the `java` folder
+    ./gradlew :spotlessApply
     ```
 
 ### Troubleshooting
@@ -160,43 +183,17 @@ After pulling new changes, ensure that you update the submodules by running the 
 git submodule update
 ```
 
-### Linters
-
-Development on the Java wrapper may involve changes in either the Java or Rust code. Each language has distinct linter tests that must be passed before committing changes.
-
-#### Language-specific Linters
-
-**Java:**
-
--   Spotless
-
-#### Running the linters
-
-1. Spotless
-    ```bash
-    # Run from the `java` folder
-    ./gradlew :spotlessApply
-    ```
-2. Rust
-    ```bash
-    # Run from the `java` folder
-    rustup component add clippy rustfmt
-    cargo clippy --all-features --all-targets -- -D warnings
-    cargo fmt --manifest-path ./Cargo.toml --all
-    ```
-
 ### Implementing a command
 
+A redis command can either have a standalone or cluster implementation which is dependent on their specifications.
 - A node is an instance of a Redis server, and a redis cluster is composed of multiple nodes working in tandem.
-- The redis commands can either have a standalone or cluster implementation dependent on their specifications.
 - A cluster command will require a note to indicate a node will follow a specific routing.
 Refer to https://redis.io/docs/latest/operate/oss_and_stack/reference/cluster-spec for more details on how hash slots work for cluster commands.
 
 When you start implementing a new command, check the [redis_request](glide-core/src/protobuf/redis_request.proto) and [request_type](glide-core/src/request_type.rs) files to see whether the command has already been implemented in another language such as Python or Node.js.
 
-Standalone and cluster clients both extend `BaseClient.java` and implement methods from the interfaces listed in `java/client/src/main/java/glide/api/commands`.
+Standalone and cluster clients both extend [BaseClient](java/client/src/main/java/glide/api/commands) and implement methods from the interfaces listed in `java/client/src/main/java/glide/api/commands`.
 The return types of these methods are in the form of a `CompletableFuture`, which fulfill the purpose of the asynchronous features of the program.
-[BaseClient](java/client/src/main/java/glide/api/commands) - BaseClient.java
 
 When implementing a command, it requires both a unit test and an integration test. The objective of the UT is to mock the expected result.
 
@@ -226,6 +223,10 @@ In the command interface it should contain
 - A link to Redis command.
 - Information about the function parameters.
 - The command's return type. In the [BaseTransaction](java/client/src/main/java/glide/api/models/BaseTransaction.java) file, include "Command Response" before specifying the return type.
+
+### Previous PR's
+
+Refer to [closed-PRs](https://github.com/aws/glide-for-redis/pulls?q=is%3Apr+is%3Aclosed+label%3Ajava) to see commands that have been previously merged.
 
 ### FFI naming and signatures, and features
 
