@@ -48,6 +48,7 @@ import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RestoreOptions;
+import glide.api.models.commands.ScanOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortOrder;
