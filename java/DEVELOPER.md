@@ -21,7 +21,7 @@ Software Dependencies
 -   rustup
 -   Java 11
 
-**Install protobuf compiler (necessary for all systems except for MacOS)**
+**Install protobuf compiler**
 
 To install protobuf for MacOS, run:
 ```bash
@@ -120,14 +120,13 @@ Development on the Java wrapper may involve changes in either the Java or Rust c
 
 **Java:**
 
--   Spotless
-
 #### Running the linters
 
     Spotless
     ```bash
     # Run from the `java` folder
-    ./gradlew :spotlessApply
+    ./gradlew :spotlessCheck # run first to see if there are any linting changes to make
+    ./gradlew :spotlessApply # to apply these changes
     ```
 
 ### Troubleshooting
