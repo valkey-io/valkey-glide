@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.ReadFrom;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -128,6 +129,53 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<String> functionDelete(String libName);
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-dump/">redis.io</a> for details.
+     * @return The serialized payload of all loaded libraries.
+     * @example
+     *     <pre>{@code
+     * byte[] data = client.functionDump().get();
+     * // now data could be saved to restore loaded functions on any Redis instance
+     * }</pre>
+     */
+    CompletableFuture<byte[]> functionDump();
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
+     *     details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionRestore(data).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionRestore(byte[] payload);
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}..
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
+     *     details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @param policy A policy for handling existing libraries.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionRestore(data, FLUSH).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy);
 
     /**
      * Invokes a previously loaded function.<br>
