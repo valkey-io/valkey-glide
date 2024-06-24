@@ -35,6 +35,26 @@ class StandaloneCommands(CoreCommands):
         """
         return await self._execute_command(RequestType.CustomCommand, command_args)
 
+    async def fcall(self, function: str) -> Optional[TResult]:
+        """
+        Invokes a previously loaded function.
+        See https://redis.io/commands/fcall/ for more details.
+
+        Args:
+            function (str): The function name.
+
+        Returns:
+            Optional[TResult]:
+                The invoked function's return value.
+
+        Example:
+            >>> await client.fcall("Deep_Thought")
+                'new_value' # Returns the function's return value.
+
+        Since: Redis version 7.0.0.
+        """
+        return await self.fcall(function, [], [])
+
     async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
