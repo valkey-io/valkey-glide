@@ -644,9 +644,25 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> incrBy(@NonNull GlideString key, long amount) {
+        return commandManager.submitNewCommand(
+                IncrBy,
+                new GlideString[] {key, gs(Long.toString(amount).getBytes())},
+                this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Double> incrByFloat(@NonNull String key, double amount) {
         return commandManager.submitNewCommand(
                 IncrByFloat, new String[] {key, Double.toString(amount)}, this::handleDoubleResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> incrByFloat(@NonNull GlideString key, double amount) {
+        return commandManager.submitNewCommand(
+                IncrByFloat,
+                new GlideString[] {key, gs(Double.toString(amount).getBytes())},
+                this::handleDoubleResponse);
     }
 
     @Override
@@ -747,11 +763,29 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> hincrBy(
+            @NonNull GlideString key, @NonNull GlideString field, long amount) {
+        return commandManager.submitNewCommand(
+                HIncrBy,
+                new GlideString[] {key, field, gs(Long.toString(amount).getBytes())},
+                this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Double> hincrByFloat(
             @NonNull String key, @NonNull String field, double amount) {
         return commandManager.submitNewCommand(
                 HIncrByFloat,
                 new String[] {key, field, Double.toString(amount)},
+                this::handleDoubleResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> hincrByFloat(
+            @NonNull GlideString key, @NonNull GlideString field, double amount) {
+        return commandManager.submitNewCommand(
+                HIncrByFloat,
+                new GlideString[] {key, field, gs(Double.toString(amount).getBytes())},
                 this::handleDoubleResponse);
     }
 
