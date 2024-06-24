@@ -302,6 +302,22 @@ public interface StringBaseCommands {
     CompletableFuture<Long> incrBy(String key, long amount);
 
     /**
+     * Increments the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * does not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return The value of <code>key</code> after the increment.
+     * @example
+     *     <pre>{@code
+     * Long num = client.incrBy(gs("key"), 2).get();
+     * assert num == 7L;
+     * }</pre>
+     */
+    CompletableFuture<Long> incrBy(GlideString key, long amount);
+
+    /**
      * Increments the string representing a floating point number stored at <code>key</code> by <code>
      * amount</code>. By using a negative increment value, the result is that the value stored at
      * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
@@ -318,6 +334,24 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> incrByFloat(String key, double amount);
+
+    /**
+     * Increments the string representing a floating point number stored at <code>key</code> by <code>
+     * amount</code>. By using a negative increment value, the result is that the value stored at
+     * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
+     * performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return The value of <code>key</code> after the increment.
+     * @example
+     *     <pre>{@code
+     * Double num = client.incrByFloat(gs("key"), 0.5).get();
+     * assert num == 7.5;
+     * }</pre>
+     */
+    CompletableFuture<Double> incrByFloat(GlideString key, double amount);
 
     /**
      * Decrements the number stored at <code>key</code> by one. If <code>key</code> does not exist, it

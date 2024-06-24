@@ -1229,6 +1229,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void incrBy_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long amount = 1L;
+        Long value = 10L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(IncrBy), eq(new GlideString[] {key, gs(Long.toString(amount).getBytes())}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.incrBy(key, amount);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void incrByFloat_returns_success() {
         // setup
         String key = "testKey";
@@ -1241,6 +1266,33 @@ public class RedisClientTest {
         // match on protobuf request
         when(commandManager.<Double>submitNewCommand(
                         eq(IncrByFloat), eq(new String[] {key, Double.toString(amount)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.incrByFloat(key, amount);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void incrByFloat_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        double amount = 1.1;
+        Double value = 10.1;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(
+                        eq(IncrByFloat),
+                        eq(new GlideString[] {key, gs(Double.toString(amount).getBytes())}),
+                        any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1622,6 +1674,34 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void hincrBy_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString field = gs("field");
+        long amount = 1L;
+        Long value = 10L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(HIncrBy),
+                        eq(new GlideString[] {key, field, gs(Long.toString(amount).getBytes())}),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hincrBy(key, field, amount);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void hincrByFloat_returns_success() {
         // setup
         String key = "testKey";
@@ -1635,6 +1715,34 @@ public class RedisClientTest {
         // match on protobuf request
         when(commandManager.<Double>submitNewCommand(
                         eq(HIncrByFloat), eq(new String[] {key, field, Double.toString(amount)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.hincrByFloat(key, field, amount);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hincrByFloat_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString field = gs("field");
+        double amount = 1.0;
+        Double value = 10.0;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(
+                        eq(HIncrByFloat),
+                        eq(new GlideString[] {key, field, gs(Double.toString(amount).getBytes())}),
+                        any()))
                 .thenReturn(testResponse);
 
         // exercise
