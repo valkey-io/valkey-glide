@@ -2,8 +2,8 @@
 package glide.api.models.commands;
 
 import glide.api.commands.GenericBaseCommands;
-import lombok.RequiredArgsConstructor;
 import glide.api.models.GlideString;
+import lombok.RequiredArgsConstructor;
 
 /**
  * Optional arguments for {@link GenericBaseCommands#expire(String, long, ExpireOptions)}, and
