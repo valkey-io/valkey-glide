@@ -47,6 +47,7 @@ from glide.async_commands.sorted_set import (
 )
 from glide.async_commands.stream import (
     StreamAddOptions,
+    StreamGroupOptions,
     StreamRangeBound,
     StreamReadOptions,
     StreamTrimOptions,
@@ -2800,6 +2801,65 @@ class CoreCommands(Protocol):
         return cast(
             Optional[Mapping[str, Mapping[str, List[List[str]]]]],
             await self._execute_command(RequestType.XRead, args),
+        )
+
+    async def xgroup_create(
+        self,
+        key: str,
+        group_name: str,
+        group_id: str,
+        options: Optional[StreamGroupOptions] = None,
+    ) -> TOK:
+        """
+        Creates a new consumer group uniquely identified by `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-create for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The newly created consumer group name.
+            group_id (str): The stream entry ID that specifies the last delivered entry in the stream from the new
+                group’s perspective. The special ID "$" can be used to specify the last entry in the stream.
+            options (Optional[StreamGroupOptions]): Options for creating the stream group.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.xgroup_create("mystream", "mygroup", "$", StreamGroupOptions(make_stream=True))
+                OK
+                # Created the consumer group "mygroup" for the stream "mystream", which will track entries created after
+                # the most recent entry. The stream was created with length 0 if it did not already exist.
+        """
+        args = [key, group_name, group_id]
+        if options is not None:
+            args.extend(options.to_args())
+
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.XGroupCreate, args),
+        )
+
+    async def xgroup_destroy(self, key: str, group_name: str) -> bool:
+        """
+        Destroys the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-destroy for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name to delete.
+
+        Returns:
+            bool: True if the consumer group was destroyed. Otherwise, returns False.
+
+        Examples:
+            >>> await client.xgroup_destroy("mystream", "mygroup")
+                True  # The consumer group "mygroup" for stream "mystream" was destroyed.
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.XGroupDestroy, [key, group_name]),
         )
 
     async def geoadd(
