@@ -811,6 +811,26 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Long> zdiffstore(String destination, String[] keys);
 
     /**
+     * Calculates the difference between the first sorted set and all the successive sorted sets at
+     * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
+     * overwriting it if it already exists. Non-existent keys are treated as empty sets.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
+     * @param destination The key for the resulting sorted set.
+     * @param keys The keys of the sorted sets to compare.
+     * @return The number of members in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * Long payload = client.zdiffstore(gs("mySortedSet"), new GlideString[] {gs("key1"), gs("key2")}).get();
+     * assert payload > 0; // At least one member differed in "key1" compared to "key2", and this difference was stored in "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Long> zdiffstore(GlideString destination, GlideString[] keys);
+
+    /**
      * Returns the number of members in the sorted set stored at <code>key</code> with scores between
      * <code>minScore</code> and <code>maxScore</code>.
      *
@@ -863,6 +883,33 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zremrangebyrank(String key, long start, long end);
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with rank between <code>start
+     * </code> and <code>end</code>. Both <code>start</code> and <code>end</code> are zero-based
+     * indexes with <code>0</code> being the element with the lowest score. These indexes can be
+     * negative numbers, where they indicate offsets starting at the element with the highest score.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return The number of elements removed.<br>
+     *     If <code>start</code> exceeds the end of the sorted set, or if <code>start</code> is
+     *     greater than <code>end</code>, <code>0</code> returned.<br>
+     *     If <code>end</code> exceeds the actual end of the sorted set, the range will stop at the
+     *     actual end of the sorted set.<br>
+     *     If <code>key</code> does not exist <code>0</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Long payload1 = client.zremrangebyrank(gs("mySortedSet"), 0, 4).get();
+     * assert payload1 == 5L; // Indicates that 5 elements, with ranks ranging from 0 to 4 (inclusive), have been removed from "mySortedSet".
+     *
+     * Long payload2 = client.zremrangebyrank(gs("mySortedSet"), 0, 4).get();
+     * assert payload2 == 0L; // Indicates that nothing was removed.
+     * }</pre>
+     */
+    CompletableFuture<Long> zremrangebyrank(GlideString key, long start, long end);
 
     /**
      * Removes all elements in the sorted set stored at <code>key</code> with a lexicographical order
@@ -1457,6 +1504,22 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets to intersect.
+     * @return The cardinality of the intersection of the given sorted sets.
+     * @example
+     *     <pre>{@code
+     * Long length = client.zintercard(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")}).get();
+     * assert length == 3L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zintercard(GlideString[] keys);
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
      * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
      * algorithm will exit early and yield <code>limit</code> as the cardinality.
      *
@@ -1475,4 +1538,25 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zintercard(String[] keys, long limit);
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
+     * algorithm will exit early and yield <code>limit</code> as the cardinality.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets to intersect.
+     * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
+     *     <code>0</code> the range will be unlimited.
+     * @return The cardinality of the intersection of the given sorted sets, or the <code>limit</code>
+     *     if reached.
+     * @example
+     *     <pre>{@code
+     * Long length = client.zintercard(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")}, 5).get();
+     * assert length == 3L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zintercard(GlideString[] keys, long limit);
 }
