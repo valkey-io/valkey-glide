@@ -487,6 +487,11 @@ public abstract class BaseClient
         return handleRedisResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
+    @SuppressWarnings("unchecked")
+    protected Set<GlideString> handleSetBinaryResponse(Response response) throws RedisException {
+        return handleRedisResponse(Set.class, EnumSet.noneOf(ResponseFlags.class), response);
+    }
+
     /** Process a <code>FUNCTION LIST</code> standalone response. */
     @SuppressWarnings("unchecked")
     protected Map<String, Object>[] handleFunctionListResponse(Object[] response) {
@@ -582,6 +587,12 @@ public abstract class BaseClient
     public CompletableFuture<Long> append(@NonNull String key, @NonNull String value) {
         return commandManager.submitNewCommand(
                 Append, new String[] {key, value}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> append(@NonNull GlideString key, @NonNull GlideString value) {
+        return commandManager.submitNewCommand(
+                Append, new GlideString[] {key, value}, this::handleLongResponse);
     }
 
     @Override
@@ -927,6 +938,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Set<String>> smembers(@NonNull String key) {
         return commandManager.submitNewCommand(SMembers, new String[] {key}, this::handleSetResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<GlideString>> smembers(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                SMembers, new GlideString[] {key}, this::handleSetBinaryResponse);
     }
 
     @Override
