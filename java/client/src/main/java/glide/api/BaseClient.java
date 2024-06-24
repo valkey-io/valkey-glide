@@ -1489,6 +1489,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> xdel(@NonNull GlideString key, @NonNull GlideString[] ids) {
+        GlideString[] arguments = ArrayUtils.addFirst(ids, key);
+        return commandManager.submitNewCommand(XDel, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Map<String, String[][]>> xrange(
             @NonNull String key, @NonNull StreamRange start, @NonNull StreamRange end) {
         String[] arguments = ArrayUtils.addFirst(StreamRange.toArgs(start, end), key);
@@ -1849,8 +1855,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> bitpos(@NonNull GlideString key, long bit) {
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(bit).getBytes())};
+        return commandManager.submitNewCommand(BitPos, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> bitpos(@NonNull String key, long bit, long start) {
         String[] arguments = new String[] {key, Long.toString(bit), Long.toString(start)};
+        return commandManager.submitNewCommand(BitPos, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> bitpos(@NonNull GlideString key, long bit, long start) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    key, gs(Long.toString(bit).getBytes()), gs(Long.toString(start).getBytes())
+                };
         return commandManager.submitNewCommand(BitPos, arguments, this::handleLongResponse);
     }
 
@@ -1858,6 +1879,18 @@ public abstract class BaseClient
     public CompletableFuture<Long> bitpos(@NonNull String key, long bit, long start, long end) {
         String[] arguments =
                 new String[] {key, Long.toString(bit), Long.toString(start), Long.toString(end)};
+        return commandManager.submitNewCommand(BitPos, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> bitpos(@NonNull GlideString key, long bit, long start, long end) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    key,
+                    gs(Long.toString(bit).getBytes()),
+                    gs(Long.toString(start).getBytes()),
+                    gs(Long.toString(end).getBytes())
+                };
         return commandManager.submitNewCommand(BitPos, arguments, this::handleLongResponse);
     }
 
@@ -1872,12 +1905,37 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> bitpos(
+            @NonNull GlideString key, long bit, long start, long end, @NonNull BitmapIndexType options) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    key,
+                    gs(Long.toString(bit).getBytes()),
+                    gs(Long.toString(start).getBytes()),
+                    gs(Long.toString(end).getBytes()),
+                    gs(options.toString().getBytes())
+                };
+        return commandManager.submitNewCommand(BitPos, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> bitop(
             @NonNull BitwiseOperation bitwiseOperation,
             @NonNull String destination,
             @NonNull String[] keys) {
         String[] arguments =
                 concatenateArrays(new String[] {bitwiseOperation.toString(), destination}, keys);
+        return commandManager.submitNewCommand(BitOp, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> bitop(
+            @NonNull BitwiseOperation bitwiseOperation,
+            @NonNull GlideString destination,
+            @NonNull GlideString[] keys) {
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {gs(bitwiseOperation.toString().getBytes()), destination}, keys);
         return commandManager.submitNewCommand(BitOp, arguments, this::handleLongResponse);
     }
 

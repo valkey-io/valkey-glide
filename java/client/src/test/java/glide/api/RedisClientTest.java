@@ -4332,6 +4332,31 @@ public class RedisClientTest {
 
     @Test
     @SneakyThrows
+    public void xdel_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] ids = {gs("one-1"), gs("two-2"), gs("three-3")};
+        Long completedResult = 69L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(XDel), eq(new GlideString[] {key, gs("one-1"), gs("two-2"), gs("three-3")}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xdel(key, ids);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @Test
+    @SneakyThrows
     public void xrange_returns_success() {
         // setup
         String key = "testKey";
@@ -6244,6 +6269,39 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void bitpos_with_start_and_end_and_type_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long bit = 0L;
+        Long start = 5L;
+        Long end = 10L;
+        Long bitPosition = 10L;
+        GlideString[] arguments =
+                new GlideString[] {
+                    key,
+                    gs(Long.toString(bit).getBytes()),
+                    gs(Long.toString(start).getBytes()),
+                    gs(Long.toString(end).getBytes()),
+                    gs(BitmapIndexType.BIT.toString().getBytes())
+                };
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(bitPosition);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(BitPos), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitpos(key, bit, start, end, BitmapIndexType.BIT);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(bitPosition, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bitop_returns_success() {
         // setup
         String destination = "destination";
@@ -6251,6 +6309,33 @@ public class RedisClientTest {
         Long result = 6L;
         BitwiseOperation bitwiseAnd = BitwiseOperation.AND;
         String[] arguments = concatenateArrays(new String[] {bitwiseAnd.toString(), destination}, keys);
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(BitOp), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.bitop(bitwiseAnd, destination, keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitop_bianry_returns_success() {
+        // setup
+        GlideString destination = gs("destination");
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        Long result = 6L;
+        BitwiseOperation bitwiseAnd = BitwiseOperation.AND;
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {gs(bitwiseAnd.toString().getBytes()), destination}, keys);
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(result);
 

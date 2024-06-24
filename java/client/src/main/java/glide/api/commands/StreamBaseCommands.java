@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamGroupOptions;
@@ -167,6 +168,23 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xdel(String key, String[] ids);
+
+    /**
+     * Removes the specified entries by id from a stream, and returns the number of entries deleted.
+     *
+     * @see <a href="https://valkey.io/commands/xdel/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param ids An array of entry ids.
+     * @return The number of entries removed from the stream. This number may be less than the number
+     *     of entries in <code>ids</code>, if the specified <code>ids</code> don't exist in the
+     *     stream.
+     * @example
+     *     <pre>{@code
+     * Long num = client.xdel("key", new GlideString[] {gs("1538561698944-0"), gs("1538561698944-1")}).get();
+     * assert num == 2L; // Stream marked 2 entries as deleted
+     * }</pre>
+     */
+    CompletableFuture<Long> xdel(GlideString key, GlideString[] ids);
 
     /**
      * Returns stream entries matching a given range of IDs.
