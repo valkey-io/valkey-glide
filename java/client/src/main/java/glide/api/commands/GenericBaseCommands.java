@@ -439,6 +439,24 @@ public interface GenericBaseCommands {
     CompletableFuture<String> objectEncoding(String key);
 
     /**
+     * Returns the internal encoding for the Redis object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-encoding/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the internal encoding of.
+     * @return If <code>key</code> exists, returns the internal encoding of the object stored at
+     *     <code>key</code> as a <code>String</code>. Otherwise, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * String encoding = client.objectEncoding(gs("my_hash")).get();
+     * assert encoding.equals("listpack");
+     *
+     * encoding = client.objectEncoding(gs("non_existing_key")).get();
+     * assert encoding == null;
+     * }</pre>
+     */
+    CompletableFuture<String> objectEncoding(GlideString key);
+
+    /**
      * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/object-freq/">redis.io</a> for details.
@@ -459,6 +477,26 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> objectFreq(String key);
 
     /**
+     * Returns the logarithmic access frequency counter of a Redis object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-freq/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the logarithmic access frequency counter
+     *     of.
+     * @return If <code>key</code> exists, returns the logarithmic access frequency counter of the
+     *     object stored at <code>key</code> as a <code>Long</code>. Otherwise, returns <code>null
+     *     </code>.
+     * @example
+     *     <pre>{@code
+     * Long frequency = client.objectFreq(gs("my_hash")).get();
+     * assert frequency == 2L;
+     *
+     * frequency = client.objectFreq(gs("non_existing_key")).get();
+     * assert frequency == null;
+     * }</pre>
+     */
+    CompletableFuture<Long> objectFreq(GlideString key);
+
+    /**
      * Returns the time in seconds since the last access to the value stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/object-idletime/">redis.io</a> for details.
@@ -477,6 +515,24 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> objectIdletime(String key);
 
     /**
+     * Returns the time in seconds since the last access to the value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-idletime/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the idle time of.
+     * @return If <code>key</code> exists, returns the idle time in seconds. Otherwise, returns <code>
+     *     null</code>.
+     * @example
+     *     <pre>{@code
+     * Long idletime = client.objectIdletime(gs("my_hash")).get();
+     * assert idletime == 2L;
+     *
+     * idletime = client.objectIdletime(gs("non_existing_key")).get();
+     * assert idletime == null;
+     * }</pre>
+     */
+    CompletableFuture<Long> objectIdletime(GlideString key);
+
+    /**
      * Returns the reference count of the object stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/object-refcount/">redis.io</a> for details.
@@ -493,6 +549,24 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> objectRefcount(String key);
+
+    /**
+     * Returns the reference count of the object stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/object-refcount/">redis.io</a> for details.
+     * @param key The <code>key</code> of the object to get the reference count of.
+     * @return If <code>key</code> exists, returns the reference count of the object stored at <code>
+     *     key</code> as a <code>Long</code>. Otherwise, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Long refcount = client.objectRefcount(gs("my_hash")).get();
+     * assert refcount == 2L;
+     *
+     * refcount = client.objectRefcount(gs("non_existing_key")).get();
+     * assert refcount == null;
+     * }</pre>
+     */
+    CompletableFuture<Long> objectRefcount(GlideString key);
 
     /**
      * Renames <code>key</code> to <code>newKey</code>.<br>

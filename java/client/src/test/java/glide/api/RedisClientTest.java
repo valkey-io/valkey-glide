@@ -5378,6 +5378,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void objectEncoding_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        String encoding = "testEncoding";
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(encoding);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(
+                        eq(ObjectEncoding), eq(new GlideString[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.objectEncoding(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(encoding, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void objectFreq_returns_success() {
         // setup
         String key = "testKey";
@@ -5387,6 +5410,28 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(ObjectFreq), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.objectFreq(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(frequency, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void objectFreq_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long frequency = 0L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(frequency);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ObjectFreq), eq(new GlideString[] {key}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -5422,6 +5467,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void objectIdletime_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long idletime = 0L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(idletime);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(ObjectIdleTime), eq(new GlideString[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.objectIdletime(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(idletime, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void objectRefcount_returns_success() {
         // setup
         String key = "testKey";
@@ -5431,6 +5499,29 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(ObjectRefCount), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.objectRefcount(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(refcount, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void objectRefcount_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long refcount = 0L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(refcount);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(ObjectRefCount), eq(new GlideString[] {key}), any()))
                 .thenReturn(testResponse);
 
         // exercise
