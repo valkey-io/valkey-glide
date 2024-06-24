@@ -701,6 +701,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> strlen(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                Strlen, new GlideString[] {key}, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> setrange(@NonNull String key, int offset, @NonNull String value) {
         String[] arguments = new String[] {key, Integer.toString(offset), value};
         return commandManager.submitNewCommand(SetRange, arguments, this::handleLongResponse);
@@ -823,6 +829,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> hstrlen(@NonNull GlideString key, @NonNull GlideString field) {
+        return commandManager.submitNewCommand(
+                HStrlen, new GlideString[] {key, field}, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<String> hrandfield(@NonNull String key) {
         return commandManager.submitNewCommand(
                 HRandField, new String[] {key}, this::handleStringOrNullResponse);
@@ -923,6 +935,11 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> llen(@NonNull String key) {
         return commandManager.submitNewCommand(LLen, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> llen(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(LLen, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1514,6 +1531,11 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> xlen(@NonNull String key) {
         return commandManager.submitNewCommand(XLen, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> xlen(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(XLen, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
