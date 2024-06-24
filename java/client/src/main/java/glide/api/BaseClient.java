@@ -327,12 +327,18 @@ public abstract class BaseClient
 
     /**
      * Extracts the value from a <code>GLIDE core</code> response message and either throws an
-     * exception or returns the value as an object of type <code>T</code>. If <code>isNullable</code>,
-     * than also returns <code>null</code>.
+     * exception or returns the value as an object of type <code>T</code>.
      *
      * @param response Redis protobuf message.
      * @param classType Parameter <code>T</code> class type.
-     * @param isNullable Accepts null values in the protobuf message.
+     * @param flags A set of parameters which describes how to handle the response. Could be empty or
+     *     any combination of
+     *     <ul>
+     *       <li>{@link ResponseFlags#ENCODING_UTF8} to return the data as a <code>String</code>; if
+     *           unset, a <code>byte[]</code> is returned.
+     *       <li>{@link ResponseFlags#IS_NULLABLE} to accept <code>null</code> values.
+     *     </ul>
+     *
      * @return Response as an object of type <code>T</code> or <code>null</code>.
      * @param <T> The return value type.
      * @throws RedisException On a type mismatch.
@@ -436,12 +442,14 @@ public abstract class BaseClient
     }
 
     /**
+     * Get a map and convert {@link Map} keys from <code>byte[]</code> to {@link String}.
+     *
      * @param response A Protobuf response
      * @return A map of <code>GlideString</code> to <code>V</code>.
      * @param <V> Value type.
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
-    protected <V> Map<GlideString, V> handleMapResponseBinary(Response response)
+    protected <V> Map<GlideString, V> handleBinaryStringMapResponse(Response response)
             throws RedisException {
         return handleRedisResponse(Map.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
@@ -737,7 +745,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, GlideString>> hgetall(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                HGetAll, new GlideString[] {key}, this::handleMapResponseBinary);
+                HGetAll, new GlideString[] {key}, this::handleBinaryStringMapResponse);
     }
 
     @Override
