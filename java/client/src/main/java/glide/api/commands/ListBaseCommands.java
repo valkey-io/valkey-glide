@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -270,6 +271,22 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> llen(String key);
+
+    /**
+     * Returns the length of the list stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/llen/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return The length of the list at <code>key</code>.<br>
+     *     If <code>key</code> does not exist, it is interpreted as an empty list and <code>0</code>
+     *     is returned.
+     * @example
+     *     <pre>{@code
+     * Long lenList = client.llen(gs("my_list")).get();
+     * assert lenList == 3L //Indicates that there are 3 elements in the list.;
+     * }</pre>
+     */
+    CompletableFuture<Long> llen(GlideString key);
 
     /**
      * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
