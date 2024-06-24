@@ -46,16 +46,12 @@ class ClusterCommands(CoreCommands):
         """
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.
-
-        Note:
-            When in cluster mode, all `keys` must map to the same hash slot. and `newkey` must map to the same hash slot.
-            If no `keys` are given, command will be routed to a random node.
         
         Args:
             function (str): The function name.
             arguments (List[str]): A list of `function` arguments. `Arguments`
                 should not represent names of keys.
-            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed to a random primay node, unless `route` is provided, in which
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
