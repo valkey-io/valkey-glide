@@ -279,7 +279,8 @@ public interface GenericBaseCommands {
      * assert isSet;
      * }</pre>
      */
-    CompletableFuture<Boolean> expireAt(GlideString key, long unixSeconds, ExpireOptions expireOptions);
+    CompletableFuture<Boolean> expireAt(
+            GlideString key, long unixSeconds, ExpireOptions expireOptions);
 
     /**
      * Sets a timeout on <code>key</code> in milliseconds. After the timeout has expired, the <code>
@@ -375,7 +376,8 @@ public interface GenericBaseCommands {
      * assert isSet;
      * }</pre>
      */
-    CompletableFuture<Boolean> pexpire(GlideString key, long milliseconds, ExpireOptions expireOptions);
+    CompletableFuture<Boolean> pexpire(
+            GlideString key, long milliseconds, ExpireOptions expireOptions);
 
     /**
      * Sets a timeout on <code>key</code>. It takes an absolute Unix timestamp (milliseconds since
@@ -473,7 +475,7 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> pexpireAt(
-        GlideString key, long unixMilliseconds, ExpireOptions expireOptions);
+            GlideString key, long unixMilliseconds, ExpireOptions expireOptions);
 
     /**
      * Returns the remaining time to live of <code>key</code> that has a timeout, in seconds.

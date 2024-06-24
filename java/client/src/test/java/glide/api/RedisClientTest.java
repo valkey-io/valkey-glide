@@ -1068,7 +1068,8 @@ public class RedisClientTest {
         // setup
         GlideString key = gs("testKey");
         long unixMilliseconds = 999999L;
-        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(unixMilliseconds)), gs("GT")};
+        GlideString[] arguments =
+                new GlideString[] {key, gs(Long.toString(unixMilliseconds)), gs("GT")};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(Boolean.FALSE);

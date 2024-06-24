@@ -200,8 +200,6 @@ import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.ZAddOptions;
-import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
-import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
@@ -1009,7 +1007,8 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> expire(
             @NonNull GlideString key, long seconds, @NonNull ExpireOptions expireOptions) {
         GlideString[] arguments =
-                ArrayUtils.addAll(new GlideString[] {key, gs(Long.toString(seconds))}, expireOptions.toGlideStringArgs());
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(seconds))}, expireOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(Expire, arguments, this::handleBooleanResponse);
     }
 
@@ -1022,7 +1021,9 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Boolean> expireAt(@NonNull GlideString key, long unixSeconds) {
         return commandManager.submitNewCommand(
-                ExpireAt, new GlideString[] {key, gs(Long.toString(unixSeconds))}, this::handleBooleanResponse);
+                ExpireAt,
+                new GlideString[] {key, gs(Long.toString(unixSeconds))},
+                this::handleBooleanResponse);
     }
 
     @Override
@@ -1037,7 +1038,9 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> expireAt(
             @NonNull GlideString key, long unixSeconds, @NonNull ExpireOptions expireOptions) {
         GlideString[] arguments =
-                ArrayUtils.addAll(new GlideString[] {key, gs(Long.toString(unixSeconds))}, expireOptions.toGlideStringArgs());
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(unixSeconds))},
+                        expireOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(ExpireAt, arguments, this::handleBooleanResponse);
     }
 
@@ -1050,7 +1053,9 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Boolean> pexpire(@NonNull GlideString key, long milliseconds) {
         return commandManager.submitNewCommand(
-                PExpire, new GlideString[] {key, gs(Long.toString(milliseconds))}, this::handleBooleanResponse);
+                PExpire,
+                new GlideString[] {key, gs(Long.toString(milliseconds))},
+                this::handleBooleanResponse);
     }
 
     @Override
@@ -1065,7 +1070,9 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> pexpire(
             @NonNull GlideString key, long milliseconds, @NonNull ExpireOptions expireOptions) {
         GlideString[] arguments =
-                ArrayUtils.addAll(new GlideString[] {key, gs(Long.toString(milliseconds))}, expireOptions.toGlideStringArgs());
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(milliseconds))},
+                        expireOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(PExpire, arguments, this::handleBooleanResponse);
     }
 
@@ -1099,7 +1106,8 @@ public abstract class BaseClient
             @NonNull GlideString key, long unixMilliseconds, @NonNull ExpireOptions expireOptions) {
         GlideString[] arguments =
                 ArrayUtils.addAll(
-                        new GlideString[] {key, gs(Long.toString(unixMilliseconds))}, expireOptions.toGlideStringArgs());
+                        new GlideString[] {key, gs(Long.toString(unixMilliseconds))},
+                        expireOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(PExpireAt, arguments, this::handleBooleanResponse);
     }
 

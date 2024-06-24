@@ -44,7 +44,7 @@ public enum ExpireOptions {
         return new String[] {this.redisApi};
     }
 
-        /**
+    /**
      * Converts SetOptions into a GlideString[] to add to a {@link Command} arguments.
      *
      * @return GlideString[]
@@ -52,5 +52,4 @@ public enum ExpireOptions {
     public GlideString[] toGlideStringArgs() {
         return new GlideString[] {GlideString.gs(redisApi)};
     }
-
 }
