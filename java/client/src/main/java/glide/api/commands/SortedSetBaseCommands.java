@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.RangeOptions.InfLexBound;
 import glide.api.models.commands.RangeOptions.InfScoreBound;
 import glide.api.models.commands.RangeOptions.LexBoundary;
@@ -199,6 +200,28 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Long> zrem(String key, String[] members);
 
     /**
+     * Removes the specified members from the sorted set stored at <code>key</code>.<br>
+     * Specified members that are not a member of this set are ignored.
+     *
+     * @see <a href="https://redis.io/commands/zrem/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members An array of members to remove from the sorted set.
+     * @return The number of members that were removed from the sorted set, not including non-existing
+     *     members.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and this command
+     *     returns <code>0</code>.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.zrem(gs("mySortedSet"), new GlideString[] {gs("member1"), gs("member2")}).get();
+     * assert num1 == 2L; // Indicates that two members have been removed from the sorted set "mySortedSet".
+     *
+     * Long num2 = client.zrem(gs("nonExistingSortedSet"), new GlideString[] {gs("member1"), gs("member2")}).get();
+     * assert num2 == 0L; // Indicates that no members were removed as the sorted set "nonExistingSortedSet" does not exist.
+     * }</pre>
+     */
+    CompletableFuture<Long> zrem(GlideString key, GlideString[] members);
+
+    /**
      * Returns the cardinality (number of elements) of the sorted set stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/zcard/">redis.io</a> for more details.
@@ -216,6 +239,25 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zcard(String key);
+
+    /**
+     * Returns the cardinality (number of elements) of the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zcard/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @return The number of elements in the sorted set.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty sorted set, and this command
+     *     return <code>0</code>.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.zcard(gs("mySortedSet")).get();
+     * assert num1 == 3L; // Indicates that there are 3 elements in the sorted set "mySortedSet".
+     *
+     * Long num2 = client.zcard((gs("nonExistingSortedSet")).get();
+     * assert num2 == 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zcard(GlideString key);
 
     /**
      * Removes and returns up to <code>count</code> members with the lowest scores from the sorted set
@@ -372,6 +414,26 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> zscore(String key, String member);
+
+    /**
+     * Returns the score of <code>member</code> in the sorted set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose score is to be retrieved.
+     * @return The score of the member.<br>
+     *     If <code>member</code> does not exist in the sorted set, <code>null</code> is returned.<br>
+     *     If <code>key</code> does not exist, <code>null</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Double num1 = client.zscore(gs("mySortedSet")), gs("member")).get();
+     * assert num1 == 10.5; // Indicates that the score of "member" in the sorted set "mySortedSet" is 10.5.
+     *
+     * Double num2 = client.zscore(gs("mySortedSet"), gs("nonExistingMember")).get();
+     * assert num2 == null;
+     * }</pre>
+     */
+    CompletableFuture<Double> zscore(GlideString key, GlideString member);
 
     /**
      * Returns the specified range of elements in the sorted set stored at <code>key</code>.<br>
@@ -580,6 +642,28 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zrank(String key, String member);
+
+    /**
+     * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code>, with
+     * scores ordered from low to high, starting from <code>0</code>.<br>
+     * To get the rank of <code>member</code> with its score, see {@link #zrankWithScore}.
+     *
+     * @see <a href="https://redis.io/commands/zrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member The member whose rank is to be retrieved.
+     * @return The rank of <code>member</code> in the sorted set.<br>
+     *     If <code>key</code> doesn't exist, or if <code>member</code> is not present in the set,
+     *     <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.zrank(gs("mySortedSet"), gs("member2")).get();
+     * assert num1 == 3L; // Indicates that "member2" has the second-lowest score in the sorted set "mySortedSet".
+     *
+     * Long num2 = client.zcard(gs("mySortedSet"), gs("nonExistingMember")).get();
+     * assert num2 == null; // Indicates that "nonExistingMember" is not present in the sorted set "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Long> zrank(GlideString key, GlideString member);
 
     /**
      * Returns the rank of <code>member</code> in the sorted set stored at <code>key</code> with its
@@ -1334,6 +1418,26 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> zincrby(String key, double increment, String member);
+
+    /**
+     * Increments the score of <code>member</code> in the sorted set stored at <code>key</code> by
+     * <code>increment</code>.<br>
+     * If <code>member</code> does not exist in the sorted set, it is added with <code>increment
+     * </code> as its score. If <code>key</code> does not exist, a new sorted set with the specified
+     * member as its sole member is created.
+     *
+     * @see <a href="https://redis.io/commands/zincrby/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param increment The score increment.
+     * @param member A member of the sorted set.
+     * @return The new score of <code>member</code>.
+     * @example
+     *     <pre>{@code
+     * Double score = client.zincrby(gs("mySortedSet"), -3.14, gs("value")).get();
+     * assert score > 0; // member "value" existed in the set before score was altered
+     * }</pre>
+     */
+    CompletableFuture<Double> zincrby(GlideString key, double increment, GlideString member);
 
     /**
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
