@@ -48,6 +48,18 @@ jobs:
                     CLASSIFIER: linux-x86_64
                   }
                   - {
+                    OS: ubuntu,
+                    RUNNER: ubuntu-latest,
+                    TARGET: aarch64-unknown-linux-gnu,
+                    CLASSIFIER: linux-aarch_64
+                  }
+                  - {
+                    OS: macos,
+                    RUNNER: macos-latest,
+                    TARGET: x86_64-apple-darwin,
+                    CLASSIFIER: osx-x86_64
+                  }
+                  - {
                     OS: macos,
                     RUNNER: macos-latest,
                     TARGET: aarch64-apple-darwin,
