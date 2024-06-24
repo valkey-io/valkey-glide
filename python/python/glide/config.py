@@ -7,6 +7,7 @@ from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from glide.async_commands.core import CoreCommands
+from glide.exceptions import WrongConfiguration
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ProtocolVersion as SentProtocolVersion
 from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
@@ -310,6 +311,8 @@ class RedisClientConfiguration(BaseClientConfiguration):
             request.database_id = self.database_id
 
         if self.pubsub_subscriptions:
+            if self.protocol == ProtocolVersion.RESP2:
+                raise WrongConfiguration("Subscriptions require RESP3 protocol.")
             for (
                 channel_type,
                 channels_patterns,
@@ -436,6 +439,8 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             request.periodic_checks_disabled.SetInParent()
 
         if self.pubsub_subscriptions:
+            if self.protocol == ProtocolVersion.RESP2:
+                raise WrongConfiguration("Subscriptions require RESP3 protocol.")
             for (
                 channel_type,
                 channels_patterns,
