@@ -694,11 +694,54 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void exists_binary_returns_long_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("testKey1"), gs("testKey2")};
+        Long numberExisting = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(numberExisting);
+        when(commandManager.<Long>submitNewCommand(eq(Exists), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.exists(keys);
+        Long result = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(numberExisting, result);
+    }
+
+    @SneakyThrows
+    @Test
     public void expire_returns_success() {
         // setup
         String key = "testKey";
         long seconds = 10L;
         String[] arguments = new String[] {key, Long.toString(seconds)};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(Expire), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.expire(key, seconds);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void expire_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long seconds = 10L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(seconds))};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(Boolean.TRUE);
@@ -740,11 +783,57 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void expire_with_expireOptions_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long seconds = 10L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(seconds)), gs("NX")};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.FALSE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(Expire), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.expire(key, seconds, ExpireOptions.HAS_NO_EXPIRY);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(false, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void expireAt_returns_success() {
         // setup
         String key = "testKey";
         long unixSeconds = 100000L;
         String[] arguments = new String[] {key, Long.toString(unixSeconds)};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(ExpireAt), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.expireAt(key, unixSeconds);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void expireAt_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long unixSeconds = 100000L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(unixSeconds))};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(Boolean.TRUE);
@@ -787,11 +876,58 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void expireAt_with_expireOptions_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long unixSeconds = 100000L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(unixSeconds)), gs("XX")};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.FALSE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(ExpireAt), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response =
+                service.expireAt(key, unixSeconds, ExpireOptions.HAS_EXISTING_EXPIRY);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(false, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void pexpire_returns_success() {
         // setup
         String key = "testKey";
         long milliseconds = 50000L;
         String[] arguments = new String[] {key, Long.toString(milliseconds)};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(PExpire), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.pexpire(key, milliseconds);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void pexpire_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long milliseconds = 50000L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(milliseconds))};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(Boolean.TRUE);
@@ -834,11 +970,58 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void pexpire_with_expireOptions_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long milliseconds = 50000L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(milliseconds)), gs("LT")};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.FALSE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(PExpire), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response =
+                service.pexpire(key, milliseconds, ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(false, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void pexpireAt_returns_success() {
         // setup
         String key = "testKey";
         long unixMilliseconds = 999999L;
         String[] arguments = new String[] {key, Long.toString(unixMilliseconds)};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(PExpireAt), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.pexpireAt(key, unixMilliseconds);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(true, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void pexpireAt_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long unixMilliseconds = 999999L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(unixMilliseconds))};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(Boolean.TRUE);
@@ -881,6 +1064,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void pexpireAt_with_expireOptions_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long unixMilliseconds = 999999L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(unixMilliseconds)), gs("GT")};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.FALSE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(PExpireAt), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response =
+                service.pexpireAt(key, unixMilliseconds, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(false, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void ttl_returns_success() {
         // setup
         String key = "testKey";
@@ -890,6 +1097,27 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(TTL), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.ttl(key);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(ttl, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void ttl_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long ttl = 999L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(ttl);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(TTL), eq(new GlideString[] {key}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -923,6 +1151,27 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void expiretime_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long value = 999L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ExpireTime), eq(new GlideString[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.expiretime(key);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void pexpiretime_returns_success() {
         // setup
         String key = "testKey";
@@ -932,6 +1181,27 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(PExpireTime), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.pexpiretime(key);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void pexpiretime_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long value = 999L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(PExpireTime), eq(new GlideString[] {key}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -1006,6 +1276,28 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Long>submitNewCommand(eq(PTTL), eq(new String[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.pttl(key);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(pttl, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void pttl_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long pttl = 999000L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(pttl);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(PTTL), eq(new GlideString[] {key}), any()))
                 .thenReturn(testResponse);
 
         // exercise

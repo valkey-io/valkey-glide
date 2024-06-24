@@ -3,6 +3,7 @@ package glide.api.models.commands;
 
 import glide.api.commands.GenericBaseCommands;
 import lombok.RequiredArgsConstructor;
+import glide.api.models.GlideString;
 
 /**
  * Optional arguments for {@link GenericBaseCommands#expire(String, long, ExpireOptions)}, and
@@ -42,4 +43,14 @@ public enum ExpireOptions {
     public String[] toArgs() {
         return new String[] {this.redisApi};
     }
+
+        /**
+     * Converts SetOptions into a GlideString[] to add to a {@link Command} arguments.
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toGlideStringArgs() {
+        return new GlideString[] {GlideString.gs(redisApi)};
+    }
+
 }
