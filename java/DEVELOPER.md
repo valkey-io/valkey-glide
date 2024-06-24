@@ -26,7 +26,10 @@ Software Dependencies
 To install protobuf for MacOS, run:
 ```bash
 brew install protobuf
+# Check that the protobuf compiler version 26.1 or higher is installed
+protoc --version
 ```
+
 For the remaining systems, do the following:
 ```bash
 PB_REL="https://github.com/protocolbuffers/protobuf/releases"
@@ -64,8 +67,6 @@ brew update
 brew install openjdk@11 git gcc pkgconfig protobuf openssl protobuf
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
-# Check that the protobuf compiler version 26.1 or higher is installed
-protoc --version
 ```
 
 #### Building and installation steps
@@ -205,7 +206,7 @@ When implementing a command, it requires both a unit test and an integration tes
 
 Implement unit tests in the following files:
 - [RedisClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClientTest.java) for standalone.
-- [RedisClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClientTest.java), and '[RedisClusterClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClusterClientTest.java) for cluster commands.
+- [RedisClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClientTest.java), and [RedisClusterClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClusterClientTest.java) for cluster commands.
 These files are found in the java/client/src/test/java/glide/api path.
 
 Implement integration tests in the following files:
@@ -216,7 +217,7 @@ Implement integration tests in the following files:
 
 For commands that have options, create a separate file for the optional values.
 
-[BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions list. [BaseClient](https://github.com/aws/glide-for-redis/tree/main/java/client/src/main/java/glide/api/commands) will submit the command to Transactions to execute.
+[BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions list. [BaseClient.java](https://github.com/aws/glide-for-redis/tree/main/java/client/src/main/java/glide/api/commands) will submit the command to `Transactions` to execute.
 Refer to https://redis.io/docs/latest/develop/interact/transactions/ for more details about how Transactions work in Redis.
 
 ### Javadocs
