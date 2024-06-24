@@ -864,6 +864,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> lpush(@NonNull GlideString key, @NonNull GlideString[] elements) {
+        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(LPush, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<String> lpop(@NonNull String key) {
         return commandManager.submitNewCommand(
                 LPop, new String[] {key}, this::handleStringOrNullResponse);
@@ -949,8 +955,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> lrem(
+            @NonNull GlideString key, long count, @NonNull GlideString element) {
+        return commandManager.submitNewCommand(
+                LRem,
+                new GlideString[] {key, gs(Long.toString(count).getBytes()), element},
+                this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> rpush(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(RPush, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> rpush(@NonNull GlideString key, @NonNull GlideString[] elements) {
+        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
         return commandManager.submitNewCommand(RPush, arguments, this::handleLongResponse);
     }
 
@@ -1333,6 +1354,15 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zdiffstore(
+            @NonNull GlideString destination, @NonNull GlideString[] keys) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {destination, gs(Long.toString(keys.length).getBytes())}, keys);
+        return commandManager.submitNewCommand(ZDiffStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zcount(
             @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         return commandManager.submitNewCommand(
@@ -1344,6 +1374,16 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 ZRemRangeByRank,
                 new String[] {key, Long.toString(start), Long.toString(end)},
+                this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zremrangebyrank(@NonNull GlideString key, long start, long end) {
+        return commandManager.submitNewCommand(
+                ZRemRangeByRank,
+                new GlideString[] {
+                    key, gs(Long.toString(start).getBytes()), gs(Long.toString(end).getBytes())
+                },
                 this::handleLongResponse);
     }
 
@@ -1518,12 +1558,29 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zintercard(@NonNull GlideString[] keys) {
+        GlideString[] arguments =
+                ArrayUtils.addFirst(keys, gs(Integer.toString(keys.length).getBytes()));
+        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zintercard(@NonNull String[] keys, long limit) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Integer.toString(keys.length)},
                         keys,
                         new String[] {LIMIT_REDIS_API, Long.toString(limit)});
+        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zintercard(@NonNull GlideString[] keys, long limit) {
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {gs(Integer.toString(keys.length).getBytes())},
+                        keys,
+                        new GlideString[] {gs(LIMIT_REDIS_API), gs(Long.toString(limit).getBytes())});
         return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
     }
 
@@ -1725,8 +1782,20 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> rpushx(@NonNull GlideString key, @NonNull GlideString[] elements) {
+        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(RPushX, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> lpushx(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(LPushX, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpushx(@NonNull GlideString key, @NonNull GlideString[] elements) {
+        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
         return commandManager.submitNewCommand(LPushX, arguments, this::handleLongResponse);
     }
 
