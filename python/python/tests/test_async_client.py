@@ -4905,7 +4905,6 @@ class TestCommands:
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:3-{get_random_string(10)}"
-        string_key = f"{{testKey}}:4-{get_random_string(10)}"
         stream_id1_1 = "1-1"
         stream_id1_2 = "1-2"
         stream_id1_3 = "1-3"
@@ -4993,19 +4992,43 @@ class TestCommands:
             },
         }
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xread_edge_cases_and_failures(
+        self, redis_client: TRedisClient, cluster_mode, protocol, request
+    ):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        string_key = f"{{testKey}}:2-{get_random_string(10)}"
+        stream_id0 = "0-0"
+        stream_id1 = "1-1"
+        stream_id2 = "1-2"
+
+        assert (
+            await redis_client.xadd(
+                key1, [("f1", "v1")], StreamAddOptions(id=stream_id1)
+            )
+            == stream_id1
+        )
+        assert (
+            await redis_client.xadd(
+                key1, [("f2", "v2")], StreamAddOptions(id=stream_id2)
+            )
+            == stream_id2
+        )
+
         test_client = await create_client(
             request=request, protocol=protocol, cluster_mode=cluster_mode, timeout=900
         )
         # ensure command doesn't time out even if timeout > request timeout
         assert (
             await test_client.xread(
-                {key1: stream_id2_3}, StreamReadOptions(block_ms=1000)
+                {key1: stream_id2}, StreamReadOptions(block_ms=1000)
             )
             is None
         )
 
         async def endless_xread_call():
-            await test_client.xread({key1: stream_id2_3}, StreamReadOptions(block_ms=0))
+            await test_client.xread({key1: stream_id2}, StreamReadOptions(block_ms=0))
 
         # when xread is called with a block timeout of 0, it should never timeout, but we wrap the test with a timeout
         # to avoid the test getting stuck forever.
@@ -5014,19 +5037,19 @@ class TestCommands:
 
         # if count is non-positive, it is ignored
         assert await redis_client.xread(
-            {key1: stream_id1_1}, StreamReadOptions(count=0)
+            {key1: stream_id0}, StreamReadOptions(count=0)
         ) == {
             key1: {
-                stream_id1_2: [["f1_2", "v1_2"]],
-                stream_id1_3: [["f1_3", "v1_3"]],
+                stream_id1: [["f1", "v1"]],
+                stream_id2: [["f2", "v2"]],
             },
         }
         assert await redis_client.xread(
-            {key1: stream_id1_1}, StreamReadOptions(count=-1)
+            {key1: stream_id0}, StreamReadOptions(count=-1)
         ) == {
             key1: {
-                stream_id1_2: [["f1_2", "v1_2"]],
-                stream_id1_3: [["f1_3", "v1_3"]],
+                stream_id1: [["f1", "v1"]],
+                stream_id2: [["f2", "v2"]],
             },
         }
 
@@ -5036,9 +5059,7 @@ class TestCommands:
 
         # invalid argument - block cannot be negative
         with pytest.raises(RequestError):
-            await redis_client.xread(
-                {key1: stream_id2_3}, StreamReadOptions(block_ms=-1)
-            )
+            await redis_client.xread({key1: stream_id1}, StreamReadOptions(block_ms=-1))
 
         # invalid argument - keys_and_ids must not be empty
         with pytest.raises(RequestError):
@@ -5047,9 +5068,9 @@ class TestCommands:
         # key exists, but it is not a stream
         assert await redis_client.set(string_key, "foo")
         with pytest.raises(RequestError):
-            await redis_client.xread({string_key: stream_id1_1, key1: stream_id1_1})
+            await redis_client.xread({string_key: stream_id1, key1: stream_id1})
         with pytest.raises(RequestError):
-            await redis_client.xread({key1: stream_id1_1, string_key: stream_id1_1})
+            await redis_client.xread({key1: stream_id1, string_key: stream_id1})
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
