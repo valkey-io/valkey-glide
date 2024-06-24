@@ -739,6 +739,13 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> hsetnx(
+            @NonNull GlideString key, @NonNull GlideString field, @NonNull GlideString value) {
+        return commandManager.submitNewCommand(
+                HSetNX, new GlideString[] {key, field, value}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> hdel(@NonNull String key, @NonNull String[] fields) {
         String[] args = ArrayUtils.addFirst(fields, key);
         return commandManager.submitNewCommand(HDel, args, this::handleLongResponse);
@@ -1051,6 +1058,11 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> unlink(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Unlink, keys, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> unlink(@NonNull GlideString[] keys) {
         return commandManager.submitNewCommand(Unlink, keys, this::handleLongResponse);
     }
 
@@ -1663,6 +1675,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> type(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                Type, new GlideString[] {key}, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> linsert(
             @NonNull String key,
             @NonNull InsertPosition position,
@@ -2192,6 +2210,11 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> watch(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> watch(@NonNull GlideString[] keys) {
         return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
     }
 
