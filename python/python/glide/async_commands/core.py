@@ -48,6 +48,7 @@ from glide.async_commands.sorted_set import (
 from glide.async_commands.stream import (
     StreamAddOptions,
     StreamRangeBound,
+    StreamReadOptions,
     StreamTrimOptions,
 )
 from glide.constants import TOK, TResult
@@ -2751,6 +2752,54 @@ class CoreCommands(Protocol):
         return cast(
             Optional[Mapping[str, List[List[str]]]],
             await self._execute_command(RequestType.XRevRange, args),
+        )
+
+    async def xread(
+        self,
+        keys_and_ids: Mapping[str, str],
+        options: Optional[StreamReadOptions] = None,
+    ) -> Optional[Mapping[str, Mapping[str, List[List[str]]]]]:
+        """
+        Reads entries from the given streams.
+
+        See https://valkey.io/commands/xread for more details.
+
+        Note:
+            When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of keys and entry IDs to read from. The mapping is composed of a
+                stream's key and the ID of the entry after which the stream will be read.
+            options (Optional[StreamReadOptions]): Options detailing how to read the stream.
+
+        Returns:
+            Optional[Mapping[str, Mapping[str, List[List[str]]]]]: A mapping of stream keys, to a mapping of stream IDs,
+                to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                None will be returned under the following conditions:
+                - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no entries after the given ID.
+                - The `BLOCK` option is specified and the timeout is hit.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
+            >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
+            >>> await client.xread({"mystream": "0-0"}, StreamReadOptions(block_ms=1000))
+                {
+                    "mystream": {
+                        "0-1": [["field1", "value1"]],
+                        "0-2": [["field2", "value2"], ["field2", "value3"]],
+                    }
+                }
+                # Indicates the stream entries for "my_stream" with IDs greater than "0-0". The operation blocks up to
+                # 1000ms if there is no stream data.
+        """
+        args = [] if options is None else options.to_args()
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return cast(
+            Optional[Mapping[str, Mapping[str, List[List[str]]]]],
+            await self._execute_command(RequestType.XRead, args),
         )
 
     async def geoadd(

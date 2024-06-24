@@ -61,6 +61,7 @@ from glide.async_commands.stream import (
     MaxId,
     MinId,
     StreamAddOptions,
+    StreamReadOptions,
     TrimByMaxLen,
     TrimByMinId,
 )
@@ -4898,6 +4899,160 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xread(
+        self, redis_client: TRedisClient, cluster_mode, protocol, request
+    ):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:3-{get_random_string(10)}"
+        string_key = f"{{testKey}}:4-{get_random_string(10)}"
+        stream_id1_1 = "1-1"
+        stream_id1_2 = "1-2"
+        stream_id1_3 = "1-3"
+        stream_id2_1 = "2-1"
+        stream_id2_2 = "2-2"
+        stream_id2_3 = "2-3"
+        non_existing_id = "99-99"
+
+        # setup first entries in streams key1 and key2
+        assert (
+            await redis_client.xadd(
+                key1, [("f1_1", "v1_1")], StreamAddOptions(id=stream_id1_1)
+            )
+            == stream_id1_1
+        )
+        assert (
+            await redis_client.xadd(
+                key2, [("f2_1", "v2_1")], StreamAddOptions(id=stream_id2_1)
+            )
+            == stream_id2_1
+        )
+
+        # setup second entries in streams key1 and key2
+        assert (
+            await redis_client.xadd(
+                key1, [("f1_2", "v1_2")], StreamAddOptions(id=stream_id1_2)
+            )
+            == stream_id1_2
+        )
+        assert (
+            await redis_client.xadd(
+                key2, [("f2_2", "v2_2")], StreamAddOptions(id=stream_id2_2)
+            )
+            == stream_id2_2
+        )
+
+        # setup third entries in streams key1 and key2
+        assert (
+            await redis_client.xadd(
+                key1, [("f1_3", "v1_3")], StreamAddOptions(id=stream_id1_3)
+            )
+            == stream_id1_3
+        )
+        assert (
+            await redis_client.xadd(
+                key2, [("f2_3", "v2_3")], StreamAddOptions(id=stream_id2_3)
+            )
+            == stream_id2_3
+        )
+
+        assert await redis_client.xread({key1: stream_id1_1, key2: stream_id2_1}) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+                stream_id1_3: [["f1_3", "v1_3"]],
+            },
+            key2: {
+                stream_id2_2: [["f2_2", "v2_2"]],
+                stream_id2_3: [["f2_3", "v2_3"]],
+            },
+        }
+
+        assert await redis_client.xread({non_existing_key: stream_id1_1}) is None
+        assert await redis_client.xread({key1: non_existing_id}) is None
+
+        # passing an empty read options argument has no effect
+        assert await redis_client.xread({key1: stream_id1_1}, StreamReadOptions()) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+                stream_id1_3: [["f1_3", "v1_3"]],
+            },
+        }
+
+        assert await redis_client.xread(
+            {key1: stream_id1_1}, StreamReadOptions(count=1)
+        ) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+            },
+        }
+        assert await redis_client.xread(
+            {key1: stream_id1_1}, StreamReadOptions(count=1, block_ms=1000)
+        ) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+            },
+        }
+
+        test_client = await create_client(
+            request=request, protocol=protocol, cluster_mode=cluster_mode, timeout=900
+        )
+        # ensure command doesn't time out even if timeout > request timeout
+        assert (
+            await test_client.xread(
+                {key1: stream_id2_3}, StreamReadOptions(block_ms=1000)
+            )
+            is None
+        )
+
+        async def endless_xread_call():
+            await test_client.xread({key1: stream_id2_3}, StreamReadOptions(block_ms=0))
+
+        # when xread is called with a block timeout of 0, it should never timeout, but we wrap the test with a timeout
+        # to avoid the test getting stuck forever.
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_xread_call(), timeout=3)
+
+        # if count is non-positive, it is ignored
+        assert await redis_client.xread(
+            {key1: stream_id1_1}, StreamReadOptions(count=0)
+        ) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+                stream_id1_3: [["f1_3", "v1_3"]],
+            },
+        }
+        assert await redis_client.xread(
+            {key1: stream_id1_1}, StreamReadOptions(count=-1)
+        ) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+                stream_id1_3: [["f1_3", "v1_3"]],
+            },
+        }
+
+        # invalid stream ID
+        with pytest.raises(RequestError):
+            await redis_client.xread({key1: "invalid_stream_id"})
+
+        # invalid argument - block cannot be negative
+        with pytest.raises(RequestError):
+            await redis_client.xread(
+                {key1: stream_id2_3}, StreamReadOptions(block_ms=-1)
+            )
+
+        # invalid argument - keys_and_ids must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.xread({})
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo")
+        with pytest.raises(RequestError):
+            await redis_client.xread({string_key: stream_id1_1, key1: stream_id1_1})
+        with pytest.raises(RequestError):
+            await redis_client.xread({key1: stream_id1_1, string_key: stream_id1_1})
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_pfadd(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.pfadd(key, []) == 1
@@ -5793,6 +5948,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.msetnx({"abc": "abc", "zxy": "zyx"}),
             redis_client.sunion(["def", "ghi"]),
             redis_client.bitop(BitwiseOperation.OR, "abc", ["zxy", "lkn"]),
+            redis_client.xread({"abc": "0-0", "zxy": "0-0"}),
         ]
 
         if not await check_if_server_version_lt(redis_client, "6.2.0"):

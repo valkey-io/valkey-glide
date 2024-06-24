@@ -45,6 +45,7 @@ from glide.async_commands.sorted_set import (
 from glide.async_commands.stream import (
     StreamAddOptions,
     StreamRangeBound,
+    StreamReadOptions,
     StreamTrimOptions,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -1924,6 +1925,35 @@ class BaseTransaction:
             args.extend(["COUNT", str(count)])
 
         return self.append_command(RequestType.XRevRange, args)
+
+    def xread(
+        self: TTransaction,
+        keys_and_ids: Mapping[str, str],
+        options: Optional[StreamReadOptions] = None,
+    ) -> TTransaction:
+        """
+        Reads entries from the given streams.
+
+        See https://valkey.io/commands/xread for more details.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of keys and entry IDs to read from. The mapping is composed of a
+                stream's key and the ID of the entry after which the stream will be read.
+            options (Optional[StreamReadOptions]): Options detailing how to read the stream.
+
+        Command response:
+            Optional[Mapping[str, Mapping[str, List[List[str]]]]]: A mapping of stream keys, to a mapping of stream IDs,
+                to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                None will be returned under the following conditions:
+                - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no entries after the given ID.
+                - The `BLOCK` option is specified and the timeout is hit.
+        """
+        args = [] if options is None else options.to_args()
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return self.append_command(RequestType.XRead, args)
 
     def geoadd(
         self: TTransaction,
