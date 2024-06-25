@@ -102,19 +102,19 @@ Before starting this step, make sure you've installed all software dependencies.
     ```bash
     ./gradlew :client:buildAllRelease
     ```
-4. Install the rust linter
-    Rust
-    ```bash
-    # Run from the `java` folder
-    # will only need to run once during the installation process
-    rustup component add clippy rustfmt
-    cargo clippy --all-features --all-targets -- -D warnings
-    cargo fmt --manifest-path ./Cargo.toml --all
-    ```
 
 ### Linters
 
 Development on the Java wrapper may involve changes in either the Java or Rust code. Each language has distinct linter tests that must be passed before committing changes.
+
+Firstly, install the Rust linter
+```bash
+# Run from the `java` folder
+# Will only need to run once during the installation process
+rustup component add clippy rustfmt
+cargo clippy --all-features --all-targets -- -D warnings
+cargo fmt --manifest-path ./Cargo.toml --all
+```
 
 #### Language-specific Linters
 
@@ -122,7 +122,9 @@ Development on the Java wrapper may involve changes in either the Java or Rust c
 
 #### Running the linters
 
+For Java, the only linter we use is Spotless.
     Spotless
+
     ```bash
     # Run from the `java` folder
     ./gradlew :spotlessCheck # run first to see if there are any linting changes to make
@@ -144,7 +146,7 @@ To run all tests, use the following command:
 ./gradlew test
 ```
 
-To run a unit test, use the following command:
+To run the unit tests, use the following command:
 
 ```bash
 ./gradlew :client:test
@@ -187,7 +189,7 @@ After pulling new changes, ensure that you update the submodules by running the 
 git submodule update
 ```
 
-### Implementing a command
+### Contributing new ValKey commands
 
 A redis command can either have a standalone or cluster implementation which is dependent on their specifications.
 - A node is an instance of a Redis server, and a redis cluster is composed of multiple nodes working in tandem.
@@ -199,30 +201,31 @@ When you start implementing a new command, check the [redis_request.proto](https
 Standalone and cluster clients both extend [BaseClient.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/BaseClient.java) and implement methods from the interfaces listed in `java/client/src/main/java/glide/api/commands`.
 The return types of these methods are in the form of a `CompletableFuture`, which fulfill the purpose of the asynchronous features of the program.
 
-When implementing a command, it requires both a unit test and an integration test. The objective of the UT is to mock the expected result.
-
 ### Tests
 
+When implementing a command, include both a unit test and an integration test.
+
 Implement unit tests in the following files:
-- [RedisClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClientTest.java) for standalone.
-- [RedisClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClientTest.java), and [RedisClusterClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClusterClientTest.java) for cluster commands.
+- [RedisClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClientTest.java) for standalone commands.
+- [RedisClusterClientTest.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/RedisClusterClientTest.java) for cluster commands.
 These files are found in the java/client/src/test/java/glide/api path.
 
 Implement integration tests in the following files:
-- [TransactionTests.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/models/TransactionTests.java) (standalone and cluster)
-- [TransactionTestsUtilities.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/TransactionTestUtilities.java) (standalone and cluster)
-- [SharedCommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/SharedCommandTests.java) (standalone)
-- [CommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/cluster/CommandTests.java) (cluster)
-
+- [TransactionTests.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/test/java/glide/api/models/TransactionTests.java) (standalone and cluster).
+- [TransactionTestsUtilities.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/TransactionTestUtilities.java) (standalone and cluster).
+- [SharedCommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/SharedCommandTests.java) (standalone and cluster).
+- [cluster/CommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/cluster/CommandTests.java) (cluster).
+- [standalone/CommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/standalone/CommandTests.java) (cluster).
 For commands that have options, create a separate file for the optional values.
 
-[BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions list. [BaseClient.java](https://github.com/aws/glide-for-redis/tree/main/java/client/src/main/java/glide/api/commands) will submit the command to `Transactions` to execute.
+[BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions API.
+Refer to [this](https://github.com/aws/glide-for-redis/tree/35f36ee61a777ee2dd3a15dc6078c5f3759aeaa7/java/client/src/main/java/glide/api/commands) link view the interface directory.
 Refer to https://redis.io/docs/latest/develop/interact/transactions/ for more details about how Transactions work in Redis.
 
 ### Javadocs
 
 [BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) and the methods within the command interfaces will both contain documentation on how the command operates.
-In the command interface it should contain
+In the command interface each command's javadoc should contain:
 - Detail on when the Redis started supporting the command (if it wasn't initially implemented in 6.0.0 or before).
 - A link to the Redis documentation.
 - Information about the function parameters.
@@ -234,7 +237,7 @@ Refer to [closed-PRs](https://github.com/aws/glide-for-redis/pulls?q=is%3Apr+is%
 
 ### FFI naming and signatures, and features
 
-Javac will create the name of the signature in rust convention which can be called on native code.
+Javac will create the name of the signature in Rust convention which can be called on native code.
 - In the command line write:
 ```bash
 javac -h . RedisValueResolver.java
