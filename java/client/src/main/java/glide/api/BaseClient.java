@@ -1754,8 +1754,7 @@ public abstract class BaseClient
             @NonNull GlideString member1,
             @NonNull GlideString member2,
             @NonNull GeoUnit geoUnit) {
-        GlideString[] arguments =
-                new GlideString[] {key, member1, member2, gs(geoUnit.getRedisApi().getBytes())};
+        GlideString[] arguments = new GlideString[] {key, member1, member2, gs(geoUnit.getRedisApi())};
         return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
     }
 
@@ -1810,9 +1809,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> setbit(@NonNull GlideString key, long offset, long value) {
         GlideString[] arguments =
-                new GlideString[] {
-                    key, gs(Long.toString(offset).getBytes()), gs(Long.toString(value).getBytes())
-                };
+                new GlideString[] {key, gs(Long.toString(offset)), gs(Long.toString(value))};
         return commandManager.submitNewCommand(SetBit, arguments, this::handleLongResponse);
     }
 
@@ -1824,7 +1821,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> getbit(@NonNull GlideString key, long offset) {
-        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(offset).getBytes())};
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(offset))};
         return commandManager.submitNewCommand(GetBit, arguments, this::handleLongResponse);
     }
 

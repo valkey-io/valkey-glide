@@ -5579,7 +5579,7 @@ public class RedisClientTest {
         GlideString member2 = gs("Palermo");
         GeoUnit geoUnit = GeoUnit.KILOMETERS;
         GlideString[] arguments =
-                new GlideString[] {key, member1, member2, gs(GeoUnit.KILOMETERS.getRedisApi().getBytes())};
+                new GlideString[] {key, member1, member2, gs(GeoUnit.KILOMETERS.getRedisApi())};
         Double value = 166.2742;
 
         CompletableFuture<Double> testResponse = new CompletableFuture<>();
