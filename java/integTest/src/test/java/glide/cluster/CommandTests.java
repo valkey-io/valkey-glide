@@ -1160,7 +1160,7 @@ public class CommandTests {
     public void fcall_binary_with_keys(String prefix) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
-        String key = "{" + prefix.toString() + "}-fcall_with_keys-";
+        String key = "{" + prefix + "}-fcall_with_keys-";
         SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
         String libName = "mylib_with_keys";
         GlideString funcName = gs("myfunc_with_keys");
