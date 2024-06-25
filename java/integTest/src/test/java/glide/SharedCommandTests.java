@@ -840,6 +840,21 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hexists_binary_existing_field_non_existing_field_non_existing_key(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        Map<String, String> fieldValueMap = Map.of(field1.toString(), "value1", field2.toString(), "value1");
+
+        assertEquals(2, client.hset(key.toString(), fieldValueMap).get());
+        assertTrue(client.hexists(key, field1).get());
+        assertFalse(client.hexists(key, gs("non_existing_field")).get());
+        assertFalse(client.hexists(gs("non_existing_key"), field2).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hgetall_multiple_existing_fields_existing_key_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String field1 = UUID.randomUUID().toString();
@@ -1433,6 +1448,25 @@ public class SharedCommandTests {
         assertFalse(client.sismember("nonExistingKey", member).get());
 
         assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sismember(key2, member).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sismember_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString member = gs(UUID.randomUUID().toString());
+
+        assertEquals(1, client.sadd(key1.toString(), new String[] {member.toString()}).get());
+        assertTrue(client.sismember(key1, member).get());
+        assertFalse(client.sismember(key1, gs("nonExistingMember")).get());
+        assertFalse(client.sismember(gs("nonExistingKey"), member).get());
+
+        assertEquals(OK, client.set(key2, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sismember(key2, member).get());
         assertTrue(executionException.getCause() instanceof RequestException);
@@ -5112,6 +5146,48 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void lset_binary(BaseClient client) {
+        // setup
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        long index = 0;
+        long oobIndex = 10;
+        long negativeIndex = -1;
+        GlideString element = gs("zero");
+        GlideString[] lpushArgs = {gs("four"), gs("three"), gs("two"), gs("one")};
+        String[] expectedList = {"zero", "two", "three", "four"};
+        String[] expectedList2 = {"zero", "two", "three", "zero"};
+
+        // key does not exist
+        ExecutionException noSuchKeyException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lset(nonExistingKey, index, element).get());
+        assertInstanceOf(RequestException.class, noSuchKeyException.getCause());
+
+        // pushing elements to list
+        client.lpush(key, lpushArgs).get();
+
+        // index out of range
+        ExecutionException indexOutOfBoundException =
+                assertThrows(ExecutionException.class, () -> client.lset(key, oobIndex, element).get());
+        assertInstanceOf(RequestException.class, indexOutOfBoundException.getCause());
+
+        // assert lset result
+        String response = client.lset(key, index, element).get();
+        assertEquals(OK, response);
+        String[] updatedList = client.lrange(key.toString(), 0, -1).get();
+        assertArrayEquals(updatedList, expectedList);
+
+        // assert lset with a negative index for the last element in the list
+        String response2 = client.lset(key, negativeIndex, element).get();
+        assertEquals(OK, response2);
+        String[] updatedList2 = client.lrange(key.toString(), 0, -1).get();
+        assertArrayEquals(updatedList2, expectedList2);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void lmove(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
         // setup
@@ -5676,6 +5752,37 @@ public class SharedCommandTests {
         // both exists, with REPLACE
         assertTrue(client.copy(source, destination, true).get());
         assertEquals("two", client.get(destination).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void copy_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        GlideString source = gs("{key}-1" + UUID.randomUUID());
+        GlideString destination = gs("{key}-2" + UUID.randomUUID());
+
+        // neither key exists, returns false
+        assertFalse(client.copy(source, destination, false).get());
+        assertFalse(client.copy(source, destination).get());
+
+        // source exists, destination does not
+        client.set(source, gs("one"));
+        assertTrue(client.copy(source, destination, false).get());
+        assertEquals(gs("one"), client.get(destination).get());
+
+        // setting new value for source
+        client.set(source, gs("two"));
+
+        // both exists, no REPLACE
+        assertFalse(client.copy(source, destination).get());
+        assertFalse(client.copy(source, destination, false).get());
+        assertEquals(gs("one"), client.get(destination).get());
+
+        // both exists, with REPLACE
+        assertTrue(client.copy(source, destination, true).get());
+        assertEquals(gs("two"), client.get(destination).get());
     }
 
     @SneakyThrows

@@ -1642,6 +1642,31 @@ public class RedisClientTest {
         assertEquals(value, payload);
     }
 
+   @SneakyThrows
+    @Test
+    public void hexists_binary_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString field = gs("testField");
+        GlideString[] args = new GlideString[] {key, field};
+        Boolean value = true;
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(HExists), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.hexists(key, field);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
     @SneakyThrows
     @Test
     public void hgetall_success() {
@@ -2368,6 +2393,30 @@ public class RedisClientTest {
         String key = "testKey";
         String member = "testMember";
         String[] arguments = new String[] {key, member};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(SIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.sismember(key, member);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertTrue(payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sismember_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member = gs("testMember");
+        GlideString[] arguments = new GlideString[] {key, member};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(true);
@@ -7044,6 +7093,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lset_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long index = 0;
+        GlideString element = gs("two");
+        GlideString[] arguments = new GlideString[] {key, gs("0"), element};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(LSet), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.lset(key, index, element);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void blmove_returns_success() {
         // setup
         String key1 = "testKey";
@@ -7339,6 +7412,31 @@ public class RedisClientTest {
         String source = "testKey1";
         String destination = "testKey2";
         String[] arguments = new String[] {source, destination};
+        Boolean value = true;
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(Copy), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.copy(source, destination);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void copy_binary_returns_success() {
+        // setup
+        GlideString source = gs("testKey1");
+        GlideString destination = gs("testKey2");
+        GlideString[] arguments = new GlideString[] {source, destination};
         Boolean value = true;
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();

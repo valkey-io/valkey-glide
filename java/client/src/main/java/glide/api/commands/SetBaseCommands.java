@@ -153,6 +153,26 @@ public interface SetBaseCommands {
     CompletableFuture<Boolean> sismember(String key, String member);
 
     /**
+     * Returns if <code>member</code> is a member of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/sismember/">redis.io</a> for details.
+     * @param key The key of the set.
+     * @param member The member to check for existence in the set.
+     * @return <code>true</code> if the member exists in the set, <code>false</code> otherwise. If
+     *     <code>key</code> doesn't exist, it is treated as an <code>empty set</code> and the command
+     *     returns <code>false</code>.
+     * @example
+     *     <pre>{@code
+     * Boolean payload1 = client.sismember(gs("mySet")), gs("member1")).get();
+     * assert payload1; // Indicates that "member1" exists in the set "mySet".
+     *
+     * Boolean payload2 = client.sismember(gs("mySet"), gs("nonExistingMember")).get();
+     * assert !payload2; // Indicates that "nonExistingMember" does not exist in the set "mySet".
+     * }</pre>
+     */
+    CompletableFuture<Boolean> sismember(GlideString key, GlideString member);
+
+    /**
      * Computes the difference between the first set and all the successive sets in <code>keys</code>.
      *
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
