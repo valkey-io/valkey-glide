@@ -1,8 +1,5 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
-import java.util.Arrays;
-
-import glide.api.models.GlideString;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
@@ -19,12 +16,14 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClient;
+import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -265,9 +264,7 @@ public class TransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         String[] keys = new String[] {key1, key2, key3};
-        GlideString[] keys_gs = Arrays.stream(keys)
-                    .map(GlideString::gs)
-                    .toArray(GlideString[]::new);
+        GlideString[] keys_gs = Arrays.stream(keys).map(GlideString::gs).toArray(GlideString[]::new);
         Transaction setFoobarTransaction = new Transaction();
         Transaction setHelloTransaction = new Transaction();
         String[] expectedExecResponse = new String[] {OK, OK, OK};
