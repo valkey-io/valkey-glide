@@ -5005,6 +5005,87 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GetEx, args),
         )
 
+    async def dump(
+        self,
+        key: str,
+    ) -> str:
+        """
+        Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
+
+        See https://valkey.io/commands/dump for more details.
+
+        Args:
+            key (str): The `key` of the set.
+
+        Returns:
+            str: The serialized value of a set.
+                If `key` does not exist, `None` will be returned.
+
+        Examples:
+            >>> await client.dump("key")
+                `value`
+            >>> await client.dump("nonExistingKey")
+                None
+        """
+        return cast(
+            str,
+            await self._execute_command(RequestType.Dump, [key]),
+        )
+
+    async def restore(
+        self,
+        key: str,
+        ttl: int,
+        value: str,
+        replace: Optional[str] = None,
+        absttl: Optional[str] = None,
+        idletime: Optional[int] = None,
+        frequency: Optional[int] = None,
+    ) -> TOK:
+        """
+        Create a `key` associated with a `value` that is obtained by deserializing the provided
+        serialized `value` obtained via `dump`.
+
+        See https://valkey.io/commands/restore for more details.
+
+        Args:
+            key (str): The `key` of the set.
+            ttl (int): The expiry time (in milliseconds). If `0, the `key` will persist.
+            value (byte) The serialized value.
+            replace (Optional[str]): Set the `REPLACE` option to the given key.
+            absttl (Optional[str]): Set the `ABSTTL` option to the given key.
+            idletime (Optional[int]): Set the `IDLETIME` option with object idletime to the given key.
+            frequency (Optional[int]): Set the `FREQ` option with object frequency to the given key.
+
+        Returns:
+            OK: If the `key` was successfully restored with a `value`.
+
+        Examples:
+            >>> await client.restore("newKey", 0, value)
+                OK # Indicates restore `newKey` without any ttl expiry nor any option
+            >>> await client.restore("newKey", 0, value, "REPLACE")
+                OK # Indicates restore `newKey` with `REPLACE` option
+            >>> await client.restore("newKey", 0, value, "REPLACE", "ABSTTL")
+                OK # Indicates restore `newKey` with `REPLACE` and `ABSTTL` options
+            >>> await client.restore("newKey", 0, value, "REPLACE", idletime=10)
+                OK # Indicates restore `newKey` with `REPLACE` and `IDLETIME` options
+            >>> await client.restore("newKey", 0, value, "REPLACE", frequency=5)
+                OK # Indicates restore `newKey` with `REPLACE` and `FREQ` options
+        """
+        args = [key, str(ttl), value]
+        if replace is not None:
+            args.append(["REPLACE"])
+        if absttl is not None:
+            args.append(["ABSTTL"])
+        if idletime is not None:
+            args.extend(["IDLETIME", str(idletime)])
+        if frequency is not None:
+            args.extend(["FREQ", str(frequency)])
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Restore, args),
+        )
+
     @dataclass
     class PubSubMsg:
         """Describes incoming pubsub message
