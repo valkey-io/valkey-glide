@@ -113,7 +113,7 @@ public interface GeospatialIndicesBaseCommands {
      *     members do not exist, or if the key does not exist, returns <code>null</code>.
      * @example
      *     <pre>{@code
-     * Double result = client.geodist("mySortedSet", "Palermo", "Catania", GeoUnit.KILOMETERS).get();
+     * Double result = client.geodist(gs("mySortedSet"), gs("Palermo"), gs("Catania"), GeoUnit.KILOMETERS).get();
      * System.out.println(result);
      * }</pre>
      */

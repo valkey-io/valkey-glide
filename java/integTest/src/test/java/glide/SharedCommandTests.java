@@ -3649,7 +3649,7 @@ public class SharedCommandTests {
         assertNotNull(streamid_3);
 
         // xack that streamid_1, and streamid_2 was received
-        assertEquals(2L, client.xack(key, groupName, new String[] {streamid_1, streamid_2}).get());
+        assertEquals(2L, client.xack(gs(key.getBytes()), gs(groupName.getBytes()), new GlideString[] {gs(streamid_1.getBytes()), gs(streamid_2.getBytes())}).get());
 
         // Delete the consumer group and expect 1 pending messages (one was received)
         assertEquals(0L, client.xgroupDelConsumer(key, groupName, consumerName).get());
@@ -3662,7 +3662,7 @@ public class SharedCommandTests {
         assertEquals(1, result_3.get(key).size());
 
         // wrong group, so xack streamid_3 returns 0
-        assertEquals(0L, client.xack(key, "not_a_group", new String[] {streamid_3}).get());
+        assertEquals(0L, client.xack(gs(key.getBytes()), gs("not_a_group"), new GlideString[] {gs(streamid_3.getBytes())}).get());
 
         // Delete the consumer group and expect the pending message
         assertEquals(1L, client.xgroupDelConsumer(key, groupName, consumerName).get());
@@ -4625,11 +4625,11 @@ public class SharedCommandTests {
         assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
 
         // assert correct result with default metric
-        Double actual = client.geodist(key1, member1, member2).get();
+        Double actual = client.geodist(gs(key1.getBytes()), gs(member1.getBytes()), gs(member2.getBytes())).get();
         assertEquals(expected, actual, delta);
 
         // assert correct result with manual metric specification kilometers
-        Double actualKM = client.geodist(key1, member1, member2, geoUnitKM).get();
+        Double actualKM = client.geodist(gs(key1.getBytes()), gs(member1.getBytes()), gs(member2.getBytes()), geoUnitKM).get();
         assertEquals(expectedKM, actualKM, delta);
 
         // assert null result when member index is missing
@@ -4737,6 +4737,8 @@ public class SharedCommandTests {
 
         assertEquals(0, client.setbit(key1, 0, 1).get());
         assertEquals(1, client.setbit(key1, 0, 0).get());
+        assertEquals(0, client.setbit(gs(key1.getBytes()), 0, 1).get());
+        assertEquals(1, client.setbit(gs(key1.getBytes()), 0, 0).get());
 
         // Exception thrown due to the negative offset
         ExecutionException executionException =
@@ -4763,11 +4765,13 @@ public class SharedCommandTests {
         String key2 = UUID.randomUUID().toString();
         String missingKey = UUID.randomUUID().toString();
         String value = "foobar";
-
         assertEquals(OK, client.set(key1, value).get());
         assertEquals(1, client.getbit(key1, 1).get());
         assertEquals(0, client.getbit(key1, 1000).get());
         assertEquals(0, client.getbit(missingKey, 1).get());
+        assertEquals(1, client.getbit(gs(key1.getBytes()), 1).get());
+        assertEquals(0, client.getbit(gs(key1.getBytes()), 1000).get());
+        assertEquals(0, client.getbit(gs(missingKey.getBytes()), 1).get());
         if (client instanceof RedisClient) {
             assertEquals(
                     1L, ((RedisClient) client).customCommand(new String[] {"SETBIT", key1, "5", "0"}).get());
