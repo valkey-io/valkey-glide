@@ -1331,8 +1331,8 @@ public class SharedCommandTests {
         String setKey3 = "{key}" + UUID.randomUUID();
         String nonSetKey = "{key}" + UUID.randomUUID();
 
-        assertEquals(3, client.sadd(gs(setKey1), new GlideString[] {gs("1"), gs("2"), gs("3")}).get());
-        assertEquals(2, client.sadd(gs(setKey2), new GlideString[] {gs("2"), gs("3")}).get());
+        assertEquals(3, client.sadd(setKey1, new String[] {"1", "2", "3"}).get());
+        assertEquals(2, client.sadd(setKey2, new String[] {"2", "3"}).get());
 
         // move an elem
         assertTrue(client.smove(gs(setKey1), gs(setKey2), gs("1")).get());
@@ -1371,6 +1371,58 @@ public class SharedCommandTests {
 
         executionException =
                 assertThrows(ExecutionException.class, () -> client.smove(setKey1, nonSetKey, "_").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void smove_binary(BaseClient client) {
+        String setKey1 = "{key}" + UUID.randomUUID();
+        String setKey2 = "{key}" + UUID.randomUUID();
+        String setKey3 = "{key}" + UUID.randomUUID();
+        String nonSetKey = "{key}" + UUID.randomUUID();
+
+        assertEquals(3, client.sadd(gs(setKey1), new GlideString[] {gs("1"), gs("2"), gs("3")}).get());
+        assertEquals(2, client.sadd(gs(setKey2), new GlideString[] {gs("2"), gs("3")}).get());
+
+        // move an elem
+        assertTrue(client.smove(gs(setKey1), gs(setKey2), gs("1")).get());
+        assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("1", "2", "3"), client.smembers(setKey2).get());
+
+        // move an elem which preset at destination
+        assertTrue(client.smove(gs(setKey2), gs(setKey1), gs("2")).get());
+        assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("1", "3"), client.smembers(setKey2).get());
+
+        // move from missing key
+        assertFalse(client.smove(gs(setKey3), gs(setKey1), gs("4")).get());
+        assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
+
+        // move to a new set
+        assertTrue(client.smove(gs(setKey1), gs(setKey3), gs("2")).get());
+        assertEquals(Set.of("3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("2"), client.smembers(setKey3).get());
+
+        // move missing element
+        assertFalse(client.smove(gs(setKey1), gs(setKey3), gs("42")).get());
+        assertEquals(Set.of("3"), client.smembers(setKey1).get());
+        assertEquals(Set.of("2"), client.smembers(setKey3).get());
+
+        // move missing element to missing key
+        assertFalse(client.smove(gs(setKey1), gs(nonSetKey), gs("42")).get());
+        assertEquals(Set.of("3"), client.smembers(setKey1).get());
+        assertEquals("none", client.type(nonSetKey).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(gs(nonSetKey), gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.smove(gs(nonSetKey), gs(setKey1), gs("_")).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.smove(gs(setKey1), gs(nonSetKey), gs("_")).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
