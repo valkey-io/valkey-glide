@@ -12,6 +12,7 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
@@ -43,12 +44,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static glide.api.models.GlideString.gs;
 
-import glide.api.models.GlideString;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
@@ -793,7 +793,10 @@ public class CommandTests {
                 Arguments.of(
                         "fcall",
                         "7.0.0",
-                        clusterClient.fcall(gs("func"), new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, new GlideString[0])),
+                        clusterClient.fcall(
+                                gs("func"),
+                                new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")},
+                                new GlideString[0])),
                 Arguments.of(
                         "fcallReadOnly",
                         "7.0.0",
@@ -801,7 +804,10 @@ public class CommandTests {
                 Arguments.of(
                         "fcallReadOnly",
                         "7.0.0",
-                        clusterClient.fcallReadOnly(gs("func"), new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, new GlideString[0])),
+                        clusterClient.fcallReadOnly(
+                                gs("func"),
+                                new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")},
+                                new GlideString[0])),
                 Arguments.of(
                         "xread", null, clusterClient.xread(Map.of("abc", "stream1", "zxy", "stream2"))),
                 Arguments.of("copy", "6.2.0", clusterClient.copy("abc", "def", true)),
@@ -906,7 +912,7 @@ public class CommandTests {
                 assertEquals("one", nodeResponse);
             }
         }
-                fcallResult = clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}, route).get();
+        fcallResult = clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}, route).get();
         if (route instanceof SingleNodeRoute) {
             assertEquals("one", fcallResult.getSingleValue());
         } else {
@@ -914,7 +920,7 @@ public class CommandTests {
                 assertEquals("one", nodeResponse);
             }
         }
-        
+
         var expectedDescription =
                 new HashMap<String, String>() {
                     {
@@ -1050,8 +1056,8 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
         assertEquals("one", clusterClient.fcall(funcName, new String[] {"one", "two"}).get());
-                assertEquals("one", clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}).get());
-        
+        assertEquals("one", clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}).get());
+
         var flist = clusterClient.functionList(false).get();
         var expectedDescription =
                 new HashMap<String, String>() {
@@ -1111,8 +1117,8 @@ public class CommandTests {
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
         assertEquals(2L, clusterClient.fcall(newFuncName, new String[] {"one", "two"}).get());
-                assertEquals(2L, clusterClient.fcallReadOnly(newFuncName, new String[] {"one", "two"}).get());
-        
+        assertEquals(2L, clusterClient.fcallReadOnly(newFuncName, new String[] {"one", "two"}).get());
+
         assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
     }
 
@@ -1168,35 +1174,40 @@ public class CommandTests {
         String libName = "mylib_with_keys";
         GlideString funcName = gs("myfunc_with_keys");
         // function $funcName returns array with first two arguments
-        String code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return {keys[1], keys[2]}"), true);
+        String code =
+                generateLuaLibCode(libName, Map.of(funcName.toString(), "return {keys[1], keys[2]}"), true);
 
         // loading function to the node where key is stored
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
 
         // due to common prefix, all keys are mapped to the same hash slot
         var functionResult =
-                clusterClient.fcall(funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0]).get();
+                clusterClient
+                        .fcall(funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0])
+                        .get();
         assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
         functionResult =
-                clusterClient.fcallReadOnly(funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0]).get();
+                clusterClient
+                        .fcallReadOnly(
+                                funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0])
+                        .get();
         assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
 
-        /* TODO: change to binary transaction version once available:
-        var transaction =
-                new ClusterTransaction()
-                        .fcall(funcName, new String[] {key + 1, key + 2}, new String[0])
-                        .fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]);
+        //  TODO: change to binary transaction version once available:
+        // var transaction =
+        //         new ClusterTransaction()
+        //                 .fcall(funcName, new String[] {key + 1, key + 2}, new String[0])
+        //                 .fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]);
 
-        // check response from a routed transaction request
-        assertDeepEquals(
-                new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction, route).get());
-        // if no route given, GLIDE should detect it automatically
-        assertDeepEquals(
-                new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
-                clusterClient.exec(transaction).get());
-        */
-        
+        // // check response from a routed transaction request
+        // assertDeepEquals(
+        //         new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
+        //         clusterClient.exec(transaction, route).get());
+        // // if no route given, GLIDE should detect it automatically
+        // assertDeepEquals(
+        //         new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
+        //         clusterClient.exec(transaction).get());
+
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
