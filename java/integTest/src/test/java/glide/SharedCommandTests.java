@@ -4335,7 +4335,28 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void objectEncoding_binary_returns_null(BaseClient client) {
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        assertNull(client.objectEncoding(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void objectEncoding_returns_string_raw(BaseClient client) {
+        String stringRawKey = UUID.randomUUID().toString();
+        assertEquals(
+                OK,
+                client
+                        .set(stringRawKey, "a really loooooooooooooooooooooooooooooooooooooooong value")
+                        .get());
+        assertEquals("raw", client.objectEncoding(stringRawKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_binary_returns_string_raw(BaseClient client) {
         GlideString stringRawKey = gs(UUID.randomUUID().toString());
         assertEquals(
                 OK,
@@ -4349,6 +4370,15 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectEncoding_returns_string_int(BaseClient client) {
+        String stringIntKey = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(stringIntKey, "2").get());
+        assertEquals("int", client.objectEncoding(stringIntKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_binary_returns_string_int(BaseClient client) {
         GlideString stringIntKey = gs(UUID.randomUUID().toString());
         assertEquals(OK, client.set(stringIntKey, gs("2")).get());
         assertEquals("int", client.objectEncoding(stringIntKey).get());
@@ -4366,9 +4396,31 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void objectEncoding_binary_returns_string_embstr(BaseClient client) {
+        GlideString stringEmbstrKey = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(stringEmbstrKey, gs("value")).get());
+        assertEquals("embstr", client.objectEncoding(stringEmbstrKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void objectEncoding_returns_list_listpack(BaseClient client) {
         String listListpackKey = UUID.randomUUID().toString();
         assertEquals(1, client.lpush(listListpackKey, new String[] {"1"}).get());
+        // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
+        // actual behavior returns a quicklist.
+        assertEquals(
+                REDIS_VERSION.isLowerThan("7.0.0") ? "quicklist" : "listpack",
+                client.objectEncoding(listListpackKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_binary_returns_list_listpack(BaseClient client) {
+        GlideString listListpackKey = gs(UUID.randomUUID().toString());
+        assertEquals(1, client.lpush(listListpackKey, new GlideString[] {gs("1")}).get());
         // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
         // actual behavior returns a quicklist.
         assertEquals(
@@ -4469,7 +4521,14 @@ public class SharedCommandTests {
     public void objectFreq_returns_null(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
         assertNull(client.objectFreq(nonExistingKey).get());
-        assertNull(client.objectFreq(gs(nonExistingKey)).get());
+    }
+
+   @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectFreq_binary_returns_null(BaseClient client) {
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        assertNull(client.objectFreq(nonExistingKey).get());
     }
 
     @SneakyThrows
@@ -4483,7 +4542,25 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void objectIdletime_binary_returns_null(BaseClient client) {
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        assertNull(client.objectIdletime(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void objectIdletime(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "").get());
+        Thread.sleep(2000);
+        assertTrue(client.objectIdletime(key).get() > 0L);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectIdletime_binary_(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
         assertEquals(OK, client.set(key, gs("")).get());
         Thread.sleep(2000);
@@ -4494,6 +4571,14 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectRefcount_returns_null(BaseClient client) {
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        assertNull(client.objectRefcount(nonExistingKey).get());
+    }
+
+   @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectRefcount_binary_returns_null(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
         assertNull(client.objectRefcount(nonExistingKey).get());
     }
@@ -4502,6 +4587,15 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectRefcount(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        assertEquals(OK, client.set(key, "").get());
+        assertTrue(client.objectRefcount(key).get() >= 0L);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectRefcount_binary(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
         assertEquals(OK, client.set(key, gs("")).get());
         assertTrue(client.objectRefcount(key).get() >= 0L);
