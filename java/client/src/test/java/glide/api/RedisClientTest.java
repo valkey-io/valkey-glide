@@ -2533,6 +2533,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void scard_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SCard), eq(new GlideString[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.scard(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sdiff_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};

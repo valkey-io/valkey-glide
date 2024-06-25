@@ -132,6 +132,20 @@ public interface SetBaseCommands {
     CompletableFuture<Long> scard(String key);
 
     /**
+     * Retrieves the set cardinality (number of elements) of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/scard/">redis.io</a> for details.
+     * @param key The key from which to retrieve the number of set members.
+     * @return The cardinality (number of elements) of the set, or 0 if the key does not exist.
+     * @example
+     *     <pre>{@code
+     * Long result = client.scard("my_set").get();
+     * assert result == 3L;
+     * }</pre>
+     */
+    CompletableFuture<Long> scard(GlideString key);
+
+    /**
      * Checks whether each member is contained in the members of the set stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/smismember/">redis.io</a> for details.
