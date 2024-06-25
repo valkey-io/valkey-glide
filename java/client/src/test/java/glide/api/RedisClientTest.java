@@ -3057,7 +3057,9 @@ public class RedisClientTest {
         GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
         ScoreFilter modifier = MAX;
         long count = 42;
-        GlideString[] arguments = {gs("0.5"), gs("2"), gs("key1"), gs("key2"), gs("MAX"), gs("COUNT"), gs("42")};
+        GlideString[] arguments = {
+            gs("0.5"), gs("2"), gs("key1"), gs("key2"), gs("MAX"), gs("COUNT"), gs("42")
+        };
         Object[] value = new Object[] {"key1", "elem"};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -3330,7 +3332,8 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Double>>submitNewCommand(eq(ZPopMin), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -3380,7 +3383,8 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Double>>submitNewCommand(eq(ZPopMin), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZPopMin), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -3478,7 +3482,8 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Double>>submitNewCommand(eq(ZPopMax), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -3578,7 +3583,8 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, Double>>submitNewCommand(eq(ZPopMax), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZPopMax), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -7089,14 +7095,17 @@ public class RedisClientTest {
         ListDirection listDirection = ListDirection.LEFT;
         double timeout = 0.1;
         GlideString[] arguments =
-                new GlideString[] {gs(Double.toString(timeout)), gs("2"), key, key2, gs(listDirection.toString())};
+                new GlideString[] {
+                    gs(Double.toString(timeout)), gs("2"), key, key2, gs(listDirection.toString())
+                };
         Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -7174,7 +7183,8 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(eq(BLMPop), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+                        eq(BLMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -7445,11 +7455,13 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(eq(LMPop), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+                        eq(LMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<GlideString, GlideString[]>> response = service.lmpop(keys, listDirection);
+        CompletableFuture<Map<GlideString, GlideString[]>> response =
+                service.lmpop(keys, listDirection);
         Map<GlideString, GlideString[]> payload = response.get();
 
         // verify
@@ -7499,7 +7511,12 @@ public class RedisClientTest {
         long count = 1L;
         GlideString[] arguments =
                 new GlideString[] {
-                    gs("2"), key, key2, gs(listDirection.toString()), gs(COUNT_FOR_LIST_REDIS_API), gs(Long.toString(count))
+                    gs("2"),
+                    key,
+                    key2,
+                    gs(listDirection.toString()),
+                    gs(COUNT_FOR_LIST_REDIS_API),
+                    gs(Long.toString(count))
                 };
         Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
 
@@ -7507,11 +7524,13 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(eq(LMPop), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+                        eq(LMPop), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<GlideString, GlideString[]>> response = service.lmpop(keys, listDirection, count);
+        CompletableFuture<Map<GlideString, GlideString[]>> response =
+                service.lmpop(keys, listDirection, count);
         Map<GlideString, GlideString[]> payload = response.get();
 
         // verify

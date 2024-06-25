@@ -770,7 +770,7 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<GlideString, GlideString[]>> lmpop(
-        GlideString[] keys, ListDirection direction, long count);
+            GlideString[] keys, ListDirection direction, long count);
 
     /**
      * Pops one element from the first non-empty list from the provided <code>keys</code>.
@@ -810,7 +810,8 @@ public interface ListBaseCommands {
      * assertArrayEquals(new GlideString[] {gs("three")}, resultValue);
      * }</pre>
      */
-    CompletableFuture<Map<GlideString, GlideString[]>> lmpop(GlideString[] keys, ListDirection direction);
+    CompletableFuture<Map<GlideString, GlideString[]>> lmpop(
+            GlideString[] keys, ListDirection direction);
 
     /**
      * Blocks the connection until it pops one or more elements from the first non-empty list from the
@@ -878,7 +879,7 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<GlideString, GlideString[]>> blmpop(
-        GlideString[] keys, ListDirection direction, long count, double timeout);
+            GlideString[] keys, ListDirection direction, long count, double timeout);
 
     /**
      * Blocks the connection until it pops one element from the first non-empty list from the provided
@@ -944,7 +945,7 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<GlideString, GlideString[]>> blmpop(
-        GlideString[] keys, ListDirection direction, double timeout);
+            GlideString[] keys, ListDirection direction, double timeout);
 
     /**
      * Sets the list element at <code>index</code> to <code>element</code>.<br>

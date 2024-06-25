@@ -1486,7 +1486,7 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> bzmpop(
-        GlideString[] keys, ScoreFilter modifier, double timeout, long count);
+            GlideString[] keys, ScoreFilter modifier, double timeout, long count);
 
     /**
      * Returns the union of members from sorted sets specified by the given <code>keys</code>.<br>

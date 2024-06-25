@@ -12,6 +12,7 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
@@ -43,12 +44,11 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static glide.api.models.GlideString.gs;
 
-import glide.api.models.GlideString;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
@@ -752,27 +752,41 @@ public class CommandTests {
                 Arguments.of(
                         "zintercard", "7.0.0", clusterClient.zintercard(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("brpop", null, clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
-                Arguments.of("brpop", null, clusterClient.brpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
+                Arguments.of(
+                        "brpop",
+                        null,
+                        clusterClient.brpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
                 Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
-                Arguments.of("blpop", null, clusterClient.blpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
+                Arguments.of(
+                        "blpop",
+                        null,
+                        clusterClient.blpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
                 Arguments.of("pfcount", null, clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("pfmerge", null, clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})),
                 Arguments.of(
                         "bzpopmax", "5.0.0", clusterClient.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of(
-                        "bzpopmax", "5.0.0", clusterClient.bzpopmax(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
+                        "bzpopmax",
+                        "5.0.0",
+                        clusterClient.bzpopmax(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
                 Arguments.of(
                         "bzpopmin", "5.0.0", clusterClient.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of(
-                        "bzpopmin", "5.0.0", clusterClient.bzpopmin(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
+                        "bzpopmin",
+                        "5.0.0",
+                        clusterClient.bzpopmin(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
                 Arguments.of(
                         "zmpop", "7.0.0", clusterClient.zmpop(new String[] {"abc", "zxy", "lkn"}, MAX)),
                 Arguments.of(
-                        "zmpop", "7.0.0", clusterClient.zmpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, MAX)),
+                        "zmpop",
+                        "7.0.0",
+                        clusterClient.zmpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, MAX)),
                 Arguments.of(
                         "bzmpop", "7.0.0", clusterClient.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1)),
                 Arguments.of(
-                        "bzmpop", "7.0.0", clusterClient.bzmpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, MAX, .1)),
+                        "bzmpop",
+                        "7.0.0",
+                        clusterClient.bzmpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, MAX, .1)),
                 Arguments.of(
                         "lmpop",
                         "7.0.0",
@@ -792,7 +806,8 @@ public class CommandTests {
                 Arguments.of(
                         "blmpop",
                         "7.0.0",
-                        clusterClient.blmpop(new GlideString[] {gs("abc"), gs("def")}, ListDirection.LEFT, 1L, 0.1)),
+                        clusterClient.blmpop(
+                                new GlideString[] {gs("abc"), gs("def")}, ListDirection.LEFT, 1L, 0.1)),
                 Arguments.of(
                         "lmove",
                         "6.2.0",

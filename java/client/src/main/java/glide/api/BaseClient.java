@@ -12,6 +12,7 @@ import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
+import static glide.utils.ArrayTransformUtils.castBinaryStringMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -467,6 +468,17 @@ public abstract class BaseClient
 
     /**
      * @param response A Protobuf response
+     * @return A map of <code>String</code> to <code>V</code> or <code>null</code>
+     * @param <V> Value type.
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
+    protected <V> Map<GlideString, V> handleBinaryStringMapOrNullResponse(Response response) throws RedisException {
+        return handleRedisResponse(
+                Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+    }
+
+    /**
+     * @param response A Protobuf response
      * @return A map of a map of <code>String[][]</code>
      */
     protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
@@ -891,7 +903,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString> lpop(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                LPop, new GlideString[] {key}, this::handleStringOrNullResponse);
+                LPop, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -1011,7 +1023,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString> rpop(@NonNull GlideString key) {
         return commandManager.submitNewCommand(
-                RPop, new GlideString[] {key}, this::handleStringOrNullResponse);
+                RPop, new GlideString[] {key}, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -1027,7 +1039,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 RPop,
                 new GlideString[] {key, gs(Long.toString(count))},
-                response -> castArray(handleArrayOrNullResponse(response), GlideString.class));
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -1294,7 +1306,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, Double>> zpopmin(@NonNull GlideString key, long count) {
         return commandManager.submitNewCommand(
-                ZPopMin, new GlideString[] {key, gs(Long.toString(count))}, this::handleMapResponse);
+                ZPopMin, new GlideString[] {key, gs(Long.toString(count))}, this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -1304,7 +1316,8 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zpopmin(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(ZPopMin, new GlideString[] {key}, this::handleMapResponse);
+        return commandManager.submitNewCommand(
+                ZPopMin, new GlideString[] {key}, this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -1328,7 +1341,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, Double>> zpopmax(@NonNull GlideString key, long count) {
         return commandManager.submitNewCommand(
-                ZPopMax, new GlideString[] {key, gs(Long.toString(count))}, this::handleMapResponse);
+                ZPopMax, new GlideString[] {key, gs(Long.toString(count))}, this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -1338,7 +1351,8 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<GlideString, Double>> zpopmax(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(ZPopMax, new GlideString[] {key}, this::handleMapResponse);
+        return commandManager.submitNewCommand(
+                ZPopMax, new GlideString[] {key}, this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -1863,7 +1877,9 @@ public abstract class BaseClient
     public CompletableFuture<GlideString[]> blpop(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
         return commandManager.submitNewCommand(
-                BLPop, arguments, response -> castArray(handleArrayOrNullResponse(response), GlideString.class));
+                BLPop,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -1877,7 +1893,9 @@ public abstract class BaseClient
     public CompletableFuture<GlideString[]> brpop(@NonNull GlideString[] keys, double timeout) {
         GlideString[] arguments = ArrayUtils.add(keys, gs(Double.toString(timeout)));
         return commandManager.submitNewCommand(
-                BRPop, arguments, response -> castArray(handleArrayOrNullResponse(response), GlideString.class));
+                BRPop,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -1943,10 +1961,13 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Object[]> zmpop(@NonNull GlideString[] keys, @NonNull ScoreFilter modifier) {
+    public CompletableFuture<Object[]> zmpop(
+            @NonNull GlideString[] keys, @NonNull ScoreFilter modifier) {
         GlideString[] arguments =
                 concatenateArrays(
-                        new GlideString[] {gs(Integer.toString(keys.length))}, keys, new GlideString[] {gs(modifier.toString())});
+                        new GlideString[] {gs(Integer.toString(keys.length))},
+                        keys,
+                        new GlideString[] {gs(modifier.toString())});
         return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
     }
 
@@ -1968,7 +1989,9 @@ public abstract class BaseClient
                 concatenateArrays(
                         new GlideString[] {gs(Integer.toString(keys.length))},
                         keys,
-                        new GlideString[] {gs(modifier.toString()), gs(COUNT_REDIS_API), gs(Long.toString(count))});
+                        new GlideString[] {
+                            gs(modifier.toString()), gs(COUNT_REDIS_API), gs(Long.toString(count))
+                        });
         return commandManager.submitNewCommand(ZMPop, arguments, this::handleArrayOrNullResponse);
     }
 
@@ -2012,7 +2035,9 @@ public abstract class BaseClient
                 concatenateArrays(
                         new GlideString[] {gs(Double.toString(timeout)), gs(Integer.toString(keys.length))},
                         keys,
-                        new GlideString[] {gs(modifier.toString()), gs(COUNT_REDIS_API), gs(Long.toString(count))});
+                        new GlideString[] {
+                            gs(modifier.toString()), gs(COUNT_REDIS_API), gs(Long.toString(count))
+                        });
         return commandManager.submitNewCommand(BZMPop, arguments, this::handleArrayOrNullResponse);
     }
 
@@ -2266,18 +2291,20 @@ public abstract class BaseClient
                 response -> castMapOfArrays(handleMapOrNullResponse(response), String.class));
     }
 
+    @Override 
     public CompletableFuture<Map<GlideString, GlideString[]>> lmpop(
-    @Override
             @NonNull GlideString[] keys, @NonNull ListDirection direction, long count) {
-                GlideString[] arguments =
+        GlideString[] arguments =
                 concatenateArrays(
                         new GlideString[] {gs(Long.toString(keys.length))},
                         keys,
-                        new GlideString[] {gs(direction.toString()), gs(COUNT_FOR_LIST_REDIS_API), gs(Long.toString(count))});
+                        new GlideString[] {
+                            gs(direction.toString()), gs(COUNT_FOR_LIST_REDIS_API), gs(Long.toString(count))
+                        });
         return commandManager.submitNewCommand(
                 LMPop,
                 arguments,
-                response -> castMapOfArrays(handleMapOrNullResponse(response), GlideString.class));
+                response -> castBinaryStringMapOfArrays(handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
@@ -2295,13 +2322,15 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, GlideString[]>> lmpop(
             @NonNull GlideString[] keys, @NonNull ListDirection direction) {
-                GlideString[] arguments =
+        GlideString[] arguments =
                 concatenateArrays(
-                        new GlideString[] {gs(Long.toString(keys.length))}, keys, new GlideString[] {gs(direction.toString())});
+                        new GlideString[] {gs(Long.toString(keys.length))},
+                        keys,
+                        new GlideString[] {gs(direction.toString())});
         return commandManager.submitNewCommand(
                 LMPop,
                 arguments,
-                response -> castMapOfArrays(handleMapOrNullResponse(response), GlideString.class));
+                response -> castBinaryStringMapOfArrays(handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
@@ -2321,15 +2350,17 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, GlideString[]>> blmpop(
             @NonNull GlideString[] keys, @NonNull ListDirection direction, long count, double timeout) {
-                GlideString[] arguments =
+        GlideString[] arguments =
                 concatenateArrays(
                         new GlideString[] {gs(Double.toString(timeout)), gs(Long.toString(keys.length))},
                         keys,
-                        new GlideString[] {gs(direction.toString()), gs(COUNT_FOR_LIST_REDIS_API), gs(Long.toString(count))});
+                        new GlideString[] {
+                            gs(direction.toString()), gs(COUNT_FOR_LIST_REDIS_API), gs(Long.toString(count))
+                        });
         return commandManager.submitNewCommand(
                 BLMPop,
                 arguments,
-                response -> castMapOfArrays(handleMapOrNullResponse(response), GlideString.class));
+                response -> castBinaryStringMapOfArrays(handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
@@ -2349,7 +2380,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, GlideString[]>> blmpop(
             @NonNull GlideString[] keys, @NonNull ListDirection direction, double timeout) {
-                GlideString[] arguments =
+        GlideString[] arguments =
                 concatenateArrays(
                         new GlideString[] {gs(Double.toString(timeout)), gs(Long.toString(keys.length))},
                         keys,
@@ -2357,7 +2388,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 BLMPop,
                 arguments,
-                response -> castMapOfArrays(handleMapOrNullResponse(response), GlideString.class));
+                response -> castBinaryStringMapOfArrays(handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
@@ -2414,7 +2445,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString> spop(@NonNull GlideString key) {
         GlideString[] arguments = new GlideString[] {key};
-        return commandManager.submitNewCommand(SPop, arguments, this::handleStringOrNullResponse);
+        return commandManager.submitNewCommand(SPop, arguments, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -2426,7 +2457,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Set<GlideString>> spopCount(@NonNull GlideString key, long count) {
         GlideString[] arguments = new GlideString[] {key, gs(Long.toString(count))};
-        return commandManager.submitNewCommand(SPop, arguments, this::handleSetResponse);
+        return commandManager.submitNewCommand(SPop, arguments, this::handleSetBinaryResponse);
     }
 
     @Override
