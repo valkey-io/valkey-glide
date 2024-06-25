@@ -817,3 +817,15 @@ class TestTransaction:
         lastsave_time = response[0]
         assert isinstance(lastsave_time, int)
         assert lastsave_time > yesterday_unix_time
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lolwut_transaction(self, redis_client: RedisClusterClient):
+        transaction = Transaction()
+        transaction.lolwut().lolwut(5).lolwut(parameters=[1, 2]).lolwut(6, [42])
+        results = await redis_client.exec(transaction)
+        assert results is not None
+
+        for element in results:
+            assert isinstance(element, str)
+            assert "Redis ver. " in element

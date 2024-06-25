@@ -503,3 +503,39 @@ class StandaloneCommands(CoreCommands):
             bool,
             await self._execute_command(RequestType.Copy, args),
         )
+
+    async def lolwut(
+        self,
+        version: Optional[int] = None,
+        parameters: Optional[List[int]] = None,
+    ) -> str:
+        """
+        Displays a piece of generative computer art and the Redis version.
+
+        See https://valkey.io/commands/lolwut for more details.
+
+        Args:
+            version (Optional[int]): Version of computer art to generate.
+            parameters (Optional[List[int]]): Additional set of arguments in order to change the output:
+                For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+                For version `6`, those are number of columns and number of lines.
+
+        Returns:
+            str: A piece of generative computer art along with the current Redis version.
+
+        Examples:
+            >>> await client.lolwut(6, [40, 20]);
+            "Redis ver. 7.2.3" # Indicates the current Redis version
+            >>> await client.lolwut(5, [30, 5, 5]);
+            "Redis ver. 7.2.3" # Indicates the current Redis version
+        """
+        args = []
+        if version is not None:
+            args.extend(["VERSION", str(version)])
+        if parameters:
+            for var in parameters:
+                args.extend(str(var))
+        return cast(
+            str,
+            await self._execute_command(RequestType.Lolwut, args),
+        )
