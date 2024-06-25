@@ -3649,7 +3649,14 @@ public class SharedCommandTests {
         assertNotNull(streamid_3);
 
         // xack that streamid_1, and streamid_2 was received
-        assertEquals(2L, client.xack(gs(key.getBytes()), gs(groupName.getBytes()), new GlideString[] {gs(streamid_1.getBytes()), gs(streamid_2.getBytes())}).get());
+        assertEquals(
+                2L,
+                client
+                        .xack(
+                                gs(key.getBytes()),
+                                gs(groupName.getBytes()),
+                                new GlideString[] {gs(streamid_1.getBytes()), gs(streamid_2.getBytes())})
+                        .get());
 
         // Delete the consumer group and expect 1 pending messages (one was received)
         assertEquals(0L, client.xgroupDelConsumer(key, groupName, consumerName).get());
@@ -3662,7 +3669,14 @@ public class SharedCommandTests {
         assertEquals(1, result_3.get(key).size());
 
         // wrong group, so xack streamid_3 returns 0
-        assertEquals(0L, client.xack(gs(key.getBytes()), gs("not_a_group"), new GlideString[] {gs(streamid_3.getBytes())}).get());
+        assertEquals(
+                0L,
+                client
+                        .xack(
+                                gs(key.getBytes()),
+                                gs("not_a_group"),
+                                new GlideString[] {gs(streamid_3.getBytes())})
+                        .get());
 
         // Delete the consumer group and expect the pending message
         assertEquals(1L, client.xgroupDelConsumer(key, groupName, consumerName).get());
@@ -4625,11 +4639,15 @@ public class SharedCommandTests {
         assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
 
         // assert correct result with default metric
-        Double actual = client.geodist(gs(key1.getBytes()), gs(member1.getBytes()), gs(member2.getBytes())).get();
+        Double actual =
+                client.geodist(gs(key1.getBytes()), gs(member1.getBytes()), gs(member2.getBytes())).get();
         assertEquals(expected, actual, delta);
 
         // assert correct result with manual metric specification kilometers
-        Double actualKM = client.geodist(gs(key1.getBytes()), gs(member1.getBytes()), gs(member2.getBytes()), geoUnitKM).get();
+        Double actualKM =
+                client
+                        .geodist(gs(key1.getBytes()), gs(member1.getBytes()), gs(member2.getBytes()), geoUnitKM)
+                        .get();
         assertEquals(expectedKM, actualKM, delta);
 
         // assert null result when member index is missing
