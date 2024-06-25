@@ -386,7 +386,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             channels_and_patterns (Dict[ClusterClientConfiguration.PubSubChannelModes, Set[str]]):
                 Channels and patterns by modes.
             callback (Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]):
-                Optional callback to accept the incomming messages.
+                Optional callback to accept the incoming messages.
             context (Any):
                 Arbitrary context to pass to the callback.
         """
