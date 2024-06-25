@@ -655,6 +655,23 @@ class TestTransaction:
 
         await client2.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_large_values(self, request, cluster_mode, protocol):
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+        )
+        length = 2**25  # 33mb
+        key = "0" * length
+        value = "0" * length
+        transaction = Transaction()
+        transaction.set(key, value)
+        transaction.get(key)
+        result = await redis_client.exec(transaction)
+        assert isinstance(result, list)
+        assert result[0] == OK
+        assert result[1] == value
+
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_transaction(self, redis_client: RedisClient):
