@@ -744,7 +744,7 @@ public class SharedCommandTests {
         String key2 = UUID.randomUUID().toString();
         String field = UUID.randomUUID().toString();
 
-        assertTrue(client.hsetnx(gs(key1), gs(field), gs("value")).get());
+        assertTrue(client.hsetnx(key1, field, "value").get());
         assertFalse(client.hsetnx(key1, field, "newValue").get());
         assertEquals("value", client.hget(key1, field).get());
 
@@ -752,6 +752,25 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hsetnx(key2, field, "value").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hsetnx_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString field = gs(UUID.randomUUID().toString());
+
+        assertTrue(client.hsetnx(key1, field, gs("value")).get());
+        assertFalse(client.hsetnx(key1, field, gs("newValue")).get());
+        assertEquals("value", client.hget(key1.toString(), field.toString()).get());
+
+        // Key exists, but it is not a hash
+        assertEquals(OK, client.set(key2, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hsetnx(key2, field, gs("value")).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 

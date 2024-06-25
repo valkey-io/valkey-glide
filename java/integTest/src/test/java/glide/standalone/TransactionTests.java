@@ -23,7 +23,6 @@ import glide.api.models.commands.SortOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
@@ -264,7 +263,6 @@ public class TransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         String[] keys = new String[] {key1, key2, key3};
-        GlideString[] keys_gs = Arrays.stream(keys).map(GlideString::gs).toArray(GlideString[]::new);
         Transaction setFoobarTransaction = new Transaction();
         Transaction setHelloTransaction = new Transaction();
         String[] expectedExecResponse = new String[] {OK, OK, OK};
@@ -281,7 +279,63 @@ public class TransactionTests {
 
         // Transaction executes command successfully with a read command on the watch key before
         // transaction is executed.
-        assertEquals(OK, client.watch(keys_gs).get());
+        assertEquals(OK, client.watch(keys).get());
+        assertEquals(helloString, client.get(key2).get());
+        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
+        assertEquals(foobarString, client.get(key1).get()); // Sanity check
+        assertEquals(foobarString, client.get(key2).get());
+        assertEquals(foobarString, client.get(key3).get());
+
+        // Transaction executes command successfully with unmodified watched keys
+        assertEquals(OK, client.watch(keys).get());
+        assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
+        assertEquals(foobarString, client.get(key1).get()); // Sanity check
+        assertEquals(foobarString, client.get(key2).get());
+        assertEquals(foobarString, client.get(key3).get());
+
+        // Transaction executes command successfully with a modified watched key but is not in the
+        // transaction.
+        assertEquals(OK, client.watch(new String[] {key4}).get());
+        setHelloTransaction.set(key1, helloString).set(key2, helloString).set(key3, helloString);
+        assertArrayEquals(expectedExecResponse, client.exec(setHelloTransaction).get());
+        assertEquals(helloString, client.get(key1).get()); // Sanity check
+        assertEquals(helloString, client.get(key2).get());
+        assertEquals(helloString, client.get(key3).get());
+
+        // WATCH can not have an empty String array parameter
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.watch(new String[] {}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @Test
+    @SneakyThrows
+    public void watch_binary() {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String key4 = "{key}-4" + UUID.randomUUID();
+        String foobarString = "foobar";
+        String helloString = "hello";
+        GlideString[] keys =
+                new GlideString[] {GlideString.gs(key1), GlideString.gs(key2), GlideString.gs(key3)};
+        Transaction setFoobarTransaction = new Transaction();
+        Transaction setHelloTransaction = new Transaction();
+        String[] expectedExecResponse = new String[] {OK, OK, OK};
+
+        // Returns null when a watched key is modified before it is executed in a transaction command.
+        // Transaction commands are not performed.
+        assertEquals(OK, client.watch(keys).get());
+        assertEquals(OK, client.set(key2, helloString).get());
+        setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
+        assertEquals(null, client.exec(setFoobarTransaction).get());
+        assertEquals(null, client.get(key1).get()); // Sanity check
+        assertEquals(helloString, client.get(key2).get());
+        assertEquals(null, client.get(key3).get());
+
+        // Transaction executes command successfully with a read command on the watch key before
+        // transaction is executed.
+        assertEquals(OK, client.watch(keys).get());
         assertEquals(helloString, client.get(key2).get());
         assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
         assertEquals(foobarString, client.get(key1).get()); // Sanity check
