@@ -5056,7 +5056,8 @@ class CoreCommands(Protocol):
 
     @dataclass
     class PubSubMsg:
-        """Describes incoming pubsub message
+        """
+        Describes the incoming pubsub message
 
         Attributes:
             message (str): Incoming message.
@@ -5087,7 +5088,7 @@ class CoreCommands(Protocol):
 
     def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
         """
-        Tries to returns the next pubsub message.
+        Tries to return the next pubsub message.
         Throws WrongConfiguration in cases:
         1. No pubsub subscriptions are configured for the client
         2. Callback is configured with the pubsub subsciptions
