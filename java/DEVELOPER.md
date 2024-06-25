@@ -229,6 +229,7 @@ In the command interface each command's javadoc should contain:
 - Detail on when the Redis started supporting the command (if it wasn't initially implemented in 6.0.0 or before).
 - A link to the Redis documentation.
 - Information about the function parameters.
+- Any glide-core implementation details, such as how glide-core manages default routing for the command. Reference this [link](https://github.com/aws/glide-for-redis/blob/4df0dd939b515dbf9da0a00bfca6d3ad2f27440b/java/client/src/main/java/glide/api/commands/SetBaseCommands.java#L119) for an example.
 - The command's return type. In the [BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) file, include "Command Response" before specifying the return type.
 
 ### Previous PR's
