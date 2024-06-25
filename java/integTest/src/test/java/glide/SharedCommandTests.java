@@ -165,7 +165,7 @@ public class SharedCommandTests {
         assertEquals(3L, unlinkedKeysNum);
     }
 
-   @SneakyThrows
+    @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void unlink_binary_multiple_keys(BaseClient client) {
