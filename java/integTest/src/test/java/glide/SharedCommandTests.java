@@ -161,10 +161,28 @@ public class SharedCommandTests {
         setResult = client.set(key3, value).get();
         assertEquals(OK, setResult);
 
-        Long unlinkedKeysNum = client.unlink(new String[] {key1}).get();
-        assertEquals(1L, unlinkedKeysNum);
-        unlinkedKeysNum = client.unlink(new GlideString[] {gs(key2), gs(key3)}).get();
-        assertEquals(2L, unlinkedKeysNum);
+        Long unlinkedKeysNum = client.unlink(new String[] {key1, key2, key3}).get();
+        assertEquals(3L, unlinkedKeysNum);
+    }
+
+   @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void unlink_binary_multiple_keys(BaseClient client) {
+        GlideString key1 = gs("{key}" + UUID.randomUUID());
+        GlideString key2 = gs("{key}" + UUID.randomUUID());
+        GlideString key3 = gs("{key}" + UUID.randomUUID());
+        GlideString value = gs(UUID.randomUUID().toString());
+
+        String setResult = client.set(key1, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key2, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key3, value).get();
+        assertEquals(OK, setResult);
+
+        Long unlinkedKeysNum = client.unlink(new GlideString[] {key1, key2, key3}).get();
+        assertEquals(3L, unlinkedKeysNum);
     }
 
     @SneakyThrows
@@ -3996,8 +4014,36 @@ public class SharedCommandTests {
         assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
 
         assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
-        assertTrue("string".equalsIgnoreCase(client.type(gs(stringKey)).get()));
-        assertTrue("list".equalsIgnoreCase(client.type(gs(listKey)).get()));
+        assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
+        assertTrue("list".equalsIgnoreCase(client.type(listKey).get()));
+        assertTrue("hash".equalsIgnoreCase(client.type(hashKey).get()));
+        assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
+        assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
+        assertTrue("stream".equalsIgnoreCase(client.type(streamKey).get()));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void type_binary(BaseClient client) {
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        GlideString stringKey = gs(UUID.randomUUID().toString());
+        GlideString listKey = gs(UUID.randomUUID().toString());
+        String hashKey = UUID.randomUUID().toString();
+        String setKey = UUID.randomUUID().toString();
+        String zsetKey = UUID.randomUUID().toString();
+        String streamKey = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(stringKey, gs("value")).get());
+        assertEquals(1, client.lpush(listKey, new GlideString[] {gs("value")}).get());
+        assertEquals(1, client.hset(hashKey, Map.of("1", "2")).get());
+        assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
+        assertEquals(1, client.zadd(zsetKey, Map.of("1", 2d)).get());
+        assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
+
+        assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
+        assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
+        assertTrue("list".equalsIgnoreCase(client.type(listKey).get()));
         assertTrue("hash".equalsIgnoreCase(client.type(hashKey).get()));
         assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
         assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
