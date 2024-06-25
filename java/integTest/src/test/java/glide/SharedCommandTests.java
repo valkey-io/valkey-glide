@@ -1362,7 +1362,7 @@ public class SharedCommandTests {
         String key1 = "{key}" + UUID.randomUUID();
 
         assertEquals(OK, client.set(key1, "foo").get());
-        assertEquals(OK, client.rename(gs(key1.getBytes()), gs((key1 + "_rename").getBytes())).get());
+        assertEquals(OK, client.rename(gs(key1), gs((key1 + "_rename"))).get());
         assertEquals(1L, client.exists(new String[] {key1 + "_rename"}).get());
 
         // key doesn't exist
@@ -1391,8 +1391,8 @@ public class SharedCommandTests {
 
         // rename a string
         assertEquals(OK, client.set(key1, "key1").get());
-        assertTrue(client.renamenx(gs(key1.getBytes()), gs(key2.getBytes())).get());
-        assertFalse(client.renamenx(gs(key2.getBytes()), gs(key3.getBytes())).get());
+        assertTrue(client.renamenx(gs(key1), gs(key2)).get());
+        assertFalse(client.renamenx(gs(key2), gs(key3)).get());
         assertEquals("key1", client.get(key2).get());
         assertEquals(1, client.del(new String[] {key1, key2}).get());
 
@@ -1813,13 +1813,13 @@ public class SharedCommandTests {
 
         assertFalse(client.persist(key).get());
 
-        assertEquals(OK, client.set(gs(key.getBytes()), gs("persist_value")).get());
-        assertFalse(client.persist(gs(key.getBytes())).get());
+        assertEquals(OK, client.set(gs(key), gs("persist_value")).get());
+        assertFalse(client.persist(gs(key)).get());
 
         assertTrue(client.expire(key, 10L).get());
         Long persistAmount = client.ttl(key).get();
         assertTrue(0L <= persistAmount && persistAmount <= 10L);
-        assertTrue(client.persist(gs(key.getBytes())).get());
+        assertTrue(client.persist(gs(key)).get());
         assertEquals(-1L, client.ttl(key).get());
     }
 
@@ -2281,7 +2281,7 @@ public class SharedCommandTests {
                 new Double[] {1.0, null, null, 3.0},
                 client
                         .zmscore(
-                                gs(key1.getBytes()),
+                                gs(key1),
                                 new GlideString[] {
                                     gs("one"), gs("nonExistentMember"), gs("nonExistentMember"), gs("three")
                                 })
@@ -4603,7 +4603,7 @@ public class SharedCommandTests {
         }
 
         // Loop through the arrays and perform assertions
-        actual = client.geopos(gs(key1.getBytes()), members_gs).get();
+        actual = client.geopos(gs(key1), members_gs).get();
         for (int i = 0; i < expected.length; i++) {
             for (int j = 0; j < expected[i].length; j++) {
                 assertEquals(expected[i][j], actual[i][j], 1e-9);
