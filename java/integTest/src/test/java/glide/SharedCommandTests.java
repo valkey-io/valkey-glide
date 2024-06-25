@@ -1039,22 +1039,25 @@ public class SharedCommandTests {
         assertNull(client.lpop("non_existing_key").get());
     }
 
-    /* TODO: uncomment once client.lrange has binary version
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void lpush_lpop_lrange_binary_existing_non_existing_key(BaseClient client) {
-        GlideString key = gs(UUID.randomUUID().toString());
-        GlideString[] valueArray = new GlideString[] {gs("value4"), gs("value3"), gs("value2"), gs("value1")};
+    //     TODO: uncomment once client.lrange has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void lpush_lpop_lrange_binary_existing_non_existing_key(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         GlideString[] valueArray = new GlideString[] {gs("value4"), gs("value3"), gs("value2"),
+    // gs("value1")};
 
-        assertEquals(4, client.lpush(key, valueArray).get());
-        assertEquals("value1", client.lpop(key).get());
-        assertArrayEquals(new GlideString[] {gs("value2"), gs("value3"), gs("value4")}, client.lrange(key, 0, -1).get());
-        assertArrayEquals(new GlideString[] {gs("value2"), gs("value3")}, client.lpopCount(key, 2).get());
-        assertArrayEquals(new GlideString[] {}, client.lrange(gs("non_existing_key"), 0, -1).get());
-        assertNull(client.lpop(gs("non_existing_key")).get());
-    }
-    */
+    //         assertEquals(4, client.lpush(key, valueArray).get());
+    //         assertEquals("value1", client.lpop(key).get());
+    //         assertArrayEquals(new GlideString[] {gs("value2"), gs("value3"), gs("value4")},
+    // client.lrange(key, 0, -1).get());
+    //         assertArrayEquals(new GlideString[] {gs("value2"), gs("value3")}, client.lpopCount(key,
+    // 2).get());
+    //         assertArrayEquals(new GlideString[] {}, client.lrange(gs("non_existing_key"), 0,
+    // -1).get());
+    //         assertNull(client.lpop(gs("non_existing_key")).get());
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -1080,31 +1083,32 @@ public class SharedCommandTests {
         assertTrue(lrangeException.getCause() instanceof RequestException);
     }
 
-    /* TODO: uncomment once client.lrange has binary version
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void lpush_lpop_lrange_binary_type_error(BaseClient client) {
-        GlideString key = gs(UUID.randomUUID().toString());
+    //     TODO: uncomment once client.lrange has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void lpush_lpop_lrange_binary_type_error(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
 
-        assertEquals(OK, client.set(key, "foo").get());
+    //         assertEquals(OK, client.set(key, "foo").get());
 
-        Exception lpushException =
-                assertThrows(ExecutionException.class, () -> client.lpush(key, new GlideString[] {gs("foo")}).get());
-        assertTrue(lpushException.getCause() instanceof RequestException);
+    //         Exception lpushException =
+    //                 assertThrows(ExecutionException.class, () -> client.lpush(key, new
+    // GlideString[] {gs("foo")}).get());
+    //         assertTrue(lpushException.getCause() instanceof RequestException);
 
-        Exception lpopException = assertThrows(ExecutionException.class, () -> client.lpop(key).get());
-        assertTrue(lpopException.getCause() instanceof RequestException);
+    //         Exception lpopException = assertThrows(ExecutionException.class, () ->
+    // client.lpop(key).get());
+    //         assertTrue(lpopException.getCause() instanceof RequestException);
 
-        Exception lpopCountException =
-                assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
-        assertTrue(lpopCountException.getCause() instanceof RequestException);
+    //         Exception lpopCountException =
+    //                 assertThrows(ExecutionException.class, () -> client.lpopCount(key, 2).get());
+    //         assertTrue(lpopCountException.getCause() instanceof RequestException);
 
-        Exception lrangeException =
-                assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
-        assertTrue(lrangeException.getCause() instanceof RequestException);
-    }
-    */
+    //         Exception lrangeException =
+    //                 assertThrows(ExecutionException.class, () -> client.lrange(key, 0, -1).get());
+    //         assertTrue(lrangeException.getCause() instanceof RequestException);
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -1305,12 +1309,14 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void rpush_rpop_binary_existing_non_existing_key(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
-        GlideString[] valueArray = new GlideString[] {gs("value1"), gs("value2"), gs("value3"), gs("value4")};
+        GlideString[] valueArray =
+                new GlideString[] {gs("value1"), gs("value2"), gs("value3"), gs("value4")};
 
         assertEquals(4, client.rpush(key, valueArray).get());
         assertEquals(gs("value4"), client.rpop(key).get());
 
-        assertArrayEquals(new GlideString[] {gs("value3"), gs("value2")}, client.rpopCount(key, 2).get());
+        assertArrayEquals(
+                new GlideString[] {gs("value3"), gs("value2")}, client.rpopCount(key, 2).get());
         assertNull(client.rpop(gs("non_existing_key")).get());
     }
 
@@ -1339,7 +1345,8 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key, gs("foo")).get());
 
         Exception rpushException =
-                assertThrows(ExecutionException.class, () -> client.rpush(key, new GlideString[] {gs("foo")}).get());
+                assertThrows(
+                        ExecutionException.class, () -> client.rpush(key, new GlideString[] {gs("foo")}).get());
         assertTrue(rpushException.getCause() instanceof RequestException);
 
         Exception rpopException = assertThrows(ExecutionException.class, () -> client.rpop(key).get());
@@ -2121,26 +2128,26 @@ public class SharedCommandTests {
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
-    /* TODO: uncomment once client.zadd has binary version 
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void zpopmin_binary(BaseClient client) {
-        GlideString key = gs(UUID.randomUUID().toString());
-        Map<GlideString, Double> membersScores = Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"), 3.0);
-        assertEquals(3, client.zadd(key, membersScores).get());
-        assertEquals(Map.of(gs("a"), 1.0), client.zpopmin(key).get());
-        assertEquals(Map.of(gs("b"), 2.0, gs("c"), 3.0), client.zpopmin(key, 3).get());
-        assertTrue(client.zpopmin(key).get().isEmpty());
-        assertTrue(client.zpopmin(gs("non_existing_key")).get().isEmpty());
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void zpopmin_binary(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         Map<GlideString, Double> membersScores = Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"),
+    // 3.0);
+    //         assertEquals(3, client.zadd(key, membersScores).get());
+    //         assertEquals(Map.of(gs("a"), 1.0), client.zpopmin(key).get());
+    //         assertEquals(Map.of(gs("b"), 2.0, gs("c"), 3.0), client.zpopmin(key, 3).get());
+    //         assertTrue(client.zpopmin(key).get().isEmpty());
+    //         assertTrue(client.zpopmin(gs("non_existing_key")).get().isEmpty());
 
-        // Key exists, but it is not a set
-        assertEquals(OK, client.set(key, gs("value")).get());
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.zpopmin(key).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-    }
-    */
+    //         // Key exists, but it is not a set
+    //         assertEquals(OK, client.set(key, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.zpopmin(key).get());
+    //         assertTrue(executionException.getCause() instanceof RequestException);
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -2173,38 +2180,41 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
-    /* TODO: uncomment once client.zadd has binary version
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void bzpopmin_binary(BaseClient client) {
-        GlideString key1 = gs("{test}-1-" + UUID.randomUUID());
-        GlideString key2 = gs("{test}-2-" + UUID.randomUUID());
-        GlideString key3 = gs("{test}-3-" + UUID.randomUUID());
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void bzpopmin_binary(BaseClient client) {
+    //         GlideString key1 = gs("{test}-1-" + UUID.randomUUID());
+    //         GlideString key2 = gs("{test}-2-" + UUID.randomUUID());
+    //         GlideString key3 = gs("{test}-3-" + UUID.randomUUID());
 
-        assertEquals(2, client.zadd(key1, Map.of("a", 1.0, "b", 1.5)).get());
-        assertEquals(1, client.zadd(key2, Map.of("c", 2.0)).get());
-        assertArrayEquals(
-                new Object[] {key1, "a", 1.0}, client.bzpopmin(new GlideString[] {key1, key2}, .5).get());
+    //         assertEquals(2, client.zadd(key1, Map.of("a", 1.0, "b", 1.5)).get());
+    //         assertEquals(1, client.zadd(key2, Map.of("c", 2.0)).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key1, "a", 1.0}, client.bzpopmin(new GlideString[] {key1, key2},
+    // .5).get());
 
-        // nothing popped out - key does not exist
-        assertNull(
-                client
-                        .bzpopmin(new GlideString[] {key3}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
-                        .get());
+    //         // nothing popped out - key does not exist
+    //         assertNull(
+    //                 client
+    //                         .bzpopmin(new GlideString[] {key3}, REDIS_VERSION.isLowerThan("7.0.0")
+    // ? 1. : 0.001)
+    //                         .get());
 
-        // pops from the second key
-        assertArrayEquals(
-                new Object[] {key2, "c", 2.0}, client.bzpopmin(new GlideString[] {key3, key2}, .5).get());
+    //         // pops from the second key
+    //         assertArrayEquals(
+    //                 new Object[] {key2, "c", 2.0}, client.bzpopmin(new GlideString[] {key3, key2},
+    // .5).get());
 
-        // Key exists, but it is not a sorted set
-        assertEquals(OK, client.set(key3, gs("value")).get());
-        ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.bzpopmin(new GlideString[] {key3}, .5).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-    }
-    */
+    //         // Key exists, but it is not a sorted set
+    //         assertEquals(OK, client.set(key3, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzpopmin(new GlideString[]
+    // {key3}, .5).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -2269,26 +2279,26 @@ public class SharedCommandTests {
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
-    /* TODO: uncomment once client.zadd has binary version 
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void zpopmax_binary(BaseClient client) {
-        GlideString key = gs(UUID.randomUUID().toString());
-        Map<GlideString, Double> membersScores = Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"), 3.0);
-        assertEquals(3, client.zadd(key, membersScores).get());
-        assertEquals(Map.of(gs("c"), 3.0), client.zpopmax(key).get());
-        assertEquals(Map.of(gs("b"), 2.0, gs("a"), 1.0), client.zpopmax(key, 3).get());
-        assertTrue(client.zpopmax(key).get().isEmpty());
-        assertTrue(client.zpopmax(gs("non_existing_key")).get().isEmpty());
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void zpopmax_binary(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         Map<GlideString, Double> membersScores = Map.of(gs("a"), 1.0, gs("b"), 2.0, gs("c"),
+    // 3.0);
+    //         assertEquals(3, client.zadd(key, membersScores).get());
+    //         assertEquals(Map.of(gs("c"), 3.0), client.zpopmax(key).get());
+    //         assertEquals(Map.of(gs("b"), 2.0, gs("a"), 1.0), client.zpopmax(key, 3).get());
+    //         assertTrue(client.zpopmax(key).get().isEmpty());
+    //         assertTrue(client.zpopmax(gs("non_existing_key")).get().isEmpty());
 
-        // Key exists, but it is not a set
-        assertEquals(OK, client.set(key, gs("value")).get());
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
-        assertTrue(executionException.getCause() instanceof RequestException);
-    }
-    */
+    //         // Key exists, but it is not a set
+    //         assertEquals(OK, client.set(key, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.zpopmax(key).get());
+    //         assertTrue(executionException.getCause() instanceof RequestException);
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -2321,38 +2331,41 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
-    /* TODO: uncomment once client.zadd has binary version
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void bzpopmax_binary(BaseClient client) {
-        GlideString key1 = gs("{test}-1-" + UUID.randomUUID());
-        GlideString key2 = gs("{test}-2-" + UUID.randomUUID());
-        GlideString key3 = gs("{test}-3-" + UUID.randomUUID());
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void bzpopmax_binary(BaseClient client) {
+    //         GlideString key1 = gs("{test}-1-" + UUID.randomUUID());
+    //         GlideString key2 = gs("{test}-2-" + UUID.randomUUID());
+    //         GlideString key3 = gs("{test}-3-" + UUID.randomUUID());
 
-        assertEquals(2, client.zadd(key1, Map.of(gs("a"), 1.0, gs("b"), 1.5)).get());
-        assertEquals(1, client.zadd(key2, Map.of(gs("c"), 2.0)).get());
-        assertArrayEquals(
-                new Object[] {key1, "b", 1.5}, client.bzpopmax(new GlideString[] {key1, key2}, .5).get());
+    //         assertEquals(2, client.zadd(key1, Map.of(gs("a"), 1.0, gs("b"), 1.5)).get());
+    //         assertEquals(1, client.zadd(key2, Map.of(gs("c"), 2.0)).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key1, "b", 1.5}, client.bzpopmax(new GlideString[] {key1, key2},
+    // .5).get());
 
-        // nothing popped out - key does not exist
-        assertNull(
-                client
-                        .bzpopmax(new GlideString[] {key3}, REDIS_VERSION.isLowerThan("7.0.0") ? 1. : 0.001)
-                        .get());
+    //         // nothing popped out - key does not exist
+    //         assertNull(
+    //                 client
+    //                         .bzpopmax(new GlideString[] {key3}, REDIS_VERSION.isLowerThan("7.0.0")
+    // ? 1. : 0.001)
+    //                         .get());
 
-        // pops from the second key
-        assertArrayEquals(
-                new Object[] {key2, "c", 2.0}, client.bzpopmax(new GlideString[] {key3, key2}, .5).get());
+    //         // pops from the second key
+    //         assertArrayEquals(
+    //                 new Object[] {key2, "c", 2.0}, client.bzpopmax(new GlideString[] {key3, key2},
+    // .5).get());
 
-        // Key exists, but it is not a sorted set
-        assertEquals(OK, client.set(key3, gs("value")).get());
-        ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.bzpopmax(new GlideString[] {key3}, .5).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-    }
-    */
+    //         // Key exists, but it is not a sorted set
+    //         assertEquals(OK, client.set(key3, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzpopmax(new GlideString[]
+    // {key3}, .5).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -3314,58 +3327,63 @@ public class SharedCommandTests {
         assertEquals(entries, client.zmpop(new String[] {key2}, MIN, 10).get()[1]);
     }
 
-    /* TODO: uncomment once client.zadd has binary version
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void zmpop_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        GlideString key1 = gs("{zmpop}-1-" + UUID.randomUUID());
-        GlideString key2 = gs("{zmpop}-2-" + UUID.randomUUID());
-        GlideString key3 = gs("{zmpop}-3-" + UUID.randomUUID());
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void zmpop_binary(BaseClient client) {
+    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis
+    // 7");
+    //         GlideString key1 = gs("{zmpop}-1-" + UUID.randomUUID());
+    //         GlideString key2 = gs("{zmpop}-2-" + UUID.randomUUID());
+    //         GlideString key3 = gs("{zmpop}-3-" + UUID.randomUUID());
 
-        assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
-        assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
+    //         assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
+    //         assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of(gs("b1"), 2.)}, client.zmpop(new GlideString[] {key1, key2}, MAX).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
-                client.zmpop(new GlideString[] {key2, key1}, MAX, 10).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key1, Map.of(gs("b1"), 2.)}, client.zmpop(new GlideString[]
+    // {key1, key2}, MAX).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
+    //                 client.zmpop(new GlideString[] {key2, key1}, MAX, 10).get());
 
-        // nothing popped out
-        assertNull(client.zmpop(new GlideString[] {key3}, MIN).get());
-        assertNull(client.zmpop(new GlideString[] {key3}, MIN, 1).get());
+    //         // nothing popped out
+    //         assertNull(client.zmpop(new GlideString[] {key3}, MIN).get());
+    //         assertNull(client.zmpop(new GlideString[] {key3}, MIN, 1).get());
 
-        // Key exists, but it is not a sorted set
-        assertEquals(OK, client.set(key3, gs("value")).get());
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.zmpop(new GlideString[] {key3}, MAX).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.zmpop(new GlideString[] {key3}, MAX, 1).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+    //         // Key exists, but it is not a sorted set
+    //         assertEquals(OK, client.set(key3, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.zmpop(new GlideString[]
+    // {key3}, MAX).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.zmpop(new GlideString[] {key3},
+    // MAX, 1).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
 
-        // incorrect argument
-        executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.zmpop(new GlideString[] {key1}, MAX, 0).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        executionException =
-                assertThrows(ExecutionException.class, () -> client.zmpop(new GlideString[0], MAX).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+    //         // incorrect argument
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.zmpop(new GlideString[] {key1},
+    // MAX, 0).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.zmpop(new GlideString[0],
+    // MAX).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
 
-        // check that order of entries in the response is preserved
-        var entries = new LinkedHashMap<String, Double>();
-        for (int i = 0; i < 10; i++) {
-            // a => 1., b => 2. etc
-            entries.put(gs("" + ('a' + i)), (double) i);
-        }
-        assertEquals(10, client.zadd(key2, entries).get());
-        assertEquals(entries, client.zmpop(new GlideString[] {key2}, MIN, 10).get()[1]);
-    }
-    */
+    //         // check that order of entries in the response is preserved
+    //         var entries = new LinkedHashMap<String, Double>();
+    //         for (int i = 0; i < 10; i++) {
+    //             // a => 1., b => 2. etc
+    //             entries.put(gs("" + ('a' + i)), (double) i);
+    //         }
+    //         assertEquals(10, client.zadd(key2, entries).get());
+    //         assertEquals(entries, client.zmpop(new GlideString[] {key2}, MIN, 10).get()[1]);
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -3417,57 +3435,60 @@ public class SharedCommandTests {
         assertEquals(entries, client.bzmpop(new String[] {key2}, MIN, .1, 10).get()[1]);
     }
 
-    /* TODO: uncomment once client.zadd has binary version
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void bzmpop_binary(BaseClient client) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        GlideString key1 = gs("{bzmpop}-1-" + UUID.randomUUID());
-        GlideString key2 = gs("{bzmpop}-2-" + UUID.randomUUID());
-        GlideString key3 = gs("{bzmpop}-3-" + UUID.randomUUID());
+    //     TODO: uncomment once client.zadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void bzmpop_binary(BaseClient client) {
+    //         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis
+    // 7");
+    //         GlideString key1 = gs("{bzmpop}-1-" + UUID.randomUUID());
+    //         GlideString key2 = gs("{bzmpop}-2-" + UUID.randomUUID());
+    //         GlideString key3 = gs("{bzmpop}-3-" + UUID.randomUUID());
 
-        assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
-        assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
+    //         assertEquals(2, client.zadd(key1, Map.of(gs("a1"), 1., gs("b1"), 2.)).get());
+    //         assertEquals(2, client.zadd(key2, Map.of(gs("a2"), .1, gs("b2"), .2)).get());
 
-        assertArrayEquals(
-                new Object[] {key1, Map.of(gs("b1"), 2.)},
-                client.bzmpop(new GlideString[] {key1, key2}, MAX, 0.1).get());
-        assertArrayEquals(
-                new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
-                client.bzmpop(new GlideString[] {key2, key1}, MAX, 0.1, 10).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key1, Map.of(gs("b1"), 2.)},
+    //                 client.bzmpop(new GlideString[] {key1, key2}, MAX, 0.1).get());
+    //         assertArrayEquals(
+    //                 new Object[] {key2, Map.of(gs("b2"), .2, gs("a2"), .1)},
+    //                 client.bzmpop(new GlideString[] {key2, key1}, MAX, 0.1, 10).get());
 
-        // nothing popped out
-        assertNull(client.bzmpop(new GlideString[] {key3}, MIN, 0.001).get());
-        assertNull(client.bzmpop(new GlideString[] {key3}, MIN, 0.001, 1).get());
+    //         // nothing popped out
+    //         assertNull(client.bzmpop(new GlideString[] {key3}, MIN, 0.001).get());
+    //         assertNull(client.bzmpop(new GlideString[] {key3}, MIN, 0.001, 1).get());
 
-        // Key exists, but it is not a sorted set
-        assertEquals(OK, client.set(key3, gs("value")).get());
-        ExecutionException executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.bzmpop(new GlideString[] {key3}, MAX, .1).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.bzmpop(new GlideString[] {key3}, MAX, .1, 1).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+    //         // Key exists, but it is not a sorted set
+    //         assertEquals(OK, client.set(key3, gs("value")).get());
+    //         ExecutionException executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzmpop(new GlideString[] {key3},
+    // MAX, .1).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzmpop(new GlideString[] {key3},
+    // MAX, .1, 1).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
 
-        // incorrect argument
-        executionException =
-                assertThrows(
-                        ExecutionException.class, () -> client.bzmpop(new GlideString[] {key1}, MAX, .1, 0).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+    //         // incorrect argument
+    //         executionException =
+    //                 assertThrows(
+    //                         ExecutionException.class, () -> client.bzmpop(new GlideString[] {key1},
+    // MAX, .1, 0).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
 
-        // check that order of entries in the response is preserved
-        var entries = new LinkedHashMap<GlideString, Double>();
-        for (int i = 0; i < 10; i++) {
-            // a => 1., b => 2. etc
-            entries.put(gs("" + ('a' + i)), (double) i);
-        }
-        assertEquals(10, client.zadd(key2, entries).get());
-        assertEquals(entries, client.bzmpop(new GlideString[] {key2}, MIN, .1, 10).get()[1]);
-    }
-    */
+    //         // check that order of entries in the response is preserved
+    //         var entries = new LinkedHashMap<GlideString, Double>();
+    //         for (int i = 0; i < 10; i++) {
+    //             // a => 1., b => 2. etc
+    //             entries.put(gs("" + ('a' + i)), (double) i);
+    //         }
+    //         assertEquals(10, client.zadd(key2, entries).get());
+    //         assertEquals(entries, client.bzmpop(new GlideString[] {key2}, MIN, .1, 10).get()[1]);
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -4428,7 +4449,8 @@ public class SharedCommandTests {
         assertEquals(OK, client.set("foo", "bar").get());
         ExecutionException executionException =
                 assertThrows(
-                        ExecutionException.class, () -> client.brpop(new GlideString[] {gs("foo")}, .0001).get());
+                        ExecutionException.class,
+                        () -> client.brpop(new GlideString[] {gs("foo")}, .0001).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -4508,7 +4530,8 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(gs("foo"), gs("bar")).get());
         ExecutionException executionException =
                 assertThrows(
-                        ExecutionException.class, () -> client.blpop(new GlideString[] {gs("foo")}, .0001).get());
+                        ExecutionException.class,
+                        () -> client.blpop(new GlideString[] {gs("foo")}, .0001).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -5420,7 +5443,8 @@ public class SharedCommandTests {
         Long arraySize = 5L;
         GlideString[] lpushArgs = {gs("one"), gs("two"), gs("three"), gs("four"), gs("five")};
         Map<GlideString, GlideString[]> expected = Map.of(key1, new GlideString[] {gs("five")});
-        Map<GlideString, GlideString[]> expected2 = Map.of(key2, new GlideString[] {gs("one"), gs("two")});
+        Map<GlideString, GlideString[]> expected2 =
+                Map.of(key2, new GlideString[] {gs("one"), gs("two")});
 
         // nothing to be popped
         assertNull(client.lmpop(singleKeyArray, ListDirection.LEFT).get());
@@ -5435,7 +5459,8 @@ public class SharedCommandTests {
         assertDeepEquals(result, expected);
 
         // assert popping multiple elements from the right
-        Map<GlideString, GlideString[]> result2 = client.lmpop(multiKeyArray, ListDirection.RIGHT, 2L).get();
+        Map<GlideString, GlideString[]> result2 =
+                client.lmpop(multiKeyArray, ListDirection.RIGHT, 2L).get();
         assertDeepEquals(result2, expected2);
 
         // key exists but is not a list type key
@@ -5505,7 +5530,8 @@ public class SharedCommandTests {
         Long arraySize = 5L;
         GlideString[] lpushArgs = {gs("one"), gs("two"), gs("three"), gs("four"), gs("five")};
         Map<GlideString, GlideString[]> expected = Map.of(key1, new GlideString[] {gs("five")});
-        Map<GlideString, GlideString[]> expected2 = Map.of(key2, new GlideString[] {gs("one"), gs("two")});
+        Map<GlideString, GlideString[]> expected2 =
+                Map.of(key2, new GlideString[] {gs("one"), gs("two")});
 
         // nothing to be popped
         assertNull(client.blmpop(singleKeyArray, ListDirection.LEFT, 0.1).get());
@@ -5516,7 +5542,8 @@ public class SharedCommandTests {
         assertEquals(arraySize, client.lpush(key2, lpushArgs).get());
 
         // assert correct result from popping
-        Map<GlideString, GlideString[]> result = client.blmpop(singleKeyArray, ListDirection.LEFT, 0.1).get();
+        Map<GlideString, GlideString[]> result =
+                client.blmpop(singleKeyArray, ListDirection.LEFT, 0.1).get();
         assertDeepEquals(result, expected);
 
         // assert popping multiple elements from the right
@@ -5850,46 +5877,47 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
-    /* TODO: uncomment once client.sadd has binary version
-    @SneakyThrows
-    @ParameterizedTest(autoCloseArguments = false)
-    @MethodSource("getClients")
-    public void spop_spopCount_binary(BaseClient client) {
-        GlideString key = gs(UUID.randomUUID().toString());
-        GlideString stringKey = gs(UUID.randomUUID().toString());
-        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
-        GlideString member1 = gs(UUID.randomUUID().toString());
-        GlideString member2 = gs(UUID.randomUUID().toString());
-        GlideString member3 = gs(UUID.randomUUID().toString());
+    //     TODO: uncomment once client.sadd has binary version
+    //     @SneakyThrows
+    //     @ParameterizedTest(autoCloseArguments = false)
+    //     @MethodSource("getClients")
+    //     public void spop_spopCount_binary(BaseClient client) {
+    //         GlideString key = gs(UUID.randomUUID().toString());
+    //         GlideString stringKey = gs(UUID.randomUUID().toString());
+    //         GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+    //         GlideString member1 = gs(UUID.randomUUID().toString());
+    //         GlideString member2 = gs(UUID.randomUUID().toString());
+    //         GlideString member3 = gs(UUID.randomUUID().toString());
 
-        assertEquals(1, client.sadd(key, new GlideString[] {member1}).get());
-        assertEquals(member1, client.spop(key).get());
+    //         assertEquals(1, client.sadd(key, new GlideString[] {member1}).get());
+    //         assertEquals(member1, client.spop(key).get());
 
-        assertEquals(3, client.sadd(key, new GlideString[] {member1, member2, member3}).get());
-        // Pop with count value greater than the size of the set
-        assertEquals(Set.of(member1, member2, member3), client.spopCount(key, 4).get());
-        assertEquals(0, client.scard(key).get());
+    //         assertEquals(3, client.sadd(key, new GlideString[] {member1, member2, member3}).get());
+    //         // Pop with count value greater than the size of the set
+    //         assertEquals(Set.of(member1, member2, member3), client.spopCount(key, 4).get());
+    //         assertEquals(0, client.scard(key).get());
 
-        assertEquals(3, client.sadd(key, new GlideString[] {member1, member2, member3}).get());
-        assertEquals(Set.of(), client.spopCount(key, 0).get());
+    //         assertEquals(3, client.sadd(key, new GlideString[] {member1, member2, member3}).get());
+    //         assertEquals(Set.of(), client.spopCount(key, 0).get());
 
-        assertNull(client.spop(nonExistingKey).get());
-        assertEquals(Set.of(), client.spopCount(nonExistingKey, 3).get());
+    //         assertNull(client.spop(nonExistingKey).get());
+    //         assertEquals(Set.of(), client.spopCount(nonExistingKey, 3).get());
 
-        // invalid argument - count must be positive
-        ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.spopCount(key, -1).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+    //         // invalid argument - count must be positive
+    //         ExecutionException executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.spopCount(key, -1).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
 
-        // key exists but is not a set
-        assertEquals(OK, client.set(stringKey, gs("foo")).get());
-        executionException = assertThrows(ExecutionException.class, () -> client.spop(stringKey).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-        executionException =
-                assertThrows(ExecutionException.class, () -> client.spopCount(stringKey, 3).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
-    }
-    */
+    //         // key exists but is not a set
+    //         assertEquals(OK, client.set(stringKey, gs("foo")).get());
+    //         executionException = assertThrows(ExecutionException.class, () ->
+    // client.spop(stringKey).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //         executionException =
+    //                 assertThrows(ExecutionException.class, () -> client.spopCount(stringKey,
+    // 3).get());
+    //         assertInstanceOf(RequestException.class, executionException.getCause());
+    //     }
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
