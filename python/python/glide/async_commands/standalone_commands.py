@@ -418,7 +418,7 @@ class StandaloneCommands(CoreCommands):
 
     async def publish(self, message: str, channel: str) -> TOK:
         """
-        Publish message on pubsub channel.
+        Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
 
         Args:
