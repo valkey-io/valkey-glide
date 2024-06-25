@@ -2863,17 +2863,17 @@ class CoreCommands(Protocol):
         )
 
     async def xgroup_create_consumer(
-        self, key: str, group_name: str, consumer: str
+        self, key: str, group_name: str, consumer_name: str
     ) -> bool:
         """
-        Creates a consumer named `consumer` in the consumer group `group_name` for the stream stored at `key`.
+        Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
 
         See https://valkey.io/commands/xgroup-createconsumer for more details.
 
         Args:
             key (str): The key of the stream.
             group_name (str): The consumer group name.
-            consumer (str): The newly created consumer.
+            consumer_name (str): The newly created consumer.
 
         Returns:
             bool: True if the consumer is created. Otherwise, returns False.
@@ -2885,22 +2885,22 @@ class CoreCommands(Protocol):
         return cast(
             bool,
             await self._execute_command(
-                RequestType.XGroupCreateConsumer, [key, group_name, consumer]
+                RequestType.XGroupCreateConsumer, [key, group_name, consumer_name]
             ),
         )
 
     async def xgroup_del_consumer(
-        self, key: str, group_name: str, consumer: str
+        self, key: str, group_name: str, consumer_name: str
     ) -> int:
         """
-        Deletes a consumer named `consumer` in the consumer group `group_name` for the stream stored at `key`.
+        Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
 
         See https://valkey.io/commands/xgroup-delconsumer for more details.
 
         Args:
             key (str): The key of the stream.
             group_name (str): The consumer group name.
-            consumer (str): The consumer to delete.
+            consumer_name (str): The consumer to delete.
 
         Returns:
             int: The number of pending messages the `consumer` had before it was deleted.
@@ -2912,7 +2912,7 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(
-                RequestType.XGroupDelConsumer, [key, group_name, consumer]
+                RequestType.XGroupDelConsumer, [key, group_name, consumer_name]
             ),
         )
 
