@@ -936,9 +936,7 @@ public abstract class BaseClient
     public CompletableFuture<String> ltrim(@NonNull GlideString key, long start, long end) {
         return commandManager.submitNewCommand(
                 LTrim,
-                new GlideString[] {
-                    key, gs(Long.toString(start).getBytes()), gs(Long.toString(end).getBytes())
-                },
+                new GlideString[] {key, gs(Long.toString(start)), gs(Long.toString(end))},
                 this::handleStringResponse);
     }
 

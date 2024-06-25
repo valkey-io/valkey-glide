@@ -1096,7 +1096,7 @@ public class SharedCommandTests {
         assertArrayEquals(new String[] {"value1", "value2"}, client.lrange(key, 0, -1).get());
 
         // `start` is greater than `end` so the key will be removed.
-        assertEquals(OK, client.ltrim(key, 4, 2).get());
+        assertEquals(OK, client.ltrim(gs(key), 4, 2).get());
         assertArrayEquals(new String[] {}, client.lrange(key, 0, -1).get());
 
         assertEquals(OK, client.set(key, "foo").get());
@@ -1288,7 +1288,7 @@ public class SharedCommandTests {
         Set<GlideString> expectedMembersBin = Set.of(gs("member1"), gs("member2"), gs("member4"));
         assertEquals(expectedMembersBin, client.smembers(gs(key)).get());
 
-        assertEquals(1, client.srem(key, new String[] {"member1"}).get());
+        assertEquals(1, client.srem(gs(key), new GlideString[] {gs("member1")}).get());
         assertEquals(2, client.scard(key).get());
     }
 
@@ -1331,11 +1331,11 @@ public class SharedCommandTests {
         String setKey3 = "{key}" + UUID.randomUUID();
         String nonSetKey = "{key}" + UUID.randomUUID();
 
-        assertEquals(3, client.sadd(setKey1, new String[] {"1", "2", "3"}).get());
-        assertEquals(2, client.sadd(setKey2, new String[] {"2", "3"}).get());
+        assertEquals(3, client.sadd(gs(setKey1), new GlideString[] {gs("1"), gs("2"), gs("3")}).get());
+        assertEquals(2, client.sadd(gs(setKey2), new GlideString[] {gs("2"), gs("3")}).get());
 
         // move an elem
-        assertTrue(client.smove(setKey1, setKey2, "1").get());
+        assertTrue(client.smove(gs(setKey1), gs(setKey2), gs("1")).get());
         assertEquals(Set.of("2", "3"), client.smembers(setKey1).get());
         assertEquals(Set.of("1", "2", "3"), client.smembers(setKey2).get());
 
