@@ -1043,6 +1043,28 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void persist_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Boolean isTimeoutRemoved = true;
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(isTimeoutRemoved);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(Persist), eq(new GlideString[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.persist(key);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(isTimeoutRemoved, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void info_returns_success() {
         // setup
         String testPayload = "Key: Value";
@@ -1902,6 +1924,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lpush_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] elements = new GlideString[] {gs("value1"), gs("value2")};
+        GlideString[] args = new GlideString[] {key, gs("value1"), gs("value2")};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPush), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpush(key, elements);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lpop_returns_success() {
         // setup
         String key = "testKey";
@@ -2167,11 +2214,61 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lrem_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long count = 2L;
+        GlideString element = gs("value");
+        GlideString[] args = new GlideString[] {key, gs(Long.toString(count).getBytes()), element};
+        long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LRem), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lrem(key, count, element);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void rpush_returns_success() {
         // setup
         String key = "testKey";
         String[] elements = new String[] {"value1", "value2"};
         String[] args = new String[] {key, "value1", "value2"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(RPush), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.rpush(key, elements);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void rpush_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] elements = new GlideString[] {gs("value1"), gs("value2")};
+        GlideString[] args = new GlideString[] {key, gs("value1"), gs("value2")};
         Long value = 2L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -2924,10 +3021,59 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zrem_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] members = new GlideString[] {gs("member1"), gs("member2")};
+        GlideString[] arguments = ArrayUtils.addFirst(members, key);
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRem), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zrem(key, members);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zcard_returns_success() {
         // setup
         String key = "testKey";
         String[] arguments = new String[] {key};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zcard(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zcard_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -3121,6 +3267,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zscore_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member = gs("testMember");
+        GlideString[] arguments = new GlideString[] {key, member};
+        Double value = 3.5;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(ZScore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.zscore(key, member);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zrange_by_index_returns_success() {
         // setup
         String key = "testKey";
@@ -3290,6 +3461,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zrank_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString member = gs("testMember");
+        GlideString[] arguments = new GlideString[] {key, member};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRank), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zrank(key, member);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zrankWithScore_returns_success() {
         // setup
         String key = "testKey";
@@ -3390,11 +3586,64 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zmscore_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] members = new GlideString[] {gs("member1"), gs("member2")};
+        GlideString[] arguments = new GlideString[] {key, gs("member1"), gs("member2")};
+        Double[] value = new Double[] {2.5, 8.2};
+
+        CompletableFuture<Double[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double[]>submitNewCommand(eq(ZMScore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double[]> response = service.zmscore(key, members);
+        Double[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zdiffstore_returns_success() {
         // setup
         String destKey = "testDestKey";
         String[] keys = new String[] {"testKey1", "testKey2"};
         String[] arguments = new String[] {destKey, Long.toString(keys.length), "testKey1", "testKey2"};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZDiffStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zdiffstore(destKey, keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zdiffstore_binary_returns_success() {
+        // setup
+        GlideString destKey = gs("testDestKey");
+        GlideString[] keys = new GlideString[] {gs("testKey1"), gs("testKey2")};
+        GlideString[] arguments =
+                new GlideString[] {
+                    destKey, gs(Long.toString(keys.length).getBytes()), gs("testKey1"), gs("testKey2")
+                };
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -3497,6 +3746,35 @@ public class RedisClientTest {
         long start = 0;
         long end = -1;
         String[] arguments = new String[] {key, Long.toString(start), Long.toString(end)};
+        Long value = 5L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZRemRangeByRank), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zremrangebyrank(key, start, end);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zremrangebyrank_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long start = 0;
+        long end = -1;
+        GlideString[] arguments =
+                new GlideString[] {
+                    key, gs(Long.toString(start).getBytes()), gs(Long.toString(end).getBytes())
+                };
         Long value = 5L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -3979,10 +4257,60 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zintercard_with_limit_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        long limit = 3L;
+        GlideString[] arguments =
+                new GlideString[] {gs("2"), gs("key1"), gs("key2"), gs(LIMIT_REDIS_API), gs("3")};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zintercard(keys, limit);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zintercard_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         String[] arguments = new String[] {"2", "key1", "key2"};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(ZInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.zintercard(keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zintercard_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        GlideString[] arguments = new GlideString[] {gs("2"), gs("key1"), gs("key2")};
         Long value = 3L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -4083,6 +4411,32 @@ public class RedisClientTest {
         double increment = 4.2;
         String member = "member";
         String[] arguments = new String[] {key, "4.2", member};
+        Double value = 3.14;
+
+        CompletableFuture<Double> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double>submitNewCommand(eq(ZIncrBy), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double> response = service.zincrby(key, increment, member);
+        Double payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zincrby_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        double increment = 4.2;
+        GlideString member = gs("member");
+        GlideString[] arguments = new GlideString[] {key, gs("4.2"), member};
         Double value = 3.14;
 
         CompletableFuture<Double> testResponse = new CompletableFuture<>();
@@ -4909,11 +5263,56 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void rename_binary() {
+        // setup
+        GlideString key = gs("key1");
+        GlideString newKey = gs("key2");
+        GlideString[] arguments = new GlideString[] {key, newKey};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Rename), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.rename(key, newKey);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void renamenx_returns_success() {
         // setup
         String key = "key1";
         String newKey = "key2";
         String[] arguments = new String[] {key, newKey};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(true);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(RenameNX), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.renamenx(key, newKey);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertTrue(response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void renamenx_binary_returns_success() {
+        // setup
+        GlideString key = gs("key1");
+        GlideString newKey = gs("key2");
+        GlideString[] arguments = new GlideString[] {key, newKey};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(true);
@@ -5234,11 +5633,61 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void rpushx_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] elements = new GlideString[] {gs("value1"), gs("value2")};
+        GlideString[] args = new GlideString[] {key, gs("value1"), gs("value2")};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(RPushX), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.rpushx(key, elements);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lpushx_returns_success() {
         // setup
         String key = "testKey";
         String[] elements = new String[] {"value1", "value2"};
         String[] args = new String[] {key, "value1", "value2"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPushX), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpushx(key, elements);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lpushx_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] elements = new GlideString[] {gs("value1"), gs("value2")};
+        GlideString[] args = new GlideString[] {key, gs("value1"), gs("value2")};
         Long value = 2L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -5629,6 +6078,31 @@ public class RedisClientTest {
         String key = "testKey";
         String[] members = {"Catania", "Palermo"};
         String[] arguments = new String[] {key, "Catania", "Palermo"};
+        Double[][] value = {{15.087269, 40.0}, {13.361389, 38.115556}};
+
+        CompletableFuture<Double[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Double[][]>submitNewCommand(eq(GeoPos), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Double[][]> response = service.geopos(key, members);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geopos_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] members = {gs("Catania"), gs("Palermo")};
+        GlideString[] arguments = new GlideString[] {key, gs("Catania"), gs("Palermo")};
         Double[][] value = {{15.087269, 40.0}, {13.361389, 38.115556}};
 
         CompletableFuture<Double[][]> testResponse = new CompletableFuture<>();
