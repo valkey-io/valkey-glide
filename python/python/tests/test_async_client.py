@@ -38,9 +38,6 @@ from glide.async_commands.core import (
     InfBound,
     InfoSection,
     InsertPosition,
-    StreamAddOptions,
-    TrimByMaxLen,
-    TrimByMinId,
     UpdateOptions,
 )
 from glide.async_commands.sorted_set import (
@@ -57,6 +54,17 @@ from glide.async_commands.sorted_set import (
     RangeByScore,
     ScoreBoundary,
     ScoreFilter,
+)
+from glide.async_commands.stream import (
+    ExclusiveIdBound,
+    IdBound,
+    MaxId,
+    MinId,
+    StreamAddOptions,
+    StreamGroupOptions,
+    StreamReadOptions,
+    TrimByMaxLen,
+    TrimByMinId,
 )
 from glide.config import (
     ClusterClientConfiguration,
@@ -4805,6 +4813,348 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xrange_and_xrevrange(self, redis_client: TRedisClient):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        string_key = get_random_string(10)
+        stream_id1 = "0-1"
+        stream_id2 = "0-2"
+        stream_id3 = "0-3"
+
+        assert (
+            await redis_client.xadd(
+                key, [("f1", "v1")], StreamAddOptions(id=stream_id1)
+            )
+            == stream_id1
+        )
+        assert (
+            await redis_client.xadd(
+                key, [("f2", "v2")], StreamAddOptions(id=stream_id2)
+            )
+            == stream_id2
+        )
+        assert await redis_client.xlen(key) == 2
+
+        # get everything from the stream
+        assert await redis_client.xrange(key, MinId(), MaxId()) == {
+            stream_id1: [["f1", "v1"]],
+            stream_id2: [["f2", "v2"]],
+        }
+        assert await redis_client.xrevrange(key, MaxId(), MinId()) == {
+            stream_id2: [["f2", "v2"]],
+            stream_id1: [["f1", "v1"]],
+        }
+
+        # returns empty mapping if + before -
+        assert await redis_client.xrange(key, MaxId(), MinId()) == {}
+        # rev search returns empty mapping if - before +
+        assert await redis_client.xrevrange(key, MinId(), MaxId()) == {}
+
+        assert (
+            await redis_client.xadd(
+                key, [("f3", "v3")], StreamAddOptions(id=stream_id3)
+            )
+            == stream_id3
+        )
+
+        # get the newest entry
+        assert await redis_client.xrange(
+            key, ExclusiveIdBound(stream_id2), ExclusiveIdBound.from_timestamp(5), 1
+        ) == {stream_id3: [["f3", "v3"]]}
+        assert await redis_client.xrevrange(
+            key, ExclusiveIdBound.from_timestamp(5), ExclusiveIdBound(stream_id2), 1
+        ) == {stream_id3: [["f3", "v3"]]}
+
+        # xrange/xrevrange against an emptied stream
+        assert await redis_client.xdel(key, [stream_id1, stream_id2, stream_id3]) == 3
+        assert await redis_client.xrange(key, MinId(), MaxId(), 10) == {}
+        assert await redis_client.xrevrange(key, MaxId(), MinId(), 10) == {}
+
+        assert await redis_client.xrange(non_existing_key, MinId(), MaxId()) == {}
+        assert await redis_client.xrevrange(non_existing_key, MaxId(), MinId()) == {}
+
+        # count value < 1 returns None
+        assert await redis_client.xrange(key, MinId(), MaxId(), 0) is None
+        assert await redis_client.xrange(key, MinId(), MaxId(), -1) is None
+        assert await redis_client.xrevrange(key, MaxId(), MinId(), 0) is None
+        assert await redis_client.xrevrange(key, MaxId(), MinId(), -1) is None
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo")
+        with pytest.raises(RequestError):
+            await redis_client.xrange(string_key, MinId(), MaxId())
+        with pytest.raises(RequestError):
+            await redis_client.xrevrange(string_key, MaxId(), MinId())
+
+        # invalid start bound
+        with pytest.raises(RequestError):
+            await redis_client.xrange(key, IdBound("not_a_stream_id"), MaxId())
+        with pytest.raises(RequestError):
+            await redis_client.xrevrange(key, MaxId(), IdBound("not_a_stream_id"))
+
+        # invalid end bound
+        with pytest.raises(RequestError):
+            await redis_client.xrange(key, MinId(), IdBound("not_a_stream_id"))
+        with pytest.raises(RequestError):
+            await redis_client.xrevrange(key, IdBound("not_a_stream_id"), MinId())
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xread(
+        self, redis_client: TRedisClient, cluster_mode, protocol, request
+    ):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:3-{get_random_string(10)}"
+        stream_id1_1 = "1-1"
+        stream_id1_2 = "1-2"
+        stream_id1_3 = "1-3"
+        stream_id2_1 = "2-1"
+        stream_id2_2 = "2-2"
+        stream_id2_3 = "2-3"
+        non_existing_id = "99-99"
+
+        # setup first entries in streams key1 and key2
+        assert (
+            await redis_client.xadd(
+                key1, [("f1_1", "v1_1")], StreamAddOptions(id=stream_id1_1)
+            )
+            == stream_id1_1
+        )
+        assert (
+            await redis_client.xadd(
+                key2, [("f2_1", "v2_1")], StreamAddOptions(id=stream_id2_1)
+            )
+            == stream_id2_1
+        )
+
+        # setup second entries in streams key1 and key2
+        assert (
+            await redis_client.xadd(
+                key1, [("f1_2", "v1_2")], StreamAddOptions(id=stream_id1_2)
+            )
+            == stream_id1_2
+        )
+        assert (
+            await redis_client.xadd(
+                key2, [("f2_2", "v2_2")], StreamAddOptions(id=stream_id2_2)
+            )
+            == stream_id2_2
+        )
+
+        # setup third entries in streams key1 and key2
+        assert (
+            await redis_client.xadd(
+                key1, [("f1_3", "v1_3")], StreamAddOptions(id=stream_id1_3)
+            )
+            == stream_id1_3
+        )
+        assert (
+            await redis_client.xadd(
+                key2, [("f2_3", "v2_3")], StreamAddOptions(id=stream_id2_3)
+            )
+            == stream_id2_3
+        )
+
+        assert await redis_client.xread({key1: stream_id1_1, key2: stream_id2_1}) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+                stream_id1_3: [["f1_3", "v1_3"]],
+            },
+            key2: {
+                stream_id2_2: [["f2_2", "v2_2"]],
+                stream_id2_3: [["f2_3", "v2_3"]],
+            },
+        }
+
+        assert await redis_client.xread({non_existing_key: stream_id1_1}) is None
+        assert await redis_client.xread({key1: non_existing_id}) is None
+
+        # passing an empty read options argument has no effect
+        assert await redis_client.xread({key1: stream_id1_1}, StreamReadOptions()) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+                stream_id1_3: [["f1_3", "v1_3"]],
+            },
+        }
+
+        assert await redis_client.xread(
+            {key1: stream_id1_1}, StreamReadOptions(count=1)
+        ) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+            },
+        }
+        assert await redis_client.xread(
+            {key1: stream_id1_1}, StreamReadOptions(count=1, block_ms=1000)
+        ) == {
+            key1: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+            },
+        }
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xread_edge_cases_and_failures(
+        self, redis_client: TRedisClient, cluster_mode, protocol, request
+    ):
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        string_key = f"{{testKey}}:2-{get_random_string(10)}"
+        stream_id0 = "0-0"
+        stream_id1 = "1-1"
+        stream_id2 = "1-2"
+
+        assert (
+            await redis_client.xadd(
+                key1, [("f1", "v1")], StreamAddOptions(id=stream_id1)
+            )
+            == stream_id1
+        )
+        assert (
+            await redis_client.xadd(
+                key1, [("f2", "v2")], StreamAddOptions(id=stream_id2)
+            )
+            == stream_id2
+        )
+
+        test_client = await create_client(
+            request=request, protocol=protocol, cluster_mode=cluster_mode, timeout=900
+        )
+        # ensure command doesn't time out even if timeout > request timeout
+        assert (
+            await test_client.xread(
+                {key1: stream_id2}, StreamReadOptions(block_ms=1000)
+            )
+            is None
+        )
+
+        async def endless_xread_call():
+            await test_client.xread({key1: stream_id2}, StreamReadOptions(block_ms=0))
+
+        # when xread is called with a block timeout of 0, it should never timeout, but we wrap the test with a timeout
+        # to avoid the test getting stuck forever.
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(endless_xread_call(), timeout=3)
+
+        # if count is non-positive, it is ignored
+        assert await redis_client.xread(
+            {key1: stream_id0}, StreamReadOptions(count=0)
+        ) == {
+            key1: {
+                stream_id1: [["f1", "v1"]],
+                stream_id2: [["f2", "v2"]],
+            },
+        }
+        assert await redis_client.xread(
+            {key1: stream_id0}, StreamReadOptions(count=-1)
+        ) == {
+            key1: {
+                stream_id1: [["f1", "v1"]],
+                stream_id2: [["f2", "v2"]],
+            },
+        }
+
+        # invalid stream ID
+        with pytest.raises(RequestError):
+            await redis_client.xread({key1: "invalid_stream_id"})
+
+        # invalid argument - block cannot be negative
+        with pytest.raises(RequestError):
+            await redis_client.xread({key1: stream_id1}, StreamReadOptions(block_ms=-1))
+
+        # invalid argument - keys_and_ids must not be empty
+        with pytest.raises(RequestError):
+            await redis_client.xread({})
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo")
+        with pytest.raises(RequestError):
+            await redis_client.xread({string_key: stream_id1, key1: stream_id1})
+        with pytest.raises(RequestError):
+            await redis_client.xread({key1: stream_id1, string_key: stream_id1})
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xgroup_create_xgroup_destroy(
+        self, redis_client: TRedisClient, cluster_mode, protocol, request
+    ):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        string_key = get_random_string(10)
+        group_name1 = get_random_string(10)
+        group_name2 = get_random_string(10)
+        stream_id = "0-1"
+
+        # trying to create a consumer group for a non-existing stream without the "MKSTREAM" arg results in error
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create(non_existing_key, group_name1, stream_id)
+
+        # calling with the "MKSTREAM" arg should create the new stream automatically
+        assert (
+            await redis_client.xgroup_create(
+                key, group_name1, stream_id, StreamGroupOptions(make_stream=True)
+            )
+            == OK
+        )
+
+        # invalid arg - group names must be unique, but group_name1 already exists
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create(key, group_name1, stream_id)
+
+        # invalid stream ID format
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create(
+                key, group_name2, "invalid_stream_id_format"
+            )
+
+        assert await redis_client.xgroup_destroy(key, group_name1) is True
+        # calling xgroup_destroy again returns False because the group was already destroyed above
+        assert await redis_client.xgroup_destroy(key, group_name1) is False
+
+        # attempting to destroy a group for a non-existing key should raise an error
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_destroy(non_existing_key, group_name1)
+
+        # "ENTRIESREAD" option was added in Redis 7.0.0
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            with pytest.raises(RequestError):
+                await redis_client.xgroup_create(
+                    key,
+                    group_name1,
+                    stream_id,
+                    StreamGroupOptions(entries_read_id="10"),
+                )
+        else:
+            assert (
+                await redis_client.xgroup_create(
+                    key,
+                    group_name1,
+                    stream_id,
+                    StreamGroupOptions(entries_read_id="10"),
+                )
+                == OK
+            )
+
+            # invalid entries_read_id - cannot be the zero ("0-0") ID
+            with pytest.raises(RequestError):
+                await redis_client.xgroup_create(
+                    key,
+                    group_name2,
+                    stream_id,
+                    StreamGroupOptions(entries_read_id="0-0"),
+                )
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create(
+                string_key, group_name1, stream_id, StreamGroupOptions(make_stream=True)
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_destroy(string_key, group_name1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_pfadd(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.pfadd(key, []) == 1
@@ -5561,6 +5911,107 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_copy_no_database(self, redis_client: TRedisClient):
+        min_version = "6.2.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        source = f"{{testKey}}:1-{get_random_string(10)}"
+        destination = f"{{testKey}}:2-{get_random_string(10)}"
+        value1 = get_random_string(5)
+        value2 = get_random_string(5)
+
+        # neither key exists
+        assert await redis_client.copy(source, destination, replace=False) is False
+        assert await redis_client.copy(source, destination) is False
+
+        # source exists, destination does not
+        await redis_client.set(source, value1)
+        assert await redis_client.copy(source, destination, replace=False) is True
+        assert await redis_client.get(destination) == value1
+
+        # new value for source key
+        await redis_client.set(source, value2)
+
+        # both exists, no REPLACE
+        assert await redis_client.copy(source, destination) is False
+        assert await redis_client.copy(source, destination, replace=False) is False
+        assert await redis_client.get(destination) == value1
+
+        # both exists, with REPLACE
+        assert await redis_client.copy(source, destination, replace=True) is True
+        assert await redis_client.get(destination) == value2
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_copy_database(self, redis_client: RedisClient):
+        min_version = "6.2.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        source = get_random_string(10)
+        destination = get_random_string(10)
+        value1 = get_random_string(5)
+        value2 = get_random_string(5)
+        index0 = 0
+        index1 = 1
+        index2 = 2
+
+        try:
+            assert await redis_client.select(index0) == OK
+
+            # neither key exists
+            assert (
+                await redis_client.copy(source, destination, index1, replace=False)
+                is False
+            )
+
+            # source exists, destination does not
+            await redis_client.set(source, value1)
+            assert (
+                await redis_client.copy(source, destination, index1, replace=False)
+                is True
+            )
+            assert await redis_client.select(index1) == OK
+            assert await redis_client.get(destination) == value1
+
+            # new value for source key
+            assert await redis_client.select(index0) == OK
+            await redis_client.set(source, value2)
+
+            # no REPLACE, copying to existing key on DB 0 & 1, non-existing key on DB 2
+            assert (
+                await redis_client.copy(source, destination, index1, replace=False)
+                is False
+            )
+            assert (
+                await redis_client.copy(source, destination, index2, replace=False)
+                is True
+            )
+
+            # new value only gets copied to DB 2
+            assert await redis_client.select(index1) == OK
+            assert await redis_client.get(destination) == value1
+            assert await redis_client.select(index2) == OK
+            assert await redis_client.get(destination) == value2
+
+            # both exists, with REPLACE, when value isn't the same, source always get copied to destination
+            assert await redis_client.select(index0) == OK
+            assert (
+                await redis_client.copy(source, destination, index1, replace=True)
+                is True
+            )
+            assert await redis_client.select(index1) == OK
+            assert await redis_client.get(destination) == value2
+
+            # invalid DB index
+            with pytest.raises(RequestError):
+                await redis_client.copy(source, destination, -1, replace=True)
+        finally:
+            assert await redis_client.select(0) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut(self, redis_client: TRedisClient):
         result = await redis_client.lolwut()
         assert "Redis ver. " in result
@@ -5632,6 +6083,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.msetnx({"abc": "abc", "zxy": "zyx"}),
             redis_client.sunion(["def", "ghi"]),
             redis_client.bitop(BitwiseOperation.OR, "abc", ["zxy", "lkn"]),
+            redis_client.xread({"abc": "0-0", "zxy": "0-0"}),
         ]
 
         if not await check_if_server_version_lt(redis_client, "6.2.0"):
@@ -5642,7 +6094,8 @@ class TestMultiKeyCommandCrossSlot:
                         "zxy",
                         GeospatialData(15, 37),
                         GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
-                    )
+                    ),
+                    redis_client.copy("abc", "zxy", replace=True),
                 ]
             )
 

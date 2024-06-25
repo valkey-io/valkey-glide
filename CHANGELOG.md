@@ -48,7 +48,13 @@
 * Python: Added BITFIELD and BITFIELD_RO commands ([#1615](https://github.com/aws/glide-for-redis/pull/1615))
 * Python: Added ZREVRANK command ([#1614](https://github.com/aws/glide-for-redis/pull/1614))
 * Python: Added XDEL command ([#1619](https://github.com/aws/glide-for-redis/pull/1619))
+* Python: Added XRANGE command ([#1624](https://github.com/aws/glide-for-redis/pull/1624))
+* Python: Added COPY command ([#1626](https://github.com/aws/glide-for-redis/pull/1626))
+* Python: Added XREVRANGE command ([#1625](https://github.com/aws/glide-for-redis/pull/1625))
+* Python: Added XREAD command ([#1644](https://github.com/aws/glide-for-redis/pull/1644))
+* Python: Added XGROUP CREATE and XGROUP DESTROY commands ([#1646](https://github.com/aws/glide-for-redis/pull/1646))
 * Python: Added LOLWUT command ([#1657](https://github.com/aws/glide-for-redis/pull/1657))
+
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

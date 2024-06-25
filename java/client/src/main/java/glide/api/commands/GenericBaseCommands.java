@@ -1,9 +1,12 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
+import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -400,6 +403,23 @@ public interface GenericBaseCommands {
     CompletableFuture<Boolean> persist(String key);
 
     /**
+     * Removes the existing timeout on <code>key</code>, turning the <code>key</code> from volatile (a
+     * <code>key</code> with an expire set) to persistent (a <code>key</code> that will never expire
+     * as no timeout is associated).
+     *
+     * @see <a href="https://redis.io/commands/persist/">redis.io</a> for details.
+     * @param key The <code>key</code> to remove the existing timeout on.
+     * @return <code>false</code> if <code>key</code> does not exist or does not have an associated
+     *     timeout, <code>true</code> if the timeout has been removed.
+     * @example
+     *     <pre>{@code
+     * Boolean timeoutRemoved = client.persist(gs("my_key")).get();
+     * assert timeoutRemoved; // Indicates that the timeout associated with the key "my_key" was successfully removed.
+     * }</pre>
+     */
+    CompletableFuture<Boolean> persist(GlideString key);
+
+    /**
      * Returns the string representation of the type of the value stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/type/">redis.io</a> for details.
@@ -512,6 +532,26 @@ public interface GenericBaseCommands {
     CompletableFuture<String> rename(String key, String newKey);
 
     /**
+     * Renames <code>key</code> to <code>newKey</code>.<br>
+     * If <code>newKey</code> already exists it is overwritten.
+     *
+     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://redis.io/commands/rename/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new name of the key.
+     * @return If the <code>key</code> was successfully renamed, return <code>"OK"</code>. If <code>
+     *     key</code> does not exist, an error is thrown.
+     * @example
+     *     <pre>{@code
+     * String value = client.set(gs("key"), gs("value")).get();
+     * value = client.rename(gs("key"), gs("newKeyName")).get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> rename(GlideString key, GlideString newKey);
+
+    /**
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
      * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
@@ -528,6 +568,24 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> renamenx(String key, String newKey);
+
+    /**
+     * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
+     *
+     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new key name.
+     * @return <code>true</code> if <code>key</code> was renamed to <code>newKey</code>, <code>false
+     *     </code> if <code>newKey</code> already exists.
+     * @example
+     *     <pre>{@code
+     * Boolean renamed = client.renamenx(gs("old_key"), gs("new_key")).get();
+     * assert renamed;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> renamenx(GlideString key, GlideString newKey);
 
     /**
      * Updates the last access time of specified <code>keys</code>.
@@ -590,4 +648,123 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> copy(String source, String destination, boolean replace);
+
+    /**
+     * Serialize the value stored at <code>key</code> in a Valkey-specific format and return it to the
+     * user.
+     *
+     * @see <a href="https://valkey.io/commands/dump/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @return The serialized value of a set.<br>
+     *     If <code>key</code> does not exist, <code>null</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * byte[] result = client.dump("myKey").get();
+     *
+     * byte[] response = client.dump("nonExistingKey").get();
+     * assert response.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<byte[]> dump(GlideString key);
+
+    /**
+     * Create a <code>key</code> associated with a <code>value</code> that is obtained by
+     * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
+     *
+     * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
+     *     persist.
+     * @param value The serialized value.
+     * @return Return <code>OK</code> if successfully create a <code>key</code> with a <code>value
+     *      </code>.
+     * @example
+     *     <pre>{@code
+     * String result = client.restore(gs("newKey"), 0, value).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> restore(GlideString key, long ttl, byte[] value);
+
+    /**
+     * Create a <code>key</code> associated with a <code>value</code> that is obtained by
+     * deserializing the provided serialized <code>value</code> (obtained via {@link #dump}).
+     *
+     * @see <a href="https://valkey.io/commands/restore/">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param ttl The expiry time (in milliseconds). If <code>0</code>, the <code>key</code> will
+     *     persist.
+     * @param value The serialized value.
+     * @param restoreOptions The restore options. See {@link RestoreOptions}.
+     * @return Return <code>OK</code> if successfully create a <code>key</code> with a <code>value
+     *      </code>.
+     * @example
+     *     <pre>{@code
+     * RestoreOptions options = RestoreOptions.builder().replace().absttl().idletime(10).frequency(10).build()).get();
+     * // Set restore options with replace and absolute TTL modifiers, object idletime and frequency to 10.
+     * String result = client.restore(gs("newKey"), 0, value, options).get();
+     * assert result.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> restore(
+            GlideString key, long ttl, byte[] value, RestoreOptions restoreOptions);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * <br>
+     * The <code>sort</code> command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.<br>
+     * To store the result into a new key, see {@link #sortStore(String, String)}.<br>
+     *
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @return An <code>Array</code> of sorted elements.
+     * @example
+     *     <pre>{@code
+     * client.lpush("mylist", new String[] {"3", "1", "2"}).get();
+     * assertArrayEquals(new String[] {"1", "2", "3"}, client.sort("mylist").get()); // List is sorted in ascending order
+     * }</pre>
+     */
+    CompletableFuture<String[]> sort(String key);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * <br>
+     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
+     * and apply transformations on sorted elements.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @return An <code>Array</code> of sorted elements.
+     * @example
+     *     <pre>{@code
+     * client.lpush("mylist", new String[] {"3", "1", "2"}).get();
+     * assertArrayEquals(new String[] {"1", "2", "3"}, client.sortReadOnly("mylist").get()); // List is sorted in ascending order
+     * }</pre>
+     */
+    CompletableFuture<String[]> sortReadOnly(String key);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
+     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
+     * different criteria, apply transformations on sorted elements, and store the result in a new
+     * key.<br>
+     * To get the sort result without storing it into a key, see {@link #sort(String)} or {@link
+     * #sortReadOnly(String)}.
+     *
+     * @apiNote When in cluster mode, <code>key</code> and <code>destination</code> must map to the
+     *     same hash slot.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param destination The key where the sorted result will be stored.
+     * @return The number of elements in the sorted key stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * client.lpush("mylist", new String[] {"3", "1", "2"}).get();
+     * assert client.sortStore("mylist", "destination").get() == 3;
+     * assertArrayEquals(
+     *    new String[] {"1", "2", "3"},
+     *    client.lrange("destination", 0, -1).get()); // Sorted list is stored in `destination`
+     * }</pre>
+     */
+    CompletableFuture<Long> sortStore(String key, String destination);
 }

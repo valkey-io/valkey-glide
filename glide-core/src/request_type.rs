@@ -201,6 +201,11 @@ pub enum RequestType {
     XGroupDelConsumer = 190,
     RandomKey = 191,
     GetEx = 192,
+    Dump = 193,
+    Restore = 194,
+    SortReadOnly = 195,
+    FunctionDump = 196,
+    FunctionRestore = 197,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -405,6 +410,11 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::XGroupDelConsumer => RequestType::XGroupDelConsumer,
             ProtobufRequestType::RandomKey => RequestType::RandomKey,
             ProtobufRequestType::GetEx => RequestType::GetEx,
+            ProtobufRequestType::Dump => RequestType::Dump,
+            ProtobufRequestType::Restore => RequestType::Restore,
+            ProtobufRequestType::SortReadOnly => RequestType::SortReadOnly,
+            ProtobufRequestType::FunctionDump => RequestType::FunctionDump,
+            ProtobufRequestType::FunctionRestore => RequestType::FunctionRestore,
         }
     }
 }
@@ -607,6 +617,11 @@ impl RequestType {
             RequestType::XGroupDelConsumer => Some(get_two_word_command("XGROUP", "DELCONSUMER")),
             RequestType::RandomKey => Some(cmd("RANDOMKEY")),
             RequestType::GetEx => Some(cmd("GETEX")),
+            RequestType::Dump => Some(cmd("DUMP")),
+            RequestType::Restore => Some(cmd("RESTORE")),
+            RequestType::SortReadOnly => Some(cmd("SORT_RO")),
+            RequestType::FunctionDump => Some(get_two_word_command("FUNCTION", "DUMP")),
+            RequestType::FunctionRestore => Some(get_two_word_command("FUNCTION", "RESTORE")),
         }
     }
 }

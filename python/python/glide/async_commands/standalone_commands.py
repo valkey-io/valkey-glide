@@ -418,7 +418,7 @@ class StandaloneCommands(CoreCommands):
 
     async def publish(self, message: str, channel: str) -> TOK:
         """
-        Publish message on pubsub channel.
+        Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
 
         Args:
@@ -458,6 +458,50 @@ class StandaloneCommands(CoreCommands):
         return cast(
             TOK,
             await self._execute_command(RequestType.FlushAll, args),
+        )
+
+    async def copy(
+        self,
+        source: str,
+        destination: str,
+        destinationDB: Optional[int] = None,
+        replace: Optional[bool] = None,
+    ) -> bool:
+        """
+        Copies the value stored at the `source` to the `destination` key. If `destinationDB`
+        is specified, the value will be copied to the database specified by `destinationDB`,
+        otherwise the current database will be used. When `replace` is True, removes the
+        `destination` key first if it already exists, otherwise performs no action.
+
+        See https://valkey.io/commands/copy for more details.
+
+        Args:
+            source (str): The key to the source value.
+            destination (str): The key where the value should be copied to.
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
+            replace (Optional[bool]): If the destination key should be removed before copying the value to it.
+
+        Returns:
+            bool: True if the source was copied. Otherwise, return False.
+
+        Examples:
+            >>> await client.set("source", "sheep")
+            >>> await client.copy("source", "destination", 1, False)
+                True # Source was copied
+            >>> await client.select(1)
+            >>> await client.get("destination")
+                "sheep"
+
+        Since: Redis version 6.2.0.
+        """
+        args = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
+        if replace is True:
+            args.append("REPLACE")
+        return cast(
+            bool,
+            await self._execute_command(RequestType.Copy, args),
         )
 
     async def lolwut(

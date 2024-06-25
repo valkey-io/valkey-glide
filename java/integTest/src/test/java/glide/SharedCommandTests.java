@@ -46,6 +46,7 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByLex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
+import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
@@ -210,6 +211,21 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.append(key2, "z").get());
         assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void appendBinary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString value = gs(String.valueOf(UUID.randomUUID()));
+
+        // Append on non-existing string(similar to SET)
+        assertEquals(value.getString().length(), client.append(key, value).get());
+
+        assertEquals(value.getString().length() * 2L, client.append(key, value).get());
+        GlideString value2 = gs(value.getString() + value.getString());
+        assertEquals(value2, client.get(key).get());
     }
 
     @SneakyThrows
@@ -1268,6 +1284,10 @@ public class SharedCommandTests {
 
         Set<String> expectedMembers = Set.of("member1", "member2", "member4");
         assertEquals(expectedMembers, client.smembers(key).get());
+
+        Set<GlideString> expectedMembersBin = Set.of(gs("member1"), gs("member2"), gs("member4"));
+        assertEquals(expectedMembersBin, client.smembers(gs(key)).get());
+
         assertEquals(1, client.srem(key, new String[] {"member1"}).get());
         assertEquals(2, client.scard(key).get());
     }
@@ -1361,7 +1381,7 @@ public class SharedCommandTests {
         String key1 = "{key}" + UUID.randomUUID();
 
         assertEquals(OK, client.set(key1, "foo").get());
-        assertEquals(OK, client.rename(key1, key1 + "_rename").get());
+        assertEquals(OK, client.rename(gs(key1), gs((key1 + "_rename"))).get());
         assertEquals(1L, client.exists(new String[] {key1 + "_rename"}).get());
 
         // key doesn't exist
@@ -1390,8 +1410,8 @@ public class SharedCommandTests {
 
         // rename a string
         assertEquals(OK, client.set(key1, "key1").get());
-        assertTrue(client.renamenx(key1, key2).get());
-        assertFalse(client.renamenx(key2, key3).get());
+        assertTrue(client.renamenx(gs(key1), gs(key2)).get());
+        assertFalse(client.renamenx(gs(key2), gs(key3)).get());
         assertEquals("key1", client.get(key2).get());
         assertEquals(1, client.del(new String[] {key1, key2}).get());
 
@@ -1812,14 +1832,13 @@ public class SharedCommandTests {
 
         assertFalse(client.persist(key).get());
 
-        assertEquals(OK, client.set(key, "persist_value").get());
-        assertFalse(client.persist(key).get());
+        assertEquals(OK, client.set(gs(key), gs("persist_value")).get());
+        assertFalse(client.persist(gs(key)).get());
 
         assertTrue(client.expire(key, 10L).get());
         Long persistAmount = client.ttl(key).get();
         assertTrue(0L <= persistAmount && persistAmount <= 10L);
-        assertTrue(client.persist(key).get());
-
+        assertTrue(client.persist(gs(key)).get());
         assertEquals(-1L, client.ttl(key).get());
     }
 
@@ -2280,10 +2299,15 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new Double[] {1.0, null, null, 3.0},
                 client
-                        .zmscore(key1, new String[] {"one", "nonExistentMember", "nonExistentMember", "three"})
+                        .zmscore(
+                                gs(key1),
+                                new GlideString[] {
+                                    gs("one"), gs("nonExistentMember"), gs("nonExistentMember"), gs("three")
+                                })
                         .get());
         assertArrayEquals(
-                new Double[] {null}, client.zmscore("nonExistentKey", new String[] {"one"}).get());
+                new Double[] {null},
+                client.zmscore(gs("nonExistentKey"), new GlideString[] {gs("one")}).get());
 
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key2, "bar").get());
@@ -4578,6 +4602,7 @@ public class SharedCommandTests {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
         String[] members = {"Palermo", "Catania"};
+        GlideString[] members_gs = {gs("Palermo"), gs("Catania")};
         Double[][] expected = {
             {13.36138933897018433, 38.11555639549629859}, {15.08726745843887329, 37.50266842333162032}
         };
@@ -4590,6 +4615,14 @@ public class SharedCommandTests {
 
         // Loop through the arrays and perform assertions
         Double[][] actual = client.geopos(key1, members).get();
+        for (int i = 0; i < expected.length; i++) {
+            for (int j = 0; j < expected[i].length; j++) {
+                assertEquals(expected[i][j], actual[i][j], 1e-9);
+            }
+        }
+
+        // Loop through the arrays and perform assertions
+        actual = client.geopos(gs(key1), members_gs).get();
         for (int i = 0; i < expected.length; i++) {
             for (int j = 0; j < expected[i].length; j++) {
                 assertEquals(expected[i][j], actual[i][j], 1e-9);
@@ -5762,6 +5795,164 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(nonSetKey, "value").get());
         assertThrows(
                 ExecutionException.class, () -> client.sunion(new String[] {nonSetKey, key1}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void test_dump_restore(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String newKey1 = UUID.randomUUID().toString();
+        String newKey2 = UUID.randomUUID().toString();
+        String nonExistingKey = UUID.randomUUID().toString();
+        String value = "oranges";
+
+        assertEquals(OK, client.set(key, value).get());
+
+        // Dump existing key
+        byte[] result = client.dump(gs(key)).get();
+        assertNotNull(result);
+
+        // Dump non-existing key
+        assertNull(client.dump(gs(nonExistingKey)).get());
+
+        // Restore to a new key
+        assertEquals(OK, client.restore(gs(newKey1), 0L, result).get());
+
+        // Restore to an existing key - Error: "Target key name already exists"
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.restore(gs(newKey1), 0L, result).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Restore with checksum error - Error: "payload version or checksum are wrong"
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.restore(gs(newKey2), 0L, value.getBytes()).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void test_dump_restore_withOptions(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String newKey = UUID.randomUUID().toString();
+        String value = "oranges";
+
+        assertEquals(OK, client.set(key, value).get());
+
+        // Dump existing key
+        byte[] data = client.dump(gs(key)).get();
+        assertNotNull(data);
+
+        // Restore without option
+        String result = client.restore(gs(newKey), 0L, data).get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE option
+        result = client.restore(gs(newKey), 0L, data, RestoreOptions.builder().replace().build()).get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE and existing key holding different value
+        assertEquals(1, client.sadd(key2, new String[] {"a"}).get());
+        result = client.restore(gs(key2), 0L, data, RestoreOptions.builder().replace().build()).get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE, ABSTTL, and positive TTL
+        result =
+                client
+                        .restore(gs(newKey), 1000L, data, RestoreOptions.builder().replace().absttl().build())
+                        .get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE, ABSTTL, and negative TTL
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .restore(
+                                                gs(newKey), -10L, data, RestoreOptions.builder().replace().absttl().build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Restore with REPLACE and positive idletime
+        result =
+                client
+                        .restore(gs(newKey), 0L, data, RestoreOptions.builder().replace().idletime(10L).build())
+                        .get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE and negative idletime
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .restore(
+                                                gs(newKey),
+                                                0L,
+                                                data,
+                                                RestoreOptions.builder().replace().idletime(-10L).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Restore with REPLACE and positive frequency
+        result =
+                client
+                        .restore(
+                                gs(newKey), 0L, data, RestoreOptions.builder().replace().frequency(10L).build())
+                        .get();
+        assertEquals(OK, result);
+
+        // Restore with REPLACE and negative frequency
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .restore(
+                                                gs(newKey),
+                                                0L,
+                                                data,
+                                                RestoreOptions.builder().replace().frequency(-10L).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sort(BaseClient client) {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String[] key1LpushArgs = {"2", "1", "4", "3"};
+        String[] key1AscendingList = {"1", "2", "3", "4"};
+        String[] key2LpushArgs = {"2", "1", "a", "x", "c", "4", "3"};
+
+        assertArrayEquals(new String[0], client.sort(key3).get());
+        assertEquals(4, client.lpush(key1, key1LpushArgs).get());
+        assertArrayEquals(key1AscendingList, client.sort(key1).get());
+
+        // SORT_R0
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(new String[0], client.sortReadOnly(key3).get());
+            assertArrayEquals(key1AscendingList, client.sortReadOnly(key1).get());
+        }
+
+        // SORT with STORE
+        assertEquals(4, client.sortStore(key1, key3).get());
+        assertArrayEquals(key1AscendingList, client.lrange(key3, 0, -1).get());
+
+        // Exceptions
+        // SORT with strings require ALPHA
+        assertEquals(7, client.lpush(key2, key2LpushArgs).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sort(key2).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }

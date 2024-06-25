@@ -217,6 +217,28 @@ public interface HashBaseCommands {
     CompletableFuture<Long> hincrBy(String key, String field, long amount);
 
     /**
+     * Increments the number stored at <code>field</code> in the hash stored at <code>key</code> by
+     * increment. By using a negative increment value, the value stored at <code>field</code> in the
+     * hash stored at <code>key</code> is decremented. If <code>field</code> or <code>key</code> does
+     * not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
+     * @return The value of <code>field</code> in the hash stored at <code>key</code> after the
+     *     increment or decrement.
+     * @example
+     *     <pre>{@code
+     * Long num = client.hincrBy(gs("my_hash"), gs("field1"), 5).get();
+     * assert num == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hincrBy(GlideString key, GlideString field, long amount);
+
+    /**
      * Increments the string representing a floating point number stored at <code>field</code> in the
      * hash stored at <code>key</code> by increment. By using a negative increment value, the value
      * stored at <code>field</code> in the hash stored at <code>key</code> is decremented. If <code>
@@ -238,6 +260,29 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> hincrByFloat(String key, String field, double amount);
+
+    /**
+     * Increments the string representing a floating point number stored at <code>field</code> in the
+     * hash stored at <code>key</code> by increment. By using a negative increment value, the value
+     * stored at <code>field</code> in the hash stored at <code>key</code> is decremented. If <code>
+     * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to increment or decrement its
+     *     value.
+     * @param amount The amount by which to increment or decrement the field's value. Use a negative
+     *     value to decrement.
+     * @return The value of <code>field</code> in the hash stored at <code>key</code> after the
+     *     increment or decrement.
+     * @example
+     *     <pre>{@code
+     * Double num = client.hincrByFloat(gs("my_hash"), gs("field1"), 2.5).get();
+     * assert num == 2.5;
+     * }</pre>
+     */
+    CompletableFuture<Double> hincrByFloat(GlideString key, GlideString field, double amount);
 
     /**
      * Returns all field names in the hash stored at <code>key</code>.
@@ -270,6 +315,23 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> hstrlen(String key, String field);
+
+    /**
+     * Returns the string length of the value associated with <code>field</code> in the hash stored at
+     * <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/hstrlen/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash.
+     * @return The string length or <code>0</code> if <code>field</code> or <code>key</code> does not
+     *     exist.
+     * @example
+     *     <pre>{@code
+     * Long strlen = client.hstrlen(gs("my_hash"), gs("my_field")).get();
+     * assert strlen >= 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hstrlen(GlideString key, GlideString field);
 
     /**
      * Returns a random field name from the hash value stored at <code>key</code>.
