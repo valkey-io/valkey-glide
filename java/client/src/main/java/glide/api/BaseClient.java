@@ -1058,7 +1058,8 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> scard(@NonNull GlideString key) {
-        return commandManager.submitNewCommand(SCard, new GlideString[] {key}, this::handleLongResponse);
+        return commandManager.submitNewCommand(
+                SCard, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override

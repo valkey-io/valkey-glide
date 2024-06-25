@@ -1111,11 +1111,13 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void ltrim_binary_existing_non_existing_key_and_type_error(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
-        GlideString[] valueArray = new GlideString[] {gs("value4"), gs("value3"), gs("value2"), gs("value1")};
+        GlideString[] valueArray =
+                new GlideString[] {gs("value4"), gs("value3"), gs("value2"), gs("value1")};
 
         assertEquals(4, client.lpush(key, valueArray).get());
         assertEquals(OK, client.ltrim(key, 0, 1).get());
-        assertArrayEquals(new String[] {"value1", "value2"}, client.lrange(key.toString(), 0, -1).get());
+        assertArrayEquals(
+                new String[] {"value1", "value2"}, client.lrange(key.toString(), 0, -1).get());
 
         // `start` is greater than `end` so the key will be removed.
         assertEquals(OK, client.ltrim(key, 4, 2).get());
@@ -1314,14 +1316,19 @@ public class SharedCommandTests {
         assertEquals(2, client.scard(key).get());
     }
 
-     @SneakyThrows
+    @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void sadd_srem_scard_smembers_binary_existing_set(BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
         assertEquals(
-                4, client.sadd(key, new GlideString[] {gs("member1"), gs("member2"), gs("member3"), gs("member4")}).get());
-        assertEquals(1, client.srem(key, new GlideString[] {gs("member3"), gs("nonExistingMember")}).get());
+                4,
+                client
+                        .sadd(
+                                key, new GlideString[] {gs("member1"), gs("member2"), gs("member3"), gs("member4")})
+                        .get());
+        assertEquals(
+                1, client.srem(key, new GlideString[] {gs("member3"), gs("nonExistingMember")}).get());
 
         Set<GlideString> expectedMembers = Set.of(gs("member1"), gs("member2"), gs("member4"));
         assertEquals(expectedMembers, client.smembers(key).get());
@@ -1459,11 +1466,13 @@ public class SharedCommandTests {
         // Key exists, but it is not a set
         assertEquals(OK, client.set(nonSetKey, gs("bar")).get());
         ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.smove(nonSetKey, setKey1, gs("_")).get());
+                assertThrows(
+                        ExecutionException.class, () -> client.smove(nonSetKey, setKey1, gs("_")).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
-                assertThrows(ExecutionException.class, () -> client.smove(setKey1, nonSetKey, gs("_")).get());
+                assertThrows(
+                        ExecutionException.class, () -> client.smove(setKey1, nonSetKey, gs("_")).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
