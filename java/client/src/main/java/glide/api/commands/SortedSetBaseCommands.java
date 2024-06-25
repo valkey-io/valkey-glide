@@ -752,6 +752,24 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Double[]> zmscore(String key, String[] members);
 
     /**
+     * Returns the scores associated with the specified <code>members</code> in the sorted set stored
+     * at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zmscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members An array of members in the sorted set.
+     * @return An <code>Array</code> of scores of the <code>members</code>.<br>
+     *     If a <code>member</code> does not exist, the corresponding value in the <code>Array</code>
+     *     will be <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Double[] payload = client.zmscore(key1, new GlideString[] {gs("one"), gs("nonExistentMember"), gs("three")}).get();
+     * assert payload.equals(new Double[] {1.0, null, 3.0});
+     * }</pre>
+     */
+    CompletableFuture<Double[]> zmscore(GlideString key, GlideString[] members);
+
+    /**
      * Returns the difference between the first sorted set and all the successive sorted sets.<br>
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *

@@ -403,6 +403,23 @@ public interface GenericBaseCommands {
     CompletableFuture<Boolean> persist(String key);
 
     /**
+     * Removes the existing timeout on <code>key</code>, turning the <code>key</code> from volatile (a
+     * <code>key</code> with an expire set) to persistent (a <code>key</code> that will never expire
+     * as no timeout is associated).
+     *
+     * @see <a href="https://redis.io/commands/persist/">redis.io</a> for details.
+     * @param key The <code>key</code> to remove the existing timeout on.
+     * @return <code>false</code> if <code>key</code> does not exist or does not have an associated
+     *     timeout, <code>true</code> if the timeout has been removed.
+     * @example
+     *     <pre>{@code
+     * Boolean timeoutRemoved = client.persist(gs("my_key")).get();
+     * assert timeoutRemoved; // Indicates that the timeout associated with the key "my_key" was successfully removed.
+     * }</pre>
+     */
+    CompletableFuture<Boolean> persist(GlideString key);
+
+    /**
      * Returns the string representation of the type of the value stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/type/">redis.io</a> for details.
@@ -515,6 +532,26 @@ public interface GenericBaseCommands {
     CompletableFuture<String> rename(String key, String newKey);
 
     /**
+     * Renames <code>key</code> to <code>newKey</code>.<br>
+     * If <code>newKey</code> already exists it is overwritten.
+     *
+     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://redis.io/commands/rename/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new name of the key.
+     * @return If the <code>key</code> was successfully renamed, return <code>"OK"</code>. If <code>
+     *     key</code> does not exist, an error is thrown.
+     * @example
+     *     <pre>{@code
+     * String value = client.set(gs("key"), gs("value")).get();
+     * value = client.rename(gs("key"), gs("newKeyName")).get();
+     * assert value.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> rename(GlideString key, GlideString newKey);
+
+    /**
      * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
      *
      * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
@@ -531,6 +568,24 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> renamenx(String key, String newKey);
+
+    /**
+     * Renames <code>key</code> to <code>newKey</code> if <code>newKey</code> does not yet exist.
+     *
+     * @apiNote When in cluster mode, both <code>key</code> and <code>newKey</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://redis.io/commands/renamenx/">redis.io</a> for details.
+     * @param key The key to rename.
+     * @param newKey The new key name.
+     * @return <code>true</code> if <code>key</code> was renamed to <code>newKey</code>, <code>false
+     *     </code> if <code>newKey</code> already exists.
+     * @example
+     *     <pre>{@code
+     * Boolean renamed = client.renamenx(gs("old_key"), gs("new_key")).get();
+     * assert renamed;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> renamenx(GlideString key, GlideString newKey);
 
     /**
      * Updates the last access time of specified <code>keys</code>.
