@@ -554,7 +554,7 @@ class ClusterCommands(CoreCommands):
             bool,
             await self._execute_command(RequestType.Copy, args),
         )
-      
+
     async def lolwut(
         self,
         version: Optional[int] = None,
