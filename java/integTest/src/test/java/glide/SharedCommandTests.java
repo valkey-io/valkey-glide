@@ -4523,7 +4523,7 @@ public class SharedCommandTests {
         assertNull(client.objectFreq(nonExistingKey).get());
     }
 
-   @SneakyThrows
+    @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectFreq_binary_returns_null(BaseClient client) {
@@ -4575,7 +4575,7 @@ public class SharedCommandTests {
         assertNull(client.objectRefcount(nonExistingKey).get());
     }
 
-   @SneakyThrows
+    @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectRefcount_binary_returns_null(BaseClient client) {
