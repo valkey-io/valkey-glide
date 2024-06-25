@@ -39,7 +39,7 @@ class MethodTesting(IntEnum):
     Callback = 2
 
 
-async def setup_clients(
+async def create_clients_with_subscription(
     request,
     cluster_mode,
     pub_sub,
@@ -48,31 +48,40 @@ async def setup_clients(
 ) -> Tuple[
     Union[RedisClient, RedisClusterClient], Union[RedisClient, RedisClusterClient]
 ]:
-    "Sets up clients for testing purposes."
-    c_pubsub, s_pubsub = None, None
-    c2_pubsub, s2_pubsub = None, None
-    if cluster_mode:
-        c_pubsub = pub_sub
-        c2_pubsub = pub_sub2
-    else:
-        s_pubsub = pub_sub
-        s2_pubsub = pub_sub2
+    """
+    Sets up clients for testing purposes.
 
-    publishing_client = await create_client(
+    Args:
+        request: pytest request for creating a client.
+        cluster_mode: the cluster mode.
+        pub_sub: pub/sub configuration subscription for a listening (could also be publishing) client.
+        pub_sub2: pub/sub configuration subscription for a listening (could also be publishing) client.
+        protocol: what protocol to use, used for the test: `test_pubsub_resp2_raise_an_error`.
+    """
+    cluster_mode_pubsub, standalone_mode_pubsub = None, None
+    cluster_mode_pubsub2, standalone_mode_pubsub2 = None, None
+    if cluster_mode:
+        cluster_mode_pubsub = pub_sub
+        cluster_mode_pubsub2 = pub_sub2
+    else:
+        standalone_mode_pubsub = pub_sub
+        standalone_mode_pubsub2 = pub_sub2
+
+    client = await create_client(
         request,
         cluster_mode=cluster_mode,
-        cluster_mode_pubsub=c2_pubsub,
-        standalone_mode_pubsub=s2_pubsub,
+        cluster_mode_pubsub=cluster_mode_pubsub2,
+        standalone_mode_pubsub=standalone_mode_pubsub2,
         protocol=protocol,
     )
-    listening_client = await create_client(
+    client2 = await create_client(
         request,
         cluster_mode=cluster_mode,
-        cluster_mode_pubsub=c_pubsub,
-        standalone_mode_pubsub=s_pubsub,
+        cluster_mode_pubsub=cluster_mode_pubsub,
+        standalone_mode_pubsub=standalone_mode_pubsub,
         protocol=protocol,
     )
-    return publishing_client, listening_client
+    return client, client2
 
 
 async def get_message_by_method(
@@ -92,8 +101,7 @@ async def get_message_by_method(
 
 
 async def check_no_messages_left(
-    method,
-    client: TRedisClient,
+    method, client: TRedisClient, callback: Optional[List[Any]] = None, size: int = 0
 ):
     if method == MethodTesting.Async:
         # assert there are no messages to read
@@ -101,7 +109,9 @@ async def check_no_messages_left(
             await asyncio.wait_for(client.get_pubsub_message(), timeout=3)
     elif method == MethodTesting.Sync:
         assert client.try_get_pubsub_message() is None
-        # check callback
+    else:
+        assert callback is not None
+        assert len(callback) == size
 
 
 def create_channels_and_patterns(
@@ -161,14 +171,14 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_basic_happy_path(
+    async def test_pubsub_exact_happy_path(
         self,
         request,
         cluster_mode: bool,
         method: MethodTesting,
     ):
         """
-        Tests the basic happy path for Pub/Sub functionality.
+        Tests the basic happy path for exact Pub/Sub functionality.
 
         This test covers the basic pub/sub flow using three different methods:
         Async, Sync, and Callback. It verifies that a message published to a
@@ -179,12 +189,12 @@ class TestPubSub:
         publish_response = 1 if cluster_mode else OK
 
         callback, context = None, None
-        callback_massages: List[
+        callback_messages: List[
             Union[RedisClient.PubSubMsg, RedisClusterClient.PubSubMsg]
         ] = []
         if method == MethodTesting.Callback:
             callback = new_message
-            context = callback_massages
+            context = callback_messages
 
         pub_sub = create_pubsub_subscription(
             cluster_mode,
@@ -193,7 +203,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -202,14 +212,14 @@ class TestPubSub:
         await asyncio.sleep(1)
 
         pubsub_msg = await get_message_by_method(
-            method, listening_client, callback_massages, 0
+            method, listening_client, callback_messages, 0
         )
 
         assert pubsub_msg.message == message
         assert pubsub_msg.channel == channel
         assert pubsub_msg.pattern is None
 
-        await check_no_messages_left(method, listening_client)
+        await check_no_messages_left(method, listening_client, callback_messages, 1)
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
@@ -217,11 +227,11 @@ class TestPubSub:
             await listening_client.custom_command(["UNSUBSCRIBE", channel])
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_basic_happy_path_coexistence(
+    async def test_pubsub_exact_happy_path_coexistence(
         self, request, cluster_mode: bool
     ):
         """
-        Tests the coexistence of async and sync message retrieval methods in Pub/Sub.
+        Tests the coexistence of async and sync message retrieval methods in exact Pub/Sub.
 
         This test covers the scenario where messages are published to a channel
         and received using both async and sync methods to ensure that both methods
@@ -237,7 +247,7 @@ class TestPubSub:
             {PubSubChannelModes.Exact: {channel}},
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -250,13 +260,15 @@ class TestPubSub:
         sync_msg = listening_client.try_get_pubsub_message()
         assert sync_msg
 
-        assert async_msg.message == message
+        assert async_msg.message in [message, message2]
         assert async_msg.channel == channel
         assert async_msg.pattern is None
 
-        assert sync_msg.message == message2
+        assert sync_msg.message in [message, message2]
         assert sync_msg.channel == channel
         assert sync_msg.pattern is None
+        # we do not check the order of the messages, but we can check that we received both messages once
+        assert not sync_msg.message == async_msg.message
 
         # assert there are no messages to read
         with pytest.raises(asyncio.TimeoutError):
@@ -274,11 +286,11 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_basic_happy_path_many_channels(
+    async def test_pubsub_exact_happy_path_many_channels(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
-        Tests publishing and receiving messages across many channels in Pub/Sub.
+        Tests publishing and receiving messages across many channels in exact Pub/Sub.
 
         This test covers the scenario where multiple channels each receive their own
         unique message. It verifies that messages are correctly published and received
@@ -295,12 +307,12 @@ class TestPubSub:
         }
 
         callback, context = None, None
-        callback_massages: List[
+        callback_messages: List[
             Union[RedisClient.PubSubMsg, RedisClusterClient.PubSubMsg]
         ] = []
         if method == MethodTesting.Callback:
             callback = new_message
-            context = callback_massages
+            context = callback_messages
 
         pub_sub = create_pubsub_subscription(
             cluster_mode,
@@ -308,7 +320,7 @@ class TestPubSub:
             callback=callback,
             context=context,
         )
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -320,17 +332,21 @@ class TestPubSub:
         await asyncio.sleep(1)
 
         # Check if all messages are received correctly
-        for index, (channel, expected_message) in enumerate(
-            channels_and_messages.items()
-        ):
+        for index in range(len(channels_and_messages)):
             pubsub_msg = await get_message_by_method(
-                method, listening_client, callback_massages, index
+                method, listening_client, callback_messages, index
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
+            assert pubsub_msg.channel in channels_and_messages.keys()
+            assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
             assert pubsub_msg.pattern is None
+            del channels_and_messages[pubsub_msg.channel]
 
-        await check_no_messages_left(method, listening_client)
+        # check that we received all messages
+        assert channels_and_messages == {}
+        # check no messages left
+        await check_no_messages_left(
+            method, listening_client, callback_messages, NUM_CHANNELS
+        )
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
@@ -340,11 +356,11 @@ class TestPubSub:
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_basic_happy_path_many_channels_co_existence(
+    async def test_pubsub_exact_happy_path_many_channels_co_existence(
         self, request, cluster_mode: bool
     ):
         """
-        Tests publishing and receiving messages across many channels in Pub/Sub, ensuring coexistence of async and sync retrieval methods.
+        Tests publishing and receiving messages across many channels in exact Pub/Sub, ensuring coexistence of async and sync retrieval methods.
 
         This test covers scenarios where multiple channels each receive their own unique message.
         It verifies that messages are correctly published and received using both async and sync methods to ensure that both methods
@@ -365,7 +381,7 @@ class TestPubSub:
             {PubSubChannelModes.Exact: set(channels_and_messages.keys())},
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -377,16 +393,17 @@ class TestPubSub:
         await asyncio.sleep(1)
 
         # Check if all messages are received correctly by each method
-        for index, (channel, expected_message) in enumerate(
-            channels_and_messages.items()
-        ):
+        for index in range(len(channels_and_messages)):
             method = MethodTesting.Async if index % 2 else MethodTesting.Sync
-            msg = await get_message_by_method(method, listening_client)
+            pubsub_msg = await get_message_by_method(method, listening_client)
 
-            assert msg.message == expected_message
-            assert msg.channel == channel
-            assert msg.pattern is None
+            assert pubsub_msg.channel in channels_and_messages.keys()
+            assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
+            assert pubsub_msg.pattern is None
+            del channels_and_messages[pubsub_msg.channel]
 
+        # check that we received all messages
+        assert channels_and_messages == {}
         # assert there are no messages to read
         with pytest.raises(asyncio.TimeoutError):
             await asyncio.wait_for(listening_client.get_pubsub_message(), timeout=3)
@@ -434,7 +451,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
         min_version = "7.0.0"
@@ -457,7 +474,7 @@ class TestPubSub:
         assert pubsub_msg.pattern is None
 
         # assert there are no messages to read
-        await check_no_messages_left(method, listening_client)
+        await check_no_messages_left(method, listening_client, callback_messages, 1)
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
@@ -486,7 +503,7 @@ class TestPubSub:
             cluster_mode, {PubSubChannelModes.Sharded: {channel}}
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -511,12 +528,15 @@ class TestPubSub:
         assert sync_msg
 
         assert async_msg.message == message
+        assert async_msg.message in [message, message2]
         assert async_msg.channel == channel
         assert async_msg.pattern is None
 
-        assert sync_msg.message == message2
+        assert sync_msg.message in [message, message2]
         assert sync_msg.channel == channel
         assert sync_msg.pattern is None
+        # we do not check the order of the messages, but we can check that we received both messages once
+        assert not sync_msg.message == async_msg.message
 
         # assert there are no messages to read
         with pytest.raises(asyncio.TimeoutError):
@@ -568,7 +588,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -588,18 +608,22 @@ class TestPubSub:
         await asyncio.sleep(1)
 
         # Check if all messages are received correctly
-        for index, (channel, expected_message) in enumerate(
-            channels_and_messages.items()
-        ):
+        for index in range(len(channels_and_messages)):
             pubsub_msg = await get_message_by_method(
                 method, listening_client, callback_messages, index
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
+            assert pubsub_msg.channel in channels_and_messages.keys()
+            assert pubsub_msg.message == channels_and_messages[pubsub_msg.channel]
             assert pubsub_msg.pattern is None
+            del channels_and_messages[pubsub_msg.channel]
+
+        # check that we received all messages
+        assert channels_and_messages == {}
 
         # Assert there are no more messages to read
-        await check_no_messages_left(method, listening_client)
+        await check_no_messages_left(
+            method, listening_client, callback_messages, NUM_CHANNELS
+        )
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
@@ -642,7 +666,7 @@ class TestPubSub:
             callback=callback,
             context=context,
         )
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -652,15 +676,20 @@ class TestPubSub:
         # allow the message to propagate
         await asyncio.sleep(1)
 
-        for index, (channel, message) in enumerate(channels.items()):
+        # Check if all messages are received correctly
+        for index in range(len(channels)):
             pubsub_msg = await get_message_by_method(
                 method, listening_client, callback_messages, index
             )
+            assert pubsub_msg.channel in channels.keys()
+            assert pubsub_msg.message == channels[pubsub_msg.channel]
             assert pubsub_msg.pattern == PATTERN
-            assert pubsub_msg.message == message
-            assert pubsub_msg.channel == channel
+            del channels[pubsub_msg.channel]
 
-        await check_no_messages_left(method, listening_client)
+        # check that we received all messages
+        assert channels == {}
+
+        await check_no_messages_left(method, listening_client, callback_messages, 2)
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
@@ -687,7 +716,7 @@ class TestPubSub:
             cluster_mode, {PubSubChannelModes.Pattern: {PATTERN}}
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -697,13 +726,18 @@ class TestPubSub:
         # allow the message to propagate
         await asyncio.sleep(1)
 
-        for index, (channel, message) in enumerate(channels.items()):
+        # Check if all messages are received correctly by each method
+        for index in range(len(channels)):
             method = MethodTesting.Async if index % 2 else MethodTesting.Sync
-            msg = await get_message_by_method(method, listening_client)
+            pubsub_msg = await get_message_by_method(method, listening_client)
 
-            assert msg.message == message
-            assert msg.channel == channel
-            assert msg.pattern == PATTERN
+            assert pubsub_msg.channel in channels.keys()
+            assert pubsub_msg.message == channels[pubsub_msg.channel]
+            assert pubsub_msg.pattern == PATTERN
+            del channels[pubsub_msg.channel]
+
+        # check that we received all messages
+        assert channels == {}
 
         # assert there are no more messages to read
         with pytest.raises(asyncio.TimeoutError):
@@ -752,7 +786,7 @@ class TestPubSub:
             callback=callback,
             context=context,
         )
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -762,15 +796,22 @@ class TestPubSub:
         # allow the message to propagate
         await asyncio.sleep(1)
 
-        for index, (channel, message) in enumerate(channels.items()):
+        # Check if all messages are received correctly
+        for index in range(len(channels)):
             pubsub_msg = await get_message_by_method(
                 method, listening_client, callback_messages, index
             )
+            assert pubsub_msg.channel in channels.keys()
+            assert pubsub_msg.message == channels[pubsub_msg.channel]
             assert pubsub_msg.pattern == PATTERN
-            assert pubsub_msg.message == message
-            assert pubsub_msg.channel == channel
+            del channels[pubsub_msg.channel]
 
-        await check_no_messages_left(method, listening_client)
+        # check that we received all messages
+        assert channels == {}
+
+        await check_no_messages_left(
+            method, listening_client, callback_messages, NUM_CHANNELS
+        )
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
@@ -781,13 +822,13 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_basic_and_pattern_one_client(
+    async def test_pubsub_combined_exact_and_pattern_one_client(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
-        Tests combined basic and pattern Pub/Sub with one client.
+        Tests combined exact and pattern Pub/Sub with one client.
 
-        This test verifies that a single client can correctly handle both basic and pattern Pub/Sub
+        This test verifies that a single client can correctly handle both exact and pattern Pub/Sub
         subscriptions. It covers the following scenarios:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
@@ -797,7 +838,7 @@ class TestPubSub:
         PATTERN = "{{{}}}:{}".format("pattern", "*")
 
         # Create dictionaries of channels and their corresponding messages
-        basic_channels_and_messages = {
+        exact_channels_and_messages = {
             "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(10)
             for _ in range(NUM_CHANNELS)
         }
@@ -807,7 +848,7 @@ class TestPubSub:
         }
 
         all_channels_and_messages = {
-            **basic_channels_and_messages,
+            **exact_channels_and_messages,
             **pattern_channels_and_messages,
         }
 
@@ -823,20 +864,20 @@ class TestPubSub:
             context = callback_messages
 
         # Setup pub/sub for exact channels
-        pub_sub_basic = create_pubsub_subscription(
+        pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {
-                PubSubChannelModes.Exact: set(basic_channels_and_messages.keys()),
+                PubSubChannelModes.Exact: set(exact_channels_and_messages.keys()),
                 PubSubChannelModes.Pattern: {PATTERN},
             },
             callback=callback,
             context=context,
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request,
             cluster_mode,
-            pub_sub_basic,
+            pub_sub_exact,
         )
 
         # Publish messages to all channels
@@ -846,35 +887,33 @@ class TestPubSub:
         # allow the message to propagate
         await asyncio.sleep(1)
 
-        # Verify messages for basic pub/sub
-        for i, (channel, expected_message) in enumerate(
-            basic_channels_and_messages.items()
-        ):
-            pubsub_msg = await get_message_by_method(
-                method, listening_client, callback_messages, i
-            )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
-            assert pubsub_msg.pattern is None
-
-        # Verify messages for pattern pub/sub
-        for index, (channel, expected_message) in enumerate(
-            pattern_channels_and_messages.items(), start=i + 1
-        ):
+        # Check if all messages are received correctly
+        for index in range(len(all_channels_and_messages)):
             pubsub_msg = await get_message_by_method(
                 method, listening_client, callback_messages, index
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
-            assert pubsub_msg.pattern == PATTERN
+            pattern = (
+                PATTERN
+                if pubsub_msg.channel in pattern_channels_and_messages.keys()
+                else None
+            )
+            assert pubsub_msg.channel in all_channels_and_messages.keys()
+            assert pubsub_msg.message == all_channels_and_messages[pubsub_msg.channel]
+            assert pubsub_msg.pattern == pattern
+            del all_channels_and_messages[pubsub_msg.channel]
 
-        await check_no_messages_left(method, listening_client)
+        # check that we received all messages
+        assert all_channels_and_messages == {}
+
+        await check_no_messages_left(
+            method, listening_client, callback_messages, NUM_CHANNELS * 2
+        )
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
             # So to avoid flakiness, we make sure to unsubscribe from the channels
             await listening_client.custom_command(
-                ["UNSUBSCRIBE", *list(basic_channels_and_messages.keys())]
+                ["UNSUBSCRIBE", *list(exact_channels_and_messages.keys())]
             )
             await listening_client.custom_command(["PUNSUBSCRIBE", PATTERN])
 
@@ -882,13 +921,13 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_basic_and_pattern_multiple_clients(
+    async def test_pubsub_combined_exact_and_pattern_multiple_clients(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
-        Tests combined basic and pattern Pub/Sub with multiple clients, one for each subscription.
+        Tests combined exact and pattern Pub/Sub with multiple clients, one for each subscription.
 
-        This test verifies that separate clients can correctly handle both basic and pattern Pub/Sub
+        This test verifies that separate clients can correctly handle both exact and pattern Pub/Sub
         subscriptions. It covers the following scenarios:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
@@ -900,7 +939,7 @@ class TestPubSub:
         PATTERN = "{{{}}}:{}".format("pattern", "*")
 
         # Create dictionaries of channels and their corresponding messages
-        basic_channels_and_messages = {
+        exact_channels_and_messages = {
             "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(10)
             for _ in range(NUM_CHANNELS)
         }
@@ -910,7 +949,7 @@ class TestPubSub:
         }
 
         all_channels_and_messages = {
-            **basic_channels_and_messages,
+            **exact_channels_and_messages,
             **pattern_channels_and_messages,
         }
 
@@ -926,17 +965,19 @@ class TestPubSub:
             context = callback_messages
 
         # Setup pub/sub for exact channels
-        pub_sub_basic = create_pubsub_subscription(
+        pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
-            {PubSubChannelModes.Exact: set(basic_channels_and_messages.keys())},
+            {PubSubChannelModes.Exact: set(exact_channels_and_messages.keys())},
             callback=callback,
             context=context,
         )
 
-        publishing_client, listening_client_basic = await setup_clients(
-            request,
-            cluster_mode,
-            pub_sub_basic,
+        publishing_client, listening_client_exact = (
+            await create_clients_with_subscription(
+                request,
+                cluster_mode,
+                pub_sub_exact,
+            )
         )
 
         callback_messages_pattern: List[
@@ -954,7 +995,7 @@ class TestPubSub:
             context=context,
         )
 
-        _, listening_client_pattern = await setup_clients(
+        _, listening_client_pattern = await create_clients_with_subscription(
             request, cluster_mode, pub_sub_pattern
         )
 
@@ -965,36 +1006,46 @@ class TestPubSub:
         # allow the messages to propagate
         await asyncio.sleep(1)
 
-        # Verify messages for basic pub/sub
-        for i, (channel, expected_message) in enumerate(
-            basic_channels_and_messages.items()
-        ):
+        # Verify messages for exact pub/sub
+        for index in range(len(exact_channels_and_messages)):
             pubsub_msg = await get_message_by_method(
-                method, listening_client_basic, callback_messages, i
+                method, listening_client_exact, callback_messages, index
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
+            assert pubsub_msg.channel in exact_channels_and_messages.keys()
+            assert pubsub_msg.message == exact_channels_and_messages[pubsub_msg.channel]
             assert pubsub_msg.pattern is None
+            del exact_channels_and_messages[pubsub_msg.channel]
+
+        # check that we received all messages
+        assert exact_channels_and_messages == {}
 
         # Verify messages for pattern pub/sub
-        for i, (channel, expected_message) in enumerate(
-            pattern_channels_and_messages.items()
-        ):
+        for index in range(len(pattern_channels_and_messages)):
             pubsub_msg = await get_message_by_method(
-                method, listening_client_pattern, callback_messages_pattern, i
+                method, listening_client_pattern, callback_messages_pattern, index
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
+            assert pubsub_msg.channel in pattern_channels_and_messages.keys()
+            assert (
+                pubsub_msg.message == pattern_channels_and_messages[pubsub_msg.channel]
+            )
             assert pubsub_msg.pattern == PATTERN
+            del pattern_channels_and_messages[pubsub_msg.channel]
 
-        await check_no_messages_left(method, listening_client_basic)
-        await check_no_messages_left(method, listening_client_pattern)
+        # check that we received all messages
+        assert pattern_channels_and_messages == {}
+
+        await check_no_messages_left(
+            method, listening_client_exact, callback_messages, NUM_CHANNELS
+        )
+        await check_no_messages_left(
+            method, listening_client_pattern, callback_messages_pattern, NUM_CHANNELS
+        )
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
             # So to avoid flakiness, we make sure to unsubscribe from the channels
-            await listening_client_basic.custom_command(
-                ["UNSUBSCRIBE", *list(basic_channels_and_messages.keys())]
+            await listening_client_exact.custom_command(
+                ["UNSUBSCRIBE", *list(exact_channels_and_messages.keys())]
             )
             await listening_client_pattern.custom_command(["PUNSUBSCRIBE", PATTERN])
 
@@ -1002,13 +1053,13 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_basic_pattern_and_sharded_one_client(
+    async def test_pubsub_combined_exact_pattern_and_sharded_one_client(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
-        Tests combined basic, pattern and sharded Pub/Sub with one client.
+        Tests combined exact, pattern and sharded Pub/Sub with one client.
 
-        This test verifies that a single client can correctly handle both basic, pattern and sharded Pub/Sub
+        This test verifies that a single client can correctly handle both exact, pattern and sharded Pub/Sub
         subscriptions. It covers the following scenarios:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
@@ -1020,7 +1071,7 @@ class TestPubSub:
         SHARD_PREFIX = "{same-shard}"
 
         # Create dictionaries of channels and their corresponding messages
-        basic_channels_and_messages = {
+        exact_channels_and_messages = {
             "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(10)
             for _ in range(NUM_CHANNELS)
         }
@@ -1045,10 +1096,10 @@ class TestPubSub:
             context = callback_messages
 
         # Setup pub/sub for exact channels
-        pub_sub_basic = create_pubsub_subscription(
+        pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {
-                PubSubChannelModes.Exact: set(basic_channels_and_messages.keys()),
+                PubSubChannelModes.Exact: set(exact_channels_and_messages.keys()),
                 PubSubChannelModes.Pattern: {PATTERN},
                 PubSubChannelModes.Sharded: set(sharded_channels_and_messages.keys()),
             },
@@ -1056,10 +1107,10 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request,
             cluster_mode,
-            pub_sub_basic,
+            pub_sub_exact,
         )
 
         # Setup pub/sub for sharded channels (Redis version > 7)
@@ -1070,7 +1121,7 @@ class TestPubSub:
 
         # Publish messages to all channels
         for channel, message in {
-            **basic_channels_and_messages,
+            **exact_channels_and_messages,
             **pattern_channels_and_messages,
         }.items():
             assert await publishing_client.publish(message, channel) == publish_response
@@ -1085,47 +1136,39 @@ class TestPubSub:
         # allow the messages to propagate
         await asyncio.sleep(1)
 
-        # Verify messages for basic pub/sub
-        for i, (channel, expected_message) in enumerate(
-            basic_channels_and_messages.items()
-        ):
+        all_channels_and_messages = {
+            **exact_channels_and_messages,
+            **pattern_channels_and_messages,
+            **sharded_channels_and_messages,
+        }
+        # Check if all messages are received correctly
+        for index in range(len(all_channels_and_messages)):
             pubsub_msg = await get_message_by_method(
-                method, listening_client, callback_messages, i
+                method, listening_client, callback_messages, index
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
-            assert pubsub_msg.pattern is None
-
-        # Verify messages for pattern pub/sub
-        for j, (channel, expected_message) in enumerate(
-            pattern_channels_and_messages.items(), start=i + 1
-        ):
-            pubsub_msg = await get_message_by_method(
-                method, listening_client, callback_messages, j
+            pattern = (
+                PATTERN
+                if pubsub_msg.channel in pattern_channels_and_messages.keys()
+                else None
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
-            assert pubsub_msg.pattern == PATTERN
+            assert pubsub_msg.channel in all_channels_and_messages.keys()
+            assert pubsub_msg.message == all_channels_and_messages[pubsub_msg.channel]
+            assert pubsub_msg.pattern == pattern
+            del all_channels_and_messages[pubsub_msg.channel]
 
-        # Verify messages for sharded pub/sub
-        for k, (channel, expected_message) in enumerate(
-            sharded_channels_and_messages.items(), start=j + 1
-        ):
-            pubsub_msg = await get_message_by_method(
-                method, listening_client, callback_messages, k
-            )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
-            assert pubsub_msg.pattern is None
+        # check that we received all messages
+        assert all_channels_and_messages == {}
 
-        await check_no_messages_left(method, listening_client)
+        await check_no_messages_left(
+            method, listening_client, callback_messages, NUM_CHANNELS * 3
+        )
 
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
             # So to avoid flakiness, we make sure to unsubscribe from the channels
             await listening_client.custom_command(
-                ["UNSUBSCRIBE", *list(basic_channels_and_messages.keys())]
+                ["UNSUBSCRIBE", *list(exact_channels_and_messages.keys())]
             )
             await listening_client.custom_command(["PUNSUBSCRIBE", PATTERN])
             await listening_client.custom_command(
@@ -1136,13 +1179,13 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_basic_pattern_and_sharded_multi_client(
+    async def test_pubsub_combined_exact_pattern_and_sharded_multi_client(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
-        Tests combined basic, pattern and sharded Pub/Sub with multiple clients, one for each subscription.
+        Tests combined exact, pattern and sharded Pub/Sub with multiple clients, one for each subscription.
 
-        This test verifies that separate clients can correctly handle both basic, pattern and sharded Pub/Sub
+        This test verifies that separate clients can correctly handle exact, pattern and sharded Pub/Sub
         subscriptions. It covers the following scenarios:
         - Subscribing to multiple channels with exact names and verifying message reception.
         - Subscribing to channels using a pattern and verifying message reception.
@@ -1156,7 +1199,7 @@ class TestPubSub:
         SHARD_PREFIX = "{same-shard}"
 
         # Create dictionaries of channels and their corresponding messages
-        basic_channels_and_messages = {
+        exact_channels_and_messages = {
             "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(10)
             for _ in range(NUM_CHANNELS)
         }
@@ -1172,7 +1215,7 @@ class TestPubSub:
         publish_response = 1
 
         callback, context = None, None
-        callback_messages_basic: List[
+        callback_messages_exact: List[
             Union[RedisClient.PubSubMsg, RedisClusterClient.PubSubMsg]
         ] = []
         callback_messages_pattern: List[
@@ -1184,20 +1227,22 @@ class TestPubSub:
 
         if method == MethodTesting.Callback:
             callback = new_message
-            context = callback_messages_basic
+            context = callback_messages_exact
 
         # Setup pub/sub for exact channels
-        pub_sub_basic = create_pubsub_subscription(
+        pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
-            {PubSubChannelModes.Exact: set(basic_channels_and_messages.keys())},
+            {PubSubChannelModes.Exact: set(exact_channels_and_messages.keys())},
             callback=callback,
             context=context,
         )
 
-        publishing_client, listening_client_basic = await setup_clients(
-            request,
-            cluster_mode,
-            pub_sub_basic,
+        publishing_client, listening_client_exact = (
+            await create_clients_with_subscription(
+                request,
+                cluster_mode,
+                pub_sub_exact,
+            )
         )
 
         # Setup pub/sub for sharded channels (Redis version > 7)
@@ -1225,15 +1270,17 @@ class TestPubSub:
             context=context,
         )
 
-        listening_client_sharded, listening_client_pattern = await setup_clients(
-            request, cluster_mode, pub_sub_pattern, pub_sub_sharded
+        listening_client_sharded, listening_client_pattern = (
+            await create_clients_with_subscription(
+                request, cluster_mode, pub_sub_pattern, pub_sub_sharded
+            )
         )
 
         assert type(publishing_client) == RedisClusterClient
 
         # Publish messages to all channels
         for channel, message in {
-            **basic_channels_and_messages,
+            **exact_channels_and_messages,
             **pattern_channels_and_messages,
         }.items():
             assert await publishing_client.publish(message, channel) == publish_response
@@ -1248,49 +1295,65 @@ class TestPubSub:
         # allow the messages to propagate
         await asyncio.sleep(1)
 
-        # Verify messages for basic pub/sub
-        for i, (channel, expected_message) in enumerate(
-            basic_channels_and_messages.items()
-        ):
+        # Verify messages for exact pub/sub
+        for index in range(len(exact_channels_and_messages)):
             pubsub_msg = await get_message_by_method(
-                method, listening_client_basic, callback_messages_basic, i
+                method, listening_client_exact, callback_messages_exact, index
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
+            assert pubsub_msg.channel in exact_channels_and_messages.keys()
+            assert pubsub_msg.message == exact_channels_and_messages[pubsub_msg.channel]
             assert pubsub_msg.pattern is None
+            del exact_channels_and_messages[pubsub_msg.channel]
+
+        # check that we received all messages
+        assert exact_channels_and_messages == {}
 
         # Verify messages for pattern pub/sub
-        for i, (channel, expected_message) in enumerate(
-            pattern_channels_and_messages.items()
-        ):
+        for index in range(len(pattern_channels_and_messages)):
             pubsub_msg = await get_message_by_method(
-                method, listening_client_pattern, callback_messages_pattern, i
+                method, listening_client_pattern, callback_messages_pattern, index
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
+            assert pubsub_msg.channel in pattern_channels_and_messages.keys()
+            assert (
+                pubsub_msg.message == pattern_channels_and_messages[pubsub_msg.channel]
+            )
             assert pubsub_msg.pattern == PATTERN
+            del pattern_channels_and_messages[pubsub_msg.channel]
 
-        # Verify messages for sharded pub/sub
-        for i, (channel, expected_message) in enumerate(
-            sharded_channels_and_messages.items()
-        ):
+        # check that we received all messages
+        assert pattern_channels_and_messages == {}
+
+        # Verify messages for shaded pub/sub
+        for index in range(len(sharded_channels_and_messages)):
             pubsub_msg = await get_message_by_method(
-                method, listening_client_sharded, callback_messages_sharded, i
+                method, listening_client_sharded, callback_messages_sharded, index
             )
-            assert pubsub_msg.message == expected_message
-            assert pubsub_msg.channel == channel
+            assert pubsub_msg.channel in sharded_channels_and_messages.keys()
+            assert (
+                pubsub_msg.message == sharded_channels_and_messages[pubsub_msg.channel]
+            )
             assert pubsub_msg.pattern is None
+            del sharded_channels_and_messages[pubsub_msg.channel]
 
-        await check_no_messages_left(method, listening_client_basic)
-        await check_no_messages_left(method, listening_client_pattern)
-        await check_no_messages_left(method, listening_client_sharded)
+        # check that we received all messages
+        assert sharded_channels_and_messages == {}
+
+        await check_no_messages_left(
+            method, listening_client_exact, callback_messages_exact, NUM_CHANNELS
+        )
+        await check_no_messages_left(
+            method, listening_client_pattern, callback_messages_pattern, NUM_CHANNELS
+        )
+        await check_no_messages_left(
+            method, listening_client_sharded, callback_messages_sharded, NUM_CHANNELS
+        )
 
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
             # So to avoid flakiness, we make sure to unsubscribe from the channels
-            await listening_client_basic.custom_command(
-                ["UNSUBSCRIBE", *list(basic_channels_and_messages.keys())]
+            await listening_client_exact.custom_command(
+                ["UNSUBSCRIBE", *list(exact_channels_and_messages.keys())]
             )
             await listening_client_pattern.custom_command(["PUNSUBSCRIBE", PATTERN])
             await listening_client_sharded.custom_command(
@@ -1301,7 +1364,7 @@ class TestPubSub:
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_combined_different_channels_same_name(
+    async def test_pubsub_combined_different_channels_with_same_name(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
@@ -1318,12 +1381,12 @@ class TestPubSub:
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
         CHANNEL_NAME = "same-channel-name" + get_random_string(3)
-        MESSAGE_BASIC = get_random_string(10)
+        MESSAGE_EXACT = get_random_string(10)
         MESSAGE_PATTERN = get_random_string(7)
         MESSAGE_SHARDED = get_random_string(5)
 
         callback, context = None, None
-        callback_messages_basic: List[
+        callback_messages_exact: List[
             Union[RedisClient.PubSubMsg, RedisClusterClient.PubSubMsg]
         ] = []
         callback_messages_pattern: List[
@@ -1335,20 +1398,22 @@ class TestPubSub:
 
         if method == MethodTesting.Callback:
             callback = new_message
-            context = callback_messages_basic
+            context = callback_messages_exact
 
         # Setup pub/sub for exact channel
-        pub_sub_basic = create_pubsub_subscription(
+        pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {PubSubChannelModes.Exact: {CHANNEL_NAME}},
             callback=callback,
             context=context,
         )
 
-        publishing_client, listening_client_basic = await setup_clients(
-            request,
-            cluster_mode,
-            pub_sub_basic,
+        publishing_client, listening_client_exact = (
+            await create_clients_with_subscription(
+                request,
+                cluster_mode,
+                pub_sub_exact,
+            )
         )
 
         # (Redis version > 7)
@@ -1377,14 +1442,16 @@ class TestPubSub:
             context=context,
         )
 
-        listening_client_sharded, listening_client_pattern = await setup_clients(
-            request, cluster_mode, pub_sub_pattern, pub_sub_sharded
+        listening_client_sharded, listening_client_pattern = (
+            await create_clients_with_subscription(
+                request, cluster_mode, pub_sub_pattern, pub_sub_sharded
+            )
         )
 
         assert type(publishing_client) == RedisClusterClient
 
         # Publish messages to each channel
-        assert await publishing_client.publish(MESSAGE_BASIC, CHANNEL_NAME) == 2
+        assert await publishing_client.publish(MESSAGE_EXACT, CHANNEL_NAME) == 2
         assert await publishing_client.publish(MESSAGE_PATTERN, CHANNEL_NAME) == 2
         assert (
             await publishing_client.publish(MESSAGE_SHARDED, CHANNEL_NAME, sharded=True)
@@ -1394,25 +1461,19 @@ class TestPubSub:
         # allow the message to propagate
         await asyncio.sleep(1)
 
-        # Verify message for basic pub/sub
-        for i in range(2):
-            pubsub_msg_basic = await get_message_by_method(
-                method, listening_client_basic, callback_messages_basic, i
-            )
-            msg = MESSAGE_BASIC if i < 1 else MESSAGE_PATTERN
-            assert pubsub_msg_basic.message == msg
-            assert pubsub_msg_basic.channel == CHANNEL_NAME
-            assert pubsub_msg_basic.pattern is None
+        # Verify message for exact and pattern pub/sub
+        for client, callback, pattern in [  # type: ignore
+            (listening_client_exact, callback_messages_exact, None),
+            (listening_client_pattern, callback_messages_pattern, CHANNEL_NAME),
+        ]:
+            pubsub_msg = await get_message_by_method(method, client, callback, 0)  # type: ignore
 
-        for i in range(2):
-            # Verify message for pattern pub/sub
-            pubsub_msg_pattern = await get_message_by_method(
-                method, listening_client_pattern, callback_messages_pattern, i
-            )
-            msg = MESSAGE_BASIC if i < 1 else MESSAGE_PATTERN
-            assert pubsub_msg_pattern.message == msg
-            assert pubsub_msg_pattern.channel == CHANNEL_NAME
-            assert pubsub_msg_pattern.pattern == CHANNEL_NAME
+            pubsub_msg2 = await get_message_by_method(method, client, callback, 1)  # type: ignore
+            assert not pubsub_msg.message == pubsub_msg2.message
+            assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
+            assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
+            assert pubsub_msg.channel == pubsub_msg2.channel == CHANNEL_NAME
+            assert pubsub_msg.pattern == pubsub_msg2.pattern == pattern
 
         # Verify message for sharded pub/sub
         pubsub_msg_sharded = await get_message_by_method(
@@ -1422,15 +1483,21 @@ class TestPubSub:
         assert pubsub_msg_sharded.channel == CHANNEL_NAME
         assert pubsub_msg_sharded.pattern is None
 
-        await check_no_messages_left(method, listening_client_basic)
-        await check_no_messages_left(method, listening_client_pattern)
-        await check_no_messages_left(method, listening_client_sharded)
+        await check_no_messages_left(
+            method, listening_client_exact, callback_messages_exact, 2
+        )
+        await check_no_messages_left(
+            method, listening_client_pattern, callback_messages_pattern, 2
+        )
+        await check_no_messages_left(
+            method, listening_client_sharded, callback_messages_sharded, 1
+        )
 
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
             # So to avoid flakiness, we make sure to unsubscribe from the channels
-            await listening_client_basic.custom_command(["UNSUBSCRIBE", CHANNEL_NAME])
+            await listening_client_exact.custom_command(["UNSUBSCRIBE", CHANNEL_NAME])
             await listening_client_pattern.custom_command(
                 ["PUNSUBSCRIBE", CHANNEL_NAME]
             )
@@ -1459,11 +1526,11 @@ class TestPubSub:
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
         CHANNEL_NAME = "same-channel-name" + get_random_string(3)
-        MESSAGE_BASIC = get_random_string(10)
+        MESSAGE_EXACT = get_random_string(10)
         MESSAGE_PATTERN = get_random_string(7)
         publish_response = 2 if cluster_mode else OK
-        callback, context, context2 = None, None, None
-        callback_messages_basic: List[
+        callback, context_exact, context_pattern = None, None, None
+        callback_messages_exact: List[
             Union[RedisClient.PubSubMsg, RedisClusterClient.PubSubMsg]
         ] = []
         callback_messages_pattern: List[
@@ -1472,88 +1539,99 @@ class TestPubSub:
 
         if method == MethodTesting.Callback:
             callback = new_message
-            context = callback_messages_basic
-            context2 = callback_messages_pattern
+            context_exact = callback_messages_exact
+            context_pattern = callback_messages_pattern
 
         # Setup pub/sub for exact channel
-        pub_sub_basic = create_pubsub_subscription(
+        pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {PubSubChannelModes.Exact: {CHANNEL_NAME}},
             callback=callback,
-            context=context,
+            context=context_exact,
         )
         # Setup pub/sub for pattern channels
         pub_sub_pattern = create_pubsub_subscription(
             cluster_mode,
             {PubSubChannelModes.Pattern: {CHANNEL_NAME}},
             callback=callback,
-            context=context2,
+            context=context_pattern,
         )
 
-        client_pattern, client_basic = await setup_clients(
-            request, cluster_mode, pub_sub_basic, pub_sub_pattern
+        client_pattern, client_exact = await create_clients_with_subscription(
+            request, cluster_mode, pub_sub_exact, pub_sub_pattern
         )
 
         # Publish messages to each channel - both clients publishing
         assert (
-            await client_pattern.publish(MESSAGE_BASIC, CHANNEL_NAME)
+            await client_pattern.publish(MESSAGE_EXACT, CHANNEL_NAME)
             == publish_response
         )
         assert (
-            await client_basic.publish(MESSAGE_PATTERN, CHANNEL_NAME)
+            await client_exact.publish(MESSAGE_PATTERN, CHANNEL_NAME)
             == publish_response
         )
 
         # allow the message to propagate
         await asyncio.sleep(1)
 
-        # Verify message for basic pub/sub
-        for i in range(2):
-            pubsub_msg_basic = await get_message_by_method(
-                method, client_basic, callback_messages_basic, i
-            )
-            msg = MESSAGE_BASIC if i < 1 else MESSAGE_PATTERN
-            assert pubsub_msg_basic.message == msg
-            assert pubsub_msg_basic.channel == CHANNEL_NAME
-            assert pubsub_msg_basic.pattern is None
+        # Verify message for exact and pattern pub/sub
+        for client, callback, pattern in [  # type: ignore
+            (client_exact, callback_messages_exact, None),
+            (client_pattern, callback_messages_pattern, CHANNEL_NAME),
+        ]:
+            pubsub_msg = await get_message_by_method(method, client, callback, 0)  # type: ignore
 
-        for i in range(2):
-            # Verify message for pattern pub/sub
-            pubsub_msg_pattern = await get_message_by_method(
-                method, client_pattern, callback_messages_pattern, i
-            )
-            msg = MESSAGE_BASIC if i < 1 else MESSAGE_PATTERN
-            assert pubsub_msg_pattern.message == msg
-            assert pubsub_msg_pattern.channel == CHANNEL_NAME
-            assert pubsub_msg_pattern.pattern == CHANNEL_NAME
+            pubsub_msg2 = await get_message_by_method(method, client, callback, 1)  # type: ignore
+            assert not pubsub_msg.message == pubsub_msg2.message
+            assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
+            assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
+            assert pubsub_msg.channel == pubsub_msg2.channel == CHANNEL_NAME
+            assert pubsub_msg.pattern == pubsub_msg2.pattern == pattern
 
-        await check_no_messages_left(method, client_pattern)
-        await check_no_messages_left(method, client_basic)
+        await check_no_messages_left(
+            method, client_pattern, callback_messages_pattern, 2
+        )
+        await check_no_messages_left(method, client_exact, callback_messages_exact, 2)
 
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
             # So to avoid flakiness, we make sure to unsubscribe from the channels
-            await client_basic.custom_command(["UNSUBSCRIBE", CHANNEL_NAME])
+            await client_exact.custom_command(["UNSUBSCRIBE", CHANNEL_NAME])
             await client_pattern.custom_command(["PUNSUBSCRIBE", CHANNEL_NAME])
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize(
         "method", [MethodTesting.Async, MethodTesting.Sync, MethodTesting.Callback]
     )
-    async def test_pubsub_two_publishing_clients_same_name_with_sharded(
+    async def test_pubsub_three_publishing_clients_same_name_with_sharded(
         self, request, cluster_mode: bool, method: MethodTesting
     ):
         """
-        This test
+        Tests Pub/Sub with 3 publishing clients using the same channel name.
+        One client uses pattern subscription, one uses exact, and one uses sharded.
+
+        This test verifies that 3 separate clients can correctly publish to and handle subscriptions
+        for exact, sharded and pattern channels with the same name. It covers the following scenarios:
+        - Subscribing to an exact channel and verifying message reception.
+        - Subscribing to a pattern channel and verifying message reception.
+        - Subscribing to a sharded channel and verifying message reception.
+        - Ensuring that messages are correctly published and received using different retrieval methods (async, sync, callback).
+        - Verifying that no messages are left unread.
+        - Properly unsubscribing from all channels to avoid interference with other tests.
         """
         CHANNEL_NAME = "same-channel-name" + get_random_string(3)
-        MESSAGE_BASIC = get_random_string(10)
+        MESSAGE_EXACT = get_random_string(10)
         MESSAGE_PATTERN = get_random_string(7)
         MESSAGE_SHARDED = get_random_string(5)
         publish_response = 2 if cluster_mode else OK
-        callback, context, context2, context3 = None, None, None, None
-        callback_messages_basic: List[
+        callback, context_exact, context_pattern, context_sharded = (
+            None,
+            None,
+            None,
+            None,
+        )
+        callback_messages_exact: List[
             Union[RedisClient.PubSubMsg, RedisClusterClient.PubSubMsg]
         ] = []
         callback_messages_pattern: List[
@@ -1565,44 +1643,46 @@ class TestPubSub:
 
         if method == MethodTesting.Callback:
             callback = new_message
-            context = callback_messages_basic
-            context2 = callback_messages_pattern
-            context3 = callback_messages_sharded
+            context_exact = callback_messages_exact
+            context_pattern = callback_messages_pattern
+            context_sharded = callback_messages_sharded
 
         # Setup pub/sub for exact channel
-        pub_sub_basic = create_pubsub_subscription(
+        pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {PubSubChannelModes.Exact: {CHANNEL_NAME}},
             callback=callback,
-            context=context,
+            context=context_exact,
         )
         # Setup pub/sub for pattern channels
         pub_sub_pattern = create_pubsub_subscription(
             cluster_mode,
             {PubSubChannelModes.Pattern: {CHANNEL_NAME}},
             callback=callback,
-            context=context2,
+            context=context_pattern,
         )
         # Setup pub/sub for pattern channels
         pub_sub_sharded = create_pubsub_subscription(
             cluster_mode,
             {PubSubChannelModes.Sharded: {CHANNEL_NAME}},
             callback=callback,
-            context=context3,
+            context=context_sharded,
         )
 
-        client_pattern, client_basic = await setup_clients(
-            request, cluster_mode, pub_sub_basic, pub_sub_pattern
+        client_pattern, client_exact = await create_clients_with_subscription(
+            request, cluster_mode, pub_sub_exact, pub_sub_pattern
         )
-        _, client_sharded = await setup_clients(request, cluster_mode, pub_sub_sharded)
+        _, client_sharded = await create_clients_with_subscription(
+            request, cluster_mode, pub_sub_sharded
+        )
         # (Redis version > 7)
         if await check_if_server_version_lt(client_pattern, "7.0.0"):
             pytest.skip("Redis version required >= 7.0.0")
-        assert type(client_basic) == RedisClusterClient
+        assert type(client_exact) == RedisClusterClient
 
         # Publish messages to each channel - both clients publishing
         assert (
-            await client_pattern.publish(MESSAGE_BASIC, CHANNEL_NAME)
+            await client_pattern.publish(MESSAGE_EXACT, CHANNEL_NAME)
             == publish_response
         )
         assert (
@@ -1610,31 +1690,25 @@ class TestPubSub:
             == publish_response
         )
         assert (
-            await client_basic.publish(MESSAGE_SHARDED, CHANNEL_NAME, sharded=True) == 1
+            await client_exact.publish(MESSAGE_SHARDED, CHANNEL_NAME, sharded=True) == 1
         )
 
         # allow the message to propagate
         await asyncio.sleep(1)
 
-        # Verify message for basic pub/sub
-        for i in range(2):
-            pubsub_msg_basic = await get_message_by_method(
-                method, client_basic, callback_messages_basic, i
-            )
-            msg = MESSAGE_BASIC if i < 1 else MESSAGE_PATTERN
-            assert pubsub_msg_basic.message == msg
-            assert pubsub_msg_basic.channel == CHANNEL_NAME
-            assert pubsub_msg_basic.pattern is None
+        # Verify message for exact and pattern pub/sub
+        for client, callback, pattern in [  # type: ignore
+            (client_exact, callback_messages_exact, None),
+            (client_pattern, callback_messages_pattern, CHANNEL_NAME),
+        ]:
+            pubsub_msg = await get_message_by_method(method, client, callback, 0)  # type: ignore
 
-        for i in range(2):
-            # Verify message for pattern pub/sub
-            pubsub_msg_pattern = await get_message_by_method(
-                method, client_pattern, callback_messages_pattern, i
-            )
-            msg = MESSAGE_BASIC if i < 1 else MESSAGE_PATTERN
-            assert pubsub_msg_pattern.message == msg
-            assert pubsub_msg_pattern.channel == CHANNEL_NAME
-            assert pubsub_msg_pattern.pattern == CHANNEL_NAME
+            pubsub_msg2 = await get_message_by_method(method, client, callback, 1)  # type: ignore
+            assert not pubsub_msg.message == pubsub_msg2.message
+            assert pubsub_msg2.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
+            assert pubsub_msg.message in [MESSAGE_PATTERN, MESSAGE_EXACT]
+            assert pubsub_msg.channel == pubsub_msg2.channel == CHANNEL_NAME
+            assert pubsub_msg.pattern == pubsub_msg2.pattern == pattern
 
         msg = await get_message_by_method(
             method, client_sharded, callback_messages_sharded, 0
@@ -1643,21 +1717,27 @@ class TestPubSub:
         assert msg.channel == CHANNEL_NAME
         assert msg.pattern is None
 
-        await check_no_messages_left(method, client_pattern)
-        await check_no_messages_left(method, client_basic)
-        await check_no_messages_left(method, client_sharded)
+        await check_no_messages_left(
+            method, client_pattern, callback_messages_pattern, 2
+        )
+        await check_no_messages_left(method, client_exact, callback_messages_exact, 2)
+        await check_no_messages_left(
+            method, client_sharded, callback_messages_sharded, 1
+        )
 
         if cluster_mode:
             # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
             # In cluster mode, we check how many subscriptions received the message
             # So to avoid flakiness, we make sure to unsubscribe from the channels
-            await client_basic.custom_command(["UNSUBSCRIBE", CHANNEL_NAME])
+            await client_exact.custom_command(["UNSUBSCRIBE", CHANNEL_NAME])
             await client_pattern.custom_command(["PUNSUBSCRIBE", CHANNEL_NAME])
             await client_sharded.custom_command(["SUNSUBSCRIBE", CHANNEL_NAME])
 
-    @pytest.mark.skip(reason="no way of currently testing this")
+    @pytest.mark.skip(
+        reason="no way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649"
+    )
     @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_max_size_message(self, request, cluster_mode: bool):
+    async def test_pubsub_exact_max_size_message(self, request, cluster_mode: bool):
         """
         Tests publishing and receiving maximum size messages in Pub/Sub.
 
@@ -1682,7 +1762,7 @@ class TestPubSub:
             {PubSubChannelModes.Exact: {channel}},
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
@@ -1715,11 +1795,86 @@ class TestPubSub:
             # So to avoid flakiness, we make sure to unsubscribe from the channels
             await listening_client.custom_command(["UNSUBSCRIBE", channel])
 
-    @pytest.mark.skip(reason="no way of currently testing this")
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    async def test_pubsub_max_size_message_callback(self, request, cluster_mode: bool):
+    @pytest.mark.skip(
+        reason="no way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649"
+    )
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_pubsub_sharded_max_size_message(self, request, cluster_mode: bool):
         """
-        Tests publishing and receiving maximum size messages in Pub/Sub with callback method.
+        Tests publishing and receiving maximum size messages in sharded Pub/Sub.
+
+        This test verifies that very large messages (512MB - BulkString max size) can be published and received
+        correctly. It ensures that the Pub/Sub system
+        can handle maximum size messages without errors and that async and sync message
+        retrieval methods can coexist and function correctly.
+
+        The test covers the following scenarios:
+        - Setting up Pub/Sub subscription for a specific sharded channel.
+        - Publishing two maximum size messages to the channel.
+        - Verifying that the messages are received correctly using both async and sync methods.
+        - Ensuring that no additional messages are left after the expected messages are received.
+        """
+        channel = get_random_string(10)
+        message = get_random_string(512 * 1024 * 1024)
+        message2 = get_random_string(512 * 1024 * 1024)
+        publish_response = 1 if cluster_mode else OK
+
+        pub_sub = create_pubsub_subscription(
+            cluster_mode,
+            {PubSubChannelModes.Sharded: {channel}},
+        )
+
+        publishing_client, listening_client = await create_clients_with_subscription(
+            request, cluster_mode, pub_sub
+        )
+
+        # (Redis version > 7)
+        if await check_if_server_version_lt(publishing_client, "7.0.0"):
+            pytest.skip("Redis version required >= 7.0.0")
+
+        assert type(publishing_client) == RedisClusterClient
+
+        assert (
+            await publishing_client.publish(message, channel, sharded=True)
+            == publish_response
+        )
+        assert await publishing_client.publish(message2, channel) == publish_response
+        # allow the message to propagate
+        await asyncio.sleep(5)
+
+        async_msg = await listening_client.get_pubsub_message()
+        sync_msg = listening_client.try_get_pubsub_message()
+        assert sync_msg
+
+        assert async_msg.message == message
+        assert async_msg.channel == channel
+        assert async_msg.pattern is None
+
+        assert sync_msg.message == message2
+        assert sync_msg.channel == channel
+        assert sync_msg.pattern is None
+
+        # assert there are no messages to read
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(listening_client.get_pubsub_message(), timeout=3)
+
+        assert listening_client.try_get_pubsub_message() is None
+
+        if cluster_mode:
+            # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
+            # In cluster mode, we check how many subscriptions received the message
+            # So to avoid flakiness, we make sure to unsubscribe from the channels
+            await listening_client.custom_command(["UNSUBSCRIBE", channel])
+
+    @pytest.mark.skip(
+        reason="no way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649"
+    )
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    async def test_pubsub_exact_max_size_message_callback(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Tests publishing and receiving maximum size messages in exact Pub/Sub with callback method.
 
         This test verifies that very large messages (512MB - BulkString max size) can be published and received
         correctly in both cluster and standalone modes. It ensures that the Pub/Sub system
@@ -1733,7 +1888,6 @@ class TestPubSub:
         """
         channel = get_random_string(10)
         message = get_random_string(512 * 1024 * 1024)
-        message2 = get_random_string(512 * 1024 * 1024)
         publish_response = 1 if cluster_mode else OK
 
         callback_messages: List[
@@ -1748,11 +1902,75 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await setup_clients(
+        publishing_client, listening_client = await create_clients_with_subscription(
             request, cluster_mode, pub_sub
         )
 
         assert await publishing_client.publish(message, channel) == publish_response
+        # allow the message to propagate
+        await asyncio.sleep(5)
+
+        assert len(callback_messages) == 1
+
+        assert callback_messages[0].message == message
+        assert callback_messages[0].channel == channel
+        assert callback_messages[0].pattern is None
+
+        if cluster_mode:
+            # Since all tests run on the same cluster, when closing the client, garbage collector can be called after another test will start running
+            # In cluster mode, we check how many subscriptions received the message
+            # So to avoid flakiness, we make sure to unsubscribe from the channels
+            await listening_client.custom_command(["UNSUBSCRIBE", channel])
+
+    @pytest.mark.skip(
+        reason="no way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649"
+    )
+    @pytest.mark.parametrize("cluster_mode", [True])
+    async def test_pubsub_sharded_max_size_message_callback(
+        self, request, cluster_mode: bool
+    ):
+        """
+        Tests publishing and receiving maximum size messages in sharded Pub/Sub with callback method.
+
+        This test verifies that very large messages (512MB - BulkString max size) can be published and received
+        correctly. It ensures that the Pub/Sub system
+        can handle maximum size messages without errors and that the callback message
+        retrieval method works as expected.
+
+        The test covers the following scenarios:
+        - Setting up Pub/Sub subscription for a specific sharded channel with a callback.
+        - Publishing a maximum size message to the channel.
+        - Verifying that the message is received correctly using the callback method.
+        """
+        channel = get_random_string(10)
+        message = get_random_string(512 * 1024 * 1024)
+        publish_response = 1 if cluster_mode else OK
+
+        callback_messages: List[
+            Union[RedisClient.PubSubMsg, RedisClusterClient.PubSubMsg]
+        ] = []
+        callback, context = new_message, callback_messages
+
+        pub_sub = create_pubsub_subscription(
+            cluster_mode,
+            {PubSubChannelModes.Sharded: {channel}},
+            callback=callback,
+            context=context,
+        )
+
+        publishing_client, listening_client = await create_clients_with_subscription(
+            request, cluster_mode, pub_sub
+        )
+
+        # (Redis version > 7)
+        if await check_if_server_version_lt(publishing_client, "7.0.0"):
+            pytest.skip("Redis version required >= 7.0.0")
+
+        assert type(publishing_client) == RedisClusterClient
+        assert (
+            await publishing_client.publish(message, channel, sharded=True)
+            == publish_response
+        )
         # allow the message to propagate
         await asyncio.sleep(5)
 
@@ -1773,28 +1991,26 @@ class TestPubSub:
         """Tests that when creating a resp2 client with pub/sub - an error will be raised"""
         channel = get_random_string(5)
 
-        pub_sub_basic = create_pubsub_subscription(
+        pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {PubSubChannelModes.Exact: {channel}},
         )
 
         with pytest.raises(WrongConfiguration):
-            await setup_clients(
-                request, cluster_mode, pub_sub_basic, protocol=ProtocolVersion.RESP2
+            await create_clients_with_subscription(
+                request, cluster_mode, pub_sub_exact, protocol=ProtocolVersion.RESP2
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     async def test_pubsub_context_with_no_callback_raise_error(
         self, request, cluster_mode: bool
     ):
-        """Tests that when creating a resp2 client with pub/sub - an error will be raised"""
+        """Tests that when creating a pub/sub client in callback method with context but no callback raises an error"""
         channel = get_random_string(5)
         context: List[Union[RedisClient.PubSubMsg, RedisClusterClient.PubSubMsg]] = []
-        pub_sub_basic = create_pubsub_subscription(
+        pub_sub_exact = create_pubsub_subscription(
             cluster_mode, {PubSubChannelModes.Exact: {channel}}, context=context
         )
 
         with pytest.raises(WrongConfiguration):
-            await setup_clients(
-                request, cluster_mode, pub_sub_basic, protocol=ProtocolVersion.RESP2
-            )
+            await create_clients_with_subscription(request, cluster_mode, pub_sub_exact)

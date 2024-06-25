@@ -312,7 +312,16 @@ class RedisClientConfiguration(BaseClientConfiguration):
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:
-                raise WrongConfiguration("Subscriptions require RESP3 protocol.")
+                raise WrongConfiguration(
+                    "Pub/Sub subscriptions require RESP3 protocol, but RESP2 was configured."
+                )
+            if (
+                self.pubsub_subscriptions.context is not None
+                and not self.pubsub_subscriptions.callback
+            ):
+                raise WrongConfiguration(
+                    "Pub/Sub subscriptions with a context require a callback function to be configured."
+                )
             for (
                 channel_type,
                 channels_patterns,
@@ -440,7 +449,16 @@ class ClusterClientConfiguration(BaseClientConfiguration):
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:
-                raise WrongConfiguration("Subscriptions require RESP3 protocol.")
+                raise WrongConfiguration(
+                    "Pub/Sub subscriptions require RESP3 protocol, but RESP2 was configured."
+                )
+            if (
+                self.pubsub_subscriptions.context is not None
+                and not self.pubsub_subscriptions.callback
+            ):
+                raise WrongConfiguration(
+                    "Pub/Sub subscriptions with a context require a callback function to be configured."
+                )
             for (
                 channel_type,
                 channels_patterns,
