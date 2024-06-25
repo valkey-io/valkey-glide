@@ -465,10 +465,10 @@ public interface GenericBaseCommands {
      *     "none" string is returned.
      * @example
      *     <pre>{@code
-     * String type = client.type("StringKey").get();
+     * String type = client.type(gs("StringKey")).get();
      * assert type.equals("string");
      *
-     * type = client.type("ListKey").get();
+     * type = client.type(gs("ListKey")).get();
      * assert type.equals("list");
      * }</pre>
      */
