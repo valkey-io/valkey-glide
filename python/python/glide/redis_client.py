@@ -263,7 +263,7 @@ class BaseRedisClient(CoreCommands):
 
         if not self.config._is_pubsub_configured():
             raise WrongConfiguration(
-                "The operation will never complete since there was no pubsbub subscriptions applied to the client."
+                "The operation will never complete since there was no pubsub subscriptions applied to the client."
             )
 
         if self.config._get_pubsub_callback_and_context()[0] is not None:
@@ -323,13 +323,11 @@ class BaseRedisClient(CoreCommands):
             Dict[str, Any], value_from_pointer(response.resp_pointer)
         )
         message_kind = push_notification["kind"]
-        if message_kind == "Disconnect":
-            # cancel all futures since we dont know how many (if any) messages wont arrive
-            # TODO: consider cancelling a single future
-            self._cancel_pubsub_futures_with_exception_safe(
-                ConnectionError(
-                    "Warning, transport disconnect occured, messages might be lost"
-                )
+        if message_kind == "Disconnection":
+            ClientLogger.log(
+                LogLevel.WARN,
+                "disconnect notification",
+                "Transport disconnected, messages might be lost",
             )
         elif (
             message_kind == "Message"
@@ -353,11 +351,11 @@ class BaseRedisClient(CoreCommands):
         ):
             pass
         else:
-            err_msg = f"Unsupported push message: '{message_kind}'"
-            ClientLogger.log(LogLevel.ERROR, "pubsub message", err_msg)
-            # cancel all futures since its a serious
-            # TODO: consider cancelling a single future
-            self._cancel_pubsub_futures_with_exception_safe(ConnectionError(err_msg))
+            ClientLogger.log(
+                LogLevel.WARN,
+                "unknown notification",
+                f"Unknown notification message: '{message_kind}'",
+            )
 
         return pubsub_message
 
