@@ -5155,6 +5155,71 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xgroup_create_consumer_xgroup_del_consumer(
+        self, redis_client: TRedisClient, cluster_mode, protocol, request
+    ):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        string_key = get_random_string(10)
+        group_name = get_random_string(10)
+        consumer = get_random_string(10)
+        stream_id0 = "0"
+
+        # create group and consumer for the group
+        assert (
+            await redis_client.xgroup_create(
+                key, group_name, stream_id0, StreamGroupOptions(make_stream=True)
+            )
+            == OK
+        )
+        assert (
+            await redis_client.xgroup_create_consumer(key, group_name, consumer) is True
+        )
+
+        # attempting to create/delete a consumer for a group that does not exist results in a NOGROUP request error
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create_consumer(
+                key, "non_existing_group", consumer
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_del_consumer(key, "non_existing_group", consumer)
+
+        # attempt to create consumer for group again
+        assert (
+            await redis_client.xgroup_create_consumer(key, group_name, consumer)
+            is False
+        )
+
+        # attempting to delete a consumer that has not been created yet returns 0
+        assert (
+            await redis_client.xgroup_del_consumer(
+                key, group_name, "non_existing_consumer"
+            )
+            == 0
+        )
+
+        # TODO: use XREADGROUP to mark pending messages for the consumer so that we get non-zero return
+        assert await redis_client.xgroup_del_consumer(key, group_name, consumer) == 0
+
+        # attempting to call XGROUP CREATECONSUMER or XGROUP DELCONSUMER with a non-existing key should raise an error
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create_consumer(
+                non_existing_key, group_name, consumer
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_del_consumer(
+                non_existing_key, group_name, consumer
+            )
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create_consumer(string_key, group_name, consumer)
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_del_consumer(string_key, group_name, consumer)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_pfadd(self, redis_client: TRedisClient):
         key = get_random_string(10)
         assert await redis_client.pfadd(key, []) == 1
