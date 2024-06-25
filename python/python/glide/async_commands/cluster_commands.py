@@ -460,7 +460,7 @@ class ClusterCommands(CoreCommands):
 
     async def publish(self, message: str, channel: str, sharded: bool = False) -> int:
         """
-        Publish message on pubsub channel.
+        Publish a message on pubsub channel.
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
         The mode is selected using the 'sharded' parameter
         See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
