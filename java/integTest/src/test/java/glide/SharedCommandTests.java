@@ -4571,7 +4571,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectRefcount_returns_null(BaseClient client) {
-        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        String nonExistingKey = UUID.randomUUID().toString();
         assertNull(client.objectRefcount(nonExistingKey).get());
     }
 
