@@ -7448,7 +7448,7 @@ public class RedisClientTest {
         GlideString key2 = gs("testKey2");
         GlideString[] keys = {key, key2};
         ListDirection listDirection = ListDirection.LEFT;
-        GlideString[] arguments = new GlideString[] {gs("2"), key, key2, listDirection.toString()};
+        GlideString[] arguments = new GlideString[] {gs("2"), key, key2, gs(listDirection.toString())};
         Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
 
         CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();

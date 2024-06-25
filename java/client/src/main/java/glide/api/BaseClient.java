@@ -10,9 +10,9 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArg
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
+import static glide.utils.ArrayTransformUtils.castBinaryStringMapOfArrays;
 import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
-import static glide.utils.ArrayTransformUtils.castBinaryStringMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -472,9 +472,9 @@ public abstract class BaseClient
      * @param <V> Value type.
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<String, V>
-    protected <V> Map<GlideString, V> handleBinaryStringMapOrNullResponse(Response response) throws RedisException {
-        return handleRedisResponse(
-                Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+    protected <V> Map<GlideString, V> handleBinaryStringMapOrNullResponse(Response response)
+            throws RedisException {
+        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     /**
@@ -1306,7 +1306,9 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, Double>> zpopmin(@NonNull GlideString key, long count) {
         return commandManager.submitNewCommand(
-                ZPopMin, new GlideString[] {key, gs(Long.toString(count))}, this::handleBinaryStringMapResponse);
+                ZPopMin,
+                new GlideString[] {key, gs(Long.toString(count))},
+                this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -1341,7 +1343,9 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Map<GlideString, Double>> zpopmax(@NonNull GlideString key, long count) {
         return commandManager.submitNewCommand(
-                ZPopMax, new GlideString[] {key, gs(Long.toString(count))}, this::handleBinaryStringMapResponse);
+                ZPopMax,
+                new GlideString[] {key, gs(Long.toString(count))},
+                this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -2291,7 +2295,7 @@ public abstract class BaseClient
                 response -> castMapOfArrays(handleMapOrNullResponse(response), String.class));
     }
 
-    @Override 
+    @Override
     public CompletableFuture<Map<GlideString, GlideString[]>> lmpop(
             @NonNull GlideString[] keys, @NonNull ListDirection direction, long count) {
         GlideString[] arguments =
@@ -2304,7 +2308,9 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LMPop,
                 arguments,
-                response -> castBinaryStringMapOfArrays(handleBinaryStringMapOrNullResponse(response), GlideString.class));
+                response ->
+                        castBinaryStringMapOfArrays(
+                                handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
@@ -2330,7 +2336,9 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 LMPop,
                 arguments,
-                response -> castBinaryStringMapOfArrays(handleBinaryStringMapOrNullResponse(response), GlideString.class));
+                response ->
+                        castBinaryStringMapOfArrays(
+                                handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
@@ -2360,7 +2368,9 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 BLMPop,
                 arguments,
-                response -> castBinaryStringMapOfArrays(handleBinaryStringMapOrNullResponse(response), GlideString.class));
+                response ->
+                        castBinaryStringMapOfArrays(
+                                handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override
@@ -2388,7 +2398,9 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 BLMPop,
                 arguments,
-                response -> castBinaryStringMapOfArrays(handleBinaryStringMapOrNullResponse(response), GlideString.class));
+                response ->
+                        castBinaryStringMapOfArrays(
+                                handleBinaryStringMapOrNullResponse(response), GlideString.class));
     }
 
     @Override

@@ -2,8 +2,8 @@
 package glide.utils;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
-import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.GlideString;
+import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
 import java.util.HashMap;
