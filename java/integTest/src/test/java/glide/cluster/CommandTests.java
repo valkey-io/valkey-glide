@@ -40,7 +40,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
+import static glide.api.models.GlideString.gs;
 
+import glide.api.models.GlideString;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
@@ -786,9 +788,17 @@ public class CommandTests {
                         "7.0.0",
                         clusterClient.fcall("func", new String[] {"abc", "zxy", "lkn"}, new String[0])),
                 Arguments.of(
+                        "fcall",
+                        "7.0.0",
+                        clusterClient.fcall(gs("func"), new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, new GlideString[0])),
+                Arguments.of(
                         "fcallReadOnly",
                         "7.0.0",
                         clusterClient.fcallReadOnly("func", new String[] {"abc", "zxy", "lkn"}, new String[0])),
+                Arguments.of(
+                        "fcallReadOnly",
+                        "7.0.0",
+                        clusterClient.fcallReadOnly(gs("func"), new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, new GlideString[0])),
                 Arguments.of(
                         "xread", null, clusterClient.xread(Map.of("abc", "stream1", "zxy", "stream2"))),
                 Arguments.of("copy", "6.2.0", clusterClient.copy("abc", "def", true)),
@@ -869,6 +879,7 @@ public class CommandTests {
                         .contains("can't write against a read only replica"));
     }
 
+    // TODO: add a binary version of this test
     @SneakyThrows
     @ParameterizedTest(name = "functionLoad: singleNodeRoute = {0}")
     @ValueSource(booleans = {true, false})
@@ -892,7 +903,7 @@ public class CommandTests {
                 assertEquals("one", nodeResponse);
             }
         }
-        fcallResult = clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}, route).get();
+                fcallResult = clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}, route).get();
         if (route instanceof SingleNodeRoute) {
             assertEquals("one", fcallResult.getSingleValue());
         } else {
@@ -900,7 +911,7 @@ public class CommandTests {
                 assertEquals("one", nodeResponse);
             }
         }
-
+        
         var expectedDescription =
                 new HashMap<String, String>() {
                     {
@@ -1018,6 +1029,7 @@ public class CommandTests {
         assertEquals(OK, clusterClient.functionFlush(route).get());
     }
 
+    // TODO: add a binary version of this test
     @SneakyThrows
     @Test
     public void function_commands_without_keys_and_without_route() {
@@ -1035,8 +1047,8 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
         assertEquals("one", clusterClient.fcall(funcName, new String[] {"one", "two"}).get());
-        assertEquals("one", clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}).get());
-
+                assertEquals("one", clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}).get());
+        
         var flist = clusterClient.functionList(false).get();
         var expectedDescription =
                 new HashMap<String, String>() {
@@ -1096,8 +1108,8 @@ public class CommandTests {
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
         assertEquals(2L, clusterClient.fcall(newFuncName, new String[] {"one", "two"}).get());
-        assertEquals(2L, clusterClient.fcallReadOnly(newFuncName, new String[] {"one", "two"}).get());
-
+                assertEquals(2L, clusterClient.fcallReadOnly(newFuncName, new String[] {"one", "two"}).get());
+        
         assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
     }
 
@@ -1139,6 +1151,49 @@ public class CommandTests {
                 new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
                 clusterClient.exec(transaction).get());
 
+        assertEquals(OK, clusterClient.functionDelete(libName, route).get());
+    }
+
+    @ParameterizedTest
+    @ValueSource(strings = {"abc", "xyz", "kln"})
+    @SneakyThrows
+    public void fcall_binary_with_keys(String prefix) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String key = "{" + prefix.toString() + "}-fcall_with_keys-";
+        SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
+        String libName = "mylib_with_keys";
+        GlideString funcName = gs("myfunc_with_keys");
+        // function $funcName returns array with first two arguments
+        String code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return {keys[1], keys[2]}"), true);
+
+        // loading function to the node where key is stored
+        assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
+
+        // due to common prefix, all keys are mapped to the same hash slot
+        var functionResult =
+                clusterClient.fcall(funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0]).get();
+        assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
+        functionResult =
+                clusterClient.fcallReadOnly(funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0]).get();
+        assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
+
+        /* TODO: change to binary transaction version once available:
+        var transaction =
+                new ClusterTransaction()
+                        .fcall(funcName, new String[] {key + 1, key + 2}, new String[0])
+                        .fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]);
+
+        // check response from a routed transaction request
+        assertDeepEquals(
+                new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
+                clusterClient.exec(transaction, route).get());
+        // if no route given, GLIDE should detect it automatically
+        assertDeepEquals(
+                new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
+                clusterClient.exec(transaction).get());
+        */
+        
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
 
@@ -1188,6 +1243,61 @@ public class CommandTests {
 
         // create the same function, but with RO flag
         code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), true);
+
+        assertEquals(libName, clusterClient.functionLoad(code, true).get());
+
+        // fcall should succeed now
+        assertEquals(42L, clusterClient.fcall(funcName, replicaRoute).get().getSingleValue());
+
+        assertEquals(OK, clusterClient.functionDelete(libName).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_readonly_binary_function() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        String libName = "fcall_readonly_function";
+        // intentionally using a REPLICA route
+        Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
+        Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
+        GlideString funcName = gs("fcall_readonly_function");
+
+        // function $funcName returns a magic number
+        String code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return 42"), false);
+
+        assertEquals(libName, clusterClient.functionLoad(code, false).get());
+
+        // fcall on a replica node should fail, because a function isn't guaranteed to be RO
+        var executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.fcall(funcName, replicaRoute).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("You can't write against a read only replica."));
+
+        // fcall_ro also fails
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.fcallReadOnly(funcName, replicaRoute).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("You can't write against a read only replica."));
+
+        // fcall_ro also fails to run it even on primary - another error
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.fcallReadOnly(funcName, primaryRoute).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException
+                        .getMessage()
+                        .contains("Can not execute a script with write flag using *_ro command."));
+
+        // create the same function, but with RO flag
+        code = generateLuaLibCode(libName, Map.of(funcName.toString(), "return 42"), true);
 
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 

@@ -3,6 +3,7 @@ package glide.api;
 
 import static glide.api.BaseClient.OK;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
@@ -52,6 +53,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortBaseOptions.Limit;
@@ -1610,10 +1612,56 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void fcall_binary_without_keys_and_without_args_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] args = new GlideString[] {function, gs("0")};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCall), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcall(function);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void fcall_without_keys_and_without_args_but_with_route_returns_success() {
         // setup
         String function = "func";
         String[] args = new String[] {function, "0"};
+        ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object>>submitNewCommand(
+                        eq(FCall), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object>> response = service.fcall(function, RANDOM);
+        ClusterValue<Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_binary_without_keys_and_without_args_but_with_route_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] args = new GlideString[] {function, gs("0")};
         ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
         CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -1657,6 +1705,29 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void fcall_binary_without_keys_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] arguments = new GlideString[] {gs("1"), gs("2")};
+        GlideString[] args = new GlideString[] {function, gs("0"), gs("1"), gs("2")};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCall), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcall(function, arguments);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void fcall_without_keys_and_with_route_returns_success() {
         // setup
         String function = "func";
@@ -1682,10 +1753,58 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void fcall_bianry_without_keys_and_with_route_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] arguments = new GlideString[] {gs("1"), gs("2")};
+        GlideString[] args = new GlideString[] {function, gs("0"), gs("1"), gs("2")};
+        ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object>>submitNewCommand(
+                        eq(FCall), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object>> response = service.fcall(function, arguments, RANDOM);
+        ClusterValue<Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void fcallReadOnly_without_keys_and_without_args_returns_success() {
         // setup
         String function = "func";
         String[] args = new String[] {function, "0"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCallReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcallReadOnly(function);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcallReadOnly_binary_without_keys_and_without_args_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] args = new GlideString[] {function, gs("0")};
         Object value = "42";
         CompletableFuture<Object> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -1797,6 +1916,30 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void fcallReadOnly_binary_without_keys_and_without_args_but_with_route_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] args = new GlideString[] {function, gs("0")};
+        ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object>>submitNewCommand(
+                        eq(FCallReadOnly), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object>> response = service.fcallReadOnly(function, RANDOM);
+        ClusterValue<Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void fcallReadOnly_without_keys_returns_success() {
         // setup
         String function = "func";
@@ -1821,11 +1964,61 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void fcallReadOnly_binary_without_keys_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] arguments = new GlideString[] {gs("1"), gs("2")};
+        GlideString[] args = new GlideString[] {function, gs("0"), gs("1"), gs("2")};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCallReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcallReadOnly(function, arguments);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void fcallReadOnly_without_keys_and_with_route_returns_success() {
         // setup
         String function = "func";
         String[] arguments = new String[] {"1", "2"};
         String[] args = new String[] {function, "0", "1", "2"};
+        ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
+        CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<Object>>submitNewCommand(
+                        eq(FCallReadOnly), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<Object>> response =
+                service.fcallReadOnly(function, arguments, RANDOM);
+        ClusterValue<Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcallReadOnly_binary_without_keys_and_with_route_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] arguments = new GlideString[] {gs("1"), gs("2")};
+        GlideString[] args = new GlideString[] {function, gs("0"), gs("1"), gs("2")};
         ClusterValue<Object> value = ClusterValue.ofSingleValue("42");
         CompletableFuture<ClusterValue<Object>> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
