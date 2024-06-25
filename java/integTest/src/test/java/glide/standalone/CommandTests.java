@@ -181,7 +181,7 @@ public class CommandTests {
         assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
         assertEquals(OK, regularClient.set(key1, value1).get());
         assertEquals(OK, regularClient.set(key2, value2).get());
-        assertEquals(true, regularClient.move(GlideString.gs(key1), 1L).get());
+        assertEquals(true, regularClient.move(key1, 1L).get());
         assertNull(regularClient.get(key1).get());
 
         assertEquals(OK, regularClient.select(1).get());
@@ -189,7 +189,37 @@ public class CommandTests {
 
         assertEquals(OK, regularClient.set(key2, value2).get());
         // Move does not occur because key2 already exists in DB 0
-        assertEquals(false, regularClient.move(GlideString.gs(key2), 0).get());
+        assertEquals(false, regularClient.move(key2, 0).get());
+        assertEquals(value2, regularClient.get(key2).get());
+
+        // Incorrect argument - DB index must be non-negative
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> regularClient.move(key1, -1L).get());
+        assertTrue(e.getCause() instanceof RequestException);
+    }
+
+    @Test
+    @SneakyThrows
+    public void move_binary() {
+        GlideString key1 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString key2 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString value1 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString value2 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString nonExistingKey = GlideString.gs(UUID.randomUUID().toString());
+        assertEquals(OK, regularClient.select(0).get());
+
+        assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
+        assertEquals(OK, regularClient.set(key1, value1).get());
+        assertEquals(OK, regularClient.set(key2, value2).get());
+        assertEquals(true, regularClient.move(key1, 1L).get());
+        assertNull(regularClient.get(key1).get());
+
+        assertEquals(OK, regularClient.select(1).get());
+        assertEquals(value1, regularClient.get(key1).get());
+
+        assertEquals(OK, regularClient.set(key2, value2).get());
+        // Move does not occur because key2 already exists in DB 0
+        assertEquals(false, regularClient.move(key2, 0).get());
         assertEquals(value2, regularClient.get(key2).get());
 
         // Incorrect argument - DB index must be non-negative
