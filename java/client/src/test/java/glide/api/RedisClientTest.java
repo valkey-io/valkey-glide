@@ -2124,10 +2124,7 @@ public class RedisClientTest {
         GlideString key = gs("testKey");
         long start = 2L;
         long end = 2L;
-        GlideString[] args =
-                new GlideString[] {
-                    key, gs(Long.toString(end)), gs(Long.toString(start))
-                };
+        GlideString[] args = new GlideString[] {key, gs(Long.toString(end)), gs(Long.toString(start))};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -6544,8 +6541,7 @@ public class RedisClientTest {
         Long result = 6L;
         BitwiseOperation bitwiseAnd = BitwiseOperation.AND;
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {gs(bitwiseAnd.toString()), destination}, keys);
+                concatenateArrays(new GlideString[] {gs(bitwiseAnd.toString()), destination}, keys);
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(result);
 
