@@ -61,6 +61,7 @@ from glide.async_commands.stream import (
     MaxId,
     MinId,
     StreamAddOptions,
+    StreamGroupOptions,
     StreamReadOptions,
     TrimByMaxLen,
     TrimByMinId,
@@ -5071,6 +5072,86 @@ class TestCommands:
             await redis_client.xread({string_key: stream_id1, key1: stream_id1})
         with pytest.raises(RequestError):
             await redis_client.xread({key1: stream_id1, string_key: stream_id1})
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xgroup_create_xgroup_destroy(
+        self, redis_client: TRedisClient, cluster_mode, protocol, request
+    ):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        string_key = get_random_string(10)
+        group_name1 = get_random_string(10)
+        group_name2 = get_random_string(10)
+        stream_id = "0-1"
+
+        # trying to create a consumer group for a non-existing stream without the "MKSTREAM" arg results in error
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create(non_existing_key, group_name1, stream_id)
+
+        # calling with the "MKSTREAM" arg should create the new stream automatically
+        assert (
+            await redis_client.xgroup_create(
+                key, group_name1, stream_id, StreamGroupOptions(make_stream=True)
+            )
+            == OK
+        )
+
+        # invalid arg - group names must be unique, but group_name1 already exists
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create(key, group_name1, stream_id)
+
+        # invalid stream ID format
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create(
+                key, group_name2, "invalid_stream_id_format"
+            )
+
+        assert await redis_client.xgroup_destroy(key, group_name1) is True
+        # calling xgroup_destroy again returns False because the group was already destroyed above
+        assert await redis_client.xgroup_destroy(key, group_name1) is False
+
+        # attempting to destroy a group for a non-existing key should raise an error
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_destroy(non_existing_key, group_name1)
+
+        # "ENTRIESREAD" option was added in Redis 7.0.0
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            with pytest.raises(RequestError):
+                await redis_client.xgroup_create(
+                    key,
+                    group_name1,
+                    stream_id,
+                    StreamGroupOptions(entries_read_id="10"),
+                )
+        else:
+            assert (
+                await redis_client.xgroup_create(
+                    key,
+                    group_name1,
+                    stream_id,
+                    StreamGroupOptions(entries_read_id="10"),
+                )
+                == OK
+            )
+
+            # invalid entries_read_id - cannot be the zero ("0-0") ID
+            with pytest.raises(RequestError):
+                await redis_client.xgroup_create(
+                    key,
+                    group_name2,
+                    stream_id,
+                    StreamGroupOptions(entries_read_id="0-0"),
+                )
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_create(
+                string_key, group_name1, stream_id, StreamGroupOptions(make_stream=True)
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_destroy(string_key, group_name1)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

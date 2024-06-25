@@ -52,6 +52,7 @@
 * Python: Added COPY command ([#1626](https://github.com/aws/glide-for-redis/pull/1626))
 * Python: Added XREVRANGE command ([#1625](https://github.com/aws/glide-for-redis/pull/1625))
 * Python: Added XREAD command ([#1644](https://github.com/aws/glide-for-redis/pull/1644))
+* Python: Added XGROUP CREATE and XGROUP DESTROY commands ([#1646](https://github.com/aws/glide-for-redis/pull/1646))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
