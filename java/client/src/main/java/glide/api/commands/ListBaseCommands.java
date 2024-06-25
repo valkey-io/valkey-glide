@@ -716,7 +716,7 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> lset(String key, long index, String element);
-    
+
     /**
      * Sets the list element at <code>index</code> to <code>element</code>.<br>
      * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second

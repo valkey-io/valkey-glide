@@ -342,7 +342,10 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<Boolean> copy(
-            @NonNull GlideString source, @NonNull GlideString destination, long destinationDB, boolean replace) {
+            @NonNull GlideString source,
+            @NonNull GlideString destination,
+            long destinationDB,
+            boolean replace) {
         GlideString[] arguments =
                 new GlideString[] {source, destination, gs(DB_REDIS_API), gs(Long.toString(destinationDB))};
         if (replace) {

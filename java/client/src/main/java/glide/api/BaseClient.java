@@ -1021,7 +1021,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Boolean> sismember(@NonNull GlideString key, @NonNull GlideString member) {
+    public CompletableFuture<Boolean> sismember(
+            @NonNull GlideString key, @NonNull GlideString member) {
         return commandManager.submitNewCommand(
                 SIsMember, new GlideString[] {key, member}, this::handleBooleanResponse);
     }
@@ -2208,7 +2209,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> lset(@NonNull GlideString key, long index, @NonNull GlideString element) {
+    public CompletableFuture<String> lset(
+            @NonNull GlideString key, long index, @NonNull GlideString element) {
         GlideString[] arguments = new GlideString[] {key, gs(Long.toString(index)), element};
         return commandManager.submitNewCommand(LSet, arguments, this::handleStringResponse);
     }
@@ -2341,7 +2343,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Boolean> copy(@NonNull GlideString source, @NonNull GlideString destination) {
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source, @NonNull GlideString destination) {
         GlideString[] arguments = new GlideString[] {source, destination};
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }

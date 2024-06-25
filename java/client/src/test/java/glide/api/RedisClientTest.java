@@ -1642,7 +1642,7 @@ public class RedisClientTest {
         assertEquals(value, payload);
     }
 
-   @SneakyThrows
+    @SneakyThrows
     @Test
     public void hexists_binary_success() {
         // setup

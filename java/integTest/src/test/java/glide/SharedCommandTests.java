@@ -844,7 +844,8 @@ public class SharedCommandTests {
         GlideString key = gs(UUID.randomUUID().toString());
         GlideString field1 = gs(UUID.randomUUID().toString());
         GlideString field2 = gs(UUID.randomUUID().toString());
-        Map<String, String> fieldValueMap = Map.of(field1.toString(), "value1", field2.toString(), "value1");
+        Map<String, String> fieldValueMap =
+                Map.of(field1.toString(), "value1", field2.toString(), "value1");
 
         assertEquals(2, client.hset(key.toString(), fieldValueMap).get());
         assertTrue(client.hexists(key, field1).get());
