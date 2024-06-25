@@ -215,11 +215,11 @@ Implement integration tests in the following files:
 - [TransactionTestsUtilities.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/TransactionTestUtilities.java) (standalone and cluster).
 - [SharedCommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/SharedCommandTests.java) (standalone and cluster).
 - [cluster/CommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/cluster/CommandTests.java) (cluster).
-- [standalone/CommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/standalone/CommandTests.java) (cluster).
+- [standalone/CommandTests.java](https://github.com/aws/glide-for-redis/blob/main/java/integTest/src/test/java/glide/standalone/CommandTests.java) (standalone).
 For commands that have options, create a separate file for the optional values.
 
 [BaseTransaction.java](https://github.com/aws/glide-for-redis/blob/main/java/client/src/main/java/glide/api/models/BaseTransaction.java) will add the command to the Transactions API.
-Refer to [this](https://github.com/aws/glide-for-redis/tree/35f36ee61a777ee2dd3a15dc6078c5f3759aeaa7/java/client/src/main/java/glide/api/commands) link view the interface directory.
+Refer to [this](https://github.com/aws/glide-for-redis/tree/35f36ee61a777ee2dd3a15dc6078c5f3759aeaa7/java/client/src/main/java/glide/api/commands) link to view the interface directory.
 Refer to https://redis.io/docs/latest/develop/interact/transactions/ for more details about how Transactions work in Redis.
 
 ### Javadocs
