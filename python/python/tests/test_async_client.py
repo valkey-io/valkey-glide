@@ -111,10 +111,13 @@ class TestRedisClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_send_and_receive_large_values(self, redis_client: TRedisClient):
-        length = 2**16
-        key = get_random_string(length)
-        value = get_random_string(length)
+    async def test_send_and_receive_large_values(self, request, cluster_mode, protocol):
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+        )
+        length = 2**25  # 33mb
+        key = "0" * length
+        value = "0" * length
         assert len(key) == length
         assert len(value) == length
         await redis_client.set(key, value)
