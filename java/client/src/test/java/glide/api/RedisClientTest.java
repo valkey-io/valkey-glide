@@ -2126,7 +2126,7 @@ public class RedisClientTest {
         long end = 2L;
         GlideString[] args =
                 new GlideString[] {
-                    key, gs(Long.toString(end).getBytes()), gs(Long.toString(start).getBytes())
+                    key, gs(Long.toString(end)), gs(Long.toString(start))
                 };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
@@ -6489,10 +6489,10 @@ public class RedisClientTest {
         GlideString[] arguments =
                 new GlideString[] {
                     key,
-                    gs(Long.toString(bit).getBytes()),
-                    gs(Long.toString(start).getBytes()),
-                    gs(Long.toString(end).getBytes()),
-                    gs(BitmapIndexType.BIT.toString().getBytes())
+                    gs(Long.toString(bit)),
+                    gs(Long.toString(start)),
+                    gs(Long.toString(end)),
+                    gs(BitmapIndexType.BIT.toString())
                 };
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(bitPosition);
@@ -6545,7 +6545,7 @@ public class RedisClientTest {
         BitwiseOperation bitwiseAnd = BitwiseOperation.AND;
         GlideString[] arguments =
                 concatenateArrays(
-                        new GlideString[] {gs(bitwiseAnd.toString().getBytes()), destination}, keys);
+                        new GlideString[] {gs(bitwiseAnd.toString()), destination}, keys);
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(result);
 
@@ -6966,7 +6966,7 @@ public class RedisClientTest {
         // setup
         GlideString key = gs("testKey");
         long dbIndex = 2L;
-        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(dbIndex).getBytes())};
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(dbIndex))};
         Boolean value = true;
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
