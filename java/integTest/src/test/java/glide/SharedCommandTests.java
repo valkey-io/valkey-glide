@@ -4332,11 +4332,11 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectEncoding_returns_string_raw(BaseClient client) {
-        String stringRawKey = UUID.randomUUID().toString();
+        GlideString stringRawKey = gs(UUID.randomUUID().toString());
         assertEquals(
                 OK,
                 client
-                        .set(stringRawKey, "a really loooooooooooooooooooooooooooooooooooooooong value")
+                        .set(stringRawKey, gs("a really loooooooooooooooooooooooooooooooooooooooong value"))
                         .get());
         assertEquals("raw", client.objectEncoding(stringRawKey).get());
     }
@@ -4345,8 +4345,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectEncoding_returns_string_int(BaseClient client) {
-        String stringIntKey = UUID.randomUUID().toString();
-        assertEquals(OK, client.set(stringIntKey, "2").get());
+        GlideString stringIntKey = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(stringIntKey, gs("2")).get());
         assertEquals("int", client.objectEncoding(stringIntKey).get());
     }
 
@@ -4465,6 +4465,7 @@ public class SharedCommandTests {
     public void objectFreq_returns_null(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
         assertNull(client.objectFreq(nonExistingKey).get());
+        assertNull(client.objectFreq(gs(nonExistingKey)).get());
     }
 
     @SneakyThrows
@@ -4479,8 +4480,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectIdletime(BaseClient client) {
-        String key = UUID.randomUUID().toString();
-        assertEquals(OK, client.set(key, "").get());
+        GlideString key = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(key, gs("")).get());
         Thread.sleep(2000);
         assertTrue(client.objectIdletime(key).get() > 0L);
     }
@@ -4497,8 +4498,8 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void objectRefcount(BaseClient client) {
-        String key = UUID.randomUUID().toString();
-        assertEquals(OK, client.set(key, "").get());
+        GlideString key = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(key, gs("")).get());
         assertTrue(client.objectRefcount(key).get() >= 0L);
     }
 
