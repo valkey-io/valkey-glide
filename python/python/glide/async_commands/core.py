@@ -357,38 +357,6 @@ class CoreCommands(Protocol):
         route: Optional[Route] = None,
     ) -> TResult: ...
 
-    async def fcall(self, function: str, keys: List[str], arguments: List[str]) -> TResult:
-        """
-        Invokes a previously loaded function.
-        See https://redis.io/commands/fcall/ for more details.
-
-        Note:
-            When in cluster mode, all `keys` must map to the same hash slot. and `newkey` must map to the same hash slot.
-            If no `keys` are given, command will be routed to a random node.
-        
-        Args:
-            function (str): The function name.
-            keys (List[str]): A list of keys accessed by the function. To ensure the correct
-                execution of functions, both in standalone and clustered deployments, all names of keys
-                that a function accesses must be explicitly provided as `keys`.
-            arguments (List[str]): A list of `function` arguments. `Arguments`
-                should not represent names of keys.
-
-        Returns:
-            Optional[TResult]:
-                The invoked function's return value.
-
-        Example:
-            >>> await client.fcall("Deep_Thought", [], ["Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"])
-                'new_value' # Returns the function's return value.
-
-        Since: Redis version 7.0.0.
-        """
-        args = [function, str(len(keys))]
-        args.extend(keys)
-        args.extend(arguments)
-        return cast(Optional[TResult], await self._execute_command(RequestType.FCall, args))
-
     async def set(
         self,
         key: str,

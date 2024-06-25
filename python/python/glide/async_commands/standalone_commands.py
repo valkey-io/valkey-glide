@@ -35,13 +35,23 @@ class StandaloneCommands(CoreCommands):
         """
         return await self._execute_command(RequestType.CustomCommand, command_args)
 
-    async def fcall(self, function: str) -> Optional[TResult]:
+    async def fcall(
+        self,
+        function: str,
+        keys: Optional[List[str]] = None,
+        arguments: Optional[List[str]] = None
+    ) -> Optional[TResult]:
         """
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.
 
         Args:
             function (str): The function name.
+            keys (Optional[List[str]]): A list of keys accessed by the function. To ensure the correct
+                execution of functions, both in standalone and clustered deployments, all names of keys
+                that a function accesses must be explicitly provided as `keys`.
+            arguments (Optional[List[str]]): A list of `function` arguments. `Arguments`
+                should not represent names of keys.
 
         Returns:
             Optional[TResult]:
@@ -53,7 +63,15 @@ class StandaloneCommands(CoreCommands):
 
         Since: Redis version 7.0.0.
         """
-        return await self.fcall(function, [], [])
+        args = [function]
+        if keys:
+            args.append(str(len(keys)))
+            args.extend(keys)
+        else:
+            args.append("0")
+        if arguments:
+            args.extend(arguments)
+        return cast(Optional[TResult], await self._execute_command(RequestType.FCall, args))
 
     async def info(
         self,
