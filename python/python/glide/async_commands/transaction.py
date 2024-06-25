@@ -1999,6 +1999,46 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.XGroupDestroy, [key, group_name])
 
+    def xgroup_create_consumer(
+        self: TTransaction, key: str, group_name: str, consumer: str
+    ) -> TTransaction:
+        """
+        Creates a consumer named `consumer` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-createconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer (str): The newly created consumer.
+
+        Command response:
+            bool: True if the consumer is created. Otherwise, returns False.
+        """
+        return self.append_command(
+            RequestType.XGroupCreateConsumer, [key, group_name, consumer]
+        )
+
+    def xgroup_del_consumer(
+        self: TTransaction, key: str, group_name: str, consumer: str
+    ) -> TTransaction:
+        """
+        Deletes a consumer named `consumer` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-delconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer (str): The consumer to delete.
+
+        Command response:
+            int: The number of pending messages the `consumer` had before it was deleted.
+        """
+        return self.append_command(
+            RequestType.XGroupDelConsumer, [key, group_name, consumer]
+        )
+
     def geoadd(
         self: TTransaction,
         key: str,

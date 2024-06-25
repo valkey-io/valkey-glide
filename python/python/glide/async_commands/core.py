@@ -2862,6 +2862,60 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.XGroupDestroy, [key, group_name]),
         )
 
+    async def xgroup_create_consumer(
+        self, key: str, group_name: str, consumer: str
+    ) -> bool:
+        """
+        Creates a consumer named `consumer` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-createconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer (str): The newly created consumer.
+
+        Returns:
+            bool: True if the consumer is created. Otherwise, returns False.
+
+        Examples:
+            >>> await client.xgroup_create_consumer("mystream", "mygroup", "myconsumer")
+                True  # The consumer "myconsumer" was created in consumer group "mygroup" for the stream "mystream".
+        """
+        return cast(
+            bool,
+            await self._execute_command(
+                RequestType.XGroupCreateConsumer, [key, group_name, consumer]
+            ),
+        )
+
+    async def xgroup_del_consumer(
+        self, key: str, group_name: str, consumer: str
+    ) -> int:
+        """
+        Deletes a consumer named `consumer` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-delconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer (str): The consumer to delete.
+
+        Returns:
+            int: The number of pending messages the `consumer` had before it was deleted.
+
+        Examples:
+            >>> await client.xgroup_del_consumer("mystream", "mygroup", "myconsumer")
+                5  # Consumer "myconsumer" was deleted, and had 5 pending messages unclaimed.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.XGroupDelConsumer, [key, group_name, consumer]
+            ),
+        )
+
     async def geoadd(
         self,
         key: str,
