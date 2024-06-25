@@ -1656,7 +1656,7 @@ public class SharedCommandTests {
         GlideString key2 = gs("{key}" + UUID.randomUUID());
         GlideString value = gs(UUID.randomUUID().toString());
 
-        GlideString setResult = client.set(key1, value).get();
+        String setResult = client.set(key1, value).get();
         assertEquals(OK, setResult);
         setResult = client.set(key2, value).get();
         assertEquals(OK, setResult);
@@ -1822,8 +1822,9 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void expire_pexpire_ttl_and_expiretime_binary_with_timestamp_in_the_past_or_negative_timeout(
-            BaseClient client) {
+    public void
+            expire_pexpire_ttl_and_expiretime_binary_with_timestamp_in_the_past_or_negative_timeout(
+                    BaseClient client) {
         GlideString key = gs(UUID.randomUUID().toString());
 
         assertEquals(OK, client.set(key, gs("expire_with_past_timestamp")).get());
