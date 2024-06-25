@@ -36,10 +36,12 @@ import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
@@ -59,6 +61,7 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortBaseOptions.Limit;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionLoadOptions;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
@@ -2062,6 +2065,138 @@ public class RedisClusterClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionDump_returns_success() {
+        // setup
+        byte[] value = new byte[] {42};
+        CompletableFuture<byte[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<byte[]>submitNewCommand(eq(FunctionDump), eq(new GlideString[0]), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<byte[]> response = service.functionDump();
+        byte[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionDump_with_route_returns_success() {
+        // setup
+        ClusterValue<byte[]> value = ClusterValue.of(new byte[] {42});
+        CompletableFuture<ClusterValue<byte[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<ClusterValue<byte[]>>submitNewCommand(
+                        eq(FunctionDump), eq(new GlideString[0]), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<ClusterValue<byte[]>> response = service.functionDump(RANDOM);
+        ClusterValue<byte[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionRestore_returns_success() {
+        // setup
+        byte[] data = new byte[] {42};
+        GlideString[] args = {gs(data)};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionRestore(data);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionRestore_with_policy_returns_success() {
+        // setup
+        byte[] data = new byte[] {42};
+        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString())};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionRestore(data, FunctionRestorePolicy.FLUSH);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionRestore_with_route_returns_success() {
+        // setup
+        byte[] data = new byte[] {42};
+        GlideString[] args = {gs(data)};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.functionRestore(data, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void functionRestore_with_policy_and_route_returns_success() {
+        // setup
+        byte[] data = new byte[] {42};
+        GlideString[] args = {gs(data), gs(FunctionRestorePolicy.FLUSH.toString())};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(FunctionRestore), eq(args), eq(RANDOM), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response =
+                service.functionRestore(data, FunctionRestorePolicy.FLUSH, RANDOM);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows

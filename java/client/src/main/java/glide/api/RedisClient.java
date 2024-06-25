@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
@@ -22,10 +23,12 @@ import static redis_request.RedisRequestOuterClass.RequestType.Echo;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
@@ -49,6 +52,7 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
@@ -276,6 +280,27 @@ public class RedisClient extends BaseClient
     public CompletableFuture<String> functionDelete(@NonNull String libName) {
         return commandManager.submitNewCommand(
                 FunctionDelete, new String[] {libName}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<byte[]> functionDump() {
+        return commandManager.submitNewCommand(
+                FunctionDump, new GlideString[0], this::handleBytesOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(byte @NonNull [] payload) {
+        return commandManager.submitNewCommand(
+                FunctionRestore, new GlideString[] {gs(payload)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(
+            byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy) {
+        return commandManager.submitNewCommand(
+                FunctionRestore,
+                new GlideString[] {gs(payload), gs(policy.toString())},
+                this::handleStringResponse);
     }
 
     @Override

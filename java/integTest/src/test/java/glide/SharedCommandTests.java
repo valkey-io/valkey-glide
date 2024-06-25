@@ -216,6 +216,21 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void appendBinary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString value = gs(String.valueOf(UUID.randomUUID()));
+
+        // Append on non-existing string(similar to SET)
+        assertEquals(value.getString().length(), client.append(key, value).get());
+
+        assertEquals(value.getString().length() * 2L, client.append(key, value).get());
+        GlideString value2 = gs(value.getString() + value.getString());
+        assertEquals(value2, client.get(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void del_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
@@ -1269,6 +1284,10 @@ public class SharedCommandTests {
 
         Set<String> expectedMembers = Set.of("member1", "member2", "member4");
         assertEquals(expectedMembers, client.smembers(key).get());
+
+        Set<GlideString> expectedMembersBin = Set.of(gs("member1"), gs("member2"), gs("member4"));
+        assertEquals(expectedMembersBin, client.smembers(gs(key)).get());
+
         assertEquals(1, client.srem(key, new String[] {"member1"}).get());
         assertEquals(2, client.scard(key).get());
     }
@@ -1362,7 +1381,7 @@ public class SharedCommandTests {
         String key1 = "{key}" + UUID.randomUUID();
 
         assertEquals(OK, client.set(key1, "foo").get());
-        assertEquals(OK, client.rename(key1, key1 + "_rename").get());
+        assertEquals(OK, client.rename(gs(key1), gs((key1 + "_rename"))).get());
         assertEquals(1L, client.exists(new String[] {key1 + "_rename"}).get());
 
         // key doesn't exist
@@ -1391,8 +1410,8 @@ public class SharedCommandTests {
 
         // rename a string
         assertEquals(OK, client.set(key1, "key1").get());
-        assertTrue(client.renamenx(key1, key2).get());
-        assertFalse(client.renamenx(key2, key3).get());
+        assertTrue(client.renamenx(gs(key1), gs(key2)).get());
+        assertFalse(client.renamenx(gs(key2), gs(key3)).get());
         assertEquals("key1", client.get(key2).get());
         assertEquals(1, client.del(new String[] {key1, key2}).get());
 
@@ -1813,14 +1832,13 @@ public class SharedCommandTests {
 
         assertFalse(client.persist(key).get());
 
-        assertEquals(OK, client.set(key, "persist_value").get());
-        assertFalse(client.persist(key).get());
+        assertEquals(OK, client.set(gs(key), gs("persist_value")).get());
+        assertFalse(client.persist(gs(key)).get());
 
         assertTrue(client.expire(key, 10L).get());
         Long persistAmount = client.ttl(key).get();
         assertTrue(0L <= persistAmount && persistAmount <= 10L);
-        assertTrue(client.persist(key).get());
-
+        assertTrue(client.persist(gs(key)).get());
         assertEquals(-1L, client.ttl(key).get());
     }
 
@@ -2281,10 +2299,15 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new Double[] {1.0, null, null, 3.0},
                 client
-                        .zmscore(key1, new String[] {"one", "nonExistentMember", "nonExistentMember", "three"})
+                        .zmscore(
+                                gs(key1),
+                                new GlideString[] {
+                                    gs("one"), gs("nonExistentMember"), gs("nonExistentMember"), gs("three")
+                                })
                         .get());
         assertArrayEquals(
-                new Double[] {null}, client.zmscore("nonExistentKey", new String[] {"one"}).get());
+                new Double[] {null},
+                client.zmscore(gs("nonExistentKey"), new GlideString[] {gs("one")}).get());
 
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key2, "bar").get());
@@ -4579,6 +4602,7 @@ public class SharedCommandTests {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
         String[] members = {"Palermo", "Catania"};
+        GlideString[] members_gs = {gs("Palermo"), gs("Catania")};
         Double[][] expected = {
             {13.36138933897018433, 38.11555639549629859}, {15.08726745843887329, 37.50266842333162032}
         };
@@ -4591,6 +4615,14 @@ public class SharedCommandTests {
 
         // Loop through the arrays and perform assertions
         Double[][] actual = client.geopos(key1, members).get();
+        for (int i = 0; i < expected.length; i++) {
+            for (int j = 0; j < expected[i].length; j++) {
+                assertEquals(expected[i][j], actual[i][j], 1e-9);
+            }
+        }
+
+        // Loop through the arrays and perform assertions
+        actual = client.geopos(gs(key1), members_gs).get();
         for (int i = 0; i < expected.length; i++) {
             for (int j = 0; j < expected[i].length; j++) {
                 assertEquals(expected[i][j], actual[i][j], 1e-9);

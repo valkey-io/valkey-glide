@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -64,6 +65,21 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Set<String>> smembers(String key);
+
+    /**
+     * Retrieves all the members of the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/smembers/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set members.
+     * @return A <code>Set</code> of all members of the set.
+     * @remarks If <code>key</code> does not exist an empty set will be returned.
+     * @example
+     *     <pre>{@code
+     * Set<String> result = client.smembers(gs("my_set")).get();
+     * assert result.equals(Set.of(gs("member1"), gs("member2"), gs("member3")));
+     * }</pre>
+     */
+    CompletableFuture<Set<GlideString>> smembers(GlideString key);
 
     /**
      * Retrieves the set cardinality (number of elements) of the set stored at <code>key</code>.

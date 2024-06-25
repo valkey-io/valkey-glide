@@ -25,10 +25,12 @@ import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
@@ -51,6 +53,7 @@ import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -580,6 +583,55 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> functionDelete(@NonNull String libName, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionDelete, new String[] {libName}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<byte[]> functionDump() {
+        return commandManager.submitNewCommand(
+                FunctionDump, new GlideString[] {}, this::handleBytesOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<byte[]>> functionDump(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionDump,
+                new GlideString[] {},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleBytesOrNullResponse(response))
+                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(byte @NonNull [] payload) {
+        return commandManager.submitNewCommand(
+                FunctionRestore, new GlideString[] {gs(payload)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(
+            byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy) {
+        return commandManager.submitNewCommand(
+                FunctionRestore,
+                new GlideString[] {gs(payload), gs(policy.toString())},
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(byte @NonNull [] payload, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionRestore, new GlideString[] {gs(payload)}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(
+            byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionRestore,
+                new GlideString[] {gs(payload), gs(policy.toString())},
+                route,
+                this::handleStringResponse);
     }
 
     @Override

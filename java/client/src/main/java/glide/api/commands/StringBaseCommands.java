@@ -302,6 +302,22 @@ public interface StringBaseCommands {
     CompletableFuture<Long> incrBy(String key, long amount);
 
     /**
+     * Increments the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * does not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrby/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return The value of <code>key</code> after the increment.
+     * @example
+     *     <pre>{@code
+     * Long num = client.incrBy(gs("key"), 2).get();
+     * assert num == 7L;
+     * }</pre>
+     */
+    CompletableFuture<Long> incrBy(GlideString key, long amount);
+
+    /**
      * Increments the string representing a floating point number stored at <code>key</code> by <code>
      * amount</code>. By using a negative increment value, the result is that the value stored at
      * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
@@ -318,6 +334,24 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> incrByFloat(String key, double amount);
+
+    /**
+     * Increments the string representing a floating point number stored at <code>key</code> by <code>
+     * amount</code>. By using a negative increment value, the result is that the value stored at
+     * <code>key</code> is decremented. If <code>key</code> does not exist, it is set to 0 before
+     * performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incrbyfloat/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @param amount The amount to increment.
+     * @return The value of <code>key</code> after the increment.
+     * @example
+     *     <pre>{@code
+     * Double num = client.incrByFloat(gs("key"), 0.5).get();
+     * assert num == 7.5;
+     * }</pre>
+     */
+    CompletableFuture<Double> incrByFloat(GlideString key, double amount);
 
     /**
      * Decrements the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
@@ -369,6 +403,26 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> strlen(String key);
+
+    /**
+     * Returns the length of the string value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/strlen/">redis.io</a> for details.
+     * @param key The key to check its length.
+     * @return The length of the string value stored at key.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty string, and the command
+     *     returns <code>0</code>.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("key"), gs("GLIDE")).get();
+     * Long len = client.strlen(gs("key")).get();
+     * assert len == 5L;
+     *
+     * len = client.strlen(gs("non_existing_key")).get();
+     * assert len == 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> strlen(GlideString key);
 
     /**
      * Overwrites part of the string stored at <code>key</code>, starting at the specified <code>
@@ -430,6 +484,23 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> append(String key, String value);
+
+    /**
+     * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is
+     * created and set as an empty string, so <code>APPEND</code> will be similar to {@see #set} in
+     * this special case.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/append/">redis.io</a> for details.
+     * @param key The key of the string.
+     * @param value The value to append.
+     * @return The length of the string after appending the value.
+     * @example
+     *     <pre>{@code
+     * Long value = client.append(gs("key"), gs("value")).get();
+     * assert value.equals(5L);
+     * }</pre>
+     */
+    CompletableFuture<Long> append(GlideString key, GlideString value);
 
     /**
      * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
