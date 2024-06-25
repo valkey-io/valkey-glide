@@ -1,5 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
+import java.util.Arrays;
+
+import glide.api.models.GlideString;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
@@ -262,6 +265,9 @@ public class TransactionTests {
         String foobarString = "foobar";
         String helloString = "hello";
         String[] keys = new String[] {key1, key2, key3};
+        GlideString[] keys_gs = Arrays.stream(keys)
+                    .map(GlideString::gs)
+                    .toArray(GlideString[]::new);
         Transaction setFoobarTransaction = new Transaction();
         Transaction setHelloTransaction = new Transaction();
         String[] expectedExecResponse = new String[] {OK, OK, OK};
@@ -278,7 +284,7 @@ public class TransactionTests {
 
         // Transaction executes command successfully with a read command on the watch key before
         // transaction is executed.
-        assertEquals(OK, client.watch(keys).get());
+        assertEquals(OK, client.watch(keys_gs).get());
         assertEquals(helloString, client.get(key2).get());
         assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
         assertEquals(foobarString, client.get(key1).get()); // Sanity check

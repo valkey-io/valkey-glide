@@ -161,8 +161,10 @@ public class SharedCommandTests {
         setResult = client.set(key3, value).get();
         assertEquals(OK, setResult);
 
-        Long unlinkedKeysNum = client.unlink(new String[] {key1, key2, key3}).get();
-        assertEquals(3L, unlinkedKeysNum);
+        Long unlinkedKeysNum = client.unlink(new String[] {key1}).get();
+        assertEquals(1L, unlinkedKeysNum);
+        unlinkedKeysNum = client.unlink(new GlideString[] {gs(key2), gs(key3)}).get();
+        assertEquals(2L, unlinkedKeysNum);
     }
 
     @SneakyThrows
@@ -724,7 +726,7 @@ public class SharedCommandTests {
         String key2 = UUID.randomUUID().toString();
         String field = UUID.randomUUID().toString();
 
-        assertTrue(client.hsetnx(key1, field, "value").get());
+        assertTrue(client.hsetnx(gs(key1), gs(field), gs("value")).get());
         assertFalse(client.hsetnx(key1, field, "newValue").get());
         assertEquals("value", client.hget(key1, field).get());
 
@@ -3990,8 +3992,8 @@ public class SharedCommandTests {
         assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
 
         assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
-        assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
-        assertTrue("list".equalsIgnoreCase(client.type(listKey).get()));
+        assertTrue("string".equalsIgnoreCase(client.type(gs(stringKey)).get()));
+        assertTrue("list".equalsIgnoreCase(client.type(gs(listKey)).get()));
         assertTrue("hash".equalsIgnoreCase(client.type(hashKey).get()));
         assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
         assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
