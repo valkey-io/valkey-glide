@@ -1096,7 +1096,7 @@ public class SharedCommandTests {
         assertArrayEquals(new String[] {"value1", "value2"}, client.lrange(key, 0, -1).get());
 
         // `start` is greater than `end` so the key will be removed.
-        assertEquals(OK, client.ltrim(gs(key), 4, 2).get());
+        assertEquals(OK, client.ltrim(key, 4, 2).get());
         assertArrayEquals(new String[] {}, client.lrange(key, 0, -1).get());
 
         assertEquals(OK, client.set(key, "foo").get());
