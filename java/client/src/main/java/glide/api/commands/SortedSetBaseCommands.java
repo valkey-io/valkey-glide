@@ -296,7 +296,7 @@ public interface SortedSetBaseCommands {
      * @example
      *     <pre>{@code
      * Map<GlideString, Double> payload = client.zpopmax(gs("mySortedSet"), 2).get();
-     * assert payload.equals(Map.of(gs('member3'), 7.5 , gs('member2'), 8.0)); // Indicates that gs('member3') with a score of 7.5 and gs('member2') with a score of 8.0 have been removed from the sorted set.
+     * assert payload.equals(Map.of(gs('member3'), 7.5, gs('member2'), 8.0)); // Indicates that gs('member3') with a score of 7.5 and gs('member2') with a score of 8.0 have been removed from the sorted set.
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Double>> zpopmin(GlideString key, long count);
