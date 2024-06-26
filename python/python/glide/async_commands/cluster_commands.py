@@ -533,7 +533,7 @@ class ClusterCommands(CoreCommands):
 
         Examples:
              >>> await client.flushdb()
-                 OK  # The keys of the currently selected database were deleted synchronously.
+                 OK  # The keys of the currently selected database were deleted.
              >>> await client.flushdb(FlushMode.ASYNC)
                  OK  # The keys of the currently selected database were deleted asynchronously.
              >>> await client.flushdb(FlushMode.ASYNC, AllNodes())
