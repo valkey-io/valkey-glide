@@ -39,7 +39,7 @@ class StandaloneCommands(CoreCommands):
     async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
-    ) -> str:
+    ) -> bytes:
         """
         Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
@@ -54,8 +54,6 @@ class StandaloneCommands(CoreCommands):
         """
         args = [section.value for section in sections] if sections else []
         result = await self._execute_command(RequestType.Info, args)
-        assert isinstance(result, bytes)
-        result = result.decode("utf-8")
         return cast(str, result)
 
     async def exec(

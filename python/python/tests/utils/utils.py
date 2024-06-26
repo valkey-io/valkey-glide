@@ -37,7 +37,6 @@ def is_single_response(response: T, single_res: T) -> bool:
 
 
 def get_first_result(
-    # res: Union[str, List[str], List[List[str]], Dict[str, str]]
     res: TResult,
 ) -> bytes:
     while isinstance(res, list):
@@ -53,10 +52,11 @@ def get_first_result(
     return res
 
 
-def parse_info_response(res: Union[str, Dict[str, str]]) -> Dict[str, str]:
-    res = get_first_result(res)
+def parse_info_response(res: Union[bytes, Dict[bytes, bytes]]) -> Dict[str, str]:
+    res_first = get_first_result(res)
+    res_decoded = res_first.decode() if isinstance(res_first, bytes) else res_first
     info_lines = [
-        line for line in res.splitlines() if line and not line.startswith("#")
+        line for line in res_decoded.splitlines() if line and not line.startswith("#")
     ]
     info_dict = {}
     for line in info_lines:
