@@ -515,6 +515,39 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.FlushAll, args, route),
         )
 
+    async def flushdb(
+        self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TClusterResponse[TOK]:
+        """
+        Deletes all the keys of the currently selected database. This command never fails.
+
+        See https://valkey.io/commands/flushdb for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: OK.
+
+        Examples:
+             >>> await client.flushdb()
+                 OK  # This command never fails.
+             >>> await client.flushdb(FlushMode.ASYNC)
+                 OK  # This command never fails.
+             >>> await client.flushdb(FlushMode.ASYNC, AllNodes())
+                 OK  # This command never fails.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+
+        return cast(
+            TClusterResponse[TOK],
+            await self._execute_command(RequestType.FlushDB, args, route),
+        )
+
     async def copy(
         self,
         source: str,

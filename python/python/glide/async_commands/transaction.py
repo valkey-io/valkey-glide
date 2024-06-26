@@ -3608,6 +3608,25 @@ class BaseTransaction:
             args.append(flush_mode.value)
         return self.append_command(RequestType.FlushAll, args)
 
+    def flushdb(
+        self: TTransaction, flush_mode: Optional[FlushMode] = None
+    ) -> TTransaction:
+        """
+        Deletes all the keys of the currently selected database. This command never fails.
+
+        See https://valkey.io/commands/flushdb for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Command Response:
+            TOK: OK.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+        return self.append_command(RequestType.FlushDB, args)
+
     def getex(
         self: TTransaction, key: str, expiry: Optional[ExpiryGetEx] = None
     ) -> TTransaction:
