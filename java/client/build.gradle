@@ -181,13 +181,16 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
             groupId = 'software.amazon.glide'
-            artifactId = 'glide-placeholder'
+            artifactId = 'glide'
             version = "0.4.2"
             pom {
                 name = 'glide-for-valkey'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
                 url = 'https://github.com/aws/glide-for-redis.git'
                 inceptionYear = '2024'
+                properties = [
+	            classifier: "placeholder"
+                ]
                 scm {
                     url = 'https://github.com/aws/glide-for-redis/tree/main'
                     connection = 'scm:git:ssh://git@github.com/aws/glide-for-redis.git'
@@ -228,5 +231,4 @@ tasks.withType(Test) {
 
 jar {
     archiveBaseName = "glide"
-    archiveClassifier = "placeholder"
 }
