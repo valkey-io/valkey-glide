@@ -27,6 +27,9 @@ concurrency:
     group: java-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
+permissions:
+      id-token: write
+
 jobs:
     start-self-hosted-runner:
         if: github.repository_owner == 'aws'
