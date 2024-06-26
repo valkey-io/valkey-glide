@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.configuration.ReadFrom;
@@ -76,6 +77,24 @@ public interface GenericCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> move(String key, long dbIndex);
+
+    /**
+     * Move <code>key</code> from the currently selected database to the database specified by <code>
+     * dbIndex</code>.
+     *
+     * @see <a href="https://redis.io/commands/move/">redis.io</a> for more details.
+     * @param key The key to move.
+     * @param dbIndex The index of the database to move <code>key</code> to.
+     * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
+     *     </code> already exists in the destination database or does not exist in the source
+     *     database.
+     * @example
+     *     <pre>{@code
+     * Boolean moved = client.move(gs("some_key"), 1L).get();
+     * assert moved;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> move(GlideString key, long dbIndex);
 
     /**
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
