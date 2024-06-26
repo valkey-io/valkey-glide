@@ -1108,6 +1108,11 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> exists(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(Exists, keys, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> unlink(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Unlink, keys, this::handleLongResponse);
     }
@@ -1119,6 +1124,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> expire(@NonNull GlideString key, long seconds) {
+        return commandManager.submitNewCommand(
+                Expire, new GlideString[] {key, gs(Long.toString(seconds))}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> expire(
             @NonNull String key, long seconds, @NonNull ExpireOptions expireOptions) {
         String[] arguments =
@@ -1127,9 +1138,26 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> expire(
+            @NonNull GlideString key, long seconds, @NonNull ExpireOptions expireOptions) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(seconds))}, expireOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(Expire, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> expireAt(@NonNull String key, long unixSeconds) {
         return commandManager.submitNewCommand(
                 ExpireAt, new String[] {key, Long.toString(unixSeconds)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> expireAt(@NonNull GlideString key, long unixSeconds) {
+        return commandManager.submitNewCommand(
+                ExpireAt,
+                new GlideString[] {key, gs(Long.toString(unixSeconds))},
+                this::handleBooleanResponse);
     }
 
     @Override
@@ -1141,9 +1169,27 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> expireAt(
+            @NonNull GlideString key, long unixSeconds, @NonNull ExpireOptions expireOptions) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(unixSeconds))},
+                        expireOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(ExpireAt, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> pexpire(@NonNull String key, long milliseconds) {
         return commandManager.submitNewCommand(
                 PExpire, new String[] {key, Long.toString(milliseconds)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> pexpire(@NonNull GlideString key, long milliseconds) {
+        return commandManager.submitNewCommand(
+                PExpire,
+                new GlideString[] {key, gs(Long.toString(milliseconds))},
+                this::handleBooleanResponse);
     }
 
     @Override
@@ -1155,10 +1201,28 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> pexpire(
+            @NonNull GlideString key, long milliseconds, @NonNull ExpireOptions expireOptions) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(milliseconds))},
+                        expireOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(PExpire, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> pexpireAt(@NonNull String key, long unixMilliseconds) {
         return commandManager.submitNewCommand(
                 PExpireAt,
                 new String[] {key, Long.toString(unixMilliseconds)},
+                this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> pexpireAt(@NonNull GlideString key, long unixMilliseconds) {
+        return commandManager.submitNewCommand(
+                PExpireAt,
+                new GlideString[] {key, gs(Long.toString(unixMilliseconds))},
                 this::handleBooleanResponse);
     }
 
@@ -1172,8 +1236,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> pexpireAt(
+            @NonNull GlideString key, long unixMilliseconds, @NonNull ExpireOptions expireOptions) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(unixMilliseconds))},
+                        expireOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(PExpireAt, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> ttl(@NonNull String key) {
         return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> ttl(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(TTL, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1183,9 +1262,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> expiretime(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ExpireTime, new GlideString[] {key}, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> pexpiretime(@NonNull String key) {
         return commandManager.submitNewCommand(
                 PExpireTime, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> pexpiretime(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                PExpireTime, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1785,6 +1876,11 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> pttl(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(PTTL, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
