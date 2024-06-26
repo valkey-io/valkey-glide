@@ -118,13 +118,6 @@ jobs:
                   version: "26.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Install redis
-              # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
-              if: ${{ matrix.host.OS == 'ubuntu' }}
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: ${{ matrix.redis }}
-
             - name: Create secret key ring file
               working-directory: java/client
               run: |
