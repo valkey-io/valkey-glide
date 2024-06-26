@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 import {
@@ -61,6 +61,8 @@ import {
     createMSet,
     createObjectEncoding,
     createObjectFreq,
+    createObjectIdletime,
+    createObjectRefcount,
     createPExpire,
     createPExpireAt,
     createPTTL,
@@ -80,6 +82,7 @@ import {
     createSMove,
     createSPop,
     createSRem,
+    createSUnionStore,
     createSelect,
     createSet,
     createStrlen,
@@ -88,11 +91,13 @@ import {
     createType,
     createUnlink,
     createXAdd,
+    createXLen,
     createXRead,
     createXTrim,
     createZAdd,
     createZCard,
     createZCount,
+    createZInterCard,
     createZInterstore,
     createZPopMax,
     createZPopMin,
@@ -103,11 +108,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnionStore,
-    createXLen,
-    createZInterCard,
-    createObjectIdletime,
-    createObjectRefcount,
 } from "./Commands";
 import { redis_request } from "./ProtobufMessage";
 

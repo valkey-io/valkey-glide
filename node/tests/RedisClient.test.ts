@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 import {
@@ -17,14 +17,14 @@ import { RedisCluster } from "../../utils/TestUtils.js";
 import { redis_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
+    checkSimple,
     convertStringArrayToBuffer,
     flushAndCloseClient,
     getClientConfigurationOption,
+    intoString,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
-    intoString,
-    checkSimple,
 } from "./TestUtilities";
 
 /* eslint-disable @typescript-eslint/no-var-requires */

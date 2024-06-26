@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
 from typing import Optional, Union
@@ -42,7 +42,7 @@ async def test_standalone_client(host: str = "localhost", port: int = 6379):
     # Check `RedisClientConfiguration/ClusterClientConfiguration` for additional options.
     config = BaseClientConfiguration(
         addresses=addresses,
-        client_name="test_standalone_client"
+        client_name="test_standalone_client",
         # if the server use TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
         # use_tls=True
     )
@@ -61,7 +61,7 @@ async def test_cluster_client(host: str = "localhost", port: int = 6379):
     # Check `RedisClientConfiguration/ClusterClientConfiguration` for additional options.
     config = BaseClientConfiguration(
         addresses=addresses,
-        client_name="test_cluster_client"
+        client_name="test_cluster_client",
         # if the cluster nodes use TLS, you'll need to enable it. Otherwise the connection attempt will time out silently.
         # use_tls=True
     )

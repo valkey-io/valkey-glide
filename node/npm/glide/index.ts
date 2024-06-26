@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 import { GLIBC, MUSL, familySync } from "detect-libc";

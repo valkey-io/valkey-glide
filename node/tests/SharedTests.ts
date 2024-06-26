@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 import { expect, it } from "@jest/globals";
@@ -18,12 +18,12 @@ import {
 } from "../";
 import {
     Client,
-    checkSimple,
     GetAndSetRandomValue,
+    checkSimple,
     compareMaps,
     getFirstResult,
-    intoString,
     intoArray,
+    intoString,
 } from "./TestUtilities";
 
 async function getVersion(): Promise<[number, number, number]> {

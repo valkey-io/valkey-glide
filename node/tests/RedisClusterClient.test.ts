@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 import {
@@ -24,11 +24,11 @@ import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getFirstResult,
+    intoArray,
+    intoString,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
-    intoString,
-    intoArray,
 } from "./TestUtilities";
 type Context = {
     client: RedisClusterClient;
