@@ -5577,6 +5577,8 @@ class TestCommands:
         stream_id1_1 = "1-1"
         stream_id1_2 = "1-2"
 
+        # setup: create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries
+        # List
         assert (
             await redis_client.xadd(key, [("f0", "v0")], StreamAddOptions(stream_id1_0))
             == stream_id1_0
@@ -5597,10 +5599,13 @@ class TestCommands:
                 stream_id1_2: [["f2", "v2"]],
             }
         }
+        # sanity check: xreadgroup should not return more entries since they're all already in the Pending Entries List
         assert (
             await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
         )
 
+        # reset the last delivered ID for the consumer group to "1-1"
+        # ENTRIESREAD is only supported in Redis version 7.0.0 and above
         if await check_if_server_version_lt(redis_client, "7.0.0"):
             assert await redis_client.xgroup_set_id(key, group_name, stream_id0) == OK
         else:
@@ -5610,25 +5615,32 @@ class TestCommands:
                 )
                 == OK
             )
+
+            # XGROUP SETID accepts "0" for the entries read ID, but does not accept "0-0"
             with pytest.raises(RequestError):
                 await redis_client.xgroup_set_id(
                     key, group_name, stream_id1_1, entries_read_id="0-0"
                 )
 
+        # xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
             key: {
                 stream_id1_2: [["f2", "v2"]],
             }
         }
 
+        # an error is raised if XGROUP SETID is called with a non-existing key
         with pytest.raises(RequestError):
             await redis_client.xgroup_set_id(non_existing_key, group_name, stream_id0)
 
+        # an error is raised if XGROUP SETID is called with a non-existing group
         with pytest.raises(RequestError):
             await redis_client.xgroup_set_id(key, "non_existing_group", stream_id0)
 
+        # setting the ID to a non-existing ID is allowed
         assert await redis_client.xgroup_set_id(key, group_name, "99-99") == OK
 
+        # key exists, but it is not a stream
         assert await redis_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
             await redis_client.xgroup_set_id(string_key, group_name, stream_id0)
