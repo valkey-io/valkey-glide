@@ -5564,6 +5564,77 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xgroup_set_id(
+        self, redis_client: TRedisClient, cluster_mode, protocol, request
+    ):
+        key = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:{get_random_string(10)}"
+        string_key = f"{{testKey}}:{get_random_string(10)}"
+        group_name = get_random_string(10)
+        consumer_name = get_random_string(10)
+        stream_id0 = "0"
+        stream_id1_0 = "1-0"
+        stream_id1_1 = "1-1"
+        stream_id1_2 = "1-2"
+
+        assert (
+            await redis_client.xadd(key, [("f0", "v0")], StreamAddOptions(stream_id1_0))
+            == stream_id1_0
+        )
+        assert (
+            await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
+            == stream_id1_1
+        )
+        assert (
+            await redis_client.xadd(key, [("f2", "v2")], StreamAddOptions(stream_id1_2))
+            == stream_id1_2
+        )
+        assert await redis_client.xgroup_create(key, group_name, stream_id0) == OK
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
+            key: {
+                stream_id1_0: [["f0", "v0"]],
+                stream_id1_1: [["f1", "v1"]],
+                stream_id1_2: [["f2", "v2"]],
+            }
+        }
+        assert (
+            await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
+        )
+
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.xgroup_set_id(key, group_name, stream_id0) == OK
+        else:
+            assert (
+                await redis_client.xgroup_set_id(
+                    key, group_name, stream_id1_1, entries_read_id=stream_id0
+                )
+                == OK
+            )
+            with pytest.raises(RequestError):
+                await redis_client.xgroup_set_id(
+                    key, group_name, stream_id1_1, entries_read_id="0-0"
+                )
+
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
+            key: {
+                stream_id1_2: [["f2", "v2"]],
+            }
+        }
+
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_set_id(non_existing_key, group_name, stream_id0)
+
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_set_id(key, "non_existing_group", stream_id0)
+
+        assert await redis_client.xgroup_set_id(key, group_name, "99-99") == OK
+
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_set_id(string_key, group_name, stream_id0)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_pfadd(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.pfadd(key, []) == 1
