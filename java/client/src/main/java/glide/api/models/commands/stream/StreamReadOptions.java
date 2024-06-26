@@ -12,7 +12,7 @@ import lombok.experimental.SuperBuilder;
 /**
  * Optional arguments for {@link StreamBaseCommands#xread(Map, StreamReadOptions)}
  *
- * @see <a href="https://redis.io/commands/xread/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/xread/">valkey.io</a>
  */
 @SuperBuilder
 public class StreamReadOptions {

@@ -2075,6 +2075,29 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XReadGroup, args)
 
+    def xack(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        ids: List[str],
+    ) -> TTransaction:
+        """
+        Removes one or multiple messages from the Pending Entries List (PEL) of a stream consumer group.
+        This command should be called on pending messages so that such messages do not get processed again by the
+        consumer group.
+
+        See https://valkey.io/commands/xack for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            ids (List[str]): The stream entry IDs to acknowledge and consume for the given consumer group.
+
+        Command response:
+            int: The number of messages that were successfully acknowledged.
+        """
+        return self.append_command(RequestType.XAck, [key, group_name] + ids)
+
     def geoadd(
         self: TTransaction,
         key: str,
