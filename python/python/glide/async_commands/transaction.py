@@ -46,6 +46,7 @@ from glide.async_commands.stream import (
     StreamAddOptions,
     StreamGroupOptions,
     StreamRangeBound,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
 )
@@ -2038,6 +2039,41 @@ class BaseTransaction:
         return self.append_command(
             RequestType.XGroupDelConsumer, [key, group_name, consumer_name]
         )
+
+    def xreadgroup(
+        self: TTransaction,
+        keys_and_ids: Mapping[str, str],
+        group_name: str,
+        consumer_name: str,
+        options: Optional[StreamReadGroupOptions] = None,
+    ) -> TTransaction:
+        """
+        Reads entries from the given streams owned by a consumer group.
+
+        See https://valkey.io/commands/xreadgroup for more details.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of stream keys to stream entry IDs to read from. The special ">"
+                ID returns messages that were never delivered to any other consumer. Any other valid ID will return
+                entries pending for the consumer with IDs greater than the one provided.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name. The consumer will be auto-created if it does not already exist.
+            options (Optional[StreamReadGroupOptions]): Options detailing how to read the stream.
+
+        Command response:
+            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]: A mapping of stream keys, to a mapping of
+                stream IDs, to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                Returns None if the BLOCK option is given and a timeout occurs, or if there is no stream that can be served.
+        """
+        args = ["GROUP", group_name, consumer_name]
+        if options is not None:
+            args.extend(options.to_args())
+
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return self.append_command(RequestType.XReadGroup, args)
 
     def geoadd(
         self: TTransaction,
