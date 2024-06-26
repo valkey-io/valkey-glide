@@ -3105,7 +3105,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist.
+     *     Returns <code>null</code> if there is no stream that can be served.
      */
     public T xreadgroup(
             @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
@@ -3123,12 +3123,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
      *     </code> to receive only new messages.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist.
+     *     Returns <code>null</code> if the {@link StreamReadGroupOptions#block} option is given and a timeout occurs, or if there is no stream that can be served.
      */
     public T xreadgroup(
             @NonNull Map<String, String> keysAndIds,
