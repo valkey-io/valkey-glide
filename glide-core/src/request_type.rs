@@ -207,9 +207,6 @@ pub enum RequestType {
     FunctionDump = 196,
     FunctionRestore = 197,
     XPending = 196,
-    XClaim = 197,
-    XAutoClaim = 198,
-    XInfo = 199,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -420,9 +417,6 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FunctionDump => RequestType::FunctionDump,
             ProtobufRequestType::FunctionRestore => RequestType::FunctionRestore,
             ProtobufRequestType::XPending => RequestType::XPending,
-            ProtobufRequestType::XClaim => RequestType::XClaim,
-            ProtobufRequestType::XAutoClaim => RequestType::XAutoClaim,
-            ProtobufRequestType::XInfo => RequestType::XInfo,
         }
     }
 }
@@ -631,9 +625,6 @@ impl RequestType {
             RequestType::FunctionDump => Some(get_two_word_command("FUNCTION", "DUMP")),
             RequestType::FunctionRestore => Some(get_two_word_command("FUNCTION", "RESTORE")),
             RequestType::XPending => Some(cmd("XPENDING")),
-            RequestType::XClaim => Some(cmd("XCLAIM")),
-            RequestType::XAutoClaim => Some(cmd("XAUTOCLAIM")),
-            RequestType::XInfo => Some(cmd("XINFO")),
         }
     }
 }

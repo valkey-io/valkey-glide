@@ -245,6 +245,8 @@ import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamRange.IdBound;
+import glide.api.models.commands.stream.StreamRange.InfRangeBound;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
@@ -2884,18 +2886,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
@@ -2913,18 +2915,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
@@ -2947,18 +2949,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
@@ -2978,18 +2980,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
@@ -3195,18 +3197,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param group The consumer group name.
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param count Limits the number of messages returned.
@@ -3240,18 +3240,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param group The consumer group name.
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
-     *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param count Limits the number of messages returned.
