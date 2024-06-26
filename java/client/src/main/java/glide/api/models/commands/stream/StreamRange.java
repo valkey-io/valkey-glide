@@ -10,8 +10,8 @@ import lombok.RequiredArgsConstructor;
  * glide.api.commands.StreamBaseCommands#xrevrange} to specify the starting and ending range for the
  * stream search by stream ID.
  *
- * @see <a href="https://redis.io/commands/xrange/">redis.io</a>
- * @see <a href="https://redis.io/commands/xrevrange/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/xrange/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/xrevrange/">valkey.io</a>
  */
 public interface StreamRange {
 

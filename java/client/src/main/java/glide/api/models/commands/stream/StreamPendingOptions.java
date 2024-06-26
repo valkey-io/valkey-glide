@@ -10,7 +10,7 @@ import lombok.Builder;
  * Arguments for {@link StreamBaseCommands#xpending} to specify additional filter items by idle time
  * and consumer.
  *
- * @see <a href="https://redis.io/commands/xpending/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a>
  */
 @Builder
 public class StreamPendingOptions {
