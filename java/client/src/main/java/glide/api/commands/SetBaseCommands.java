@@ -163,7 +163,7 @@ public interface SetBaseCommands {
      *     returns <code>false</code>.
      * @example
      *     <pre>{@code
-     * Boolean payload1 = client.sismember(gs("mySet")), gs("member1")).get();
+     * Boolean payload1 = client.sismember(gs("mySet"), gs("member1")).get();
      * assert payload1; // Indicates that "member1" exists in the set "mySet".
      *
      * Boolean payload2 = client.sismember(gs("mySet"), gs("nonExistingMember")).get();

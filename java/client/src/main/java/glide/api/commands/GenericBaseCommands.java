@@ -640,7 +640,7 @@ public interface GenericBaseCommands {
      * @example
      *     <pre>{@code
      * client.set(gs("test1"), gs("one")).get();
-     * client.set(gs("test2", gs("two")).get();
+     * client.set(gs("test2"), gs("two")).get();
      * assert !client.copy(gs("test1", gs("test2")).get();
      * assert client.copy(gs("test1"), gs("test2")).get();
      * }</pre>
