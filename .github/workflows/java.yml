@@ -49,19 +49,19 @@ jobs:
                   }
                   - {
                     OS: ubuntu,
-                    RUNNER: ubuntu-latest,
+                    RUNNER: ["self-hosted", "Linux", "ARM64"],
                     TARGET: aarch64-unknown-linux-gnu,
                     CLASSIFIER: linux-aarch_64
                   }
                   - {
                     OS: macos,
-                    RUNNER: macos-latest,
+                    RUNNER: macos-12,
                     TARGET: x86_64-apple-darwin,
                     CLASSIFIER: osx-x86_64
                   }
                   - {
                     OS: macos,
-                    RUNNER: macos-latest,
+                    RUNNER: macos-13-xlarge,
                     TARGET: aarch64-apple-darwin,
                     CLASSIFIER: osx-aarch_64
                   }
