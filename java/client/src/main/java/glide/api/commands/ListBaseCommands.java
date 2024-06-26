@@ -508,7 +508,7 @@ public interface ListBaseCommands {
      * @example
      *     <pre>{@code
      * GlideString[] values1 = client.rpopCount(gs("my_list"), 2).get();
-     * assert values1.equals(new GlideString[] {gs("value1"), gs("value2")});
+     * assert Arrays.equals(values1, new GlideString[] {gs("value1"), gs("value2")});
      *
      * GlideString[] values2 = client.rpopCount(gs("non_exiting_key"), 7).get();
      * assert values2.equals(null);
