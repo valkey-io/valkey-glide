@@ -182,7 +182,7 @@ publishing {
             from components.java
             groupId = 'software.amazon.glide'
             artifactId = 'glide'
-            version = "0.4.2"
+            version = "0.4.3"
             pom {
                 name = 'glide-for-valkey'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
@@ -231,4 +231,5 @@ tasks.withType(Test) {
 
 jar {
     archiveBaseName = "glide"
+    archiveClassifier = "placeholder"
 }
