@@ -163,10 +163,7 @@ class StandaloneCommands(CoreCommands):
         # result: Dict[bytes, bytes] = await self._execute_command(RequestType.ConfigGet, parameters)
         result_dict = await self._execute_command(RequestType.ConfigGet, parameters)
         assert isinstance(result_dict, dict)
-        return cast(
-            Dict[str, str],
-            convert_bytes_to_string_dict(result_dict)
-        )
+        return cast(Dict[str, str], convert_bytes_to_string_dict(result_dict))
 
     async def config_set(self, parameters_map: Mapping[str, str]) -> TOK:
         """

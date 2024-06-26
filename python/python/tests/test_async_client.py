@@ -4859,9 +4859,7 @@ class TestCommands:
             await redis_client.xadd(
                 key,
                 [(field, "foo4"), (field2, "bar4")],
-                StreamAddOptions(
-                    trim=TrimByMinId(exact=True, threshold=id.decode())
-                ),
+                StreamAddOptions(trim=TrimByMinId(exact=True, threshold=id.decode())),
             )
             is not None
         )

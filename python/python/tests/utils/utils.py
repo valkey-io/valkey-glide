@@ -82,10 +82,20 @@ async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> 
 
 def compare_maps(
     map1: Optional[
-        Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]
+        Union[
+            Mapping[str, TResult],
+            Dict[str, TResult],
+            Mapping[bytes, TResult],
+            Dict[bytes, TResult],
+        ]
     ],
     map2: Optional[
-        Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]
+        Union[
+            Mapping[str, TResult],
+            Dict[str, TResult],
+            Mapping[bytes, TResult],
+            Dict[bytes, TResult],
+        ]
     ],
 ) -> bool:
     """
