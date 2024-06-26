@@ -753,7 +753,7 @@ public class CommandTests {
                         "zintercard", "7.0.0", clusterClient.zintercard(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("brpop", null, clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of(
-                        "brpop",
+                        "brpop binary",
                         null,
                         clusterClient.brpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
                 Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
