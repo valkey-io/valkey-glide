@@ -302,3 +302,37 @@ class StreamGroupOptions:
             args.extend([self.ENTRIES_READ_REDIS_API, self.entries_read_id])
 
         return args
+
+
+class StreamReadGroupOptions(StreamReadOptions):
+    READ_NOACK_REDIS_API = "NOACK"
+
+    def __init__(
+        self, no_ack=False, block_ms: Optional[int] = None, count: Optional[int] = None
+    ):
+        """
+        Options for reading entries from streams using a consumer group. Can be used as an optional argument to
+        `XREADGROUP`.
+
+        Args:
+            no_ack (bool): If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
+                acknowledging the message when it is read.
+            block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
+                until the server has the required number of entries. Equivalent to `BLOCK` in the Redis API.
+            count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Redis API.
+        """
+        super().__init__(block_ms=block_ms, count=count)
+        self.no_ack = no_ack
+
+    def to_args(self) -> List[str]:
+        """
+        Returns the options as a list of string arguments to be used in the `XREADGROUP` command.
+
+        Returns:
+            List[str]: The options as a list of arguments for the `XREADGROUP` command.
+        """
+        args = super().to_args()
+        if self.no_ack:
+            args.append(self.READ_NOACK_REDIS_API)
+
+        return args
