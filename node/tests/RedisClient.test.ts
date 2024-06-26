@@ -14,17 +14,17 @@ import { BufferReader, BufferWriter } from "protobufjs";
 import { v4 as uuidv4 } from "uuid";
 import { ProtocolVersion, RedisClient, Transaction } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
-import { redis_request } from "../src/ProtobufMessage";
+import { glide_request } from "../src/ProtobufMessage";
 import { runBaseTests } from "./SharedTests";
 import {
+    checkSimple,
     convertStringArrayToBuffer,
     flushAndCloseClient,
     getClientConfigurationOption,
+    intoString,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
-    intoString,
-    checkSimple,
 } from "./TestUtilities";
 
 /* eslint-disable @typescript-eslint/no-var-requires */
@@ -69,7 +69,7 @@ describe("RedisClient", () => {
             callbackIdx: 1,
             singleCommand: {
                 requestType: 2,
-                argsArray: redis_request.Command.ArgsArray.create({
+                argsArray: glide_request.Command.ArgsArray.create({
                     args: convertStringArrayToBuffer(["bar1", "bar2"]),
                 }),
             },
@@ -78,24 +78,24 @@ describe("RedisClient", () => {
             callbackIdx: 3,
             singleCommand: {
                 requestType: 4,
-                argsArray: redis_request.Command.ArgsArray.create({
+                argsArray: glide_request.Command.ArgsArray.create({
                     args: convertStringArrayToBuffer(["bar3", "bar4"]),
                 }),
             },
         };
-        redis_request.RedisRequest.encodeDelimited(request, writer);
-        redis_request.RedisRequest.encodeDelimited(request2, writer);
+        glide_request.GlideRequest.encodeDelimited(request, writer);
+        glide_request.GlideRequest.encodeDelimited(request2, writer);
         const buffer = writer.finish();
         const reader = new BufferReader(buffer);
 
-        const dec_msg1 = redis_request.RedisRequest.decodeDelimited(reader);
+        const dec_msg1 = glide_request.GlideRequest.decodeDelimited(reader);
         expect(dec_msg1.callbackIdx).toEqual(1);
         expect(dec_msg1.singleCommand?.requestType).toEqual(2);
         expect(dec_msg1.singleCommand?.argsArray?.args).toEqual(
             convertStringArrayToBuffer(["bar1", "bar2"]),
         );
 
-        const dec_msg2 = redis_request.RedisRequest.decodeDelimited(reader);
+        const dec_msg2 = glide_request.GlideRequest.decodeDelimited(reader);
         expect(dec_msg2.callbackIdx).toEqual(3);
         expect(dec_msg2.singleCommand?.requestType).toEqual(4);
         expect(dec_msg2.singleCommand?.argsArray?.args).toEqual(

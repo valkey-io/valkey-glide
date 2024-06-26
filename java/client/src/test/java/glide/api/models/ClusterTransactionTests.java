@@ -7,8 +7,8 @@ import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
+import static glide_request.GlideRequestOuterClass.RequestType.Sort;
+import static glide_request.GlideRequestOuterClass.RequestType.SortReadOnly;
 
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortClusterOptions;
@@ -19,7 +19,7 @@ import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import redis_request.RedisRequestOuterClass;
+import glide_request.GlideRequestOuterClass;
 
 public class ClusterTransactionTests {
     private static Stream<Arguments> getTransactionBuilders() {
@@ -30,7 +30,7 @@ public class ClusterTransactionTests {
     @ParameterizedTest
     @MethodSource("getTransactionBuilders")
     public void cluster_transaction_builds_protobuf_request(ClusterTransaction transaction) {
-        List<Pair<RedisRequestOuterClass.RequestType, RedisRequestOuterClass.Command.ArgsArray>>
+        List<Pair<GlideRequestOuterClass.RequestType, GlideRequestOuterClass.Command.ArgsArray>>
                 results = new LinkedList<>();
 
         transaction.sortReadOnly(
@@ -83,7 +83,7 @@ public class ClusterTransactionTests {
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
-            RedisRequestOuterClass.Command protobuf = protobufTransaction.getCommands(idx);
+            GlideRequestOuterClass.Command protobuf = protobufTransaction.getCommands(idx);
 
             assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
             assertEquals(

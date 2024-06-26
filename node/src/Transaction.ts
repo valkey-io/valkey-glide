@@ -61,6 +61,8 @@ import {
     createMSet,
     createObjectEncoding,
     createObjectFreq,
+    createObjectIdletime,
+    createObjectRefcount,
     createPExpire,
     createPExpireAt,
     createPTTL,
@@ -80,6 +82,7 @@ import {
     createSMove,
     createSPop,
     createSRem,
+    createSUnionStore,
     createSelect,
     createSet,
     createStrlen,
@@ -88,11 +91,13 @@ import {
     createType,
     createUnlink,
     createXAdd,
+    createXLen,
     createXRead,
     createXTrim,
     createZAdd,
     createZCard,
     createZCount,
+    createZInterCard,
     createZInterstore,
     createZPopMax,
     createZPopMin,
@@ -103,13 +108,8 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnionStore,
-    createXLen,
-    createZInterCard,
-    createObjectIdletime,
-    createObjectRefcount,
 } from "./Commands";
-import { redis_request } from "./ProtobufMessage";
+import { glide_request } from "./ProtobufMessage";
 
 /**
  * Base class encompassing shared commands for both standalone and cluster mode implementations in a transaction.
@@ -134,7 +134,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * @internal
      */
-    readonly commands: redis_request.Command[] = [];
+    readonly commands: glide_request.Command[] = [];
     /**
      * Array of command indexes indicating commands that need to be converted into a `Set` within the transaction.
      * @internal
@@ -148,7 +148,7 @@ export class BaseTransaction<T extends BaseTransaction<T>> {
      * @returns The updated transaction instance.
      */
     protected addAndReturn(
-        command: redis_request.Command,
+        command: glide_request.Command,
         shouldConvertToSet: boolean = false,
     ): T {
         if (shouldConvertToSet) {

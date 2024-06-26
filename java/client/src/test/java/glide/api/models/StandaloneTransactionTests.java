@@ -12,23 +12,23 @@ import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.BY_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.GET_COMMAND_STRING;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static redis_request.RedisRequestOuterClass.RequestType.Copy;
-import static redis_request.RedisRequestOuterClass.RequestType.Move;
-import static redis_request.RedisRequestOuterClass.RequestType.Select;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
+import static glide_request.GlideRequestOuterClass.RequestType.Copy;
+import static glide_request.GlideRequestOuterClass.RequestType.Move;
+import static glide_request.GlideRequestOuterClass.RequestType.Select;
+import static glide_request.GlideRequestOuterClass.RequestType.Sort;
+import static glide_request.GlideRequestOuterClass.RequestType.SortReadOnly;
 
 import glide.api.models.commands.SortOptions;
 import java.util.LinkedList;
 import java.util.List;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.Test;
-import redis_request.RedisRequestOuterClass;
+import glide_request.GlideRequestOuterClass;
 
 public class StandaloneTransactionTests {
     @Test
     public void standalone_transaction_commands() {
-        List<Pair<RedisRequestOuterClass.RequestType, RedisRequestOuterClass.Command.ArgsArray>>
+        List<Pair<GlideRequestOuterClass.RequestType, GlideRequestOuterClass.Command.ArgsArray>>
                 results = new LinkedList<>();
         Transaction transaction = new Transaction();
 
@@ -175,7 +175,7 @@ public class StandaloneTransactionTests {
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
-            RedisRequestOuterClass.Command protobuf = protobufTransaction.getCommands(idx);
+            GlideRequestOuterClass.Command protobuf = protobufTransaction.getCommands(idx);
 
             assertEquals(results.get(idx).getLeft(), protobuf.getRequestType());
             assertEquals(

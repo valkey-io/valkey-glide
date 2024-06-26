@@ -59,6 +59,8 @@ import {
     createMSet,
     createObjectEncoding,
     createObjectFreq,
+    createObjectIdletime,
+    createObjectRefcount,
     createPExpire,
     createPExpireAt,
     createPTTL,
@@ -77,17 +79,20 @@ import {
     createSMove,
     createSPop,
     createSRem,
+    createSUnionStore,
     createSet,
     createStrlen,
     createTTL,
     createType,
     createUnlink,
     createXAdd,
+    createXLen,
     createXRead,
     createXTrim,
     createZAdd,
     createZCard,
     createZCount,
+    createZInterCard,
     createZInterstore,
     createZPopMax,
     createZPopMin,
@@ -98,11 +103,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnionStore,
-    createXLen,
-    createZInterCard,
-    createObjectIdletime,
-    createObjectRefcount,
 } from "./Commands";
 import {
     ClosingError,
@@ -113,7 +113,7 @@ import {
     TimeoutError,
 } from "./Errors";
 import { Logger } from "./Logger";
-import { connection_request, redis_request, response } from "./ProtobufMessage";
+import { connection_request, glide_request, response } from "./ProtobufMessage";
 
 /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
 type PromiseFunction = (value?: any) => void;
@@ -373,10 +373,10 @@ export class BaseClient {
      */
     protected createWritePromise<T>(
         command:
-            | redis_request.Command
-            | redis_request.Command[]
-            | redis_request.ScriptInvocation,
-        route?: redis_request.Routes,
+            | glide_request.Command
+            | glide_request.Command[]
+            | glide_request.ScriptInvocation,
+        route?: glide_request.Routes,
     ): Promise<T> {
         if (this.isClosed) {
             throw new ClosingError(
@@ -387,31 +387,31 @@ export class BaseClient {
         return new Promise((resolve, reject) => {
             const callbackIndex = this.getCallbackIndex();
             this.promiseCallbackFunctions[callbackIndex] = [resolve, reject];
-            this.writeOrBufferRedisRequest(callbackIndex, command, route);
+            this.writeOrBufferGlideRequest(callbackIndex, command, route);
         });
     }
 
-    private writeOrBufferRedisRequest(
+    private writeOrBufferGlideRequest(
         callbackIdx: number,
         command:
-            | redis_request.Command
-            | redis_request.Command[]
-            | redis_request.ScriptInvocation,
-        route?: redis_request.Routes,
+            | glide_request.Command
+            | glide_request.Command[]
+            | glide_request.ScriptInvocation,
+        route?: glide_request.Routes,
     ) {
         const message = Array.isArray(command)
-            ? redis_request.RedisRequest.create({
+            ? glide_request.GlideRequest.create({
                   callbackIdx,
-                  transaction: redis_request.Transaction.create({
+                  transaction: glide_request.Transaction.create({
                       commands: command,
                   }),
               })
-            : command instanceof redis_request.Command
-              ? redis_request.RedisRequest.create({
+            : command instanceof glide_request.Command
+              ? glide_request.GlideRequest.create({
                     callbackIdx,
                     singleCommand: command,
                 })
-              : redis_request.RedisRequest.create({
+              : glide_request.GlideRequest.create({
                     callbackIdx,
                     scriptInvocation: command,
                 });
@@ -419,8 +419,8 @@ export class BaseClient {
 
         this.writeOrBufferRequest(
             message,
-            (message: redis_request.RedisRequest, writer: Writer) => {
-                redis_request.RedisRequest.encodeDelimited(message, writer);
+            (message: glide_request.GlideRequest, writer: Writer) => {
+                glide_request.GlideRequest.encodeDelimited(message, writer);
             },
         );
     }
@@ -1627,7 +1627,7 @@ export class BaseClient {
         script: Script,
         option?: ScriptOptions,
     ): Promise<ReturnType> {
-        const scriptInvocation = redis_request.ScriptInvocation.create({
+        const scriptInvocation = glide_request.ScriptInvocation.create({
             hash: script.getHash(),
             keys: option?.keys,
             args: option?.args,

@@ -34,11 +34,11 @@ import {
 } from "..";
 import {
     connection_request,
-    redis_request,
+    glide_request,
     response,
 } from "../src/ProtobufMessage";
 import { convertStringArrayToBuffer } from "./TestUtilities";
-const { RequestType, RedisRequest } = redis_request;
+const { RequestType, GlideRequest } = glide_request;
 
 beforeAll(() => {
     Logger.init("info");
@@ -236,14 +236,14 @@ async function testWithClusterResources(
 
 async function testSentValueMatches(config: {
     sendRequest: (client: RedisClient | RedisClusterClient) => Promise<unknown>;
-    expectedRequestType: redis_request.RequestType | null | undefined;
+    expectedRequestType: glide_request.RequestType | null | undefined;
     expectedValue: unknown;
 }) {
     let counter = 0;
     await testWithResources(async (connection, socket) => {
         socket.on("data", (data) => {
             const reader = Reader.create(data);
-            const request = redis_request.RedisRequest.decodeDelimited(reader);
+            const request = glide_request.GlideRequest.decodeDelimited(reader);
             expect(request.singleCommand?.requestType).toEqual(
                 config.expectedRequestType,
             );
@@ -288,7 +288,7 @@ describe("SocketConnectionInternals", () => {
             await testWithResources(async (connection, socket) => {
                 socket.once("data", (data) => {
                     const reader = Reader.create(data);
-                    const request = RedisRequest.decodeDelimited(reader);
+                    const request = GlideRequest.decodeDelimited(reader);
                     expect(request.singleCommand?.requestType).toEqual(
                         RequestType.Get,
                     );
@@ -342,7 +342,7 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = RedisRequest.decodeDelimited(reader);
+                const request = GlideRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.Get,
                 );
@@ -361,7 +361,7 @@ describe("SocketConnectionInternals", () => {
         await testWithClusterResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = RedisRequest.decodeDelimited(reader);
+                const request = GlideRequest.decodeDelimited(reader);
 
                 expect(
                     request.transaction?.commands?.at(0)?.requestType,
@@ -390,7 +390,7 @@ describe("SocketConnectionInternals", () => {
         await testWithClusterResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = RedisRequest.decodeDelimited(reader);
+                const request = GlideRequest.decodeDelimited(reader);
 
                 expect(
                     request.transaction?.commands?.at(0)?.requestType,
@@ -400,7 +400,7 @@ describe("SocketConnectionInternals", () => {
                         ?.length,
                 ).toEqual(1);
                 expect(request.route?.simpleRoutes).toEqual(
-                    redis_request.SimpleRoutes.Random,
+                    glide_request.SimpleRoutes.Random,
                 );
 
                 sendResponse(socket, ResponseType.Value, request.callbackIdx, {
@@ -418,7 +418,7 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = RedisRequest.decodeDelimited(reader);
+                const request = GlideRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.Set,
                 );
@@ -438,7 +438,7 @@ describe("SocketConnectionInternals", () => {
             const error = "check";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = RedisRequest.decodeDelimited(reader);
+                const request = GlideRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.Get,
                 );
@@ -463,7 +463,7 @@ describe("SocketConnectionInternals", () => {
             const error = "check";
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = RedisRequest.decodeDelimited(reader);
+                const request = GlideRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.Get,
                 );
@@ -491,7 +491,7 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request =
-                    redis_request.RedisRequest.decodeDelimited(reader);
+                    glide_request.GlideRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.Get,
                 );
@@ -514,7 +514,7 @@ describe("SocketConnectionInternals", () => {
         await testWithResources(async (connection, socket) => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
-                const request = RedisRequest.decodeDelimited(reader);
+                const request = GlideRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.Set,
                 );
@@ -548,7 +548,7 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request =
-                    redis_request.RedisRequest.decodeDelimited(reader);
+                    glide_request.GlideRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.Get,
                 );
@@ -569,7 +569,7 @@ describe("SocketConnectionInternals", () => {
             socket.once("data", (data) => {
                 const reader = Reader.create(data);
                 const request =
-                    redis_request.RedisRequest.decodeDelimited(reader);
+                    glide_request.GlideRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.Get,
                 );
@@ -662,7 +662,7 @@ describe("SocketConnectionInternals", () => {
             socket.on("data", (data) => {
                 const reader = Reader.create(data);
                 const request =
-                    redis_request.RedisRequest.decodeDelimited(reader);
+                    glide_request.GlideRequest.decodeDelimited(reader);
                 expect(request.singleCommand?.requestType).toEqual(
                     RequestType.CustomCommand,
                 );
@@ -673,7 +673,7 @@ describe("SocketConnectionInternals", () => {
                         .toString() === "SET"
                 ) {
                     expect(request.route?.simpleRoutes).toEqual(
-                        redis_request.SimpleRoutes.AllPrimaries,
+                        glide_request.SimpleRoutes.AllPrimaries,
                     );
                 } else if (
                     request
@@ -681,7 +681,7 @@ describe("SocketConnectionInternals", () => {
                         .toString() === "GET"
                 ) {
                     expect(request.route?.slotKeyRoute).toEqual({
-                        slotType: redis_request.SlotTypes.Replica,
+                        slotType: glide_request.SlotTypes.Replica,
                         slotKey: "foo",
                     });
                 } else {

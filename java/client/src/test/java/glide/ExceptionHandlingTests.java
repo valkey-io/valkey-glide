@@ -6,7 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static redis_request.RedisRequestOuterClass.RequestType.CustomCommand;
+import static glide_request.GlideRequestOuterClass.RequestType.CustomCommand;
 import static response.ResponseOuterClass.RequestErrorType.Disconnect;
 import static response.ResponseOuterClass.RequestErrorType.ExecAbort;
 import static response.ResponseOuterClass.RequestErrorType.Timeout;
@@ -40,7 +40,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
-import redis_request.RedisRequestOuterClass.RedisRequest;
+import glide_request.GlideRequestOuterClass.GlideRequest;
 import response.ResponseOuterClass.RequestError;
 import response.ResponseOuterClass.RequestErrorType;
 import response.ResponseOuterClass.Response;
@@ -298,7 +298,7 @@ public class ExceptionHandlingTests {
         }
 
         @Override
-        public CompletableFuture<Response> write(RedisRequest.Builder request, boolean flush) {
+        public CompletableFuture<Response> write(GlideRequest.Builder request, boolean flush) {
             var commandId = callbackDispatcher.registerRequest();
             return commandId.getValue();
         }

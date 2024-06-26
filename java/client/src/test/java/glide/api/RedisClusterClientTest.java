@@ -23,35 +23,35 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientGetName;
-import static redis_request.RedisRequestOuterClass.RequestType.ClientId;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigGet;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigResetStat;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigRewrite;
-import static redis_request.RedisRequestOuterClass.RequestType.ConfigSet;
-import static redis_request.RedisRequestOuterClass.RequestType.DBSize;
-import static redis_request.RedisRequestOuterClass.RequestType.Echo;
-import static redis_request.RedisRequestOuterClass.RequestType.FCall;
-import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
-import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
-import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
-import static redis_request.RedisRequestOuterClass.RequestType.Info;
-import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
-import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
-import static redis_request.RedisRequestOuterClass.RequestType.Ping;
-import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
-import static redis_request.RedisRequestOuterClass.RequestType.Time;
-import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
+import static glide_request.GlideRequestOuterClass.RequestType.ClientGetName;
+import static glide_request.GlideRequestOuterClass.RequestType.ClientId;
+import static glide_request.GlideRequestOuterClass.RequestType.ConfigGet;
+import static glide_request.GlideRequestOuterClass.RequestType.ConfigResetStat;
+import static glide_request.GlideRequestOuterClass.RequestType.ConfigRewrite;
+import static glide_request.GlideRequestOuterClass.RequestType.ConfigSet;
+import static glide_request.GlideRequestOuterClass.RequestType.DBSize;
+import static glide_request.GlideRequestOuterClass.RequestType.Echo;
+import static glide_request.GlideRequestOuterClass.RequestType.FCall;
+import static glide_request.GlideRequestOuterClass.RequestType.FCallReadOnly;
+import static glide_request.GlideRequestOuterClass.RequestType.FlushAll;
+import static glide_request.GlideRequestOuterClass.RequestType.FlushDB;
+import static glide_request.GlideRequestOuterClass.RequestType.FunctionDelete;
+import static glide_request.GlideRequestOuterClass.RequestType.FunctionDump;
+import static glide_request.GlideRequestOuterClass.RequestType.FunctionFlush;
+import static glide_request.GlideRequestOuterClass.RequestType.FunctionKill;
+import static glide_request.GlideRequestOuterClass.RequestType.FunctionList;
+import static glide_request.GlideRequestOuterClass.RequestType.FunctionLoad;
+import static glide_request.GlideRequestOuterClass.RequestType.FunctionRestore;
+import static glide_request.GlideRequestOuterClass.RequestType.FunctionStats;
+import static glide_request.GlideRequestOuterClass.RequestType.Info;
+import static glide_request.GlideRequestOuterClass.RequestType.LastSave;
+import static glide_request.GlideRequestOuterClass.RequestType.Lolwut;
+import static glide_request.GlideRequestOuterClass.RequestType.Ping;
+import static glide_request.GlideRequestOuterClass.RequestType.RandomKey;
+import static glide_request.GlideRequestOuterClass.RequestType.Sort;
+import static glide_request.GlideRequestOuterClass.RequestType.SortReadOnly;
+import static glide_request.GlideRequestOuterClass.RequestType.Time;
+import static glide_request.GlideRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
@@ -75,7 +75,7 @@ import java.util.concurrent.CompletableFuture;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import redis_request.RedisRequestOuterClass.RedisRequest;
+import glide_request.GlideRequestOuterClass.GlideRequest;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -189,7 +189,7 @@ public class RedisClusterClientTest {
 
         @Override
         public <T> CompletableFuture<T> submitCommandToChannel(
-                RedisRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
+                GlideRequest.Builder command, RedisExceptionCheckedFunction<Response, T> responseHandler) {
             return CompletableFuture.supplyAsync(() -> responseHandler.apply(response));
         }
     }

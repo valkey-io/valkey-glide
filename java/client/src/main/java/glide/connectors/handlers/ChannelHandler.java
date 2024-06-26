@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
-import redis_request.RedisRequestOuterClass.RedisRequest;
+import glide_request.GlideRequestOuterClass.GlideRequest;
 import response.ResponseOuterClass.Response;
 
 /**
@@ -62,7 +62,7 @@ public class ChannelHandler {
      * @param flush True to flush immediately
      * @return A response promise
      */
-    public CompletableFuture<Response> write(RedisRequest.Builder request, boolean flush) {
+    public CompletableFuture<Response> write(GlideRequest.Builder request, boolean flush) {
         var commandId = callbackDispatcher.registerRequest();
         request.setCallbackIdx(commandId.getKey());
 

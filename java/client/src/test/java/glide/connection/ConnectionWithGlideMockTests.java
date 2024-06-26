@@ -27,7 +27,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import redis_request.RedisRequestOuterClass.RedisRequest;
+import glide_request.GlideRequestOuterClass.GlideRequest;
 import response.ResponseOuterClass.Response;
 
 public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
@@ -74,7 +74,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder GlideRequest(GlideRequest request) {
                         return null;
                     }
                 });
@@ -97,7 +97,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder GlideRequest(GlideRequest request) {
                         return null;
                     }
                 });
@@ -120,7 +120,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder GlideRequest(GlideRequest request) {
                         return null;
                     }
                 });
@@ -139,7 +139,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
                     }
 
                     @Override
-                    public Response.Builder redisRequest(RedisRequest request) {
+                    public Response.Builder GlideRequest(GlideRequest request) {
                         return null;
                     }
                 });

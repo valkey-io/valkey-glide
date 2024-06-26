@@ -1,5 +1,5 @@
 syntax = "proto3";
-package redis_request;
+package glide_request;
 
 enum SimpleRoutes {
     AllNodes=0;
@@ -260,7 +260,7 @@ message Transaction {
     repeated Command commands = 1;
 }
 
-message RedisRequest {
+message GlideRequest {
     uint32 callback_idx = 1;
 
     oneof command {

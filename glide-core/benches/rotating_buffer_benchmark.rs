@@ -6,8 +6,8 @@ use std::io::Write;
 use bytes::BufMut;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use glide_core::{
-    redis_request::{command, redis_request},
-    redis_request::{Command, RedisRequest, RequestType},
+    glide_request::{command, glide_request},
+    glide_request::{Command, GlideRequest, RequestType},
     rotating_buffer::RotatingBuffer,
 };
 use integer_encoding::VarInt;
@@ -118,7 +118,7 @@ fn write_length(buffer: &mut Vec<u8>, length: u32) {
     u32::encode_var(length, &mut buffer[new_len - required_space..]);
 }
 
-fn message_buffer(request: RedisRequest) -> Vec<u8> {
+fn message_buffer(request: GlideRequest) -> Vec<u8> {
     let message_length = request.compute_size() as usize;
     let mut buffer = Vec::with_capacity(message_length);
     write_length(&mut buffer, message_length as u32);
@@ -164,8 +164,8 @@ fn split_data() -> Vec<Vec<u8>> {
     vec![vec, vec1, vec2]
 }
 
-fn create_request(args: Vec<bytes::Bytes>, args_pointer: bool) -> RedisRequest {
-    let mut request = RedisRequest::new();
+fn create_request(args: Vec<bytes::Bytes>, args_pointer: bool) -> GlideRequest {
+    let mut request = GlideRequest::new();
     request.callback_idx = 1;
     let mut command = Command::new();
     command.request_type = RequestType::CustomCommand.into();
@@ -178,15 +178,15 @@ fn create_request(args: Vec<bytes::Bytes>, args_pointer: bool) -> RedisRequest {
         args_array.args = args;
         command.args = Some(command::Args::ArgsArray(args_array));
     }
-    request.command = Some(redis_request::Command::SingleCommand(command));
+    request.command = Some(glide_request::Command::SingleCommand(command));
     request
 }
 
-fn short_request() -> RedisRequest {
+fn short_request() -> GlideRequest {
     create_request(vec!["GET".into(), "goo".into(), "bar".into()], false)
 }
 
-fn medium_request() -> RedisRequest {
+fn medium_request() -> GlideRequest {
     create_request(
         vec![
             "GET".into(),
@@ -197,7 +197,7 @@ fn medium_request() -> RedisRequest {
     )
 }
 
-fn long_request(args_pointer: bool) -> RedisRequest {
+fn long_request(args_pointer: bool) -> GlideRequest {
     create_request(
         vec![
             "GET".into(),
@@ -215,7 +215,7 @@ macro_rules! run_bench {
         $test_name($c, "rotating_buffer", |test_data: &Vec<Vec<u8>>| {
             for data in test_data {
                 $rotating_buffer.current_buffer().put(&data[..]);
-                $rotating_buffer.get_requests::<RedisRequest>().unwrap();
+                $rotating_buffer.get_requests::<GlideRequest>().unwrap();
             }
             $rotating_buffer.current_buffer().clear()
         });

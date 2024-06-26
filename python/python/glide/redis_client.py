@@ -21,7 +21,7 @@ from glide.exceptions import (
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
-from glide.protobuf.redis_request_pb2 import Command, RedisRequest, RequestType
+from glide.protobuf.glide_request_pb2 import Command, GlideRequest, RequestType
 from glide.protobuf.response_pb2 import RequestErrorType, Response
 from glide.protobuf_codec import PartialMessageException, ProtobufCodec
 from glide.routes import Route, set_protobuf_route
@@ -204,7 +204,7 @@ class BaseRedisClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        request = RedisRequest()
+        request = GlideRequest()
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
         request.single_command.args_array.args[:] = [
@@ -222,7 +222,7 @@ class BaseRedisClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        request = RedisRequest()
+        request = GlideRequest()
         request.callback_idx = self._get_callback_index()
         transaction_commands = []
         for requst_type, args in commands:
@@ -247,7 +247,7 @@ class BaseRedisClient(CoreCommands):
             raise ClosingError(
                 "Unable to execute requests; the client is closed. Please create a new client."
             )
-        request = RedisRequest()
+        request = GlideRequest()
         request.callback_idx = self._get_callback_index()
         request.script_invocation.hash = hash
         request.script_invocation.args[:] = args if args is not None else []
@@ -368,7 +368,7 @@ class BaseRedisClient(CoreCommands):
             if pubsub_message:
                 self._pubsub_futures.pop(0).set_result(pubsub_message)
 
-    async def _write_request_await_response(self, request: RedisRequest):
+    async def _write_request_await_response(self, request: GlideRequest):
         # Create a response future for this request and add it to the available
         # futures map
         response_future = self._get_future(request.callback_idx)

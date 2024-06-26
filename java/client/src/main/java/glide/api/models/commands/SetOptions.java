@@ -14,7 +14,7 @@ import java.util.List;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
-import redis_request.RedisRequestOuterClass.Command;
+import glide_request.GlideRequestOuterClass.Command;
 
 /**
  * Optional arguments for {@link StringBaseCommands#set(String, String, SetOptions)} command.

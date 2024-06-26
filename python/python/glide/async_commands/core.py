@@ -53,7 +53,7 @@ from glide.async_commands.stream import (
     StreamTrimOptions,
 )
 from glide.constants import TOK, TResult
-from glide.protobuf.redis_request_pb2 import RequestType
+from glide.protobuf.glide_request_pb2 import RequestType
 from glide.routes import Route
 
 from ..glide import Script

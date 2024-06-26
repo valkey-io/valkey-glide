@@ -6,17 +6,17 @@ import static glide.api.commands.GenericCommands.DB_REDIS_API;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
-import static redis_request.RedisRequestOuterClass.RequestType.Copy;
-import static redis_request.RedisRequestOuterClass.RequestType.Move;
-import static redis_request.RedisRequestOuterClass.RequestType.Select;
-import static redis_request.RedisRequestOuterClass.RequestType.Sort;
-import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
+import static glide_request.GlideRequestOuterClass.RequestType.Copy;
+import static glide_request.GlideRequestOuterClass.RequestType.Move;
+import static glide_request.GlideRequestOuterClass.RequestType.Select;
+import static glide_request.GlideRequestOuterClass.RequestType.Sort;
+import static glide_request.GlideRequestOuterClass.RequestType.SortReadOnly;
 
 import glide.api.models.commands.SortOptions;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
+import glide_request.GlideRequestOuterClass.Command.ArgsArray;
 
 /**
  * Extends BaseTransaction class for Redis standalone commands. Transactions allow the execution of
