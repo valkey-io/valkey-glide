@@ -1,7 +1,10 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
+
 import lombok.AllArgsConstructor;
+import lombok.NonNull;
 
 /**
  * Extends BaseTransaction class for cluster mode commands. Transactions allow the execution of a
@@ -25,6 +28,20 @@ import lombok.AllArgsConstructor;
 public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     @Override
     protected ClusterTransaction getThis() {
+        return this;
+    }
+
+    /**
+     * Publishes message on pubsub channel in sharded mode.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/publish/">redis.io</a> for details.
+     * @param channel The Channel to publish the message on.
+     * @param message The message to publish.
+     * @return Command response - The number of clients that received the message.
+     */
+    public ClusterTransaction spublish(@NonNull String channel, @NonNull String message) {
+        protobufTransaction.addCommands(buildCommand(SPublish, buildArgs(channel, message)));
         return this;
     }
 }

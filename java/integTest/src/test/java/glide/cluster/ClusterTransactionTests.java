@@ -247,4 +247,13 @@ public class ClusterTransactionTests {
         assertEquals(foobarString, clusterClient.get(key1).get());
         assertEquals(foobarString, clusterClient.get(key2).get());
     }
+
+    @Test
+    @SneakyThrows
+    public void spublish() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        ClusterTransaction transaction = new ClusterTransaction().spublish("Schannel", "message");
+
+        assertArrayEquals(new Object[] {0L}, clusterClient.exec(transaction).get());
+    }
 }

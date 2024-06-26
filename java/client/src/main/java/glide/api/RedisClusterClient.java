@@ -33,11 +33,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
+import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
+import glide.api.commands.PubSubClusterCommands;
 import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
@@ -67,7 +69,8 @@ public class RedisClusterClient extends BaseClient
                 GenericClusterCommands,
                 ServerManagementClusterCommands,
                 ScriptingAndFunctionsClusterCommands,
-                TransactionsClusterCommands {
+                TransactionsClusterCommands,
+                PubSubClusterCommands {
 
     protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
         super(connectionManager, commandManager);
@@ -706,5 +709,11 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> randomKey() {
         return commandManager.submitNewCommand(
                 RandomKey, new String[0], this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> spublish(@NonNull String channel, @NonNull String message) {
+        return commandManager.submitNewCommand(
+                SPublish, new String[] {channel, message}, this::handleLongResponse);
     }
 }

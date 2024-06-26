@@ -117,6 +117,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.Publish;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
@@ -4631,6 +4632,19 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T lcsLen(@NonNull String key1, @NonNull String key2) {
         ArgsArray args = buildArgs(key1, key2, LEN_REDIS_API);
         protobufTransaction.addCommands(buildCommand(LCS, args));
+        return getThis();
+    }
+
+    /**
+     * Publishes message on pubsub channel.
+     *
+     * @see <a href="https://redis.io/docs/latest/commands/publish/">redis.io</a> for details.
+     * @param channel The Channel to publish the message on.
+     * @param message The message to publish.
+     * @return Command response - The number of clients that received the message.
+     */
+    public T publish(@NonNull String channel, @NonNull String message) {
+        protobufTransaction.addCommands(buildCommand(Publish, buildArgs(channel, message)));
         return getThis();
     }
 
