@@ -791,7 +791,7 @@ public class CommandTests {
                         "7.0.0",
                         clusterClient.fcall("func", new String[] {"abc", "zxy", "lkn"}, new String[0])),
                 Arguments.of(
-                        "fcall",
+                        "fcall binary",
                         "7.0.0",
                         clusterClient.fcall(
                                 gs("func"),
