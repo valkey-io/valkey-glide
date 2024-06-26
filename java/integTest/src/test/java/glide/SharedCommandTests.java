@@ -1109,6 +1109,30 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void ltrim_binary_existing_non_existing_key_and_type_error(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString[] valueArray =
+                new GlideString[] {gs("value4"), gs("value3"), gs("value2"), gs("value1")};
+
+        assertEquals(4, client.lpush(key, valueArray).get());
+        assertEquals(OK, client.ltrim(key, 0, 1).get());
+        assertArrayEquals(
+                new String[] {"value1", "value2"}, client.lrange(key.toString(), 0, -1).get());
+
+        // `start` is greater than `end` so the key will be removed.
+        assertEquals(OK, client.ltrim(key, 4, 2).get());
+        assertArrayEquals(new String[] {}, client.lrange(key.toString(), 0, -1).get());
+
+        assertEquals(OK, client.set(key, gs("foo")).get());
+
+        Exception ltrimException =
+                assertThrows(ExecutionException.class, () -> client.ltrim(key, 0, 1).get());
+        assertTrue(ltrimException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void llen_existing_non_existing_key_and_type_error(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -1285,10 +1309,34 @@ public class SharedCommandTests {
         Set<String> expectedMembers = Set.of("member1", "member2", "member4");
         assertEquals(expectedMembers, client.smembers(key).get());
 
-        Set<GlideString> expectedMembersBin = Set.of(gs("member1"), gs("member2"), gs("member4"));
-        assertEquals(expectedMembersBin, client.smembers(gs(key)).get());
+        Set<String> expectedMembersBin = Set.of("member1", "member2", "member4");
+        assertEquals(expectedMembersBin, client.smembers(key).get());
 
         assertEquals(1, client.srem(key, new String[] {"member1"}).get());
+        assertEquals(2, client.scard(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sadd_srem_scard_smembers_binary_existing_set(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        assertEquals(
+                4,
+                client
+                        .sadd(
+                                key, new GlideString[] {gs("member1"), gs("member2"), gs("member3"), gs("member4")})
+                        .get());
+        assertEquals(
+                1, client.srem(key, new GlideString[] {gs("member3"), gs("nonExistingMember")}).get());
+
+        Set<GlideString> expectedMembers = Set.of(gs("member1"), gs("member2"), gs("member4"));
+        assertEquals(expectedMembers, client.smembers(key).get());
+
+        Set<GlideString> expectedMembersBin = Set.of(gs("member1"), gs("member2"), gs("member4"));
+        assertEquals(expectedMembersBin, client.smembers(key).get());
+
+        assertEquals(1, client.srem(key, new GlideString[] {gs("member1")}).get());
         assertEquals(2, client.scard(key).get());
     }
 
@@ -1371,6 +1419,60 @@ public class SharedCommandTests {
 
         executionException =
                 assertThrows(ExecutionException.class, () -> client.smove(setKey1, nonSetKey, "_").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void smove_binary(BaseClient client) {
+        GlideString setKey1 = gs("{key}" + UUID.randomUUID());
+        GlideString setKey2 = gs("{key}" + UUID.randomUUID());
+        GlideString setKey3 = gs("{key}" + UUID.randomUUID());
+        GlideString nonSetKey = gs("{key}" + UUID.randomUUID());
+
+        assertEquals(3, client.sadd(setKey1, new GlideString[] {gs("1"), gs("2"), gs("3")}).get());
+        assertEquals(2, client.sadd(setKey2, new GlideString[] {gs("2"), gs("3")}).get());
+
+        // move an elem
+        assertTrue(client.smove(setKey1, setKey2, gs("1")).get());
+        assertEquals(Set.of(gs("2"), gs("3")), client.smembers(setKey1).get());
+        assertEquals(Set.of(gs("1"), gs("2"), gs("3")), client.smembers(setKey2).get());
+
+        // move an elem which preset at destination
+        assertTrue(client.smove(setKey2, setKey1, gs("2")).get());
+        assertEquals(Set.of(gs("2"), gs("3")), client.smembers(setKey1).get());
+        assertEquals(Set.of(gs("1"), gs("3")), client.smembers(setKey2).get());
+
+        // move from missing key
+        assertFalse(client.smove(setKey3, setKey1, gs("4")).get());
+        assertEquals(Set.of(gs("2"), gs("3")), client.smembers(setKey1).get());
+
+        // move to a new set
+        assertTrue(client.smove(setKey1, setKey3, gs("2")).get());
+        assertEquals(Set.of(gs("3")), client.smembers(setKey1).get());
+        assertEquals(Set.of(gs("2")), client.smembers(setKey3).get());
+
+        // move missing element
+        assertFalse(client.smove(setKey1, setKey3, gs("42")).get());
+        assertEquals(Set.of(gs("3")), client.smembers(setKey1).get());
+        assertEquals(Set.of(gs("2")), client.smembers(setKey3).get());
+
+        // move missing element to missing key
+        assertFalse(client.smove(setKey1, nonSetKey, gs("42")).get());
+        assertEquals(Set.of(gs("3")), client.smembers(setKey1).get());
+        assertEquals("none", client.type(nonSetKey.toString()).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(nonSetKey, gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.smove(nonSetKey, setKey1, gs("_")).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.smove(setKey1, nonSetKey, gs("_")).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
