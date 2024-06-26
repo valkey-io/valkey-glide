@@ -2993,6 +2993,11 @@ class CoreCommands(Protocol):
             >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="1-0"))
             >>> await client.xgroup_create("mystream", "mygroup", "0-0")
             >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer")
+                {
+                    "mystream": {
+                        "1-0": [["field1", "value1"]],
+                    }
+                }  # Read one stream entry, the entry is now in the Pending Entries List for "mygroup".
             >>> await client.xack("mystream", "mygroup", ["1-0"])
                 1  # 1 pending message was acknowledged and removed from the Pending Entries List for "mygroup".
         """
