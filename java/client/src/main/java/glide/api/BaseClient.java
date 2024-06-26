@@ -396,6 +396,10 @@ public abstract class BaseClient
         return handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
+    protected GlideString handleGlideStringResponse(Response response) throws RedisException {
+        return handleRedisResponse(GlideString.class, EnumSet.noneOf(ResponseFlags.class), response);
+    }
+
     protected Boolean handleBooleanResponse(Response response) throws RedisException {
         return handleRedisResponse(Boolean.class, EnumSet.noneOf(ResponseFlags.class), response);
     }

@@ -12,6 +12,7 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
@@ -47,6 +48,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
@@ -558,6 +560,26 @@ public class CommandTests {
 
         Map<String, String> multiPayload = clusterClient.echo(message, ALL_NODES).get().getMultiValue();
         multiPayload.forEach((key, value) -> assertEquals(message, value));
+    }
+
+    @SneakyThrows
+    @Test
+    public void echo_gs() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString response = clusterClient.echo(gs(message)).get();
+        assertEquals(gs(message), response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void echo_gs_with_route() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString singlePayload = clusterClient.echo(gs(message), RANDOM).get().getSingleValue();
+        assertEquals(gs(message), singlePayload);
+
+        Map<String, GlideString> multiPayload =
+                clusterClient.echo(gs(message), ALL_NODES).get().getMultiValue();
+        multiPayload.forEach((key, value) -> assertEquals(gs(message), value));
     }
 
     @Test
