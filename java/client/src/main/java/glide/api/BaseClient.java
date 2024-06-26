@@ -1424,7 +1424,8 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> zunionstore(
             @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
-        GlideString[] arguments = concatenateArrays(new GlideString[] {destination}, keysOrWeightedKeys.toArgs());
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {destination}, keysOrWeightedKeys.toArgs());
         return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
     }
 
@@ -1455,7 +1456,9 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString[]> zunion(@NonNull KeyArrayBinary keys) {
         return commandManager.submitNewCommand(
-                ZUnion, keys.toArgs(), response -> castArray(handleArrayResponse(response), GlideString.class));
+                ZUnion,
+                keys.toArgs(),
+                response -> castArray(handleArrayResponse(response), GlideString.class));
     }
 
     @Override

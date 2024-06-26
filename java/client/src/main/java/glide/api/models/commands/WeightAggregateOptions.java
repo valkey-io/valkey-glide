@@ -1,8 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
-import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.api.models.GlideString.gs;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.commands.SortedSetBaseCommands;
 import glide.api.models.GlideString;
@@ -43,7 +43,7 @@ public abstract class WeightAggregateOptions {
         }
 
         public GlideString[] toArgsBinary() {
-            return new GlideString[] { gs(AGGREGATE_REDIS_API), gs(toString())};
+            return new GlideString[] {gs(AGGREGATE_REDIS_API), gs(toString())};
         }
     }
 
@@ -126,9 +126,9 @@ public abstract class WeightAggregateOptions {
     }
 
     /**
-     * Represents the mapping of sorted set binary keys to their score weights. Each weight is used to boost
-     * the scores of elements in the corresponding sorted set by multiplying them before their scores
-     * are aggregated.
+     * Represents the mapping of sorted set binary keys to their score weights. Each weight is used to
+     * boost the scores of elements in the corresponding sorted set by multiplying them before their
+     * scores are aggregated.
      */
     @RequiredArgsConstructor
     public static class WeightedKeysBinary implements KeysOrWeightedKeysBinary {

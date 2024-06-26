@@ -977,9 +977,9 @@ public interface SortedSetBaseCommands {
             String destination, KeysOrWeightedKeys keysOrWeightedKeys, Aggregate aggregate);
 
     /**
-     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeysBinary</code>, and
-     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
-     * is overwritten. Otherwise, a new sorted set will be created.
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeysBinary</code>,
+     * and stores the result in <code>destination</code>. If <code>destination</code> already exists,
+     * it is overwritten. Otherwise, a new sorted set will be created.
      *
      * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
      *     keysOrWeightedKeys</code> must map to the same hash slot.
@@ -1030,9 +1030,9 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Long> zunionstore(String destination, KeysOrWeightedKeys keysOrWeightedKeys);
 
     /**
-     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeysBinary</code>, and
-     * stores the result in <code>destination</code>. If <code>destination</code> already exists, it
-     * is overwritten. Otherwise, a new sorted set will be created.
+     * Computes the union of sorted sets given by the specified <code>KeysOrWeightedKeysBinary</code>,
+     * and stores the result in <code>destination</code>. If <code>destination</code> already exists,
+     * it is overwritten. Otherwise, a new sorted set will be created.
      *
      * @apiNote When in cluster mode, <code>destination</code> and all keys in <code>
      *     keysOrWeightedKeysBinary</code> must map to the same hash slot.
@@ -1052,7 +1052,8 @@ public interface SortedSetBaseCommands {
      * assert payload == 3L; // Indicates the new sorted set contains three members from the union of gs("mySortedSet1") and gs("mySortedSet2").
      * }</pre>
      */
-    CompletableFuture<Long> zunionstore(GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys);
+    CompletableFuture<Long> zunionstore(
+            GlideString destination, KeysOrWeightedKeysBinary keysOrWeightedKeys);
 
     /**
      * Computes the intersection of sorted sets given by the specified <code>keysOrWeightedKeys</code>

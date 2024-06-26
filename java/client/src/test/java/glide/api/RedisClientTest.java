@@ -3923,7 +3923,8 @@ public class RedisClientTest {
         WeightedKeysBinary weightedKeys = new WeightedKeysBinary(keysWeights);
         Aggregate aggregate = Aggregate.MIN;
         GlideString[] arguments =
-                concatenateArrays(new GlideString[] {destination}, weightedKeys.toArgs(), aggregate.toArgsBinary());
+                concatenateArrays(
+                        new GlideString[] {destination}, weightedKeys.toArgs(), aggregate.toArgsBinary());
         Long value = 5L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
