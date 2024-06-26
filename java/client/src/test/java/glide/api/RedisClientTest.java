@@ -5662,7 +5662,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Object[]>submitNewCommand(eq(XPending), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object[]> response = service.xpending(key, groupName);
@@ -5690,7 +5690,7 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Object[][]>submitNewCommand(eq(XPending), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object[][]> response = service.xpending(key, groupName, start, end, count);
@@ -5728,17 +5728,17 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.<Object[][]>submitNewCommand(eq(XPending), eq(arguments), any()))
-            .thenReturn(testResponse);
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Object[][]> response =
-            service.xpending(
-                key,
-                groupName,
-                start,
-                end,
-                count,
-                StreamPendingOptions.builder().minIdleTime(100L).consumer(consumer).build());
+                service.xpending(
+                        key,
+                        groupName,
+                        start,
+                        end,
+                        count,
+                        StreamPendingOptions.builder().minIdleTime(100L).consumer(consumer).build());
         Object[][] payload = response.get();
 
         // verify

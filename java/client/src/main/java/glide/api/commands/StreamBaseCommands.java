@@ -631,7 +631,7 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[][]> xpending(
-        String key, String group, StreamRange start, StreamRange end, long count);
+            String key, String group, StreamRange start, StreamRange end, long count);
 
     /**
      * Returns an extended form of stream message information for pending messages matching a given range of IDs.
@@ -678,10 +678,10 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[][]> xpending(
-        String key,
-        String group,
-        StreamRange start,
-        StreamRange end,
-        long count,
-        StreamPendingOptions options);
+            String key,
+            String group,
+            StreamRange start,
+            StreamRange end,
+            long count,
+            StreamPendingOptions options);
 }

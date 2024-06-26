@@ -206,7 +206,7 @@ pub enum RequestType {
     SortReadOnly = 195,
     FunctionDump = 196,
     FunctionRestore = 197,
-    XPending = 196,
+    XPending = 198,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
