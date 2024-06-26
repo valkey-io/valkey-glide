@@ -2046,7 +2046,7 @@ class BaseTransaction:
         group_name: str,
         consumer_name: str,
         options: Optional[StreamReadGroupOptions] = None,
-    ) -> Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]:
+    ) -> TTransaction:
         """
         Reads entries from the given streams owned by a consumer group.
 
