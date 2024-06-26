@@ -11,7 +11,11 @@ import static glide.api.commands.SetBaseCommands.SET_LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
+import static glide.api.commands.StringBaseCommands.LCS_MATCHES_RESULT_KEY;
 import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
+import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
+import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
@@ -54,6 +58,7 @@ import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -8108,6 +8113,145 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.lcsLen(key1, key2);
         Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lcsIdx() {
+        // setup
+        String key1 = "testKey1";
+        String key2 = "testKey2";
+        String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING};
+        Map<String, Object> value = Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.lcsIdx(key1, key2);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lcsIdx_throws_NullPointerException() {
+        // setup
+        Map<String, Object> value = Map.of("missing", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+
+        // exception
+        RuntimeException runtimeException =
+                assertThrows(RuntimeException.class, () -> service.handleLcsIdxResponse(value));
+        assertInstanceOf(NullPointerException.class, runtimeException);
+        assertEquals(
+                "LCS result does not contain the key \"" + LCS_MATCHES_RESULT_KEY + "\"",
+                runtimeException.getMessage());
+    }
+
+    @SneakyThrows
+    @Test
+    public void lcsIdx_with_options() {
+        // setup
+        String key1 = "testKey1";
+        String key2 = "testKey2";
+        String[] arguments =
+                new String[] {key1, key2, IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, "2"};
+        Map<String, Object> value =
+                Map.of(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.lcsIdx(key1, key2, 2);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lcsIdxWithMatchLen() {
+        // setup
+        String key1 = "testKey1";
+        String key2 = "testKey2";
+        String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING};
+        Map<String, Object> value =
+                Map.of(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.lcsIdxWithMatchLen(key1, key2);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lcsIdxWithMatchLen_with_options() {
+        // setup
+        String key1 = "testKey1";
+        String key2 = "testKey2";
+        String[] arguments =
+                new String[] {
+                    key1,
+                    key2,
+                    IDX_COMMAND_STRING,
+                    MINMATCHLEN_COMMAND_STRING,
+                    "2",
+                    WITHMATCHLEN_COMMAND_STRING
+                };
+        Map<String, Object> value =
+                Map.of(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.lcsIdxWithMatchLen(key1, key2, 2);
+        Map<String, Object> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
