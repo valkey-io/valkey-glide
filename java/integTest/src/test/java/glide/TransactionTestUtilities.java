@@ -224,6 +224,16 @@ public class TransactionTestUtilities {
         String stringKey8 = "{StringKey}-8-" + UUID.randomUUID();
         String stringKey9 = "{StringKey}-9-" + UUID.randomUUID();
 
+        Map<String, Object> expectedLcsIdxObject =
+                Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+
+        Map<String, Object> expectedLcsIdxWithMatchLenObject =
+                Map.of(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
+
         transaction
                 .flushall()
                 .set(stringKey1, value1)
@@ -256,7 +266,11 @@ public class TransactionTestUtilities {
                     .lcs(stringKey6, stringKey7)
                     .lcs(stringKey6, stringKey8)
                     .lcsLen(stringKey6, stringKey7)
-                    .lcsLen(stringKey6, stringKey8);
+                    .lcsLen(stringKey6, stringKey8)
+                    .lcsIdx(stringKey6, stringKey7)
+                    .lcsIdx(stringKey6, stringKey7, 1)
+                    .lcsIdxWithMatchLen(stringKey6, stringKey7)
+                    .lcsIdxWithMatchLen(stringKey6, stringKey7, 1);
         }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
@@ -304,6 +318,10 @@ public class TransactionTestUtilities {
                                 "", // lcs(stringKey6, stringKey8)
                                 3L, // lcsLEN(stringKey6, stringKey7)
                                 0L, // lcsLEN(stringKey6, stringKey8)
+                                expectedLcsIdxObject, // lcsIdx(stringKey6, stringKey7)
+                                expectedLcsIdxObject, // lcsIdx(stringKey6, stringKey7, minMatchLen(1L)
+                                expectedLcsIdxWithMatchLenObject, // lcsIdxWithMatchLen(stringKey6, stringKey7)
+                                expectedLcsIdxWithMatchLenObject, // lcsIdxWithMatchLen(key6, key7, minMatchLen(1L))
                             });
         }
 

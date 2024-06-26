@@ -5955,4 +5955,86 @@ public class SharedCommandTests {
                 assertThrows(ExecutionException.class, () -> client.sort(key2).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lcsIdx(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonStringKey = "{key}-4" + UUID.randomUUID();
+
+        // keys does not exist or is empty
+        Map<String, Object> result = client.lcsIdx(key1, key2).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+        result = client.lcsIdx(key1, key2, 10L).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+        result = client.lcsIdxWithMatchLen(key1, key2).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+
+        // setting string values
+        client.set(key1, "abcdefghijk");
+        client.set(key2, "defjkjuighijk");
+
+        // LCS with only IDX
+        Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
+        result = client.lcsIdx(key1, key2).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and WITHMATCHLEN
+        expectedMatchesObject =
+                new Object[] {
+                    new Object[] {new Long[] {6L, 10L}, new Long[] {8L, 12L}, 5L},
+                    new Object[] {new Long[] {3L, 5L}, new Long[] {0L, 2L}, 3L}
+                };
+        result = client.lcsIdxWithMatchLen(key1, key2).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and MINMATCHLEN
+        expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}};
+        result = client.lcsIdx(key1, key2, 4).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and a negative MINMATCHLEN
+        expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
+        result = client.lcsIdx(key1, key2, -1L).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX, MINMATCHLEN, and WITHMATCHLEN
+        expectedMatchesObject =
+                new Object[] {new Object[] {new Long[] {6L, 10L}, new Long[] {8L, 12L}, 5L}};
+        result = client.lcsIdxWithMatchLen(key1, key2, 4L).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // non-string keys are used
+        client.sadd(nonStringKey, new String[] {"setmember"}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcsIdx(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.lcsIdx(nonStringKey, key1, 10L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lcsIdxWithMatchLen(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lcsIdxWithMatchLen(nonStringKey, key1, 10L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
 }
