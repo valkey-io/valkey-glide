@@ -2,6 +2,7 @@
 package glide.utils;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
@@ -24,6 +25,19 @@ public class ArrayTransformUtils {
         return args.entrySet().stream()
                 .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue().toString()))
                 .toArray(String[]::new);
+    }
+
+    /**
+     * Converts a map of GlideString keys and values of any type in to an array of GlideStrings with
+     * alternating keys and values.
+     *
+     * @param args Map of GlideString keys to values of any type to convert.
+     * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
+     */
+    public static GlideString[] convertMapToKeyValueGlideStringArray(Map<GlideString, ?> args) {
+        return args.entrySet().stream()
+                .flatMap(entry -> Stream.of(entry.getKey(), GlideString.gs(entry.getValue().toString())))
+                .toArray(GlideString[]::new);
     }
 
     /**

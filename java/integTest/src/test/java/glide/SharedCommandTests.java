@@ -548,6 +548,24 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void incr_binary_commands_existing_key(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+
+        assertEquals(OK, client.set(key, gs("10")).get());
+
+        assertEquals(11, client.incr(key).get());
+        assertEquals(gs("11"), client.get(key).get());
+
+        assertEquals(15, client.incrBy(key, 4).get());
+        assertEquals(gs("15"), client.get(key).get());
+
+        assertEquals(20.5, client.incrByFloat(key, 5.5).get());
+        assertEquals(gs("20.5"), client.get(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void incr_commands_non_existing_key(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -564,6 +582,27 @@ public class SharedCommandTests {
         assertNull(client.get(key3).get());
         assertEquals(0.5, client.incrByFloat(key3, 0.5).get());
         assertEquals("0.5", client.get(key3).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void incr_binary_commands_non_existing_key(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString key3 = gs(UUID.randomUUID().toString());
+
+        assertNull(client.get(key1).get());
+        assertEquals(1, client.incr(key1).get());
+        assertEquals(gs("1"), client.get(key1).get());
+
+        assertNull(client.get(key2).get());
+        assertEquals(3, client.incrBy(key2, 3).get());
+        assertEquals(gs("3"), client.get(key2).get());
+
+        assertNull(client.get(key3).get());
+        assertEquals(0.5, client.incrByFloat(key3, 0.5).get());
+        assertEquals(gs("0.5"), client.get(key3).get());
     }
 
     @SneakyThrows
@@ -719,6 +758,22 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hset_hget_binary_existing_fields_non_existing_fields(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<GlideString, GlideString> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key, fieldValueMap).get());
+        assertEquals(value, client.hget(key, field1).get());
+        assertEquals(value, client.hget(key, field2).get());
+        assertNull(client.hget(key, gs("non_existing_field")).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hsetnx(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -771,6 +826,30 @@ public class SharedCommandTests {
 
         // Key exists, but it is not a hash
         assertEquals(OK, client.set(key2, "value").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hlen(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hlen_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<GlideString, GlideString> fieldValueMap = Map.of(field1, value, field2, value);
+
+        assertEquals(2, client.hset(key1, fieldValueMap).get());
+        assertEquals(2, client.hlen(key1).get());
+        assertEquals(1, client.hdel(key1.toString(), new String[] {field1.toString()}).get());
+        assertEquals(1, client.hlen(key1).get());
+        assertEquals(0, client.hlen(gs("nonExistingHash")).get());
+
+        // Key exists, but it is not a hash
+        assertEquals(OK, client.set(key2, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hlen(key2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
@@ -1079,6 +1158,27 @@ public class SharedCommandTests {
 
         // Key exists, but it is not a List
         assertEquals(OK, client.set(key2, "value").get());
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.lindex(key2, 0).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lindex_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString[] valueArray = new GlideString[] {gs("value1"), gs("value2")};
+
+        assertEquals(2, client.lpush(key1, valueArray).get());
+        assertEquals(valueArray[1], client.lindex(key1, 0).get());
+        assertEquals(valueArray[0], client.lindex(key1, -1).get());
+        assertNull(client.lindex(key1, 3).get());
+        assertNull(client.lindex(key2, 3).get());
+
+        // Key exists, but it is not a List
+        assertEquals(OK, client.set(key2, gs("value")).get());
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.lindex(key2, 0).get());
         assertTrue(executionException.getCause() instanceof RequestException);
@@ -4311,6 +4411,32 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void linsert_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+
+        assertEquals(
+                4, client.lpush(key1, new GlideString[] {gs("4"), gs("3"), gs("2"), gs("1")}).get());
+        assertEquals(5, client.linsert(key1, BEFORE, gs("2"), gs("1.5")).get());
+        assertEquals(6, client.linsert(key1, AFTER, gs("3"), gs("3.5")).get());
+        assertArrayEquals(
+                new String[] {"1", "1.5", "2", "3", "3.5", "4"},
+                client.lrange(key1.toString(), 0, -1).get());
+
+        assertEquals(0, client.linsert(key2, BEFORE, gs("pivot"), gs("elem")).get());
+        assertEquals(-1, client.linsert(key1, AFTER, gs("5"), gs("6")).get());
+
+        // Key exists, but it is not a list
+        assertEquals(OK, client.set(key2, gs("linsert")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.linsert(key2, AFTER, gs("p"), gs("e")).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void brpop(BaseClient client) {
         String listKey1 = "{listKey}-1-" + UUID.randomUUID();
         String listKey2 = "{listKey}-2-" + UUID.randomUUID();
@@ -5544,6 +5670,60 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void lmove_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString nonExistingKey = gs("{key}-3" + UUID.randomUUID());
+        GlideString nonListKey = gs("{key}-4" + UUID.randomUUID());
+        GlideString[] lpushArgs1 = {gs("four"), gs("three"), gs("two"), gs("one")};
+        GlideString[] lpushArgs2 = {gs("six"), gs("five"), gs("four")};
+
+        // source does not exist or is empty
+        assertNull(client.lmove(key1, key2, ListDirection.LEFT, ListDirection.RIGHT).get());
+
+        // only source exists, only source elements gets popped, creates a list at nonExistingKey
+        assertEquals(lpushArgs1.length, client.lpush(key1, lpushArgs1).get());
+        assertEquals(
+                gs("four"),
+                client.lmove(key1, nonExistingKey, ListDirection.RIGHT, ListDirection.LEFT).get());
+        assertArrayEquals(
+                new String[] {"one", "two", "three"}, client.lrange(key1.toString(), 0, -1).get());
+
+        // source and destination are the same, performing list rotation, "three" gets popped and added
+        // back
+        assertEquals(gs("one"), client.lmove(key1, key1, ListDirection.LEFT, ListDirection.LEFT).get());
+        assertArrayEquals(
+                new String[] {"one", "two", "three"}, client.lrange(key1.toString(), 0, -1).get());
+
+        // normal use case, "three" gets popped and added to the left of destination
+        assertEquals(lpushArgs2.length, client.lpush(key2, lpushArgs2).get());
+        assertEquals(
+                gs("three"), client.lmove(key1, key2, ListDirection.RIGHT, ListDirection.LEFT).get());
+        assertArrayEquals(new String[] {"one", "two"}, client.lrange(key1.toString(), 0, -1).get());
+        assertArrayEquals(
+                new String[] {"three", "four", "five", "six"}, client.lrange(key2.toString(), 0, -1).get());
+
+        // source exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, gs("NotAList")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lmove(nonListKey, key1, ListDirection.LEFT, ListDirection.LEFT).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // destination exists but is not a list type key
+        ExecutionException executionException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lmove(key1, nonListKey, ListDirection.LEFT, ListDirection.LEFT).get());
+        assertInstanceOf(RequestException.class, executionException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void blmove(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
         // setup
@@ -5606,10 +5786,103 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void blmove_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString nonExistingKey = gs("{key}-3" + UUID.randomUUID());
+        GlideString nonListKey = gs("{key}-4" + UUID.randomUUID());
+        GlideString[] lpushArgs1 = {gs("four"), gs("three"), gs("two"), gs("one")};
+        GlideString[] lpushArgs2 = {gs("six"), gs("five"), gs("four")};
+        double timeout = 1;
+
+        // source does not exist or is empty
+        assertNull(client.blmove(key1, key2, ListDirection.LEFT, ListDirection.RIGHT, timeout).get());
+
+        // only source exists, only source elements gets popped, creates a list at nonExistingKey
+        assertEquals(lpushArgs1.length, client.lpush(key1, lpushArgs1).get());
+        assertEquals(
+                gs("four"),
+                client
+                        .blmove(key1, nonExistingKey, ListDirection.RIGHT, ListDirection.LEFT, timeout)
+                        .get());
+        assertArrayEquals(
+                new String[] {"one", "two", "three"}, client.lrange(key1.toString(), 0, -1).get());
+
+        // source and destination are the same, performing list rotation, "three" gets popped and added
+        // back
+        assertEquals(
+                gs("one"),
+                client.blmove(key1, key1, ListDirection.LEFT, ListDirection.LEFT, timeout).get());
+        assertArrayEquals(
+                new String[] {"one", "two", "three"}, client.lrange(key1.toString(), 0, -1).get());
+
+        // normal use case, "three" gets popped and added to the left of destination
+        assertEquals(lpushArgs2.length, client.lpush(key2, lpushArgs2).get());
+        assertEquals(
+                gs("three"),
+                client.blmove(key1, key2, ListDirection.RIGHT, ListDirection.LEFT, timeout).get());
+        assertArrayEquals(new String[] {"one", "two"}, client.lrange(key1.toString(), 0, -1).get());
+        assertArrayEquals(
+                new String[] {"three", "four", "five", "six"}, client.lrange(key2.toString(), 0, -1).get());
+
+        // source exists but is not a list type key
+        assertEquals(OK, client.set(nonListKey, gs("NotAList")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .blmove(nonListKey, key1, ListDirection.LEFT, ListDirection.LEFT, timeout)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // destination exists but is not a list type key
+        ExecutionException executionException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .blmove(key1, nonListKey, ListDirection.LEFT, ListDirection.LEFT, timeout)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void blmove_timeout_check(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            assertNull(testClient.blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 1).get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .blmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT, 0)
+                                    .get(3, TimeUnit.SECONDS));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void blmove_binary_timeout_check(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
