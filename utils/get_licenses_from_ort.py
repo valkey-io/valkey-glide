@@ -65,6 +65,7 @@ ort_results_per_lang = [
     OrtResults("Python", "python/ort_results"),
     OrtResults("Node", "node/ort_results"),
     OrtResults("Rust", "glide-core/ort_results"),
+    OrtResults("Java", "java/ort_results"),
 ]
 
 all_licenses_set: Set = set()
