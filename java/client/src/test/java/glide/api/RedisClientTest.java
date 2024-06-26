@@ -40,6 +40,8 @@ import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_A
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
+import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
+import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
@@ -214,6 +216,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
+import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
 import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
@@ -293,6 +296,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
@@ -5642,6 +5646,104 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xpending_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String[] arguments = {key, groupName};
+        Object[] summary = new Object[] {1L, "1234-0", "2345-4", new Object[][] {{"consumer", "4"}}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(summary);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XPending), eq(arguments), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.xpending(key, groupName);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(summary, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xpending_with_start_end_count_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String[] arguments = {key, groupName, EXCLUSIVE_RANGE_REDIS_API + "1234-0", "2345-5", "4"};
+        StreamRange start = IdBound.ofExclusive("1234-0");
+        StreamRange end = IdBound.of("2345-5");
+        Long count = 4L;
+        Object[][] extendedForm = new Object[][] {{"1234-0", "consumer", 4L, 1L}};
+
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(extendedForm);
+
+        // match on protobuf request
+        when(commandManager.<Object[][]>submitNewCommand(eq(XPending), eq(arguments), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[][]> response = service.xpending(key, groupName, start, end, count);
+        Object[][] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(extendedForm, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xpending_with_start_end_count_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        String[] arguments = {
+            key,
+            groupName,
+            IDLE_TIME_REDIS_API,
+            "100",
+            MINIMUM_RANGE_REDIS_API,
+            MAXIMUM_RANGE_REDIS_API,
+            "4",
+            consumer
+        };
+        StreamRange start = InfRangeBound.MIN;
+        StreamRange end = InfRangeBound.MAX;
+        Long count = 4L;
+        Object[][] extendedForm = new Object[][] {{"1234-0", consumer, 4L, 1L}};
+
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(extendedForm);
+
+        // match on protobuf request
+        when(commandManager.<Object[][]>submitNewCommand(eq(XPending), eq(arguments), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[][]> response =
+            service.xpending(
+                key,
+                groupName,
+                start,
+                end,
+                count,
+                StreamPendingOptions.builder().minIdleTime(100L).consumer(consumer).build());
+        Object[][] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(extendedForm, payload);
     }
 
     @SneakyThrows
