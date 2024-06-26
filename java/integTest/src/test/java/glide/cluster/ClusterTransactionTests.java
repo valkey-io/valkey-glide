@@ -188,10 +188,10 @@ public class ClusterTransactionTests {
         assertEquals(OK, clusterClient.watch(keys).get());
         assertEquals(OK, clusterClient.set(key2, helloString).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
-        assertEquals(null, clusterClient.exec(setFoobarTransaction).get()); // Sanity check
-        assertEquals(null, clusterClient.get(key1).get());
+        assertNull(clusterClient.exec(setFoobarTransaction).get()); // Sanity check
+        assertNull(clusterClient.get(key1).get());
         assertEquals(helloString, clusterClient.get(key2).get());
-        assertEquals(null, clusterClient.get(key3).get());
+        assertNull(clusterClient.get(key3).get());
 
         // Transaction executes command successfully with a read command on the watch key before
         // transaction is executed.

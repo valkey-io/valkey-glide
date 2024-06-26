@@ -272,10 +272,10 @@ public class TransactionTests {
         assertEquals(OK, client.watch(keys).get());
         assertEquals(OK, client.set(key2, helloString).get());
         setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
-        assertEquals(null, client.exec(setFoobarTransaction).get());
-        assertEquals(null, client.get(key1).get()); // Sanity check
+        assertNull(client.exec(setFoobarTransaction).get());
+        assertNull(client.get(key1).get()); // Sanity check
         assertEquals(helloString, client.get(key2).get());
-        assertEquals(null, client.get(key3).get());
+        assertNull(client.get(key3).get());
 
         // Transaction executes command successfully with a read command on the watch key before
         // transaction is executed.
@@ -311,14 +311,13 @@ public class TransactionTests {
     @Test
     @SneakyThrows
     public void watch_binary() {
-        String key1 = "{key}-1" + UUID.randomUUID();
-        String key2 = "{key}-2" + UUID.randomUUID();
-        String key3 = "{key}-3" + UUID.randomUUID();
-        String key4 = "{key}-4" + UUID.randomUUID();
+        GlideString key1 = GlideString.gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = GlideString.gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = GlideString.gs("{key}-3" + UUID.randomUUID());
+        GlideString key4 = GlideString.gs("{key}-4" + UUID.randomUUID());
         String foobarString = "foobar";
         String helloString = "hello";
-        GlideString[] keys =
-                new GlideString[] {GlideString.gs(key1), GlideString.gs(key2), GlideString.gs(key3)};
+        GlideString[] keys = new GlideString[] {key1, key2, key3};
         Transaction setFoobarTransaction = new Transaction();
         Transaction setHelloTransaction = new Transaction();
         String[] expectedExecResponse = new String[] {OK, OK, OK};
@@ -326,41 +325,47 @@ public class TransactionTests {
         // Returns null when a watched key is modified before it is executed in a transaction command.
         // Transaction commands are not performed.
         assertEquals(OK, client.watch(keys).get());
-        assertEquals(OK, client.set(key2, helloString).get());
-        setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
-        assertEquals(null, client.exec(setFoobarTransaction).get());
-        assertEquals(null, client.get(key1).get()); // Sanity check
-        assertEquals(helloString, client.get(key2).get());
-        assertEquals(null, client.get(key3).get());
+        assertEquals(OK, client.set(key2, GlideString.gs(helloString)).get());
+        setFoobarTransaction
+                .set(key1.toString(), foobarString)
+                .set(key2.toString(), foobarString)
+                .set(key3.toString(), foobarString);
+        assertNull(client.exec(setFoobarTransaction).get());
+        assertNull(client.get(key1).get()); // Sanity check
+        assertEquals(GlideString.gs(helloString), client.get(key2).get());
+        assertNull(client.get(key3).get());
 
         // Transaction executes command successfully with a read command on the watch key before
         // transaction is executed.
         assertEquals(OK, client.watch(keys).get());
-        assertEquals(helloString, client.get(key2).get());
+        assertEquals(GlideString.gs(helloString), client.get(key2).get());
         assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
-        assertEquals(foobarString, client.get(key1).get()); // Sanity check
-        assertEquals(foobarString, client.get(key2).get());
-        assertEquals(foobarString, client.get(key3).get());
+        assertEquals(GlideString.gs(foobarString), client.get(key1).get()); // Sanity check
+        assertEquals(GlideString.gs(foobarString), client.get(key2).get());
+        assertEquals(GlideString.gs(foobarString), client.get(key3).get());
 
         // Transaction executes command successfully with unmodified watched keys
         assertEquals(OK, client.watch(keys).get());
         assertArrayEquals(expectedExecResponse, client.exec(setFoobarTransaction).get());
-        assertEquals(foobarString, client.get(key1).get()); // Sanity check
-        assertEquals(foobarString, client.get(key2).get());
-        assertEquals(foobarString, client.get(key3).get());
+        assertEquals(GlideString.gs(foobarString), client.get(key1).get()); // Sanity check
+        assertEquals(GlideString.gs(foobarString), client.get(key2).get());
+        assertEquals(GlideString.gs(foobarString), client.get(key3).get());
 
         // Transaction executes command successfully with a modified watched key but is not in the
         // transaction.
-        assertEquals(OK, client.watch(new String[] {key4}).get());
-        setHelloTransaction.set(key1, helloString).set(key2, helloString).set(key3, helloString);
+        assertEquals(OK, client.watch(new GlideString[] {key4}).get());
+        setHelloTransaction
+                .set(key1.toString(), helloString)
+                .set(key2.toString(), helloString)
+                .set(key3.toString(), helloString);
         assertArrayEquals(expectedExecResponse, client.exec(setHelloTransaction).get());
-        assertEquals(helloString, client.get(key1).get()); // Sanity check
-        assertEquals(helloString, client.get(key2).get());
-        assertEquals(helloString, client.get(key3).get());
+        assertEquals(GlideString.gs(helloString), client.get(key1).get()); // Sanity check
+        assertEquals(GlideString.gs(helloString), client.get(key2).get());
+        assertEquals(GlideString.gs(helloString), client.get(key3).get());
 
         // WATCH can not have an empty String array parameter
         ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.watch(new String[] {}).get());
+                assertThrows(ExecutionException.class, () -> client.watch(new GlideString[] {}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 

@@ -4992,14 +4992,14 @@ public class SharedCommandTests {
 
         // Returns null when all keys hold empty strings
         assertEquals(0L, client.bitop(BitwiseOperation.AND, destination, emptyKeys).get());
-        assertEquals(null, client.get(destination).get());
+        assertNull(client.get(destination).get());
         assertEquals(0L, client.bitop(BitwiseOperation.OR, destination, emptyKeys).get());
-        assertEquals(null, client.get(destination).get());
+        assertNull(client.get(destination).get());
         assertEquals(0L, client.bitop(BitwiseOperation.XOR, destination, emptyKeys).get());
-        assertEquals(null, client.get(destination).get());
+        assertNull(client.get(destination).get());
         assertEquals(
                 0L, client.bitop(BitwiseOperation.NOT, destination, new String[] {emptyKey1}).get());
-        assertEquals(null, client.get(destination).get());
+        assertNull(client.get(destination).get());
 
         // Exception thrown due to the key holding a value with the wrong type
         assertEquals(1, client.sadd(emptyKey1, new String[] {value1}).get());
