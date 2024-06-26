@@ -622,9 +622,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> objectEncoding(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ObjectEncoding, new GlideString[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> objectFreq(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectFreq, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectFreq(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ObjectFreq, new GlideString[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
@@ -634,9 +646,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> objectIdletime(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ObjectIdleTime, new GlideString[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> objectRefcount(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectRefCount, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectRefcount(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ObjectRefCount, new GlideString[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
