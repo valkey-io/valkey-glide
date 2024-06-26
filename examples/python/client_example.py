@@ -13,7 +13,6 @@ from glide import (
     NodeAddress,
 )
 
-
 def set_console_logger(level: LogLevel = LogLevel.WARN):
     Logger.set_logger_config(level)
 
@@ -52,10 +51,11 @@ async def test_standalone_client(host: str = "localhost", port: int = 6379):
     await send_set_and_get(client)
     # Send PING to the primary node
     pong = await client.custom_command(["PING"])
-    print(f"PONG response is = {pong}")
+    assert isinstance(pong, bytes)
+    print(f"PONG response is = {pong.decode()}")
 
 
-async def test_cluster_client(host: str = "localhost", port: int = 6379):
+async def test_cluster_client(host: str = "localhost", port: int = 45027):
     # When in Redis is cluster mode, add address of any nodes, and the client will find all nodes in the cluster.
     addresses = [NodeAddress(host, port)]
     # Check `GlideClientConfiguration/ClusterClientConfiguration` for additional options.
@@ -71,10 +71,11 @@ async def test_cluster_client(host: str = "localhost", port: int = 6379):
     await send_set_and_get(client)
     # Send PING to all primaries (according to Redis's PING request_policy)
     pong = await client.custom_command(["PING"])
-    print(f"PONG response is = {pong}")
+    assert isinstance(pong, bytes)
+    print(f"PONG response is = {pong.decode()}")
     # Send INFO REPLICATION with routing option to all nodes
     info_repl_resps = await client.custom_command(["INFO", "REPLICATION"], AllNodes())
-    print(f"INFO REPLICATION responses to all nodes are = {info_repl_resps}")
+    print(f"INFO REPLICATION responses to all nodes are = {info_repl_resps!r}")
 
 
 async def main():

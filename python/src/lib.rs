@@ -118,13 +118,6 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
             Value::Okay => Ok("OK".into_py(py)),
             Value::Int(num) => Ok(num.into_py(py)),
             Value::BulkString(data) => {
-                // TODO: for now, and in order to keep the current tests to work,
-                // we still return a UTF-8 encoded string instead of `&[u8]`. This needs
-                // to be changed
-
-                // let value_str = String::from_utf8_lossy(&data);
-                // Ok(value_str.into_py(py))
-
                 let data_bytes = PyBytes::new(py, &data);
                 Ok(data_bytes.into_py(py))
             }
