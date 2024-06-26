@@ -410,8 +410,6 @@ class TestCommands:
             cluster_nodes = get_first_result(cluster_nodes)
             expected_num_of_results = cluster_nodes.count(b"master")
             assert len(info_result) == expected_num_of_results
-        print("adarov")
-        print(info_result)
         info_result = get_first_result(info_result)
         assert "# Memory" in info_result.decode()
 
@@ -3791,7 +3789,7 @@ class TestCommands:
             key,
             RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
         )
-        expected_map: Mapping[bytes, float] = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
+        expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
         assert await redis_client.zrange(
