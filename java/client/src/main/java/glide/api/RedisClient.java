@@ -44,8 +44,6 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.configuration.RedisClientConfiguration;
-import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -63,10 +61,6 @@ public class RedisClient extends BaseClient
                 ScriptingAndFunctionsCommands,
                 TransactionsCommands {
 
-    protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
-        super(connectionManager, commandManager);
-    }
-
     /**
      * Async request for an async (non-blocking) Redis client in Standalone mode.
      *
@@ -75,11 +69,7 @@ public class RedisClient extends BaseClient
      */
     public static CompletableFuture<RedisClient> CreateClient(
             @NonNull RedisClientConfiguration config) {
-        return CreateClient(config, RedisClient::new)
-                .thenApply(
-                        client ->
-                                (RedisClient)
-                                        client.setSubscriptionConfiguration(config.getSubscriptionConfiguration()));
+        return CreateClient(config, RedisClient::new);
     }
 
     @Override

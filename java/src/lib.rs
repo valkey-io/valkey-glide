@@ -34,19 +34,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             let s = String::from_utf8_lossy(&data);
             JObject::from(env.new_string(s).unwrap())
         }
-        Value::Array(array) => {
-            let items: JObjectArray = env
-                .new_object_array(array.len() as i32, "java/lang/Object", JObject::null())
-                .unwrap();
-
-            for (i, item) in array.into_iter().enumerate() {
-                let java_value = redis_value_to_java(env, item);
-                env.set_object_array_element(&items, i as i32, java_value)
-                    .unwrap();
-            }
-
-            items.into()
-        }
+        Value::Array(array) => array_to_java_array(env, array),
         Value::Map(map) => {
             let linked_hash_map = env
                 .new_object("java/util/LinkedHashMap", "()V", &[])
@@ -94,14 +82,60 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             data: _,
             attributes: _,
         } => todo!(),
+        // Create a java `Map<String, Object>` with two keys:
+        //   - "kind" which corresponds to the push type, stored as a `String`
+        //   - "values" which corresponds to the array of values received, stored as `Object[]`
+        // Only string messages are supported now by Redis and `redis-rs`.
         Value::Push { kind, data } => {
-            // TODO rework in a follow up PR - return values
-            dbg!(format!(
-                "received push, type: {kind:?} with data:\n{data:?}"
-            ));
-            JObject::null()
+            // TODO rework unwraps after https://github.com/aws/glide-for-redis/pull/1601
+            let hash_map = env.new_object("java/util/HashMap", "()V", &[]).unwrap();
+
+            let kind_str = env.new_string("kind").unwrap();
+            let kind_value_str = env.new_string(format!("{kind:?}")).unwrap();
+
+            let _ = env
+                .call_method(
+                    &hash_map,
+                    "put",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    &[(&kind_str).into(), (&kind_value_str).into()],
+                )
+                .unwrap();
+
+            let values_str = env.new_string("values").unwrap();
+            let values = array_to_java_array(env, data);
+
+            let _ = env
+                .call_method(
+                    &hash_map,
+                    "put",
+                    "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                    &[(&values_str).into(), (&values).into()],
+                )
+                .unwrap();
+
+            hash_map
         }
     }
+}
+
+/// Convert an array of values into java array of corresponding values.
+///
+/// Recursively calls to [`redis_value_to_java`] for every element.
+///
+/// Returns an arbitrary java `Object[]`.
+fn array_to_java_array<'local>(env: &mut JNIEnv<'local>, values: Vec<Value>) -> JObject<'local> {
+    let items: JObjectArray = env
+        .new_object_array(values.len() as i32, "java/lang/Object", JObject::null())
+        .unwrap();
+
+    for (i, item) in values.into_iter().enumerate() {
+        let java_value = redis_value_to_java(env, item);
+        env.set_object_array_element(&items, i as i32, java_value)
+            .unwrap();
+    }
+
+    items.into()
 }
 
 #[no_mangle]

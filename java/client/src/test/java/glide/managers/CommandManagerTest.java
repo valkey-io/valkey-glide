@@ -76,7 +76,7 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        new BaseCommandResponseResolver((ptr) -> ptr == pointer ? respObject : null));
+                        new BaseResponseResolver((ptr) -> ptr == pointer ? respObject : null));
         Object respPointer = result.get();
 
         // verify
@@ -98,7 +98,7 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        new BaseCommandResponseResolver((p) -> new RuntimeException("")));
+                        new BaseResponseResolver((p) -> new RuntimeException("")));
         Object respPointer = result.get();
 
         // verify
@@ -125,7 +125,7 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        new BaseCommandResponseResolver((p) -> p == pointer ? testString : null));
+                        new BaseResponseResolver((p) -> p == pointer ? testString : null));
         Object respPointer = result.get();
 
         // verify

@@ -273,7 +273,6 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -298,15 +297,13 @@ public class RedisClientTest {
 
     RedisClient service;
 
-    ConnectionManager connectionManager;
-
     CommandManager commandManager;
 
     @BeforeEach
     public void setUp() {
-        connectionManager = mock(ConnectionManager.class);
         commandManager = mock(CommandManager.class);
-        service = new RedisClient(connectionManager, commandManager);
+        service = new RedisClient();
+        service.commandManager = commandManager;
     }
 
     @SneakyThrows

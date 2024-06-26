@@ -53,7 +53,6 @@ import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -71,17 +70,15 @@ public class RedisClusterClientTest {
 
     RedisClusterClient service;
 
-    ConnectionManager connectionManager;
-
     CommandManager commandManager;
 
     private final String[] TEST_ARGS = new String[0];
 
     @BeforeEach
     public void setUp() {
-        connectionManager = mock(ConnectionManager.class);
         commandManager = mock(CommandManager.class);
-        service = new RedisClusterClient(connectionManager, commandManager);
+        service = new RedisClusterClient();
+        service.commandManager = commandManager;
     }
 
     @Test
@@ -150,7 +147,8 @@ public class RedisClusterClientTest {
         private final Object object;
 
         public TestClient(CommandManager commandManager, Object objectToReturn) {
-            super(null, commandManager);
+            super();
+            this.commandManager = commandManager;
             object = objectToReturn;
         }
 

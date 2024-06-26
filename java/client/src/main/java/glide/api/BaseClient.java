@@ -171,6 +171,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
+import glide.api.models.Message;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -201,34 +202,34 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
 import glide.api.models.exceptions.RedisException;
+import glide.api.models.exceptions.WrongConfigurationException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
+import glide.connectors.handlers.MessageHandler;
 import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolResource;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.ffi.resolvers.RedisValueResolver;
-import glide.managers.BaseCommandResponseResolver;
+import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
-import java.util.function.BiFunction;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import lombok.AccessLevel;
 import lombok.NonNull;
-import lombok.RequiredArgsConstructor;
-import lombok.Setter;
-import lombok.experimental.Accessors;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.NotImplementedException;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
-@RequiredArgsConstructor
 public abstract class BaseClient
         implements AutoCloseable,
                 BitmapBaseCommands,
@@ -248,12 +249,34 @@ public abstract class BaseClient
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
-    protected final ConnectionManager connectionManager;
-    protected final CommandManager commandManager;
+    // Members below are effectively-final, but since we use a static async method as a constructor,
+    // we can't set them in a standard constructor. They all set in `buildClient` method below.
+    // All made protected to simplify testing.
+    protected CommandManager commandManager;
+    protected ConnectionManager connectionManager;
+    protected ConcurrentLinkedDeque<Message> messageQueue;
+    protected Optional<BaseSubscriptionConfiguration> subscriptionConfiguration = Optional.empty();
 
-    @Setter(AccessLevel.PROTECTED)
-    @Accessors(chain = true)
-    protected BaseSubscriptionConfiguration subscriptionConfiguration;
+    /** Helper which extracts data from received {@link Response}s from GLIDE. */
+    private static final BaseResponseResolver responseResolver =
+            new BaseResponseResolver(RedisValueResolver::valueFromPointer);
+
+    /** Create a client instance and init private fields. */
+    protected static <T extends BaseClient> T buildClient(
+            Supplier<T> constructor,
+            ConnectionManager connectionManager,
+            CommandManager commandManager,
+            MessageHandler messageHandler,
+            BaseSubscriptionConfiguration subscriptionConfiguration) {
+        T client = constructor.get();
+        client.connectionManager = connectionManager;
+        client.commandManager = commandManager;
+        client.messageQueue = messageHandler.getQueue();
+        if (subscriptionConfiguration != null) {
+            client.subscriptionConfiguration = Optional.of(subscriptionConfiguration);
+        }
+        return client;
+    }
 
     /**
      * Async request for an async (non-blocking) Redis client.
@@ -264,29 +287,80 @@ public abstract class BaseClient
      * @return a Future to connect and return a RedisClient.
      */
     protected static <T extends BaseClient> CompletableFuture<T> CreateClient(
-            @NonNull BaseClientConfiguration config,
-            BiFunction<ConnectionManager, CommandManager, T> constructor) {
+            @NonNull BaseClientConfiguration config, Supplier<T> constructor) {
         try {
             ThreadPoolResource threadPoolResource = config.getThreadPoolResource();
             if (threadPoolResource == null) {
                 threadPoolResource =
                         ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
             }
-            ChannelHandler channelHandler = buildChannelHandler(threadPoolResource);
+            MessageHandler messageHandler = buildMessageHandler(config);
+            ChannelHandler channelHandler = buildChannelHandler(threadPoolResource, messageHandler);
             ConnectionManager connectionManager = buildConnectionManager(channelHandler);
             CommandManager commandManager = buildCommandManager(channelHandler);
             // TODO: Support exception throwing, including interrupted exceptions
             return connectionManager
                     .connectToRedis(config)
-                    .thenApply(ignore -> constructor.apply(connectionManager, commandManager));
+                    .thenApply(
+                            ignored ->
+                                    buildClient(
+                                            constructor,
+                                            connectionManager,
+                                            commandManager,
+                                            messageHandler,
+                                            config.getSubscriptionConfiguration()));
         } catch (InterruptedException e) {
-            // Something bad happened while we were establishing netty connection to
-            // UDS
+            // Something bad happened while we were establishing netty connection to UDS
             var future = new CompletableFuture<T>();
             future.completeExceptionally(e);
             return future;
         }
     }
+
+    /**
+     * Tries to return a next pubsub message.
+     *
+     * @throws WrongConfigurationException If client is not subscribed to any channel or if client
+     *     configured with a callback.
+     * @return A message if any or <code>null</code> if there are no unread messages.
+     */
+    public Message tryGetPubSubMessage() {
+        if (subscriptionConfiguration.isEmpty()) {
+            throw new WrongConfigurationException(
+                    "The operation will never complete since there was no pubsub subscriptions applied to the"
+                            + " client.");
+        }
+        if (subscriptionConfiguration.get().getCallback().isPresent()) {
+            throw new WrongConfigurationException(
+                    "The operation will never complete since messages will be passed to the configured"
+                            + " callback.");
+        }
+        return messageQueue.poll();
+    }
+
+    /**
+     * Returns a promise for a next pubsub message.
+     *
+     * @throws WrongConfigurationException If client is not subscribed to any channel or if client
+     *     configured with a callback.
+     * @return A <code>Future</code> which resolved with the next incoming message.
+     */
+    public CompletableFuture<Message> getPubSubMessage() {
+        if (subscriptionConfiguration.isEmpty()) {
+            throw new WrongConfigurationException(
+                    "The operation will never complete since there was no pubsub subscriptions applied to the"
+                            + " client.");
+        }
+        if (subscriptionConfiguration.get().getCallback().isPresent()) {
+            throw new WrongConfigurationException(
+                    "The operation will never complete since messages will be passed to the configured"
+                            + " callback.");
+        }
+        // TODO
+        throw new NotImplementedException("oh no");
+    }
+
+    // TODO return a message queue
 
     /**
      * Closes this resource, relinquishing any underlying resources. This method is invoked
@@ -300,15 +374,25 @@ public abstract class BaseClient
         try {
             connectionManager.closeConnection().get();
         } catch (InterruptedException e) {
-            // suppressing the interrupted exception - it is already suppressed in the
-            // future
+            // suppressing the interrupted exception - it is already suppressed in the future
             throw new RuntimeException(e);
         }
     }
 
-    protected static ChannelHandler buildChannelHandler(ThreadPoolResource threadPoolResource)
+    protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
+        if (config.getSubscriptionConfiguration() == null) {
+            return new MessageHandler(Optional.empty(), Optional.empty(), responseResolver);
+        }
+        return new MessageHandler(
+                config.getSubscriptionConfiguration().getCallback(),
+                config.getSubscriptionConfiguration().getContext(),
+                responseResolver);
+    }
+
+    protected static ChannelHandler buildChannelHandler(
+            ThreadPoolResource threadPoolResource, MessageHandler messageHandler)
             throws InterruptedException {
-        CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
+        CallbackDispatcher callbackDispatcher = new CallbackDispatcher(messageHandler);
         return new ChannelHandler(callbackDispatcher, getSocket(), threadPoolResource);
     }
 
@@ -336,8 +420,7 @@ public abstract class BaseClient
     protected <T> T handleRedisResponse(
             Class<T> classType, EnumSet<ResponseFlags> flags, Response response) throws RedisException {
         boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
-        Object value =
-                new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response);
+        Object value = responseResolver.apply(response);
         if (isNullable && (value == null)) {
             return null;
         }

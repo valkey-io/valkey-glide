@@ -2,6 +2,7 @@
 package glide.api;
 
 import static glide.api.BaseClient.buildChannelHandler;
+import static glide.api.BaseClient.buildClient;
 import static glide.api.RedisClient.CreateClient;
 import static glide.api.RedisClient.buildCommandManager;
 import static glide.api.RedisClient.buildConnectionManager;
@@ -45,7 +46,12 @@ public class RedisClientCreateTest {
         connectionManager = mock(ConnectionManager.class);
         threadPoolResource = mock(ThreadPoolResource.class);
 
-        mockedClient.when(() -> buildChannelHandler(any())).thenReturn(channelHandler);
+        RedisClient client = new RedisClient();
+        client.connectionManager = connectionManager;
+        client.commandManager = commandManager;
+
+        mockedClient.when(() -> buildClient(any(), any(), any(), any(), any())).thenReturn(client);
+        mockedClient.when(() -> buildChannelHandler(any(), any())).thenReturn(channelHandler);
         mockedClient.when(() -> buildConnectionManager(channelHandler)).thenReturn(connectionManager);
         mockedClient.when(() -> buildCommandManager(channelHandler)).thenReturn(commandManager);
         mockedClient.when(() -> CreateClient(any(), any())).thenCallRealMethod();
@@ -121,4 +127,6 @@ public class RedisClientCreateTest {
         // verify
         assertEquals(exception, executionException.getCause());
     }
+
+    // TODO check message queue and subscriptionConfiguration
 }

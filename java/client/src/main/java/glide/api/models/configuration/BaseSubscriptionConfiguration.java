@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.configuration;
 
+import glide.api.BaseClient;
+import glide.api.models.Message;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode;
 import java.util.HashSet;
@@ -26,19 +28,21 @@ public abstract class BaseSubscriptionConfiguration {
     public interface ChannelMode {}
 
     /**
-     * Callback is called for every incoming message. The arguments are:
+     * Callback is called for every incoming message. It should be a fast, non-blocking operation to
+     * avoid issues. A next call could happen even before then the previous call complete.<br>
+     * The callback arguments are:
      *
      * <ol>
-     *   <li>A received message
-     *   <li>User-defined context
+     *   <li>A received {@link Message}.
+     *   <li>A user-defined {@link #context} or <code>null</code> if not configured.
      * </ol>
      */
-    // TODO change message type
-    public interface MessageCallback extends BiConsumer<Object, Object> {}
+    public interface MessageCallback extends BiConsumer<Message, Object> {}
 
     /**
      * Optional callback to accept the incoming messages. See {@link MessageCallback}.<br>
-     * If not set, messages will be available via TODO method.<br>
+     * If not set, messages will be available via {@link BaseClient#tryGetPubSubMessage()} or {@link
+     * BaseClient#getPubSubMessage()}.
      */
     protected final Optional<MessageCallback> callback;
 
