@@ -12,6 +12,7 @@ import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
 import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
@@ -66,6 +67,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
+import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -138,16 +140,20 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
+import static redis_request.RedisRequestOuterClass.RequestType.Sort;
+import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -157,6 +163,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
 import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
@@ -189,6 +196,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 import com.google.protobuf.ByteString;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
@@ -233,6 +241,7 @@ import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.ReadFrom;
@@ -387,6 +396,37 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T getdel(@NonNull String key) {
         ArgsArray commandArgs = buildArgs(key);
         protobufTransaction.addCommands(buildCommand(GetDel, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets the value associated with the given <code>key</code>.
+     *
+     * @since Redis 6.2.0.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @return Command Response - If <code>key</code> exists, return the <code>value</code> of the
+     *     <code>key</code>. Otherwise, return <code>null</code>.
+     */
+    public T getex(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(GetEx, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Gets the value associated with the given <code>key</code>.
+     *
+     * @since Redis 6.2.0.
+     * @see <a href="https://redis.io/docs/latest/commands/getex/">redis.io</a> for details.
+     * @param key The <code>key</code> to retrieve from the database.
+     * @param options The {@link GetExOptions} options.
+     * @return Command Response - If <code>key</code> exists, return the <code>value</code> of the
+     *     <code>key</code>. Otherwise, return <code>null</code>.
+     */
+    public T getex(@NonNull String key, @NonNull GetExOptions options) {
+        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(options.toArgs(), key));
+        protobufTransaction.addCommands(buildCommand(GetEx, commandArgs));
         return getThis();
     }
 
@@ -2767,7 +2807,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param keysAndIds An array of <code>Pair</code>s of keys and entry ids to read from. A <code>
      *     pair</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
-     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xread(@NonNull Map<String, String> keysAndIds) {
@@ -2782,7 +2822,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     pair</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read.
      * @param options options detailing how to read the stream {@link StreamReadOptions}.
-     * @return Command Response - A <code>{@literal Map<String, Map<Object[][]>>}</code> with stream
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *     keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
      */
     public T xread(@NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
@@ -3045,6 +3085,74 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T xgroupDelConsumer(@NonNull String key, @NonNull String group, @NonNull String consumer) {
         protobufTransaction.addCommands(
                 buildCommand(XGroupDelConsumer, buildArgs(key, group, consumer)));
+        return getThis();
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
+     *     </code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
+     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     [[field, entry], [field, entry], ...]<code>.
+     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
+     *     with a value of code>null</code> if the stream is empty.
+     */
+    public T xreadgroup(
+            @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
+        return xreadgroup(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
+    }
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
+     *     </code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
+     * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
+     *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
+     *     [[field, entry], [field, entry], ...]<code>.
+     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
+     *     with a value of code>null</code> if the stream is empty.
+     */
+    public T xreadgroup(
+            @NonNull Map<String, String> keysAndIds,
+            @NonNull String group,
+            @NonNull String consumer,
+            @NonNull StreamReadGroupOptions options) {
+        protobufTransaction.addCommands(
+                buildCommand(XReadGroup, buildArgs(options.toArgs(group, consumer, keysAndIds))));
+        return getThis();
+    }
+
+    /**
+     * Returns the number of messages that were successfully acknowledged by the consumer group member
+     * of a stream. This command should be called on a pending message so that such message does not
+     * get processed again.
+     *
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param ids Stream entry ID to acknowledge and purge messages.
+     * @return Command Response - The number of messages that were successfully acknowledged.
+     */
+    public T xack(@NonNull String key, @NonNull String group, @NonNull String[] ids) {
+        String[] args = concatenateArrays(new String[] {key, group}, ids);
+        protobufTransaction.addCommands(buildCommand(XAck, buildArgs(args)));
         return getThis();
     }
 
@@ -4645,6 +4753,70 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T publish(@NonNull String channel, @NonNull String message) {
         protobufTransaction.addCommands(buildCommand(Publish, buildArgs(channel, message)));
+        return getThis();
+    }
+
+    /**
+     * Gets the union of all the given sets.
+     *
+     * @see <a href="https://valkey.io/commands/sunion">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return Command Response - A set of members which are present in at least one of the given
+     *     sets. If none of the sets exist, an empty set will be returned.
+     */
+    public T sunion(@NonNull String[] keys) {
+        protobufTransaction.addCommands(buildCommand(SUnion, buildArgs(keys)));
+        return getThis();
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * <br>
+     * The <code>sort</code> command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.<br>
+     * To store the result into a new key, see {@link #sortStore(String, String)}.<br>
+     *
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @return Command Response - An <code>Array</code> of sorted elements.
+     */
+    public T sort(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * <br>
+     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
+     * and apply transformations on sorted elements.
+     *
+     * @since Redis 7.0 and above.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @return Command Response - An <code>Array</code> of sorted elements.
+     */
+    public T sortReadOnly(@NonNull String key) {
+        ArgsArray commandArgs = buildArgs(key);
+        protobufTransaction.addCommands(buildCommand(SortReadOnly, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
+     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
+     * different criteria, apply transformations on sorted elements, and store the result in a new
+     * key.<br>
+     * To get the sort result without storing it into a key, see {@link #sort(String)} or {@link
+     * #sortReadOnly(String)}.
+     *
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param destination The key where the sorted result will be stored.
+     * @return Command Response - The number of elements in the sorted key stored at <code>destination
+     *     </code>.
+     */
+    public T sortStore(@NonNull String key, @NonNull String destination) {
+        ArgsArray commandArgs = buildArgs(new String[] {key, STORE_COMMAND_STRING, destination});
+        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
         return getThis();
     }
 

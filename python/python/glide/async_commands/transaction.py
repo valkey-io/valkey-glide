@@ -3,19 +3,26 @@
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
 
-from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import (
+    BitFieldGet,
+    BitFieldSubCommands,
+    BitmapIndexType,
+    BitwiseOperation,
+    OffsetOptions,
+    _create_bitfield_args,
+    _create_bitfield_read_only_args,
+)
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
+    ExpiryGetEx,
     ExpirySet,
     FlushMode,
     GeospatialData,
     GeoUnit,
     InfoSection,
     InsertPosition,
-    StreamAddOptions,
-    StreamTrimOptions,
     UpdateOptions,
     _build_sort_args,
 )
@@ -34,6 +41,13 @@ from glide.async_commands.sorted_set import (
     _create_geosearch_args,
     _create_zinter_zunion_cmd_args,
     _create_zrange_args,
+)
+from glide.async_commands.stream import (
+    StreamAddOptions,
+    StreamGroupOptions,
+    StreamRangeBound,
+    StreamReadOptions,
+    StreamTrimOptions,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -1787,6 +1801,22 @@ class BaseTransaction:
 
         return self.append_command(RequestType.XAdd, args)
 
+    def xdel(self: TTransaction, key: str, ids: List[str]) -> TTransaction:
+        """
+        Removes the specified entries by id from a stream, and returns the number of entries deleted.
+
+        See https://valkey.io/commands/xdel for more details.
+
+        Args:
+            key (str): The key of the stream.
+            ids (List[str]): An array of entry ids.
+
+        Command response:
+            int: The number of entries removed from the stream. This number may be less than the number of entries in
+                `ids`, if the specified `ids` don't exist in the stream.
+        """
+        return self.append_command(RequestType.XDel, [key] + ids)
+
     def xtrim(
         self: TTransaction,
         key: str,
@@ -1823,6 +1853,191 @@ class BaseTransaction:
             int: The number of entries in the stream. If `key` does not exist, returns 0.
         """
         return self.append_command(RequestType.XLen, [key])
+
+    def xrange(
+        self: TTransaction,
+        key: str,
+        start: StreamRangeBound,
+        end: StreamRangeBound,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Returns stream entries matching a given range of IDs.
+
+        See https://valkey.io/commands/xrange for more details.
+
+        Args:
+            key (str): The key of the stream.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+                If `count` is not provided, all stream entries in the range will be returned.
+
+        Command response:
+            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range arguments
+                are not applicable.
+        """
+        args = [key, start.to_arg(), end.to_arg()]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return self.append_command(RequestType.XRange, args)
+
+    def xrevrange(
+        self: TTransaction,
+        key: str,
+        end: StreamRangeBound,
+        start: StreamRangeBound,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Returns stream entries matching a given range of IDs in reverse order. Equivalent to `XRANGE` but returns the
+        entries in reverse order.
+
+        See https://valkey.io/commands/xrevrange for more details.
+
+        Args:
+            key (str): The key of the stream.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+                If `count` is not provided, all stream entries in the range will be returned.
+
+        Command response:
+            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range arguments
+                are not applicable.
+        """
+        args = [key, end.to_arg(), start.to_arg()]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return self.append_command(RequestType.XRevRange, args)
+
+    def xread(
+        self: TTransaction,
+        keys_and_ids: Mapping[str, str],
+        options: Optional[StreamReadOptions] = None,
+    ) -> TTransaction:
+        """
+        Reads entries from the given streams.
+
+        See https://valkey.io/commands/xread for more details.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of keys and entry IDs to read from. The mapping is composed of a
+                stream's key and the ID of the entry after which the stream will be read.
+            options (Optional[StreamReadOptions]): Options detailing how to read the stream.
+
+        Command response:
+            Optional[Mapping[str, Mapping[str, List[List[str]]]]]: A mapping of stream keys, to a mapping of stream IDs,
+                to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                None will be returned under the following conditions:
+                - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no entries after the given ID.
+                - The `BLOCK` option is specified and the timeout is hit.
+        """
+        args = [] if options is None else options.to_args()
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return self.append_command(RequestType.XRead, args)
+
+    def xgroup_create(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        group_id: str,
+        options: Optional[StreamGroupOptions] = None,
+    ) -> TTransaction:
+        """
+        Creates a new consumer group uniquely identified by `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-create for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The newly created consumer group name.
+            group_id (str): The stream entry ID that specifies the last delivered entry in the stream from the new
+                group’s perspective. The special ID "$" can be used to specify the last entry in the stream.
+            options (Optional[StreamGroupOptions]): Options for creating the stream group.
+
+        Command response:
+            TOK: A simple "OK" response.
+        """
+        args = [key, group_name, group_id]
+        if options is not None:
+            args.extend(options.to_args())
+
+        return self.append_command(RequestType.XGroupCreate, args)
+
+    def xgroup_destroy(self: TTransaction, key: str, group_name: str) -> TTransaction:
+        """
+        Destroys the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-destroy for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name to delete.
+
+        Command response:
+            bool: True if the consumer group was destroyed. Otherwise, returns False.
+        """
+        return self.append_command(RequestType.XGroupDestroy, [key, group_name])
+
+    def xgroup_create_consumer(
+        self: TTransaction, key: str, group_name: str, consumer_name: str
+    ) -> TTransaction:
+        """
+        Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-createconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The newly created consumer.
+
+        Command response:
+            bool: True if the consumer is created. Otherwise, returns False.
+        """
+        return self.append_command(
+            RequestType.XGroupCreateConsumer, [key, group_name, consumer_name]
+        )
+
+    def xgroup_del_consumer(
+        self: TTransaction, key: str, group_name: str, consumer_name: str
+    ) -> TTransaction:
+        """
+        Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-delconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer to delete.
+
+        Command response:
+            int: The number of pending messages the `consumer` had before it was deleted.
+        """
+        return self.append_command(
+            RequestType.XGroupDelConsumer, [key, group_name, consumer_name]
+        )
 
     def geoadd(
         self: TTransaction,
@@ -2438,6 +2653,45 @@ class BaseTransaction:
         Since: Redis version 7.2.0.
         """
         return self.append_command(RequestType.ZRank, [key, member, "WITHSCORE"])
+
+    def zrevrank(self: TTransaction, key: str, member: str) -> TTransaction:
+        """
+        Returns the rank of `member` in the sorted set stored at `key`, where scores are ordered from the highest to
+        lowest, starting from `0`.
+
+        To get the rank of `member` with its score, see `zrevrank_withscore`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Command response:
+            Optional[int]: The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+        """
+        return self.append_command(RequestType.ZRevRank, [key, member])
+
+    def zrevrank_withscore(self: TTransaction, key: str, member: str) -> TTransaction:
+        """
+        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
+        highest to lowest, starting from `0`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Command response:
+            Optional[List[Union[int, float]]]: A list containing the rank (as `int`) and score (as `float`) of `member`
+                in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+
+        Since: Redis version 7.2.0.
+        """
+        return self.append_command(RequestType.ZRevRank, [key, member, "WITHSCORE"])
 
     def zrem(
         self: TTransaction,
@@ -3195,6 +3449,56 @@ class BaseTransaction:
             RequestType.BitOp, [operation.value, destination] + keys
         )
 
+    def bitfield(
+        self: TTransaction, key: str, subcommands: List[BitFieldSubCommands]
+    ) -> TTransaction:
+        """
+        Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+        `subcommands`.
+
+        See https://valkey.io/commands/bitfield for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldSubCommands]): The subcommands to be performed on the binary value of the string
+                at `key`, which could be any of the following:
+                    - `BitFieldGet`
+                    - `BitFieldSet`
+                    - `BitFieldIncrBy`
+                    - `BitFieldOverflow`
+
+        Command response:
+            List[Optional[int]]: An array of results from the executed subcommands:
+                - `BitFieldGet` returns the value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldSet` returns the old value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldIncrBy` returns the new value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldOverflow` determines the behavior of the "SET" and "INCRBY" subcommands when an overflow or
+                  underflow occurs. "OVERFLOW" does not return a value and does not contribute a value to the list
+                  response.
+        """
+        args = [key] + _create_bitfield_args(subcommands)
+        return self.append_command(RequestType.BitField, args)
+
+    def bitfield_read_only(
+        self: TTransaction, key: str, subcommands: List[BitFieldGet]
+    ) -> TTransaction:
+        """
+        Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+
+        See https://valkey.io/commands/bitfield_ro for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldGet]): The "GET" subcommands to be performed.
+
+        Command response:
+            List[int]: An array of results from the "GET" subcommands.
+
+        Since: Redis version 6.0.0.
+        """
+        args = [key] + _create_bitfield_read_only_args(subcommands)
+        return self.append_command(RequestType.BitFieldReadOnly, args)
+
     def object_encoding(self: TTransaction, key: str) -> TTransaction:
         """
         Returns the internal encoding for the Redis object stored at `key`.
@@ -3303,6 +3607,57 @@ class BaseTransaction:
         if flush_mode is not None:
             args.append(flush_mode.value)
         return self.append_command(RequestType.FlushAll, args)
+
+    def getex(
+        self: TTransaction, key: str, expiry: Optional[ExpiryGetEx] = None
+    ) -> TTransaction:
+        """
+        Get the value of `key` and optionally set its expiration. GETEX is similar to GET.
+        See https://valkey.io/commands/getex for more details.
+
+        Args:
+            key (str): The key to get.
+            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
+
+        Command Response:
+            Optional[str]:
+                If `key` exists, return the value stored at `key`
+                If 'key` does not exist, return 'None'
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key]
+        if expiry is not None:
+            args.extend(expiry.get_cmd_args())
+        return self.append_command(RequestType.GetEx, args)
+
+    def lolwut(
+        self: TTransaction,
+        version: Optional[int] = None,
+        parameters: Optional[List[int]] = None,
+    ) -> TTransaction:
+        """
+        Displays a piece of generative computer art and the Redis version.
+
+        See https://valkey.io/commands/lolwut for more details.
+
+        Args:
+            version (Optional[int]): Version of computer art to generate.
+            parameters (Optional[List[int]]): Additional set of arguments in order to change the output:
+                For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+                For version `6`, those are number of columns and number of lines.
+
+        Command Response:
+            str: A piece of generative computer art along with the current Redis version.
+        """
+        args = []
+        if version is not None:
+            args.extend(["VERSION", str(version)])
+        if parameters:
+            for var in parameters:
+                args.extend(str(var))
+        return self.append_command(RequestType.Lolwut, args)
 
 
 class Transaction(BaseTransaction):
@@ -3451,6 +3806,40 @@ class Transaction(BaseTransaction):
         )
         return self.append_command(RequestType.Sort, args)
 
+    def copy(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        destinationDB: Optional[int] = None,
+        replace: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Copies the value stored at the `source` to the `destination` key. If `destinationDB`
+        is specified, the value will be copied to the database specified by `destinationDB`,
+        otherwise the current database will be used. When `replace` is True, removes the
+        `destination` key first if it already exists, otherwise performs no action.
+
+        See https://valkey.io/commands/copy for more details.
+
+        Args:
+            source (str): The key to the source value.
+            destination (str): The key where the value should be copied to.
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
+            replace (Optional[bool]): If the destination key should be removed before copying the value to it.
+
+        Command response:
+            bool: True if the source was copied. Otherwise, return False.
+
+        Since: Redis version 6.2.0.
+        """
+        args = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
+        if replace is not None:
+            args.append("REPLACE")
+
+        return self.append_command(RequestType.Copy, args)
+
 
 class ClusterTransaction(BaseTransaction):
     """
@@ -3517,5 +3906,33 @@ class ClusterTransaction(BaseTransaction):
         """
         args = _build_sort_args(key, None, limit, None, order, alpha, store=destination)
         return self.append_command(RequestType.Sort, args)
+
+    def copy(
+        self: TTransaction,
+        source: str,
+        destination: str,
+        replace: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Copies the value stored at the `source` to the `destination` key. When `replace` is True,
+        removes the `destination` key first if it already exists, otherwise performs no action.
+
+        See https://valkey.io/commands/copy for more details.
+
+        Args:
+            source (str): The key to the source value.
+            destination (str): The key where the value should be copied to.
+            replace (Optional[bool]): If the destination key should be removed before copying the value to it.
+
+        Command response:
+            bool: True if the source was copied. Otherwise, return False.
+
+        Since: Redis version 6.2.0.
+        """
+        args = [source, destination]
+        if replace is not None:
+            args.append("REPLACE")
+
+        return self.append_command(RequestType.Copy, args)
 
     # TODO: add all CLUSTER commands

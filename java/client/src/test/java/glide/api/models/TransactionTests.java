@@ -18,6 +18,7 @@ import static glide.api.models.commands.RangeOptions.InfScoreBound.POSITIVE_INFI
 import static glide.api.models.commands.ScoreFilter.MAX;
 import static glide.api.models.commands.ScoreFilter.MIN;
 import static glide.api.models.commands.SetOptions.RETURN_OLD_VALUE;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.WeightAggregateOptions.AGGREGATE_REDIS_API;
 import static glide.api.models.commands.WeightAggregateOptions.WEIGHTS_REDIS_API;
 import static glide.api.models.commands.ZAddOptions.UpdateOptions.SCORE_LESS_THAN_CURRENT;
@@ -29,6 +30,8 @@ import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_RE
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_GROUP_REDIS_API;
+import static glide.api.models.commands.stream.StreamReadGroupOptions.READ_NOACK_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_BLOCK_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDIS_API;
 import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
@@ -80,6 +83,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
+import static redis_request.RedisRequestOuterClass.RequestType.GetEx;
 import static redis_request.RedisRequestOuterClass.RequestType.GetRange;
 import static redis_request.RedisRequestOuterClass.RequestType.HDel;
 import static redis_request.RedisRequestOuterClass.RequestType.HExists;
@@ -152,16 +156,20 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
 import static redis_request.RedisRequestOuterClass.RequestType.SetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.SetRange;
+import static redis_request.RedisRequestOuterClass.RequestType.Sort;
+import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.Strlen;
 import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
@@ -171,6 +179,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
+import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
 import static redis_request.RedisRequestOuterClass.RequestType.XRevRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XTrim;
 import static redis_request.RedisRequestOuterClass.RequestType.ZAdd;
@@ -202,6 +211,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
 
 import com.google.protobuf.ByteString;
 import glide.api.models.commands.ConditionalChange;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -235,6 +245,7 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.ArrayList;
@@ -263,6 +274,12 @@ public class TransactionTests {
 
         transaction.get("key");
         results.add(Pair.of(Get, buildArgs("key")));
+
+        transaction.getex("key");
+        results.add(Pair.of(GetEx, buildArgs("key")));
+
+        transaction.getex("key", GetExOptions.Seconds(10L));
+        results.add(Pair.of(GetEx, buildArgs("key", "EX", "10")));
 
         transaction.set("key", "value");
         results.add(Pair.of(Set, buildArgs("key", "value")));
@@ -786,6 +803,37 @@ public class TransactionTests {
         transaction.xgroupDelConsumer("key", "group", "consumer");
         results.add(Pair.of(XGroupDelConsumer, buildArgs("key", "group", "consumer")));
 
+        transaction.xreadgroup(Map.of("key", "id"), "group", "consumer");
+        results.add(
+                Pair.of(
+                        XReadGroup,
+                        buildArgs(
+                                READ_GROUP_REDIS_API, "group", "consumer", READ_STREAMS_REDIS_API, "key", "id")));
+
+        transaction.xreadgroup(
+                Map.of("key", "id"),
+                "group",
+                "consumer",
+                StreamReadGroupOptions.builder().block(1L).count(2L).noack().build());
+        results.add(
+                Pair.of(
+                        XReadGroup,
+                        buildArgs(
+                                READ_GROUP_REDIS_API,
+                                "group",
+                                "consumer",
+                                READ_COUNT_REDIS_API,
+                                "2",
+                                READ_BLOCK_REDIS_API,
+                                "1",
+                                READ_NOACK_REDIS_API,
+                                READ_STREAMS_REDIS_API,
+                                "key",
+                                "id")));
+
+        transaction.xack("key", "group", new String[] {"12345-1", "98765-4"});
+        results.add(Pair.of(XAck, buildArgs("key", "group", "12345-1", "98765-4")));
+
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
 
@@ -1052,6 +1100,16 @@ public class TransactionTests {
 
         transaction.publish("ch1", "msg");
         results.add(Pair.of(Publish, buildArgs("ch1", "msg")));
+
+        transaction.sunion(new String[] {"key1", "key2"});
+        results.add(Pair.of(SUnion, buildArgs("key1", "key2")));
+
+        transaction.sort("key1");
+        results.add(Pair.of(Sort, buildArgs("key1")));
+        transaction.sortReadOnly("key1");
+        results.add(Pair.of(SortReadOnly, buildArgs("key1")));
+        transaction.sortStore("key1", "key2");
+        results.add(Pair.of(Sort, buildArgs("key1", STORE_COMMAND_STRING, "key2")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

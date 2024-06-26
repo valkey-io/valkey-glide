@@ -5,6 +5,7 @@ import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -128,7 +129,10 @@ public class ArrayTransformUtils {
             return null;
         }
         return mapOfArrays.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> castArrayofArrays(e.getValue(), clazz)));
+                .collect(
+                        HashMap::new,
+                        (m, e) -> m.put(e.getKey(), castArrayofArrays(e.getValue(), clazz)),
+                        HashMap::putAll);
     }
 
     /**

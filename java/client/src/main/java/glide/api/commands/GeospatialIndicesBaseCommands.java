@@ -1,6 +1,7 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeoAddOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -81,6 +82,27 @@ public interface GeospatialIndicesBaseCommands {
     CompletableFuture<Double[][]> geopos(String key, String[] members);
 
     /**
+     * Returns the positions (longitude,latitude) of all the specified <code>members</code> of the
+     * geospatial index represented by the sorted set at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geopos">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members The members for which to get the positions.
+     * @return A 2D <code>array</code> which represent positions (longitude and latitude)
+     *     corresponding to the given members. If a member does not exist, its position will be
+     *     </code>null</code>.
+     * @example
+     *     <pre>{@code
+     * // When added via GEOADD, the geospatial coordinates are converted into a 52 bit geohash, so the coordinates
+     * // returned might not be exactly the same as the input values
+     * client.geoadd(gs("mySortedSet"), Map.of(gs("Palermo"), new GeospatialData(13.361389, 38.115556), gs("Catania"), new GeospatialData(15.087269, 37.502669))).get();
+     * Double[][] result = client.geopos(gs("mySortedSet", new GlideString[]{gs("Palermo"), gs("Catania"), gs("NonExisting")}).get();
+     * System.out.println(Arrays.deepToString(result));
+     * }</pre>
+     */
+    CompletableFuture<Double[][]> geopos(GlideString key, GlideString[] members);
+
+    /**
      * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
      * geospatial index stored at <code>key</code>.
      *
@@ -107,6 +129,26 @@ public interface GeospatialIndicesBaseCommands {
      * @param key The key of the sorted set.
      * @param member1 The name of the first member.
      * @param member2 The name of the second member.
+     * @param geoUnit The unit of distance measurement - see {@link GeoUnit}.
+     * @return The distance between <code>member1</code> and <code>member2</code>. If one or both
+     *     members do not exist, or if the key does not exist, returns <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Double result = client.geodist(gs("mySortedSet"), gs("Palermo"), gs("Catania"), GeoUnit.KILOMETERS).get();
+     * System.out.println(result);
+     * }</pre>
+     */
+    CompletableFuture<Double> geodist(
+            GlideString key, GlideString member1, GlideString member2, GeoUnit geoUnit);
+
+    /**
+     * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
+     * geospatial index stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member1 The name of the first member.
+     * @param member2 The name of the second member.
      * @return The distance between <code>member1</code> and <code>member2</code>. If one or both
      *     members do not exist, or if the key does not exist, returns <code>null</code>. The default
      *     unit is {@see GeoUnit#METERS}.
@@ -117,6 +159,25 @@ public interface GeospatialIndicesBaseCommands {
      * }</pre>
      */
     CompletableFuture<Double> geodist(String key, String member1, String member2);
+
+    /**
+     * Returns the distance between <code>member1</code> and <code>member2</code> saved in the
+     * geospatial index stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/geodist">valkey.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param member1 The name of the first member.
+     * @param member2 The name of the second member.
+     * @return The distance between <code>member1</code> and <code>member2</code>. If one or both
+     *     members do not exist, or if the key does not exist, returns <code>null</code>. The default
+     *     unit is {@see GeoUnit#METERS}.
+     * @example
+     *     <pre>{@code
+     * Double result = client.geodist(gs("mySortedSet"), gs("Palermo"), gs("Catania")).get();
+     * System.out.println(result);
+     * }</pre>
+     */
+    CompletableFuture<Double> geodist(GlideString key, GlideString member1, GlideString member2);
 
     /**
      * Returns the <code>GeoHash</code> strings representing the positions of all the specified <code>

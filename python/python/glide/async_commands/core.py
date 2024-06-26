@@ -1,6 +1,7 @@
 # Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
@@ -16,7 +17,15 @@ from typing import (
     get_args,
 )
 
-from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import (
+    BitFieldGet,
+    BitFieldSubCommands,
+    BitmapIndexType,
+    BitwiseOperation,
+    OffsetOptions,
+    _create_bitfield_args,
+    _create_bitfield_read_only_args,
+)
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -35,6 +44,13 @@ from glide.async_commands.sorted_set import (
     _create_geosearch_args,
     _create_zinter_zunion_cmd_args,
     _create_zrange_args,
+)
+from glide.async_commands.stream import (
+    StreamAddOptions,
+    StreamGroupOptions,
+    StreamRangeBound,
+    StreamReadOptions,
+    StreamTrimOptions,
 )
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -69,6 +85,23 @@ class ExpiryType(Enum):
     UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Redis API
     UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Redis API
     KEEP_TTL = 4, Type[None]  # Equivalent to `KEEPTTL` in the Redis API
+
+
+class ExpiryTypeGetEx(Enum):
+    """GetEx option: The type of the expiry.
+    - EX - Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
+    - PX - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
+    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+    - UNIX_MILLSEC - Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the
+        Redis API.
+    - PERSIST - Remove the time to live associated with the key. Equivalent to `PERSIST` in the Redis API.
+    """
+
+    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Redis API
+    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Redis API
+    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Redis API
+    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Redis API
+    PERSIST = 4, Type[None]  # Equivalent to `PERSIST` in the Redis API
 
 
 class InfoSection(Enum):
@@ -143,134 +176,6 @@ class UpdateOptions(Enum):
     GREATER_THAN = "GT"
 
 
-class StreamTrimOptions(ABC):
-    """
-    Abstract base class for stream trim options.
-    """
-
-    @abstractmethod
-    def __init__(
-        self,
-        exact: bool,
-        threshold: Union[str, int],
-        method: str,
-        limit: Optional[int] = None,
-    ):
-        """
-        Initialize stream trim options.
-
-        Args:
-            exact (bool): If `true`, the stream will be trimmed exactly.
-                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (Union[str, int]): Threshold for trimming.
-            method (str): Method for trimming (e.g., MINID, MAXLEN).
-            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
-                Note: If `exact` is set to `True`, `limit` cannot be specified.
-        """
-        if exact and limit:
-            raise ValueError(
-                "If `exact` is set to `True`, `limit` cannot be specified."
-            )
-        self.exact = exact
-        self.threshold = threshold
-        self.method = method
-        self.limit = limit
-
-    def to_args(self) -> List[str]:
-        """
-        Convert options to arguments for Redis command.
-
-        Returns:
-            List[str]: List of arguments for Redis command.
-        """
-        option_args = [
-            self.method,
-            "=" if self.exact else "~",
-            str(self.threshold),
-        ]
-        if self.limit is not None:
-            option_args.extend(["LIMIT", str(self.limit)])
-        return option_args
-
-
-class TrimByMinId(StreamTrimOptions):
-    """
-    Stream trim option to trim by minimum ID.
-    """
-
-    def __init__(self, exact: bool, threshold: str, limit: Optional[int] = None):
-        """
-        Initialize trim option by minimum ID.
-
-        Args:
-            exact (bool): If `true`, the stream will be trimmed exactly.
-                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (str): Threshold for trimming by minimum ID.
-            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
-                Note: If `exact` is set to `True`, `limit` cannot be specified.
-        """
-        super().__init__(exact, threshold, "MINID", limit)
-
-
-class TrimByMaxLen(StreamTrimOptions):
-    """
-    Stream trim option to trim by maximum length.
-    """
-
-    def __init__(self, exact: bool, threshold: int, limit: Optional[int] = None):
-        """
-        Initialize trim option by maximum length.
-
-        Args:
-            exact (bool): If `true`, the stream will be trimmed exactly.
-                Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (int): Threshold for trimming by maximum length.
-            limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
-                Note: If `exact` is set to `True`, `limit` cannot be specified.
-        """
-        super().__init__(exact, threshold, "MAXLEN", limit)
-
-
-class StreamAddOptions:
-    """
-    Options for adding entries to a stream.
-    """
-
-    def __init__(
-        self,
-        id: Optional[str] = None,
-        make_stream: bool = True,
-        trim: Optional[StreamTrimOptions] = None,
-    ):
-        """
-        Initialize stream add options.
-
-        Args:
-            id (Optional[str]): ID for the new entry. If set, the new entry will be added with this ID. If not specified, '*' is used.
-            make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
-            trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream. See `StreamTrimOptions`.
-        """
-        self.id = id
-        self.make_stream = make_stream
-        self.trim = trim
-
-    def to_args(self) -> List[str]:
-        """
-        Convert options to arguments for Redis command.
-
-        Returns:
-            List[str]: List of arguments for Redis command.
-        """
-        option_args = []
-        if not self.make_stream:
-            option_args.append("NOMKSTREAM")
-        if self.trim:
-            option_args.extend(self.trim.to_args())
-        option_args.append(self.id if self.id else "*")
-
-        return option_args
-
-
 class ExpirySet:
     """SET option: Represents the expiry type and value to be executed with "SET" command."""
 
@@ -318,6 +223,61 @@ class ExpirySet:
                 value = int(value.timestamp() * 1000)
         elif self.expiry_type == ExpiryType.KEEP_TTL:
             self.cmd_arg = "KEEPTTL"
+        self.value = str(value) if value else None
+
+    def get_cmd_args(self) -> List[str]:
+        return [self.cmd_arg] if self.value is None else [self.cmd_arg, self.value]
+
+
+class ExpiryGetEx:
+    """GetEx option: Represents the expiry type and value to be executed with "GetEx" command."""
+
+    def __init__(
+        self,
+        expiry_type: ExpiryTypeGetEx,
+        value: Optional[Union[int, datetime, timedelta]],
+    ) -> None:
+        """
+        Args:
+            - expiry_type (ExpiryType): The expiry type.
+            - value (Optional[Union[int, datetime, timedelta]]): The value of the expiration type. The type of expiration
+                determines the type of expiration value:
+                - SEC: Union[int, timedelta]
+                - MILLSEC: Union[int, timedelta]
+                - UNIX_SEC: Union[int, datetime]
+                - UNIX_MILLSEC: Union[int, datetime]
+                - PERSIST: Type[None]
+        """
+        self.set_expiry_type_and_value(expiry_type, value)
+
+    def set_expiry_type_and_value(
+        self,
+        expiry_type: ExpiryTypeGetEx,
+        value: Optional[Union[int, datetime, timedelta]],
+    ):
+        if not isinstance(value, get_args(expiry_type.value[1])):
+            raise ValueError(
+                f"The value of {expiry_type} should be of type {expiry_type.value[1]}"
+            )
+        self.expiry_type = expiry_type
+        if self.expiry_type == ExpiryTypeGetEx.SEC:
+            self.cmd_arg = "EX"
+            if isinstance(value, timedelta):
+                value = int(value.total_seconds())
+        elif self.expiry_type == ExpiryTypeGetEx.MILLSEC:
+            self.cmd_arg = "PX"
+            if isinstance(value, timedelta):
+                value = int(value.total_seconds() * 1000)
+        elif self.expiry_type == ExpiryTypeGetEx.UNIX_SEC:
+            self.cmd_arg = "EXAT"
+            if isinstance(value, datetime):
+                value = int(value.timestamp())
+        elif self.expiry_type == ExpiryTypeGetEx.UNIX_MILLSEC:
+            self.cmd_arg = "PXAT"
+            if isinstance(value, datetime):
+                value = int(value.timestamp() * 1000)
+        elif self.expiry_type == ExpiryTypeGetEx.PERSIST:
+            self.cmd_arg = "PERSIST"
         self.value = str(value) if value else None
 
     def get_cmd_args(self) -> List[str]:
@@ -2624,6 +2584,29 @@ class CoreCommands(Protocol):
 
         return cast(Optional[str], await self._execute_command(RequestType.XAdd, args))
 
+    async def xdel(self, key: str, ids: List[str]) -> int:
+        """
+        Removes the specified entries by id from a stream, and returns the number of entries deleted.
+
+        See https://valkey.io/commands/xdel for more details.
+
+        Args:
+            key (str): The key of the stream.
+            ids (List[str]): An array of entry ids.
+
+        Returns:
+            int: The number of entries removed from the stream. This number may be less than the number of entries in
+                `ids`, if the specified `ids` don't exist in the stream.
+
+        Examples:
+            >>> await client.xdel("key", ["1538561698944-0", "1538561698944-1"])
+                2  # Stream marked 2 entries as deleted.
+        """
+        return cast(
+            int,
+            await self._execute_command(RequestType.XDel, [key] + ids),
+        )
+
     async def xtrim(
         self,
         key: str,
@@ -2673,6 +2656,264 @@ class CoreCommands(Protocol):
         return cast(
             int,
             await self._execute_command(RequestType.XLen, [key]),
+        )
+
+    async def xrange(
+        self,
+        key: str,
+        start: StreamRangeBound,
+        end: StreamRangeBound,
+        count: Optional[int] = None,
+    ) -> Optional[Mapping[str, List[List[str]]]]:
+        """
+        Returns stream entries matching a given range of IDs.
+
+        See https://valkey.io/commands/xrange for more details.
+
+        Args:
+            key (str): The key of the stream.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+                If `count` is not provided, all stream entries in the range will be returned.
+
+        Returns:
+            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range
+                arguments are not applicable.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
+            >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
+            >>> await client.xrange("mystream", MinId(), MaxId())
+                {
+                    "0-1": [["field1", "value1"]],
+                    "0-2": [["field2", "value2"], ["field2", "value3"]],
+                }  # Indicates the stream IDs and their associated field-value pairs for all stream entries in "mystream".
+        """
+        args = [key, start.to_arg(), end.to_arg()]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return cast(
+            Optional[Mapping[str, List[List[str]]]],
+            await self._execute_command(RequestType.XRange, args),
+        )
+
+    async def xrevrange(
+        self,
+        key: str,
+        end: StreamRangeBound,
+        start: StreamRangeBound,
+        count: Optional[int] = None,
+    ) -> Optional[Mapping[str, List[List[str]]]]:
+        """
+        Returns stream entries matching a given range of IDs in reverse order. Equivalent to `XRANGE` but returns the
+        entries in reverse order.
+
+        See https://valkey.io/commands/xrevrange for more details.
+
+        Args:
+            key (str): The key of the stream.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            count (Optional[int]): An optional argument specifying the maximum count of stream entries to return.
+                If `count` is not provided, all stream entries in the range will be returned.
+
+        Returns:
+            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range
+                arguments are not applicable.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
+            >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
+            >>> await client.xrevrange("mystream", MaxId(), MinId())
+                {
+                    "0-2": [["field2", "value2"], ["field2", "value3"]],
+                    "0-1": [["field1", "value1"]],
+                }  # Indicates the stream IDs and their associated field-value pairs for all stream entries in "mystream".
+        """
+        args = [key, end.to_arg(), start.to_arg()]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return cast(
+            Optional[Mapping[str, List[List[str]]]],
+            await self._execute_command(RequestType.XRevRange, args),
+        )
+
+    async def xread(
+        self,
+        keys_and_ids: Mapping[str, str],
+        options: Optional[StreamReadOptions] = None,
+    ) -> Optional[Mapping[str, Mapping[str, List[List[str]]]]]:
+        """
+        Reads entries from the given streams.
+
+        See https://valkey.io/commands/xread for more details.
+
+        Note:
+            When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of keys and entry IDs to read from. The mapping is composed of a
+                stream's key and the ID of the entry after which the stream will be read.
+            options (Optional[StreamReadOptions]): Options detailing how to read the stream.
+
+        Returns:
+            Optional[Mapping[str, Mapping[str, List[List[str]]]]]: A mapping of stream keys, to a mapping of stream IDs,
+                to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                None will be returned under the following conditions:
+                - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no entries after the given ID.
+                - The `BLOCK` option is specified and the timeout is hit.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
+            >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
+            >>> await client.xread({"mystream": "0-0"}, StreamReadOptions(block_ms=1000))
+                {
+                    "mystream": {
+                        "0-1": [["field1", "value1"]],
+                        "0-2": [["field2", "value2"], ["field2", "value3"]],
+                    }
+                }
+                # Indicates the stream entries for "my_stream" with IDs greater than "0-0". The operation blocks up to
+                # 1000ms if there is no stream data.
+        """
+        args = [] if options is None else options.to_args()
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return cast(
+            Optional[Mapping[str, Mapping[str, List[List[str]]]]],
+            await self._execute_command(RequestType.XRead, args),
+        )
+
+    async def xgroup_create(
+        self,
+        key: str,
+        group_name: str,
+        group_id: str,
+        options: Optional[StreamGroupOptions] = None,
+    ) -> TOK:
+        """
+        Creates a new consumer group uniquely identified by `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-create for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The newly created consumer group name.
+            group_id (str): The stream entry ID that specifies the last delivered entry in the stream from the new
+                group’s perspective. The special ID "$" can be used to specify the last entry in the stream.
+            options (Optional[StreamGroupOptions]): Options for creating the stream group.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.xgroup_create("mystream", "mygroup", "$", StreamGroupOptions(make_stream=True))
+                OK
+                # Created the consumer group "mygroup" for the stream "mystream", which will track entries created after
+                # the most recent entry. The stream was created with length 0 if it did not already exist.
+        """
+        args = [key, group_name, group_id]
+        if options is not None:
+            args.extend(options.to_args())
+
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.XGroupCreate, args),
+        )
+
+    async def xgroup_destroy(self, key: str, group_name: str) -> bool:
+        """
+        Destroys the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-destroy for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name to delete.
+
+        Returns:
+            bool: True if the consumer group was destroyed. Otherwise, returns False.
+
+        Examples:
+            >>> await client.xgroup_destroy("mystream", "mygroup")
+                True  # The consumer group "mygroup" for stream "mystream" was destroyed.
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.XGroupDestroy, [key, group_name]),
+        )
+
+    async def xgroup_create_consumer(
+        self, key: str, group_name: str, consumer_name: str
+    ) -> bool:
+        """
+        Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-createconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The newly created consumer.
+
+        Returns:
+            bool: True if the consumer is created. Otherwise, returns False.
+
+        Examples:
+            >>> await client.xgroup_create_consumer("mystream", "mygroup", "myconsumer")
+                True  # The consumer "myconsumer" was created in consumer group "mygroup" for the stream "mystream".
+        """
+        return cast(
+            bool,
+            await self._execute_command(
+                RequestType.XGroupCreateConsumer, [key, group_name, consumer_name]
+            ),
+        )
+
+    async def xgroup_del_consumer(
+        self, key: str, group_name: str, consumer_name: str
+    ) -> int:
+        """
+        Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-delconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer to delete.
+
+        Returns:
+            int: The number of pending messages the `consumer` had before it was deleted.
+
+        Examples:
+            >>> await client.xgroup_del_consumer("mystream", "mygroup", "myconsumer")
+                5  # Consumer "myconsumer" was deleted, and had 5 pending messages unclaimed.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.XGroupDelConsumer, [key, group_name, consumer_name]
+            ),
         )
 
     async def geoadd(
@@ -3501,6 +3742,65 @@ class CoreCommands(Protocol):
         return cast(
             Optional[List[Union[int, float]]],
             await self._execute_command(RequestType.ZRank, [key, member, "WITHSCORE"]),
+        )
+
+    async def zrevrank(self, key: str, member: str) -> Optional[int]:
+        """
+        Returns the rank of `member` in the sorted set stored at `key`, where scores are ordered from the highest to
+        lowest, starting from `0`.
+
+        To get the rank of `member` with its score, see `zrevrank_withscore`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Returns:
+            Optional[int]: The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2, "member3": 9.6})
+            >>> await client.zrevrank("my_sorted_set", "member2")
+                2  # "member2" has the third-highest score in the sorted set "my_sorted_set"
+        """
+        return cast(
+            Optional[int],
+            await self._execute_command(RequestType.ZRevRank, [key, member]),
+        )
+
+    async def zrevrank_withscore(
+        self, key: str, member: str
+    ) -> Optional[List[Union[int, float]]]:
+        """
+        Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
+        highest to lowest, starting from `0`.
+
+        See https://valkey.io/commands/zrevrank for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            member (str): The member whose rank is to be retrieved.
+
+        Returns:
+            Optional[List[Union[int, float]]]: A list containing the rank (as `int`) and score (as `float`) of `member`
+                in the sorted set, where ranks are ordered from high to low based on scores.
+                If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
+
+        Examples:
+            >>> await client.zadd("my_sorted_set", {"member1": 10.5, "member2": 8.2, "member3": 9.6})
+            >>> await client.zrevrank("my_sorted_set", "member2")
+                [2, 8.2]  # "member2" with score 8.2 has the third-highest score in the sorted set "my_sorted_set"
+
+        Since: Redis version 7.2.0.
+        """
+        return cast(
+            Optional[List[Union[int, float]]],
+            await self._execute_command(
+                RequestType.ZRevRank, [key, member, "WITHSCORE"]
+            ),
         )
 
     async def zrem(
@@ -4623,6 +4923,72 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def bitfield(
+        self, key: str, subcommands: List[BitFieldSubCommands]
+    ) -> List[Optional[int]]:
+        """
+        Reads or modifies the array of bits representing the string that is held at `key` based on the specified
+        `subcommands`.
+
+        See https://valkey.io/commands/bitfield for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldSubCommands]): The subcommands to be performed on the binary value of the string
+                at `key`, which could be any of the following:
+                    - `BitFieldGet`
+                    - `BitFieldSet`
+                    - `BitFieldIncrBy`
+                    - `BitFieldOverflow`
+
+        Returns:
+            List[Optional[int]]: An array of results from the executed subcommands:
+                - `BitFieldGet` returns the value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldSet` returns the old value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldIncrBy` returns the new value in `Offset` or `OffsetMultiplier`.
+                - `BitFieldOverflow` determines the behavior of the "SET" and "INCRBY" subcommands when an overflow or
+                  underflow occurs. "OVERFLOW" does not return a value and does not contribute a value to the list
+                  response.
+
+        Examples:
+            >>> await client.set("my_key", "A")  # "A" has binary value 01000001
+            >>> await client.bitfield("my_key", [BitFieldSet(UnsignedEncoding(2), Offset(1), 3), BitFieldGet(UnsignedEncoding(2), Offset(1))])
+                [2, 3]  # The old value at offset 1 with an unsigned encoding of 2 was 2. The new value at offset 1 with an unsigned encoding of 2 is 3.
+        """
+        args = [key] + _create_bitfield_args(subcommands)
+        return cast(
+            List[Optional[int]],
+            await self._execute_command(RequestType.BitField, args),
+        )
+
+    async def bitfield_read_only(
+        self, key: str, subcommands: List[BitFieldGet]
+    ) -> List[int]:
+        """
+        Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
+
+        See https://valkey.io/commands/bitfield_ro for more details.
+
+        Args:
+            key (str): The key of the string.
+            subcommands (List[BitFieldGet]): The "GET" subcommands to be performed.
+
+        Returns:
+            List[int]: An array of results from the "GET" subcommands.
+
+        Examples:
+            >>> await client.set("my_key", "A")  # "A" has binary value 01000001
+            >>> await client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
+                [2]  # The value at offset 1 with an unsigned encoding of 2 is 3.
+
+        Since: Redis version 6.0.0.
+        """
+        args = [key] + _create_bitfield_read_only_args(subcommands)
+        return cast(
+            List[int],
+            await self._execute_command(RequestType.BitFieldReadOnly, args),
+        )
+
     async def object_encoding(self, key: str) -> Optional[str]:
         """
         Returns the internal encoding for the Redis object stored at `key`.
@@ -4761,3 +5127,92 @@ class CoreCommands(Protocol):
             List[str],
             await self._execute_command(RequestType.SRandMember, [key, str(count)]),
         )
+
+    async def getex(
+        self,
+        key: str,
+        expiry: Optional[ExpiryGetEx] = None,
+    ) -> Optional[str]:
+        """
+        Get the value of `key` and optionally set its expiration. `GETEX` is similar to `GET`.
+        See https://valkey.io/commands/getex for more details.
+
+        Args:
+            key (str): The key to get.
+            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
+
+        Returns:
+            Optional[str]:
+                If `key` exists, return the value stored at `key`
+                If `key` does not exist, return `None`
+
+        Examples:
+            >>> await client.set("key", "value")
+                'OK'
+            >>> await client.getex("key")
+                'value'
+            >>> await client.getex("key", ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
+                'value'
+            >>> time.sleep(1)
+            >>> await client.getex("key")
+                None
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key]
+        if expiry is not None:
+            args.extend(expiry.get_cmd_args())
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.GetEx, args),
+        )
+
+    @dataclass
+    class PubSubMsg:
+        """
+        Describes the incoming pubsub message
+
+        Attributes:
+            message (str): Incoming message.
+            channel (str): Name of an channel that triggered the message.
+            pattern (Optional[str]): Pattern that triggered the message.
+        """
+
+        message: str
+        channel: str
+        pattern: Optional[str]
+
+    async def get_pubsub_message(self) -> PubSubMsg:
+        """
+        Returns the next pubsub message.
+        Throws WrongConfiguration in cases:
+        1. No pubsub subscriptions are configured for the client
+        2. Callback is configured with the pubsub subsciptions
+
+        See https://valkey.io/docs/topics/pubsub/ for more details.
+
+        Returns:
+            PubSubMsg: The next pubsub message
+
+        Examples:
+            >>> pubsub_msg = await listening_client.get_pubsub_message()
+        """
+        ...
+
+    def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
+        """
+        Tries to return the next pubsub message.
+        Throws WrongConfiguration in cases:
+        1. No pubsub subscriptions are configured for the client
+        2. Callback is configured with the pubsub subsciptions
+
+        See https://valkey.io/docs/topics/pubsub/ for more details.
+
+        Returns:
+            Optional[PubSubMsg]: The next pubsub message or None
+
+        Examples:
+            >>> pubsub_msg = listening_client.try_get_pubsub_message()
+        """
+        ...

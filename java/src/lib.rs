@@ -16,7 +16,11 @@ mod ffi_test;
 pub use ffi_test::*;
 
 // TODO: Consider caching method IDs here in a static variable (might need RwLock to mutate)
-fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<'local> {
+fn redis_value_to_java<'local>(
+    env: &mut JNIEnv<'local>,
+    val: Value,
+    encoding_utf8: bool,
+) -> JObject<'local> {
     match val {
         Value::Nil => JObject::null(),
         Value::SimpleString(str) => JObject::from(env.new_string(str).unwrap()),
@@ -25,24 +29,38 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             .new_object("java/lang/Long", "(J)V", &[num.into()])
             .unwrap(),
         Value::BulkString(data) => {
-            // TODO: Uncomment the below code to return binary string (next PR)
-            // let Ok(bytearr) = env.byte_array_from_slice(data.as_ref()) else {
-            //     let _ = env.throw("Failed to allocate byte array");
-            //     return JObject::null();
-            // };
-            // bytearr.into()
-            let s = String::from_utf8_lossy(&data);
-            JObject::from(env.new_string(s).unwrap())
+            if encoding_utf8 {
+                let Ok(utf8_str) = String::from_utf8(data) else {
+                    let _ = env.throw("Failed to construct UTF-8 string");
+                    return JObject::null();
+                };
+                match env.new_string(utf8_str) {
+                    Ok(string) => JObject::from(string),
+                    Err(e) => {
+                        let _ = env.throw(format!(
+                            "Failed to construct Java UTF-8 string from Rust UTF-8 string. {:?}",
+                            e
+                        ));
+                        JObject::null()
+                    }
+                }
+            } else {
+                let Ok(bytearr) = env.byte_array_from_slice(&data) else {
+                    let _ = env.throw("Failed to allocate byte array");
+                    return JObject::null();
+                };
+                bytearr.into()
+            }
         }
-        Value::Array(array) => array_to_java_array(env, array),
+        Value::Array(array) => array_to_java_array(env, array, encoding_utf8),
         Value::Map(map) => {
             let linked_hash_map = env
                 .new_object("java/util/LinkedHashMap", "()V", &[])
                 .unwrap();
 
             for (key, value) in map {
-                let java_key = redis_value_to_java(env, key);
-                let java_value = redis_value_to_java(env, value);
+                let java_key = redis_value_to_java(env, key, encoding_utf8);
+                let java_value = redis_value_to_java(env, value, encoding_utf8);
                 env.call_method(
                     &linked_hash_map,
                     "put",
@@ -66,7 +84,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             let set = env.new_object("java/util/HashSet", "()V", &[]).unwrap();
 
             for elem in array {
-                let java_value = redis_value_to_java(env, elem);
+                let java_value = redis_value_to_java(env, elem, encoding_utf8);
                 env.call_method(
                     &set,
                     "add",
@@ -103,7 +121,7 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
                 .unwrap();
 
             let values_str = env.new_string("values").unwrap();
-            let values = array_to_java_array(env, data);
+            let values = array_to_java_array(env, data, encoding_utf8);
 
             let _ = env
                 .call_method(
@@ -124,13 +142,17 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
 /// Recursively calls to [`redis_value_to_java`] for every element.
 ///
 /// Returns an arbitrary java `Object[]`.
-fn array_to_java_array<'local>(env: &mut JNIEnv<'local>, values: Vec<Value>) -> JObject<'local> {
+fn array_to_java_array<'local>(
+    env: &mut JNIEnv<'local>,
+    values: Vec<Value>,
+    encoding_utf8: bool,
+) -> JObject<'local> {
     let items: JObjectArray = env
         .new_object_array(values.len() as i32, "java/lang/Object", JObject::null())
         .unwrap();
 
     for (i, item) in values.into_iter().enumerate() {
-        let java_value = redis_value_to_java(env, item);
+        let java_value = redis_value_to_java(env, item, encoding_utf8);
         env.set_object_array_element(&items, i as i32, java_value)
             .unwrap();
     }
@@ -145,7 +167,19 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
     pointer: jlong,
 ) -> JObject<'local> {
     let value = unsafe { Box::from_raw(pointer as *mut Value) };
-    redis_value_to_java(&mut env, *value)
+    redis_value_to_java(&mut env, *value, true)
+}
+
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPointerBinary<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    pointer: jlong,
+) -> JObject<'local> {
+    let value = unsafe { Box::from_raw(pointer as *mut Value) };
+    redis_value_to_java(&mut env, *value, false)
 }
 
 #[no_mangle]

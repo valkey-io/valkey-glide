@@ -6,13 +6,23 @@ from typing import List, Union, cast
 
 import pytest
 from glide import RequestError
-from glide.async_commands.bitmap import BitmapIndexType, BitwiseOperation, OffsetOptions
+from glide.async_commands.bitmap import (
+    BitFieldGet,
+    BitFieldSet,
+    BitmapIndexType,
+    BitOffset,
+    BitOffsetMultiplier,
+    BitwiseOperation,
+    OffsetOptions,
+    SignedEncoding,
+    UnsignedEncoding,
+)
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
+    ExpiryGetEx,
+    ExpiryTypeGetEx,
     FlushMode,
     InsertPosition,
-    StreamAddOptions,
-    TrimByMinId,
 )
 from glide.async_commands.sorted_set import (
     AggregationType,
@@ -26,6 +36,12 @@ from glide.async_commands.sorted_set import (
     RangeByIndex,
     ScoreBoundary,
     ScoreFilter,
+)
+from glide.async_commands.stream import (
+    IdBound,
+    StreamAddOptions,
+    StreamGroupOptions,
+    TrimByMinId,
 )
 from glide.async_commands.transaction import (
     BaseTransaction,
@@ -64,6 +80,7 @@ async def transaction_test(
     key18 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # sort
     key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
     key20 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
+    key22 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # getex
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -97,6 +114,10 @@ async def transaction_test(
         args.append(-1)
         transaction.pexpiretime(key)
         args.append(-1)
+
+    if not await check_if_server_version_lt(redis_client, "6.2.0"):
+        transaction.copy(key, key2, replace=True)
+        args.append(True)
 
     transaction.rename(key, key2)
     args.append(OK)
@@ -283,9 +304,13 @@ async def transaction_test(
     args.append(4)
     transaction.zrank(key8, "one")
     args.append(0)
+    transaction.zrevrank(key8, "one")
+    args.append(3)
     if not await check_if_server_version_lt(redis_client, "7.2.0"):
         transaction.zrank_withscore(key8, "one")
         args.append([0, 1])
+        transaction.zrevrank_withscore(key8, "one")
+        args.append([3, 1])
     transaction.zadd_incr(key8, "one", 3)
     args.append(4)
     transaction.zincrby(key8, 3, "one")
@@ -375,10 +400,8 @@ async def transaction_test(
 
     transaction.setbit(key19, 1, 1)
     args.append(0)
-    transaction.setbit(key19, 1, 0)
-    args.append(1)
     transaction.getbit(key19, 1)
-    args.append(0)
+    args.append(1)
 
     transaction.set(key20, "foobar")
     args.append(OK)
@@ -389,14 +412,26 @@ async def transaction_test(
     transaction.bitpos(key20, 1)
     args.append(1)
 
+    if not await check_if_server_version_lt(redis_client, "6.0.0"):
+        transaction.bitfield_read_only(
+            key20, [BitFieldGet(SignedEncoding(5), BitOffset(3))]
+        )
+        args.append([6])
+
     transaction.set(key19, "abcdef")
     args.append(OK)
     transaction.bitop(BitwiseOperation.AND, key19, [key19, key20])
     args.append(6)
     transaction.get(key19)
     args.append("`bc`ab")
+    transaction.bitfield(
+        key20, [BitFieldSet(UnsignedEncoding(10), BitOffsetMultiplier(3), 4)]
+    )
+    args.append([609])
 
     if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.set(key20, "foobar")
+        args.append(OK)
         transaction.bitcount(key20, OffsetOptions(5, 30, BitmapIndexType.BIT))
         args.append(17)
         transaction.bitpos_interval(key20, 1, 44, 50, BitmapIndexType.BIT)
@@ -444,7 +479,34 @@ async def transaction_test(
     args.append("0-2")
     transaction.xlen(key11)
     args.append(2)
+    transaction.xread({key11: "0-1"})
+    args.append({key11: {"0-2": [["foo", "bar"]]}})
+    transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
+    args.append({"0-1": [["foo", "bar"]]})
+    transaction.xrevrange(key11, IdBound("0-1"), IdBound("0-1"))
+    args.append({"0-1": [["foo", "bar"]]})
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
+    args.append(1)
+
+    group_name1 = get_random_string(10)
+    group_name2 = get_random_string(10)
+    consumer = get_random_string(10)
+    transaction.xgroup_create(key11, group_name1, "0-0")
+    args.append(OK)
+    transaction.xgroup_create(
+        key11, group_name2, "0-0", StreamGroupOptions(make_stream=True)
+    )
+    args.append(OK)
+    transaction.xgroup_create_consumer(key11, group_name1, consumer)
+    args.append(True)
+    transaction.xgroup_del_consumer(key11, group_name1, consumer)
+    args.append(0)
+    transaction.xgroup_destroy(key11, group_name1)
+    args.append(True)
+    transaction.xgroup_destroy(key11, group_name2)
+    args.append(True)
+
+    transaction.xdel(key11, ["0-2", "0-3"])
     args.append(1)
 
     transaction.lpush(key17, ["2", "1", "4", "3", "a"])
@@ -479,6 +541,15 @@ async def transaction_test(
     if not await check_if_server_version_lt(redis_client, min_version):
         transaction.flushall(FlushMode.SYNC)
         args.append(OK)
+
+    min_version = "6.2.0"
+    if not await check_if_server_version_lt(redis_client, min_version):
+        transaction.set(key22, "value")
+        args.append(OK)
+        transaction.getex(key22)
+        args.append("value")
+        transaction.getex(key22, ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
+        args.append("value")
 
     min_version = "7.0.0"
     if not await check_if_server_version_lt(redis_client, min_version):
@@ -658,6 +729,27 @@ class TestTransaction:
         transaction.clear()
         assert len(transaction.commands) == 0
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_standalone_copy_transaction(self, redis_client: RedisClient):
+        min_version = "6.2.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        keyslot = get_random_string(3)
+        key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        key1 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
+        value = get_random_string(5)
+        transaction = Transaction()
+        transaction.select(1)
+        transaction.set(key, value)
+        transaction.copy(key, key1, 1, replace=True)
+        transaction.get(key1)
+        result = await redis_client.exec(transaction)
+        assert result is not None
+        assert result[2] == True
+        assert result[3] == value
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_chaining_calls(self, redis_client: TRedisClient):
@@ -725,3 +817,15 @@ class TestTransaction:
         lastsave_time = response[0]
         assert isinstance(lastsave_time, int)
         assert lastsave_time > yesterday_unix_time
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lolwut_transaction(self, redis_client: RedisClusterClient):
+        transaction = Transaction()
+        transaction.lolwut().lolwut(5).lolwut(parameters=[1, 2]).lolwut(6, [42])
+        results = await redis_client.exec(transaction)
+        assert results is not None
+
+        for element in results:
+            assert isinstance(element, str)
+            assert "Redis ver. " in element
