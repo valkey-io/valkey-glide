@@ -197,6 +197,7 @@ import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.BaseSubscriptionConfiguration;
 import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
@@ -215,14 +216,17 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.function.BiFunction;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
+import lombok.AccessLevel;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
+import lombok.Setter;
+import lombok.experimental.Accessors;
 import org.apache.commons.lang3.ArrayUtils;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
-@AllArgsConstructor
+@RequiredArgsConstructor
 public abstract class BaseClient
         implements AutoCloseable,
                 BitmapBaseCommands,
@@ -244,6 +248,10 @@ public abstract class BaseClient
     protected final ConnectionManager connectionManager;
     protected final CommandManager commandManager;
 
+    @Setter(AccessLevel.PROTECTED)
+    @Accessors(chain = true)
+    protected BaseSubscriptionConfiguration subscriptionConfiguration;
+
     /**
      * Async request for an async (non-blocking) Redis client.
      *
@@ -252,8 +260,8 @@ public abstract class BaseClient
      * @param <T> Client type.
      * @return a Future to connect and return a RedisClient.
      */
-    protected static <T> CompletableFuture<T> CreateClient(
-            BaseClientConfiguration config,
+    protected static <T extends BaseClient> CompletableFuture<T> CreateClient(
+            @NonNull BaseClientConfiguration config,
             BiFunction<ConnectionManager, CommandManager, T> constructor) {
         try {
             ThreadPoolResource threadPoolResource = config.getThreadPoolResource();

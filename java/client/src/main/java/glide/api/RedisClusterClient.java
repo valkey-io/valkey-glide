@@ -81,7 +81,11 @@ public class RedisClusterClient extends BaseClient
      */
     public static CompletableFuture<RedisClusterClient> CreateClient(
             @NonNull RedisClusterClientConfiguration config) {
-        return CreateClient(config, RedisClusterClient::new);
+        return CreateClient(config, RedisClusterClient::new)
+                .thenApply(
+                        client ->
+                                (RedisClusterClient)
+                                        client.setSubscriptionConfiguration(config.getSubscriptionConfiguration()));
     }
 
     @Override

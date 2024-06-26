@@ -94,7 +94,13 @@ fn redis_value_to_java<'local>(env: &mut JNIEnv<'local>, val: Value) -> JObject<
             data: _,
             attributes: _,
         } => todo!(),
-        Value::Push { kind: _, data: _ } => todo!(),
+        Value::Push { kind, data } => {
+            // TODO rework in a follow up PR - return values
+            dbg!(format!(
+                "received push, type: {kind:?} with data:\n{data:?}"
+            ));
+            JObject::null()
+        }
     }
 }
 

@@ -1,6 +1,8 @@
 /** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.handlers;
 
+import static glide.ffi.resolvers.RedisValueResolver.valueFromPointer;
+
 import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.ConnectionException;
 import glide.api.models.exceptions.ExecAbortException;
@@ -78,6 +80,13 @@ public class CallbackDispatcher {
             distributeClosingException(response.getClosingError());
             return;
         }
+        // ignore pushes to avoid crashed when received
+        // TODO rework
+        if (response.getIsPush()) {
+            var data = valueFromPointer(response.getRespPointer());
+            return;
+        }
+
         // Complete and return the response at callbackId
         // free up the callback ID in the freeRequestIds list
         int callbackId = response.getCallbackIdx();
