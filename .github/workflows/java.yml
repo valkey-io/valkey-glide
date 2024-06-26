@@ -90,6 +90,10 @@ jobs:
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
+            - name: Setup self-hosted runner access
+              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
+              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
+
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
