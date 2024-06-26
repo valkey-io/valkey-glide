@@ -2968,6 +2968,40 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.XReadGroup, args),
         )
 
+    async def xack(
+        self,
+        key: str,
+        group_name: str,
+        ids: List[str],
+    ) -> int:
+        """
+        Removes one or multiple messages from the Pending Entries List (PEL) of a stream consumer group.
+        This command should be called on pending messages so that such messages do not get processed again by the
+        consumer group.
+
+        See https://valkey.io/commands/xack for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            ids (List[str]): The stream entry IDs to acknowledge and consume for the given consumer group.
+
+        Returns:
+            int: The number of messages that were successfully acknowledged.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="1-0"))
+            >>> await client.xgroup_create("mystream", "mygroup", "0-0")
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer")
+            >>> await client.xack("mystream", "mygroup", ["1-0"])
+                1  # 1 pending message was acknowledged and removed from the Pending Entries List for "mygroup".
+        """
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.XAck, [key, group_name] + ids),
+        )
+
     async def geoadd(
         self,
         key: str,
