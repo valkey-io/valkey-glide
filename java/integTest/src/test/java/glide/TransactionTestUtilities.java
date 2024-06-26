@@ -38,6 +38,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
@@ -804,7 +805,14 @@ public class TransactionTestUtilities {
                         groupName1,
                         consumer1,
                         StreamReadGroupOptions.builder().count(2L).build())
+                .xpending(streamKey1, groupName1)
                 .xack(streamKey1, groupName1, new String[] {"0-3"})
+                .xpending(
+                        streamKey1,
+                        groupName1,
+                        StreamRange.InfRangeBound.MIN,
+                        StreamRange.InfRangeBound.MAX,
+                        1L)
                 .xgroupDelConsumer(streamKey1, groupName1, consumer1)
                 .xgroupDestroy(streamKey1, groupName1)
                 .xgroupDestroy(streamKey1, groupName2)
@@ -842,7 +850,11 @@ public class TransactionTestUtilities {
             Map.of(
                     streamKey1,
                     Map.of()), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1, options);
+            new Object[] {
+                1L, "0-3", "0-3", new Object[][] {{consumer1, "1"}}
+            }, // xpending(streamKey1, groupName1)
             1L, // xack(streamKey1, groupName1, new String[] {"0-3"})
+            new Object[] {}, // xpending(streamKey1, groupName1, MIN, MAX, 1L)
             0L, // xgroupDelConsumer(streamKey1, groupName1, consumer1)
             true, // xgroupDestroy(streamKey1, groupName1)
             true, // xgroupDestroy(streamKey1, groupName2)
