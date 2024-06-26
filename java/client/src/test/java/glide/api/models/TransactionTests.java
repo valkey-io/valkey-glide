@@ -7,6 +7,9 @@ import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
+import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
+import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.HAS_NO_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
@@ -1096,6 +1099,30 @@ public class TransactionTests {
 
         transaction.lcsLen("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2", "LEN")));
+
+        transaction.lcsIdx("key1", "key2");
+        results.add(Pair.of(LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING)));
+
+        transaction.lcsIdx("key1", "key2", 10);
+        results.add(
+                Pair.of(
+                        LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, "10")));
+
+        transaction.lcsIdxWithMatchLen("key1", "key2");
+        results.add(
+                Pair.of(LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING)));
+
+        transaction.lcsIdxWithMatchLen("key1", "key2", 10);
+        results.add(
+                Pair.of(
+                        LCS,
+                        buildArgs(
+                                "key1",
+                                "key2",
+                                IDX_COMMAND_STRING,
+                                MINMATCHLEN_COMMAND_STRING,
+                                "10",
+                                WITHMATCHLEN_COMMAND_STRING)));
 
         transaction.sunion(new String[] {"key1", "key2"});
         results.add(Pair.of(SUnion, buildArgs("key1", "key2")));
