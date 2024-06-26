@@ -316,7 +316,7 @@ class StreamReadGroupOptions(StreamReadOptions):
 
         Args:
             no_ack (bool): If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
-                acknowledging the message when it is read.
+                acknowledging the message when it is read. Equivalent to `NOACK` in the Redis API.
             block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
                 until the server has the required number of entries. Equivalent to `BLOCK` in the Redis API.
             count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Redis API.
