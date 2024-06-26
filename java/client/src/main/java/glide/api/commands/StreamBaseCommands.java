@@ -471,10 +471,6 @@ public interface StreamBaseCommands {
      *         );
      *     }
      * }
-     * assert client.xdel("mystream", "1-0").get() == 1L;
-     * client.xreadgroup(Map.of("mystream", "0"), "mygroup", "myconsumer").get();
-     * // Returns "mystream": "1-0": null
-     * assert streamReadResponse.get("mystream").get("1-0") == null;
      * </pre>
      */
     CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
@@ -511,12 +507,6 @@ public interface StreamBaseCommands {
      *         );
      *     }
      * }
-     * assert client.xdel("mystream", "1-0").get() == 1L;
-     * // read the first 10 items and acknowledge (ACK) them:
-     * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(10L).noack().build();
-     * streamReadResponse = client.xreadgroup(Map.of("mystream", "0"), "mygroup", "myconsumer", options).get();
-     * // Returns "mystream": "1-0": null
-     * assert streamReadResponse.get("mystream").get("1-0") == null;
      * </pre>
      */
     CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
