@@ -1,6 +1,6 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
-from typing import Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
+from typing import Any, Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
 
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.redis_request_pb2 import RedisRequest
@@ -22,6 +22,9 @@ TResult = Union[
     float,
     Set[T],
     List[T],
+    bytes,
+    Dict[bytes, "TResult"],
+    Mapping[bytes, "TResult"],
 ]
 TRequest = Union[RedisRequest, ConnectionRequest]
 # When routing to a single node, response will be T

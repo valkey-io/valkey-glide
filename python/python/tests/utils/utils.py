@@ -37,8 +37,9 @@ def is_single_response(response: T, single_res: T) -> bool:
 
 
 def get_first_result(
-    res: Union[str, List[str], List[List[str]], Dict[str, str]]
-) -> str:
+    # res: Union[str, List[str], List[List[str]], Dict[str, str]]
+    res: TResult,
+) -> bytes:
     while isinstance(res, list):
         res = (
             res[1]
@@ -81,10 +82,10 @@ async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> 
 
 def compare_maps(
     map1: Optional[
-        Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]
+        Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]
     ],
     map2: Optional[
-        Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]
+        Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]
     ],
 ) -> bool:
     """

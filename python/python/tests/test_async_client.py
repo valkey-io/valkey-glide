@@ -113,8 +113,10 @@ class TestGlideClients:
         info = await redis_client.custom_command(["CLIENT", "INFO"])
         # We check bytes string because custom_command will always return so.
         # To get String, we use redis client's info command.
-        assert b"lib-name=GlidePy" in info
-        assert b"lib-ver=unknown" in info
+        assert isinstance(info, bytes)
+        info_str = info.decode()
+        assert "lib-name=GlidePy" in info_str
+        assert "lib-ver=unknown" in info_str
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -353,7 +355,7 @@ class TestCommands:
             ["CLIENT", "LIST", "TYPE", "NORMAL"]
         )
         assert isinstance(client_list, (bytes, list))
-        res: str = get_first_result(client_list)
+        res = get_first_result(client_list)
         assert res is not None
         assert b"id" in res
         assert b"cmd=client" in res
@@ -368,7 +370,7 @@ class TestCommands:
             ["CLIENT", "LIST", "TYPE", "NORMAL"]
         )
         assert isinstance(client_list, (bytes, list))
-        res: str = get_first_result(client_list)
+        res = get_first_result(client_list)
         assert res is not None
         assert b"id" in res
         assert b"cmd=client" in res
@@ -386,12 +388,14 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_info_server_replication(self, redis_client: TGlideClient):
-        info = get_first_result(await redis_client.info([InfoSection.SERVER]))
+        info_res = get_first_result(await redis_client.info([InfoSection.SERVER]))
+        info = info_res.decode()
         assert "# Server" in info
         cluster_mode = parse_info_response(info)["redis_mode"]
         expected_cluster_mode = isinstance(redis_client, GlideClusterClient)
         assert cluster_mode == "cluster" if expected_cluster_mode else "standalone"
-        info = get_first_result(await redis_client.info([InfoSection.REPLICATION]))
+        info_res = get_first_result(await redis_client.info([InfoSection.REPLICATION]))
+        info = info_res.decode()
         assert "# Replication" in info
         assert "# Errorstats" not in info
 
@@ -3785,7 +3789,7 @@ class TestCommands:
             key,
             RangeByScore(start=InfBound.NEG_INF, stop=InfBound.POS_INF),
         )
-        expected_map = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
+        expected_map: Mapping[bytes, float] = {b"one": 1.0, b"two": 2.0, b"three": 3.0}
         assert compare_maps(zrange_map, expected_map) is True
 
         assert await redis_client.zrange(
@@ -4272,16 +4276,15 @@ class TestCommands:
             b"one": 1.0,
             b"three": 3.0,
         }
+        assert isinstance(expected_map.values, float)
         assert compare_maps(zdiff_map, expected_map) is True
+        assert isinstance()
         assert (
             compare_maps(await redis_client.zdiff_withscores([key1, key3]), {}) is True
         )
-        assert (
-            compare_maps(
-                await redis_client.zdiff_withscores([non_existing_key, key3]), {}
-            )
-            is True
-        )
+        non_exist_res = await redis_client.zdiff_withscores([non_existing_key, key3])
+        assert isinstance(non_exist_res.values, float)
+        assert compare_maps(non_exist_res, {})
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
@@ -4321,6 +4324,9 @@ class TestCommands:
         assert await redis_client.zdiffstore(key4, [key1, key2]) == 2
 
         zrange_res = await redis_client.zrange_withscores(key4, RangeByIndex(0, -1))
+        assert isinstance(zrange_res, Mapping)
+        cast(Mapping[str, float], zrange_res.values)
+        assert isinstance(zrange_res.values, float)
         assert compare_maps(zrange_res, {"one": 1.0, "three": 3.0}) is True
 
         assert await redis_client.zdiffstore(key4, [key3, key2, key1]) == 1
@@ -4396,6 +4402,7 @@ class TestCommands:
         result = await redis_client.bzmpop([key2], ScoreFilter.MIN, 0.1, 10)
         assert result is not None
         result_map = cast(Mapping[str, float], result[1])
+        assert isinstance(entries.values, float)
         assert compare_maps(entries, result_map) is True
 
         async def endless_bzmpop_call():
@@ -4415,7 +4422,8 @@ class TestCommands:
         assert await redis_client.zadd(key, scores) == 2
 
         member = await redis_client.zrandmember(key)
-        assert member.decode("utf-8") in scores
+        assert isinstance(member, bytes)
+        assert member.decode() in scores
         assert await redis_client.zrandmember("non_existing_key") is None
 
         # key exists, but it is not a set
@@ -4440,7 +4448,8 @@ class TestCommands:
         members = await redis_client.zrandmember_count(key, -4)
         assert len(members) == 4
         for member in members:
-            assert member.decode("utf-8") in scores
+            assert isinstance(member, bytes)
+            assert member.decode() in scores
 
         assert await redis_client.zrandmember_count(key, 0) == []
         assert await redis_client.zrandmember_count("non_existing_key", 0) == []
@@ -4463,13 +4472,15 @@ class TestCommands:
         assert len(elements) == 2
 
         for member, score in elements:
-            assert scores[(member).decode("utf-8")] == score
+            assert isinstance(member, bytes)
+            assert scores[(member).decode()] == score
 
         # duplicate values are expected as count is negative
         elements = await redis_client.zrandmember_withscores(key, -4)
         assert len(elements) == 4
         for member, score in elements:
-            assert scores[(member).decode("utf-8")] == score
+            assert isinstance(member, bytes)
+            assert scores[(member).decode()] == score
 
         assert await redis_client.zrandmember_withscores(key, 0) == []
         assert await redis_client.zrandmember_withscores("non_existing_key", 0) == []
@@ -4564,6 +4575,7 @@ class TestCommands:
         result = await redis_client.zmpop([key2], ScoreFilter.MIN, 10)
         assert result is not None
         result_map = cast(Mapping[str, float], result[1])
+        assert isinstance(entries.values, float)
         assert compare_maps(entries, result_map) is True
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -4847,6 +4859,7 @@ class TestCommands:
         )
 
         assert id is not None
+        assert isinstance(id, bytes)
         assert await redis_client.xlen(key) == 2
 
         # This will trim the 2nd entry.
@@ -4855,7 +4868,7 @@ class TestCommands:
                 key,
                 [(field, "foo4"), (field2, "bar4")],
                 StreamAddOptions(
-                    trim=TrimByMinId(exact=True, threshold=id.decode("utf-8"))
+                    trim=TrimByMinId(exact=True, threshold=id.decode())
                 ),
             )
             is not None
@@ -6997,6 +7010,7 @@ class TestCommands:
         assert await redis_client.sadd(key, elements) == 2
 
         member = await redis_client.srandmember(key)
+        assert isinstance(member, bytes)
         assert member.decode() in elements
         assert await redis_client.srandmember("non_existing_key") is None
 
@@ -7022,6 +7036,7 @@ class TestCommands:
         members = await redis_client.srandmember_count(key, -4)
         assert len(members) == 4
         for member in members:
+            assert isinstance(member, bytes)
             assert member.decode() in elements
 
         # empty return values for non-existing or empty keys
@@ -7636,18 +7651,19 @@ class TestClusterRoutes:
         route: Route,
     ):
         cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
-        cluster_nodes = cluster_nodes.decode("utf-8")
+        assert isinstance(cluster_nodes, bytes)
+        cluster_nodes = cluster_nodes.decode()
         assert isinstance(cluster_nodes, (str, list))
         cluster_nodes = get_first_result(cluster_nodes)
         num_of_nodes = len(cluster_nodes.splitlines())
         expected_num_of_results = (
             num_of_nodes
             if isinstance(route, AllNodes)
-            else num_of_nodes - cluster_nodes.count("slave")
+            else num_of_nodes - cluster_nodes.count(b"slave")
         )
-        expected_primary_count = cluster_nodes.count("master")
+        expected_primary_count = cluster_nodes.count(b"master")
         expected_replica_count = (
-            cluster_nodes.count("slave") if isinstance(route, AllNodes) else 0
+            cluster_nodes.count(b"slave") if isinstance(route, AllNodes) else 0
         )
 
         all_results = await redis_client.custom_command(["INFO", "REPLICATION"], route)
@@ -7656,7 +7672,8 @@ class TestClusterRoutes:
         primary_count = 0
         replica_count = 0
         for _, info_res in all_results.items():
-            info_res = info_res.decode("utf-8")
+            assert isinstance(info_res, bytes)
+            info_res = info_res.decode()
             assert "role:master" in info_res or "role:slave" in info_res
             if "role:master" in info_res:
                 primary_count += 1
@@ -7689,7 +7706,8 @@ class TestClusterRoutes:
         info_res = await redis_client.custom_command(
             ["INFO", "REPLICATION"], RandomNode()
         )
-        info_res = info_res.decode("utf-8")
+        assert isinstance(info_res, bytes)
+        info_res = info_res.decode()
         assert type(info_res) is str
         assert "role:master" in info_res or "role:slave" in info_res
 
@@ -7701,7 +7719,8 @@ class TestClusterRoutes:
         primary_res = await redis_client.custom_command(
             ["CLUSTER", "NODES"], route_class(SlotType.PRIMARY, route_second_arg)
         )
-        primary_res = primary_res.decode("utf-8")
+        assert isinstance(primary_res, bytes)
+        primary_res = primary_res.decode()
 
         assert type(primary_res) is str
         assert "myself,master" in primary_res
@@ -7713,7 +7732,8 @@ class TestClusterRoutes:
         replica_res = await redis_client.custom_command(
             ["CLUSTER", "NODES"], route_class(SlotType.REPLICA, route_second_arg)
         )
-        replica_res = replica_res.decode("utf-8")
+        assert isinstance(replica_res, bytes)
+        replica_res = replica_res.decode()
 
         assert isinstance(replica_res, str)
         assert "myself,slave" in replica_res
@@ -7763,7 +7783,8 @@ class TestClusterRoutes:
         cluster_nodes = await redis_client.custom_command(
             ["cluster", "nodes"], RandomNode()
         )
-        cluster_nodes = clean_result(cluster_nodes.decode("utf-8"))
+        assert isinstance(cluster_nodes, bytes)
+        cluster_nodes = clean_result(cluster_nodes.decode())
 
         assert isinstance(cluster_nodes, str)
         host = cluster_nodes.split(" ")[1].split("@")[0]
@@ -7771,7 +7792,8 @@ class TestClusterRoutes:
         second_result = await redis_client.custom_command(
             ["cluster", "nodes"], ByAddressRoute(host)
         )
-        second_result = clean_result(second_result.decode("utf-8"))
+        assert isinstance(second_result, bytes)
+        second_result = clean_result(second_result.decode())
 
         assert cluster_nodes == second_result
 
@@ -7781,7 +7803,8 @@ class TestClusterRoutes:
         third_result = await redis_client.custom_command(
             ["cluster", "nodes"], ByAddressRoute(host, port_as_int)
         )
-        third_result = clean_result(third_result.decode("utf-8"))
+        assert isinstance(third_result, bytes)
+        third_result = clean_result(third_result.decode())
 
         assert cluster_nodes == third_result
 

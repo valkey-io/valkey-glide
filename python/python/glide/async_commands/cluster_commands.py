@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast
+from typing import Dict, List, Mapping, Optional, cast, Union
 
 from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
@@ -56,7 +56,7 @@ class ClusterCommands(CoreCommands):
         self,
         sections: Optional[List[InfoSection]] = None,
         route: Optional[Route] = None,
-    ) -> TClusterResponse[str]:
+    ) -> TClusterDecodedResponse[str]:
         """
         Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
@@ -68,22 +68,19 @@ class ClusterCommands(CoreCommands):
             case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
-            TClusterResponse[str]: If a single node route is requested, returns a string containing the information for
+            TClusterDecodedResponse[str]: If a single node route is requested, returns a string containing the information for
             the required sections. Otherwise, returns a dict of strings, with each key containing the address of
             the queried node and value containing the information regarding the requested sections.
         """
         args = [section.value for section in sections] if sections else []
         result_bytes = await self._execute_command(RequestType.Info, args, route)
-        result_str = None
+        result_str: TClusterDecodedResponse[str] = ""
         if isinstance(result_bytes, bytes):
-            result_str = result_bytes.decode("utf-8")
+            result_str = result_bytes.decode()
         elif isinstance(result_bytes, dict):
-            result_str = convert_bytes_to_string_dict(result_bytes)
+            result_str = cast(TClusterDecodedResponse[str], convert_bytes_to_string_dict(result_bytes))
 
-        return cast(
-            TClusterResponse[str],
-            result_str,
-        )
+        return cast(TClusterDecodedResponse[str], result_str)
 
     async def exec(
         self,

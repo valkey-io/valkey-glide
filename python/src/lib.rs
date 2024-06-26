@@ -114,7 +114,6 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
             Value::SimpleString(str) => {
                 let data_bytes = PyBytes::new(py, str.as_bytes());
                 Ok(data_bytes.into_py(py))
-                // Ok(str.into_py(py)),
             }
             Value::Okay => Ok("OK".into_py(py)),
             Value::Int(num) => Ok(num.into_py(py)),

@@ -54,6 +54,7 @@ class StandaloneCommands(CoreCommands):
         """
         args = [section.value for section in sections] if sections else []
         result = await self._execute_command(RequestType.Info, args)
+        assert isinstance(result, bytes)
         result = result.decode("utf-8")
         return cast(str, result)
 
@@ -161,11 +162,12 @@ class StandaloneCommands(CoreCommands):
             {'timeout': '1000', "maxmemory": "1GB"}
 
         """
+        # result: Dict[bytes, bytes] = await self._execute_command(RequestType.ConfigGet, parameters)
+        result_dict = await self._execute_command(RequestType.ConfigGet, parameters)
+        assert isinstance(result_dict, dict)
         return cast(
             Dict[str, str],
-            convert_bytes_to_string_dict(
-                await self._execute_command(RequestType.ConfigGet, parameters)
-            ),
+            convert_bytes_to_string_dict(result_dict)
         )
 
     async def config_set(self, parameters_map: Mapping[str, str]) -> TOK:

@@ -726,8 +726,10 @@ class TestTransaction:
         expected = await transaction_test(transaction, keyslot, redis_client)
         result = await redis_client.exec(transaction)
         assert isinstance(result, list)
+        assert isinstance(result[0], bytes)
         result[0] = result[0].decode()
         assert isinstance(result[0], str)
+        # Making sure the "info" command is indeed a return at position 0
         assert "# Memory" in result[0]
         assert result[1:] == expected
 
@@ -809,6 +811,7 @@ class TestTransaction:
         expected = await transaction_test(transaction, keyslot, redis_client)
         result = await redis_client.exec(transaction)
         assert isinstance(result, list)
+        assert isinstance(result[0], bytes)
         result[0] = result[0].decode()
         assert isinstance(result[0], str)
         assert "# Memory" in result[0]
