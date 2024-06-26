@@ -1754,6 +1754,54 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void sunionstore_binary(BaseClient client) {
+        GlideString key1 = gs("{key}-1-" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2-" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3-" + UUID.randomUUID());
+        GlideString key4 = gs("{key}-4-" + UUID.randomUUID());
+        GlideString key5 = gs("{key}-5-" + UUID.randomUUID());
+
+        assertEquals(3, client.sadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertEquals(3, client.sadd(key2, new GlideString[] {gs("c"), gs("d"), gs("e")}).get());
+        assertEquals(3, client.sadd(key4, new GlideString[] {gs("e"), gs("f"), gs("g")}).get());
+
+        // create new
+        assertEquals(5, client.sunionstore(key3, new GlideString[] {key1, key2}).get());
+        assertEquals(Set.of(gs("a"), gs("b"), gs("c"), gs("d"), gs("e")), client.smembers(key3).get());
+
+        // overwrite existing set
+        assertEquals(5, client.sunionstore(key2, new GlideString[] {key3, key2}).get());
+        assertEquals(Set.of(gs("a"), gs("b"), gs("c"), gs("d"), gs("e")), client.smembers(key2).get());
+
+        // overwrite source
+        assertEquals(6, client.sunionstore(key1, new GlideString[] {key1, key4}).get());
+        assertEquals(
+                Set.of(gs("a"), gs("b"), gs("c"), gs("e"), gs("f"), gs("g")), client.smembers(key1).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key5, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.sunionstore(key1, new GlideString[] {key5}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // overwrite destination - not a set
+        assertEquals(7, client.sunionstore(key5, new GlideString[] {key1, key2}).get());
+        assertEquals(
+                Set.of(gs("a"), gs("b"), gs("c"), gs("d"), gs("e"), gs("f"), gs("g")),
+                client.smembers(key5).get());
+
+        // wrong arguments
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.sunionstore(key5, new GlideString[0]).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void exists_multiple_keys(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
         String key2 = "{key}" + UUID.randomUUID();
@@ -4903,6 +4951,22 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void touch_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString key3 = gs(UUID.randomUUID().toString());
+        GlideString value = gs("{value}" + UUID.randomUUID());
+
+        assertEquals(OK, client.set(key1, value).get());
+        assertEquals(OK, client.set(key2, value).get());
+
+        assertEquals(2, client.touch(new GlideString[] {key1, key2}).get());
+        assertEquals(0, client.touch(new GlideString[] {key3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void geoadd(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -6177,6 +6241,42 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(nonSetKey, "value").get());
         assertThrows(
                 ExecutionException.class, () -> client.sunion(new String[] {nonSetKey, key1}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sunion_binary(BaseClient client) {
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString nonSetKey = gs("{key}-4" + UUID.randomUUID());
+        GlideString[] memberList1 = new GlideString[] {gs("a"), gs("b"), gs("c")};
+        GlideString[] memberList2 = new GlideString[] {gs("b"), gs("c"), gs("d"), gs("e")};
+        Set<GlideString> expectedUnion = Set.of(gs("a"), gs("b"), gs("c"), gs("d"), gs("e"));
+
+        assertEquals(3, client.sadd(key1, memberList1).get());
+        assertEquals(4, client.sadd(key2, memberList2).get());
+        assertEquals(expectedUnion, client.sunion(new GlideString[] {key1, key2}).get());
+
+        // Key has an empty set
+        assertEquals(Set.of(), client.sunion(new GlideString[] {key3}).get());
+
+        // Empty key with non-empty key returns non-empty key set
+        assertEquals(Set.of(memberList1), client.sunion(new GlideString[] {key1, key3}).get());
+
+        // Exceptions
+        // Empty keys
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sunion(new GlideString[] {}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Non-set key
+        assertEquals(OK, client.set(nonSetKey, gs("value")).get());
+        assertThrows(
+                ExecutionException.class, () -> client.sunion(new GlideString[] {nonSetKey, key1}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 

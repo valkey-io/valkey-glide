@@ -359,6 +359,24 @@ public interface SetBaseCommands {
     CompletableFuture<Long> sunionstore(String destination, String[] keys);
 
     /**
+     * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
+     * at <code>destination</code>.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same hash slot.
+     * @see <a href="https://redis.io/commands/sunionstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sunionstore(gs("mySet"), new GlideString[] { gs("set1"), gs("set2") }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sunionstore(GlideString destination, GlideString[] keys);
+
+    /**
      * Returns a random element from the set value stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
@@ -450,4 +468,25 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Set<String>> sunion(String[] keys);
+
+    /**
+     * Gets the union of all the given sets.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://valkey.io/commands/sunion">valkey.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return A set of members which are present in at least one of the given sets. If none of the
+     *     sets exist, an empty set will be returned.
+     * @example
+     *     <pre>{@code
+     * assert client.sadd(("my_set1"), new GlideString[]{("member1"), ("member2")}).get() == 2;
+     * assert client.sadd(("my_set2"), new GlideString[]{("member2"), ("member3")}).get() == 2;
+     * Set<GlideString> result = client.sunion(new GlideString[] {("my_set1"), ("my_set2")}).get();
+     * assertEquals(Set.of(("member1"), ("member2"), ("member3")), result);
+     *
+     * result = client.sunion(new GlideString[] {("my_set1"), ("non_existent_set")}).get();
+     * assertEquals(Set.of(("member1"), ("member2")), result);
+     * }</pre>
+     */
+    CompletableFuture<Set<GlideString>> sunion(GlideString[] keys);
 }

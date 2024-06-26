@@ -12,6 +12,7 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
@@ -47,6 +48,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
@@ -728,6 +730,10 @@ public class CommandTests {
                 Arguments.of("sinter", null, clusterClient.sinter(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
                         "sunionstore", null, clusterClient.sunionstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "sunionstore",
+                        null,
+                        clusterClient.sunionstore(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of("zdiff", null, clusterClient.zdiff(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
                         "zdiffWithScores",
@@ -799,6 +805,10 @@ public class CommandTests {
                 Arguments.of("lcs", "7.0.0", clusterClient.lcs("abc", "def")),
                 Arguments.of("lcsLEN", "7.0.0", clusterClient.lcsLen("abc", "def")),
                 Arguments.of("sunion", "1.0.0", clusterClient.sunion(new String[] {"abc", "def", "ghi"})),
+                Arguments.of(
+                        "sunion",
+                        "1.0.0",
+                        clusterClient.sunion(new GlideString[] {gs("abc"), gs("def"), gs("ghi")})),
                 Arguments.of("sortStore", "1.0.0", clusterClient.sortStore("abc", "def")),
                 Arguments.of(
                         "sortStore",
@@ -827,6 +837,8 @@ public class CommandTests {
                 Arguments.of("mget", clusterClient.mget(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("mset", clusterClient.mset(Map.of("abc", "1", "zxy", "2", "lkn", "3"))),
                 Arguments.of("touch", clusterClient.touch(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "touch", clusterClient.touch(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
                 Arguments.of("watch", clusterClient.watch(new String[] {"ghi", "zxy", "lkn"})));
     }
 
