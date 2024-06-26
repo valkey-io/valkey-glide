@@ -41,6 +41,7 @@ from glide.async_commands.stream import (
     IdBound,
     StreamAddOptions,
     StreamGroupOptions,
+    StreamReadGroupOptions,
     TrimByMinId,
 )
 from glide.async_commands.transaction import (
@@ -491,7 +492,7 @@ async def transaction_test(
     group_name1 = get_random_string(10)
     group_name2 = get_random_string(10)
     consumer = get_random_string(10)
-    transaction.xgroup_create(key11, group_name1, "0-0")
+    transaction.xgroup_create(key11, group_name1, "0-1")
     args.append(OK)
     transaction.xgroup_create(
         key11, group_name2, "0-0", StreamGroupOptions(make_stream=True)
@@ -499,8 +500,12 @@ async def transaction_test(
     args.append(OK)
     transaction.xgroup_create_consumer(key11, group_name1, consumer)
     args.append(True)
+    transaction.xreadgroup(
+        {key11: ">"}, group_name1, consumer, StreamReadGroupOptions(count=5)
+    )
+    args.append({key11: {"0-2": [["foo", "bar"]]}})
     transaction.xgroup_del_consumer(key11, group_name1, consumer)
-    args.append(0)
+    args.append(1)
     transaction.xgroup_destroy(key11, group_name1)
     args.append(True)
     transaction.xgroup_destroy(key11, group_name2)

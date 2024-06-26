@@ -49,6 +49,7 @@ from glide.async_commands.stream import (
     StreamAddOptions,
     StreamGroupOptions,
     StreamRangeBound,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
 )
@@ -2914,6 +2915,57 @@ class CoreCommands(Protocol):
             await self._execute_command(
                 RequestType.XGroupDelConsumer, [key, group_name, consumer_name]
             ),
+        )
+
+    async def xreadgroup(
+        self,
+        keys_and_ids: Mapping[str, str],
+        group_name: str,
+        consumer_name: str,
+        options: Optional[StreamReadGroupOptions] = None,
+    ) -> Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]:
+        """
+        Reads entries from the given streams owned by a consumer group.
+
+        See https://valkey.io/commands/xreadgroup for more details.
+
+        Note:
+            When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of stream keys to stream entry IDs to read from. The special ">"
+                ID returns messages that were never delivered to any other consumer. Any other valid ID will return
+                entries pending for the consumer with IDs greater than the one provided.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name. The consumer will be auto-created if it does not already exist.
+            options (Optional[StreamReadGroupOptions]): Options detailing how to read the stream.
+
+        Returns:
+            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]: A mapping of stream keys, to a mapping of
+                stream IDs, to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                Returns None if the BLOCK option is given and a timeout occurs, or if there is no stream that can be served.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="1-0"))
+            >>> await client.xgroup_create("mystream", "mygroup", "0-0")
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer", StreamReadGroupOptions(count=1))
+                {
+                    "mystream": {
+                        "1-0": [["field1", "value1"]],
+                    }
+                }  # Read one stream entry from "mystream" using "myconsumer" in the consumer group "mygroup".
+        """
+        args = ["GROUP", group_name, consumer_name]
+        if options is not None:
+            args.extend(options.to_args())
+
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return cast(
+            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]],
+            await self._execute_command(RequestType.XReadGroup, args),
         )
 
     async def geoadd(
