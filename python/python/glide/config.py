@@ -7,7 +7,7 @@ from enum import Enum, IntEnum
 from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
 
 from glide.async_commands.core import CoreCommands
-from glide.exceptions import WrongConfiguration
+from glide.exceptions import ConfigurationError
 from glide.protobuf.connection_request_pb2 import ConnectionRequest
 from glide.protobuf.connection_request_pb2 import ProtocolVersion as SentProtocolVersion
 from glide.protobuf.connection_request_pb2 import ReadFrom as ProtobufReadFrom
@@ -312,14 +312,14 @@ class RedisClientConfiguration(BaseClientConfiguration):
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:
-                raise WrongConfiguration(
+                raise ConfigurationError(
                     "Pub/Sub subscriptions require RESP3 protocol, but RESP2 was configured."
                 )
             if (
                 self.pubsub_subscriptions.context is not None
                 and not self.pubsub_subscriptions.callback
             ):
-                raise WrongConfiguration(
+                raise ConfigurationError(
                     "Pub/Sub subscriptions with a context require a callback function to be configured."
                 )
             for (
@@ -449,14 +449,14 @@ class ClusterClientConfiguration(BaseClientConfiguration):
 
         if self.pubsub_subscriptions:
             if self.protocol == ProtocolVersion.RESP2:
-                raise WrongConfiguration(
+                raise ConfigurationError(
                     "Pub/Sub subscriptions require RESP3 protocol, but RESP2 was configured."
                 )
             if (
                 self.pubsub_subscriptions.context is not None
                 and not self.pubsub_subscriptions.callback
             ):
-                raise WrongConfiguration(
+                raise ConfigurationError(
                     "Pub/Sub subscriptions with a context require a callback function to be configured."
                 )
             for (

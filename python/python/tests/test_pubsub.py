@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ from glide.config import (
     RedisClientConfiguration,
 )
 from glide.constants import OK
-from glide.exceptions import WrongConfiguration
+from glide.exceptions import ConfigurationError
 from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
 from tests.conftest import create_client
 from tests.utils.utils import check_if_server_version_lt, get_random_string
@@ -1996,7 +1996,7 @@ class TestPubSub:
             {PubSubChannelModes.Exact: {channel}},
         )
 
-        with pytest.raises(WrongConfiguration):
+        with pytest.raises(ConfigurationError):
             await create_clients_with_subscription(
                 request, cluster_mode, pub_sub_exact, protocol=ProtocolVersion.RESP2
             )
@@ -2012,5 +2012,5 @@ class TestPubSub:
             cluster_mode, {PubSubChannelModes.Exact: {channel}}, context=context
         )
 
-        with pytest.raises(WrongConfiguration):
+        with pytest.raises(ConfigurationError):
             await create_clients_with_subscription(request, cluster_mode, pub_sub_exact)
