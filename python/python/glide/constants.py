@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from typing import Dict, List, Literal, Mapping, Optional, Set, TypeVar, Union
 
