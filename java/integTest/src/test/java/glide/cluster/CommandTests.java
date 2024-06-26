@@ -802,7 +802,7 @@ public class CommandTests {
                         "7.0.0",
                         clusterClient.fcallReadOnly("func", new String[] {"abc", "zxy", "lkn"}, new String[0])),
                 Arguments.of(
-                        "fcallReadOnly",
+                        "fcallReadOnly binary",
                         "7.0.0",
                         clusterClient.fcallReadOnly(
                                 gs("func"),
