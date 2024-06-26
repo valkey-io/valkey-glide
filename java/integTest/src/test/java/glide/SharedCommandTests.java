@@ -71,6 +71,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
@@ -95,6 +96,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.Getter;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -4072,7 +4074,7 @@ public class SharedCommandTests {
                     testClient
                             .xreadgroup(Map.of(timeoutKey, ">"), timeoutGroupName, timeoutConsumerName)
                             .get();
-            // returns an null result on the key
+            // returns a null result on the key
             assertNull(result_1.get(key));
 
             // subsequent calls to read ">" will block:
@@ -4138,6 +4140,292 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.xack(nonStreamKey, groupName, new String[] {zeroStreamId}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xpending(BaseClient client) {
+
+        String key = UUID.randomUUID().toString();
+        String groupName = "group" + UUID.randomUUID();
+        String zeroStreamId = "0";
+        String consumer1 = "consumer-1-" + UUID.randomUUID();
+        String consumer2 = "consumer-2-" + UUID.randomUUID();
+
+        // create group and consumer for the group
+        assertEquals(
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumer2).get());
+
+        // Add two stream entries for consumer 1
+        String streamid_1 = client.xadd(key, Map.of("field1", "value1")).get();
+        assertNotNull(streamid_1);
+        String streamid_2 = client.xadd(key, Map.of("field2", "value2")).get();
+        assertNotNull(streamid_2);
+
+        // read the entire stream for the consumer and mark messages as pending
+        var result_1 = client.xreadgroup(Map.of(key, ">"), groupName, consumer1).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamid_1, new String[][] {{"field1", "value1"}},
+                                streamid_2, new String[][] {{"field2", "value2"}})),
+                result_1);
+
+        // Add three stream entries for consumer 2
+        String streamid_3 = client.xadd(key, Map.of("field3", "value3")).get();
+        assertNotNull(streamid_3);
+        String streamid_4 = client.xadd(key, Map.of("field4", "value4")).get();
+        assertNotNull(streamid_4);
+        String streamid_5 = client.xadd(key, Map.of("field5", "value5")).get();
+        assertNotNull(streamid_5);
+
+        // read the entire stream for the consumer and mark messages as pending
+        var result_2 = client.xreadgroup(Map.of(key, ">"), groupName, consumer2).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamid_3, new String[][] {{"field3", "value3"}},
+                                streamid_4, new String[][] {{"field4", "value4"}},
+                                streamid_5, new String[][] {{"field5", "value5"}})),
+                result_2);
+
+        Object[] pending_results = client.xpending(key, groupName).get();
+        Object[] expectedResult = {
+            Long.valueOf(5L), streamid_1, streamid_5, new Object[][] {{consumer1, "2"}, {consumer2, "3"}}
+        };
+        assertDeepEquals(expectedResult, pending_results);
+
+        Object[][] pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L).get();
+
+        // because of idle time return, we have to remove it from the expected results
+        // and check it separately
+        assertArrayEquals(
+                new Object[] {streamid_1, consumer1, 1L},
+                ArrayUtils.remove(pending_results_extended[0], 2));
+        assertTrue((Long) pending_results_extended[0][2] > 0L);
+
+        assertArrayEquals(
+                new Object[] {streamid_2, consumer1, 1L},
+                ArrayUtils.remove(pending_results_extended[1], 2));
+        assertTrue((Long) pending_results_extended[1][2] > 0L);
+
+        assertArrayEquals(
+                new Object[] {streamid_3, consumer2, 1L},
+                ArrayUtils.remove(pending_results_extended[2], 2));
+        assertTrue((Long) pending_results_extended[2][2] >= 0L);
+
+        assertArrayEquals(
+                new Object[] {streamid_4, consumer2, 1L},
+                ArrayUtils.remove(pending_results_extended[3], 2));
+        assertTrue((Long) pending_results_extended[3][2] >= 0L);
+
+        assertArrayEquals(
+                new Object[] {streamid_5, consumer2, 1L},
+                ArrayUtils.remove(pending_results_extended[4], 2));
+        assertTrue((Long) pending_results_extended[4][2] >= 0L);
+
+        // acknowledge streams 2-4 and remove them from the xpending results
+        assertEquals(
+                3L, client.xack(key, groupName, new String[] {streamid_2, streamid_3, streamid_4}).get());
+
+        pending_results_extended =
+                client
+                        .xpending(key, groupName, IdBound.ofExclusive(streamid_3), InfRangeBound.MAX, 10L)
+                        .get();
+        assertEquals(1, pending_results_extended.length);
+        assertEquals(streamid_5, pending_results_extended[0][0]);
+        assertEquals(consumer2, pending_results_extended[0][1]);
+
+        pending_results_extended =
+                client
+                        .xpending(key, groupName, InfRangeBound.MIN, IdBound.ofExclusive(streamid_5), 10L)
+                        .get();
+        assertEquals(1, pending_results_extended.length);
+        assertEquals(streamid_1, pending_results_extended[0][0]);
+        assertEquals(consumer1, pending_results_extended[0][1]);
+
+        pending_results_extended =
+                client
+                        .xpending(
+                                key,
+                                groupName,
+                                InfRangeBound.MIN,
+                                InfRangeBound.MAX,
+                                10L,
+                                StreamPendingOptions.builder().minIdleTime(1L).consumer(consumer2).build())
+                        .get();
+        assertEquals(1, pending_results_extended.length);
+        assertEquals(streamid_5, pending_results_extended[0][0]);
+        assertEquals(consumer2, pending_results_extended[0][1]);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xpending_return_failures(BaseClient client) {
+
+        String key = UUID.randomUUID().toString();
+        String stringkey = UUID.randomUUID().toString();
+        String groupName = "group" + UUID.randomUUID();
+        String zeroStreamId = "0";
+        String consumer1 = "consumer-1-" + UUID.randomUUID();
+
+        // create group and consumer for the group
+        assertEquals(
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
+
+        // Add two stream entries for consumer 1
+        String streamid_1 = client.xadd(key, Map.of("field1", "value1")).get();
+        assertNotNull(streamid_1);
+        String streamid_2 = client.xadd(key, Map.of("field2", "value2")).get();
+        assertNotNull(streamid_2);
+
+        // no pending messages yet...
+        var pending_results_summary = client.xpending(key, groupName).get();
+        assertArrayEquals(new Object[] {0L, null, null, null}, pending_results_summary);
+
+        var pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MAX, InfRangeBound.MIN, 10L).get();
+        assertEquals(0, pending_results_extended.length);
+
+        // read the entire stream for the consumer and mark messages as pending
+        var result_1 = client.xreadgroup(Map.of(key, ">"), groupName, consumer1).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamid_1, new String[][] {{"field1", "value1"}},
+                                streamid_2, new String[][] {{"field2", "value2"}})),
+                result_1);
+
+        // sanity check - expect some results:
+        pending_results_summary = client.xpending(key, groupName).get();
+        assertTrue((Long) pending_results_summary[0] > 0L);
+
+        pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 1L).get();
+        assertTrue(pending_results_extended.length > 0);
+
+        // returns empty if + before -
+        pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MAX, InfRangeBound.MIN, 10L).get();
+        assertEquals(0, pending_results_extended.length);
+
+        // min idletime of 100 seconds shouldn't produce any results
+        pending_results_extended =
+                client
+                        .xpending(
+                                key,
+                                groupName,
+                                InfRangeBound.MIN,
+                                InfRangeBound.MAX,
+                                10L,
+                                StreamPendingOptions.builder().minIdleTime(100000L).build())
+                        .get();
+        assertEquals(0, pending_results_extended.length);
+
+        // invalid consumer - no results
+        pending_results_extended =
+                client
+                        .xpending(
+                                key,
+                                groupName,
+                                InfRangeBound.MIN,
+                                InfRangeBound.MAX,
+                                10L,
+                                StreamPendingOptions.builder().consumer("invalid_consumer").build())
+                        .get();
+        assertEquals(0, pending_results_extended.length);
+
+        // xpending when range bound is not valid ID throws a RequestError
+        Exception executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xpending(
+                                                key,
+                                                groupName,
+                                                IdBound.ofExclusive("not_a_stream_id"),
+                                                InfRangeBound.MAX,
+                                                10L)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xpending(
+                                                key,
+                                                groupName,
+                                                InfRangeBound.MIN,
+                                                IdBound.ofExclusive("not_a_stream_id"),
+                                                10L)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // invalid count should return no results
+        pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, -10L).get();
+        assertEquals(0, pending_results_extended.length);
+
+        pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 0L).get();
+        assertEquals(0, pending_results_extended.length);
+
+        // invalid group throws a RequestError (NOGROUP)
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xpending(key, "not_a_group").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+        // non-existent key throws a RequestError (NOGROUP)
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xpending(stringkey, groupName).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xpending(stringkey, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+        // Key exists, but it is not a stream
+        assertEquals(OK, client.set(stringkey, "bar").get());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xpending(stringkey, groupName).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xpending(stringkey, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L)
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 

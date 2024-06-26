@@ -10,7 +10,7 @@ import lombok.Builder;
 /**
  * Optional arguments to {@link StreamBaseCommands#xadd(String, Map, StreamAddOptions)}
  *
- * @see <a href="https://redis.io/commands/xadd/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/xadd/">valkey.io</a>
  */
 @Builder
 public final class StreamAddOptions {

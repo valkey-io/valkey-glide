@@ -236,6 +236,7 @@ enum RequestType {
     SortReadOnly = 195;
     FunctionDump = 196;
     FunctionRestore = 197;
+    XPending = 198;
 }
 
 message Command {
