@@ -28,7 +28,25 @@ concurrency:
     cancel-in-progress: true
 
 jobs:
+    start-self-hosted-runner:
+        if: github.repository_owner == 'aws'
+        runs-on: ubuntu-latest
+        environment: AWS_ACTIONS
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+            with:
+                fetch-depth: 0
+
+          - name: Start self hosted EC2 runner
+            uses: ./.github/workflows/start-self-hosted-runner
+            with:
+                role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
+                aws-region: ${{ secrets.AWS_REGION }}
+                ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
+
     build-and-test-java-client:
+        needs: start-self-hosted-runner
         timeout-minutes: 35
         strategy:
             # Run all jobs
