@@ -57,6 +57,7 @@
 * Python: Added LOLWUT command ([#1657](https://github.com/aws/glide-for-redis/pull/1657))
 * Python: Added XREADGROUP command ([#1679](https://github.com/aws/glide-for-redis/pull/1679))
 * Python: Added XACK command ([#1681](https://github.com/aws/glide-for-redis/pull/1681))
+* Python: Added FLUSHDB command ([#1680](https://github.com/aws/glide-for-redis/pull/1680))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
