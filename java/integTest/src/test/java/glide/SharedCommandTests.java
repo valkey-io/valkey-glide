@@ -1592,6 +1592,53 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void sinterstore_gs(BaseClient client) {
+        GlideString key1 = gs("{key}-1-" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2-" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3-" + UUID.randomUUID());
+        GlideString key4 = gs("{key}-4-" + UUID.randomUUID());
+        GlideString key5 = gs("{key}-5-" + UUID.randomUUID());
+
+        assertEquals(3, client.sadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertEquals(3, client.sadd(key2, new GlideString[] {gs("c"), gs("d"), gs("e")}).get());
+        assertEquals(3, client.sadd(key4, new GlideString[] {gs("e"), gs("f"), gs("g")}).get());
+
+        // create new
+        assertEquals(1, client.sinterstore(key3, new GlideString[] {key1, key2}).get());
+        assertEquals(Set.of(gs("c")), client.smembers(key3).get());
+
+        // overwrite existing set
+        assertEquals(1, client.sinterstore(key2, new GlideString[] {key3, key2}).get());
+        assertEquals(Set.of(gs("c")), client.smembers(key2).get());
+
+        // overwrite source
+        assertEquals(0, client.sinterstore(key1, new GlideString[] {key1, key4}).get());
+        assertEquals(Set.of(), client.smembers(key1).get());
+
+        // overwrite source
+        assertEquals(1, client.sinterstore(key2, new GlideString[] {key2}).get());
+        assertEquals(Set.of(gs("c")), client.smembers(key2).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key5, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.sinterstore(key1, new GlideString[] {key5}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // overwrite destination - not a set
+        assertEquals(0, client.sinterstore(key5, new GlideString[] {key1, key2}).get());
+        assertEquals(Set.of(), client.smembers(key5).get());
+
+        // wrong arguments
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.sinterstore(key5, new GlideString[0]).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sdiff(BaseClient client) {
         String key1 = "{key}-1-" + UUID.randomUUID();
         String key2 = "{key}-2-" + UUID.randomUUID();
@@ -1707,6 +1754,26 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key3, "bar").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sinter(new String[] {key3}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sinter_gs(BaseClient client) {
+        GlideString key1 = gs("{sinter}-" + UUID.randomUUID());
+        GlideString key2 = gs("{sinter}-" + UUID.randomUUID());
+        GlideString key3 = gs("{sinter}-" + UUID.randomUUID());
+
+        assertEquals(3, client.sadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertEquals(3, client.sadd(key2, new GlideString[] {gs("c"), gs("d"), gs("e")}).get());
+        assertEquals(Set.of(gs("c")), client.sinter(new GlideString[] {key1, key2}).get());
+        assertEquals(0, client.sinter(new GlideString[] {key1, key3}).get().size());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sinter(new GlideString[] {key3}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -6309,9 +6376,53 @@ public class SharedCommandTests {
         // returns limit as cardinality when the limit is reached partway through the computation
         assertEquals(limit, client.sintercard(keys, limit).get());
 
+        // returns actual cardinality if limit is higher
+        assertEquals(3, client.sintercard(keys, limit2).get());
+
         // non set keys are used
         assertEquals(OK, client.set(nonSetKey, "NotASet").get());
         String[] badArr = new String[] {key1, nonSetKey};
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sintercard(badArr).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sintercard_gs(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString nonSetKey = gs("{key}-4" + UUID.randomUUID());
+        GlideString[] saddargs = {gs("one"), gs("two"), gs("three"), gs("four")};
+        GlideString[] saddargs2 = {gs("two"), gs("three"), gs("four"), gs("five")};
+        long limit = 2;
+        long limit2 = 4;
+
+        // keys does not exist or is empty
+        GlideString[] keys = {key1, key2};
+        assertEquals(0, client.sintercard(keys).get());
+        assertEquals(0, client.sintercard(keys, limit).get());
+
+        // one of the keys is empty, intersection is empty, cardinality equals to 0
+        assertEquals(4, client.sadd(key1, saddargs).get());
+        assertEquals(0, client.sintercard(keys).get());
+
+        // sets at both keys have value, get cardinality of the intersection
+        assertEquals(4, client.sadd(key2, saddargs2).get());
+        assertEquals(3, client.sintercard(keys).get());
+
+        // returns limit as cardinality when the limit is reached partway through the computation
+        assertEquals(limit, client.sintercard(keys, limit).get());
+
+        // returns actual cardinality if limit is higher
+        assertEquals(3, client.sintercard(keys, limit2).get());
+
+        // non set keys are used
+        assertEquals(OK, client.set(nonSetKey, gs("NotASet")).get());
+        GlideString[] badArr = new GlideString[] {key1, nonSetKey};
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sintercard(badArr).get());
         assertInstanceOf(RequestException.class, executionException.getCause());

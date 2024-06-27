@@ -3004,11 +3004,59 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sinter_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        Set<GlideString> value = Set.of(gs("1"), gs("2"));
+
+        CompletableFuture<Set<GlideString>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Set<GlideString>>submitNewCommand(eq(SInter), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Set<GlideString>> response = service.sinter(keys);
+        Set<GlideString> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sinterstore_returns_success() {
         // setup
         String destination = "key";
         String[] keys = new String[] {"set1", "set2"};
         String[] args = new String[] {"key", "set1", "set2"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SInterStore), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sinterstore(destination, keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sinterstore_binary_returns_success() {
+        // setup
+        GlideString destination = gs("key");
+        GlideString[] keys = new GlideString[] {gs("set1"), gs("set2")};
+        GlideString[] args = new GlideString[] {gs("key"), gs("set1"), gs("set2")};
         Long value = 2L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -7834,6 +7882,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sintercard_binary_returns_success() {
+        // setup
+        GlideString key1 = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments = new GlideString[] {gs("2"), key1, key2};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sintercard(new GlideString[] {key1, key2});
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sintercard_with_limit_returns_success() {
         // setup
         String key1 = "testKey";
@@ -7851,6 +7924,32 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.sintercard(new String[] {key1, key2}, limit);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sintercard_with_limit_binary_returns_success() {
+        // setup
+        GlideString key1 = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        long limit = 1L;
+        GlideString[] arguments = new GlideString[] {gs("2"), key1, key2, gs(SET_LIMIT_REDIS_API), gs("1")};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sintercard(new GlideString[] {key1, key2}, limit);
         Long payload = response.get();
 
         // verify
