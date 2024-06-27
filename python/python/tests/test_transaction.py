@@ -543,9 +543,9 @@ async def transaction_test(
     transaction.xreadgroup(
         {key11: ">"}, group_name1, consumer, StreamReadGroupOptions(count=5)
     )
-    args.append({key11: {"0-2": [["foo", "bar"]]}})
+    args.append({key11.encode(): {b"0-2": [[b"foo", b"bar"]]}})
     transaction.xpending(key11, group_name1)
-    args.append([1, "0-2", "0-2", [[consumer, "1"]]])
+    args.append([1, b"0-2", b"0-2", [[consumer.encode(), b"1"]]])
     transaction.xack(key11, group_name1, ["0-2"])
     args.append(1)
     transaction.xpending_range(key11, group_name1, MinId(), MaxId(), 1)
@@ -773,7 +773,7 @@ class TestTransaction:
         result = await redis_client.exec(transaction)
         assert isinstance(result, list)
         assert result[0] == OK
-        assert result[1] == value
+        assert result[1] == value.encode()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

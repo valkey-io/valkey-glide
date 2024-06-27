@@ -5329,13 +5329,13 @@ class TestCommands:
             await redis_client.xadd(
                 key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
             )
-            == stream_id1_0
+            == stream_id1_0.encode()
         )
         assert (
             await redis_client.xadd(
                 key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
             )
-            == stream_id1_1
+            == stream_id1_1.encode()
         )
 
         # read the entire stream for the consumer and mark messages as pending
@@ -5345,9 +5345,9 @@ class TestCommands:
             consumer_name,
             StreamReadGroupOptions(block_ms=1000, count=10),
         ) == {
-            key: {
-                stream_id1_0: [["f1_0", "v1_0"]],
-                stream_id1_1: [["f1_1", "v1_1"]],
+            key.encode(): {
+                stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
+                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
             }
         }
 
@@ -5356,14 +5356,14 @@ class TestCommands:
 
         # now xreadgroup yields one empty stream entry and one non-empty stream entry
         assert await redis_client.xreadgroup({key: "0"}, group_name, consumer_name) == {
-            key: {stream_id1_0: None, stream_id1_1: [["f1_1", "v1_1"]]}
+            key.encode(): {stream_id1_0.encode(): None, stream_id1_1.encode(): [[b"f1_1", b"v1_1"]]}
         }
 
         assert (
             await redis_client.xadd(
                 key, [("f1_2", "v1_2")], StreamAddOptions(stream_id1_2)
             )
-            == stream_id1_2
+            == stream_id1_2.encode()
         )
 
         # delete the consumer group and expect 2 pending messages
@@ -5377,7 +5377,7 @@ class TestCommands:
             group_name,
             consumer_name,
             StreamReadGroupOptions(count=5, block_ms=1000),
-        ) == {key: {stream_id1_2: [["f1_2", "v1_2"]]}}
+        ) == {key.encode(): {stream_id1_2.encode(): [[b"f1_2", b"v1_2"]]}}
 
         # delete the consumer group and expect the pending message
         assert (
@@ -5389,7 +5389,7 @@ class TestCommands:
             await redis_client.xadd(
                 key, [("f1_3", "v1_3")], StreamAddOptions(stream_id1_3)
             )
-            == stream_id1_3
+            == stream_id1_3.encode()
         )
         # since NOACK is passed, stream entry will be consumed without being added to the pending entries
         assert await redis_client.xreadgroup(
@@ -5397,7 +5397,7 @@ class TestCommands:
             group_name,
             consumer_name,
             StreamReadGroupOptions(no_ack=True, count=5, block_ms=1000),
-        ) == {key: {stream_id1_3: [["f1_3", "v1_3"]]}}
+        ) == {key.encode(): {stream_id1_3.encode(): [[b"f1_3", b"v1_3"]]}}
         assert (
             await redis_client.xreadgroup(
                 {key: ">"},
@@ -5412,7 +5412,7 @@ class TestCommands:
             group_name,
             consumer_name,
             StreamReadGroupOptions(no_ack=False, count=5, block_ms=1000),
-        ) == {key: {}}
+        ) == {key.encode(): {}}
 
         # attempting to call XGROUP CREATECONSUMER or XGROUP DELCONSUMER with a non-existing key should raise an error
         with pytest.raises(RequestError):
@@ -5469,21 +5469,21 @@ class TestCommands:
             await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
         )
         assert await redis_client.xreadgroup({key: "0"}, group_name, consumer_name) == {
-            key: {}
+            key.encode(): {}
         }
 
         # setup first entry
         assert (
             await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
-            == stream_id1_1
+            == stream_id1_1.encode()
         )
 
         # if count is non-positive, it is ignored
         assert await redis_client.xreadgroup(
             {key: ">"}, group_name, consumer_name, StreamReadGroupOptions(count=0)
         ) == {
-            key: {
-                stream_id1_1: [["f1", "v1"]],
+            key.encode(): {
+                stream_id1_1.encode(): [[b"f1", b"v1"]],
             },
         }
         assert await redis_client.xreadgroup(
@@ -5492,8 +5492,8 @@ class TestCommands:
             consumer_name,
             StreamReadGroupOptions(count=-1),
         ) == {
-            key: {
-                stream_id1_1: [["f1", "v1"]],
+            key.encode(): {
+                stream_id1_1.encode(): [[b"f1", b"v1"]],
             },
         }
 
@@ -5567,13 +5567,13 @@ class TestCommands:
             await test_client.xadd(
                 timeout_key, [("f1", "v1")], StreamAddOptions(stream_id1_1)
             )
-            == stream_id1_1
+            == stream_id1_1.encode()
         )
 
         # read the entire stream for the consumer and mark messages as pending
         assert await test_client.xreadgroup(
             {timeout_key: ">"}, timeout_group_name, timeout_consumer_name
-        ) == {timeout_key: {stream_id1_1: [["f1", "v1"]]}}
+        ) == {timeout_key.encode(): {stream_id1_1.encode(): [[b"f1", b"v1"]]}}
 
         # subsequent calls to read ">" will block
         assert (
@@ -5618,24 +5618,24 @@ class TestCommands:
         # setup: add 2 entries to the stream, create consumer group, read to mark them as pending
         assert (
             await redis_client.xadd(key, [("f0", "v0")], StreamAddOptions(stream_id1_0))
-            == stream_id1_0
+            == stream_id1_0.encode()
         )
         assert (
             await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
-            == stream_id1_1
+            == stream_id1_1.encode()
         )
         assert await redis_client.xgroup_create(key, group_name, stream_id0) == OK
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
-            key: {
-                stream_id1_0: [["f0", "v0"]],
-                stream_id1_1: [["f1", "v1"]],
+            key.encode(): {
+                stream_id1_0.encode(): [[b"f0", b"v0"]],
+                stream_id1_1.encode(): [[b"f1", b"v1"]],
             }
         }
 
         # add one more entry
         assert (
             await redis_client.xadd(key, [("f2", "v2")], StreamAddOptions(stream_id1_2))
-            == stream_id1_2
+            == stream_id1_2.encode()
         )
 
         # acknowledge the first 2 entries
@@ -5648,7 +5648,7 @@ class TestCommands:
         )
         # read the last, unacknowledged entry
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
-            key: {stream_id1_2: [["f2", "v2"]]}
+            key.encode(): {stream_id1_2.encode(): [[b"f2", b"v2"]]}
         }
         # deleting the consumer returns 1 since the last entry still hasn't been acknowledged
         assert (
@@ -7265,7 +7265,7 @@ class TestCommands:
             result = await redis_client.lolwut(parameters=[10, 20], route=AllNodes())
             assert isinstance(result, dict)
             result_decoded = convert_bytes_to_string_dict(result)
-            for node_result in result.values():
+            for node_result in result_decoded.values():
                 assert "Redis ver. " in node_result
 
             # test with single-node route

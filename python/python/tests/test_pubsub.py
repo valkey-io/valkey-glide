@@ -77,6 +77,14 @@ async def create_two_clients(
     )
     return client, client2
 
+def decode_pubsub_msg(msg: Optional[CoreCommands.PubSubMsg]) -> CoreCommands.PubSubMsg:
+    if not msg:
+        return CoreCommands.PubSubMsg("", "", None)
+    string_msg = cast(bytes, msg.message).decode()
+    string_channel = cast(bytes, msg.channel).decode()
+    string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
+    decoded_msg = CoreCommands.PubSubMsg(string_msg, string_channel, string_pattern)
+    return decoded_msg
 
 async def get_message_by_method(
     method: MethodTesting,
@@ -85,11 +93,11 @@ async def get_message_by_method(
     index: Optional[int] = None,
 ):
     if method == MethodTesting.Async:
-        return await client.get_pubsub_message()
+        return decode_pubsub_msg(await client.get_pubsub_message())
     elif method == MethodTesting.Sync:
-        return client.try_get_pubsub_message()
+        return decode_pubsub_msg(client.try_get_pubsub_message())
     assert messages and (index is not None)
-    return messages[index]
+    return decode_pubsub_msg(messages[index])
 
 
 async def check_no_messages_left(
@@ -234,9 +242,11 @@ class TestPubSub:
             # allow the message to propagate
             await asyncio.sleep(1)
 
-            async_msg = await listening_client.get_pubsub_message()
-            sync_msg = listening_client.try_get_pubsub_message()
-            assert sync_msg
+            async_msg_res = await listening_client.get_pubsub_message()
+            sync_msg_res = listening_client.try_get_pubsub_message()
+            assert sync_msg_res
+            async_msg = decode_pubsub_msg(async_msg_res)
+            sync_msg = decode_pubsub_msg(sync_msg_res)
 
             assert async_msg.message in [message, message2]
             assert async_msg.channel == channel
@@ -536,11 +546,12 @@ class TestPubSub:
             # allow the messages to propagate
             await asyncio.sleep(1)
 
-            async_msg = await listening_client.get_pubsub_message()
-            sync_msg = listening_client.try_get_pubsub_message()
-            assert sync_msg
+            async_msg_res = await listening_client.get_pubsub_message()
+            sync_msg_res = listening_client.try_get_pubsub_message()
+            assert sync_msg_res
+            async_msg = decode_pubsub_msg(async_msg_res)
+            sync_msg = decode_pubsub_msg(sync_msg_res)
 
-            assert async_msg.message == message
             assert async_msg.message in [message, message2]
             assert async_msg.channel == channel
             assert async_msg.pattern is None
@@ -1881,12 +1892,12 @@ class TestPubSub:
             sync_msg = listening_client.try_get_pubsub_message()
             assert sync_msg
 
-            assert async_msg.message == message
-            assert async_msg.channel == channel
+            assert async_msg.message == message.encode()
+            assert async_msg.channel == channel.encode()
             assert async_msg.pattern is None
 
-            assert sync_msg.message == message2
-            assert sync_msg.channel == channel
+            assert sync_msg.message == message2.encode()
+            assert sync_msg.channel == channel.encode()
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
@@ -1957,12 +1968,12 @@ class TestPubSub:
             sync_msg = listening_client.try_get_pubsub_message()
             assert sync_msg
 
-            assert async_msg.message == message
-            assert async_msg.channel == channel
+            assert async_msg.message == message.encode()
+            assert async_msg.channel == channel.encode()
             assert async_msg.pattern is None
 
-            assert sync_msg.message == message2
-            assert sync_msg.channel == channel
+            assert sync_msg.message == message2.encode()
+            assert sync_msg.channel == channel.encode()
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
