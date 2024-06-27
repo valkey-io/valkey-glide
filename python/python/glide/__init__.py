@@ -65,12 +65,12 @@ from glide.config import (
     BackoffStrategy,
     BaseClientConfiguration,
     ClusterClientConfiguration,
+    GlideClientConfiguration,
     NodeAddress,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
     ProtocolVersion,
     ReadFrom,
-    RedisClientConfiguration,
     RedisCredentials,
 )
 from glide.constants import OK
@@ -83,9 +83,9 @@ from glide.exceptions import (
     RequestError,
     TimeoutError,
 )
+from glide.glide_client import GlideClient, GlideClusterClient
 from glide.logger import Level as LogLevel
 from glide.logger import Logger
-from glide.redis_client import RedisClient, RedisClusterClient
 from glide.routes import (
     AllNodes,
     AllPrimaries,
@@ -100,13 +100,13 @@ from .glide import Script
 
 __all__ = [
     # Client
-    "RedisClient",
-    "RedisClusterClient",
+    "GlideClient",
+    "GlideClusterClient",
     "Transaction",
     "ClusterTransaction",
     # Config
     "BaseClientConfiguration",
-    "RedisClientConfiguration",
+    "GlideClientConfiguration",
     "ClusterClientConfiguration",
     "BackoffStrategy",
     "ReadFrom",

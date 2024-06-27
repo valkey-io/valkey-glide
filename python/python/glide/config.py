@@ -136,7 +136,7 @@ class BaseClientConfiguration:
         protocol: ProtocolVersion = ProtocolVersion.RESP3,
     ):
         """
-        Represents the configuration settings for a Redis client.
+        Represents the configuration settings for a Glide client.
 
         Args:
             addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
@@ -208,9 +208,9 @@ class BaseClientConfiguration:
         return None, None
 
 
-class RedisClientConfiguration(BaseClientConfiguration):
+class GlideClientConfiguration(BaseClientConfiguration):
     """
-    Represents the configuration settings for a Standalone Redis client.
+    Represents the configuration settings for a Standalone Glide client.
 
     Args:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
@@ -234,7 +234,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
         database_id (Optional[int]): index of the logical database to connect to.
         client_name (Optional[str]): Client name to be used for the client. Will be used with CLIENT SETNAME command during connection establishment.
         protocol (ProtocolVersion): The version of the Redis RESP protocol to communicate with the server.
-        pubsub_subscriptions (Optional[RedisClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+        pubsub_subscriptions (Optional[GlideClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
                 Will be applied via SUBSCRIBE/PSUBSCRIBE commands during connection establishment.
     """
 
@@ -254,7 +254,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
         """Describes pubsub configuration for standalone mode client.
 
         Attributes:
-            channels_and_patterns (Dict[RedisClientConfiguration.PubSubChannelModes, Set[str]]):
+            channels_and_patterns (Dict[GlideClientConfiguration.PubSubChannelModes, Set[str]]):
                 Channels and patterns by modes.
             callback (Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]):
                 Optional callback to accept the incomming messages.
@@ -263,7 +263,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
         """
 
         channels_and_patterns: Dict[
-            RedisClientConfiguration.PubSubChannelModes, Set[str]
+            GlideClientConfiguration.PubSubChannelModes, Set[str]
         ]
         callback: Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]
         context: Any
@@ -347,7 +347,7 @@ class RedisClientConfiguration(BaseClientConfiguration):
 
 class ClusterClientConfiguration(BaseClientConfiguration):
     """
-    Represents the configuration settings for a Cluster Redis client.
+    Represents the configuration settings for a Cluster Glide client.
 
     Args:
         addresses (List[NodeAddress]): DNS Addresses and ports of known nodes in the cluster.
