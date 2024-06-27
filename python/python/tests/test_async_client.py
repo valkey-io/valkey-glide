@@ -6283,6 +6283,41 @@ class TestCommands:
                 assert await redis_client.flushall(FlushMode.SYNC, AllPrimaries()) is OK
             assert await redis_client.dbsize() == 0
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_standalone_flushdb(self, redis_client: RedisClient):
+        min_version = "6.2.0"
+        key1 = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        value = get_random_string(5)
+
+        # fill DB 0 and check size non-empty
+        assert await redis_client.select(0) is OK
+        await redis_client.set(key1, value)
+        assert await redis_client.dbsize() > 0
+
+        # fill DB 1 and check size non-empty
+        assert await redis_client.select(1) is OK
+        await redis_client.set(key2, value)
+        assert await redis_client.dbsize() > 0
+
+        # flush DB 1 and check again
+        assert await redis_client.flushdb() is OK
+        assert await redis_client.dbsize() == 0
+
+        # swith to DB 0, flush, and check
+        assert await redis_client.select(0) is OK
+        assert await redis_client.dbsize() > 0
+        assert await redis_client.flushdb(FlushMode.ASYNC) is OK
+        assert await redis_client.dbsize() == 0
+
+        # verify flush SYNC
+        if not await check_if_server_version_lt(redis_client, min_version):
+            await redis_client.set(key2, value)
+            assert await redis_client.dbsize() > 0
+            assert await redis_client.flushdb(FlushMode.SYNC) is OK
+            assert await redis_client.dbsize() == 0
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_getex(self, redis_client: TRedisClient):
@@ -6788,6 +6823,29 @@ class TestClusterRoutes:
     ):
         with pytest.raises(RequestError):
             await redis_client.info(route=ByAddressRoute("foo"))
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_flushdb(self, redis_client: RedisClusterClient):
+        min_version = "6.2.0"
+        key = f"{{key}}-1{get_random_string(5)}"
+        value = get_random_string(5)
+
+        await redis_client.set(key, value)
+        assert await redis_client.dbsize() > 0
+        assert await redis_client.flushdb(route=AllPrimaries()) is OK
+        assert await redis_client.dbsize() == 0
+
+        await redis_client.set(key, value)
+        assert await redis_client.dbsize() > 0
+        assert await redis_client.flushdb(FlushMode.ASYNC, AllPrimaries()) is OK
+        assert await redis_client.dbsize() == 0
+
+        if not await check_if_server_version_lt(redis_client, min_version):
+            await redis_client.set(key, value)
+            assert await redis_client.dbsize() > 0
+            assert await redis_client.flushdb(FlushMode.SYNC, AllPrimaries()) is OK
+            assert await redis_client.dbsize() == 0
 
 
 @pytest.mark.asyncio
