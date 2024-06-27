@@ -2063,6 +2063,35 @@ class BaseTransaction:
             RequestType.XGroupDelConsumer, [key, group_name, consumer_name]
         )
 
+    def xgroup_set_id(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        stream_id: str,
+        entries_read_id: Optional[str] = None,
+    ) -> TTransaction:
+        """
+        Set the last delivered ID for a consumer group.
+
+        See https://valkey.io/commands/xgroup-setid for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            stream_id (str): The stream entry ID that should be set as the last delivered ID for the consumer group.
+            entries_read_id (Optional[str]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
+                used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last
+                entry. This argument can only be specified if you are using Redis version 7.0.0 or above.
+
+        Command response:
+            TOK: A simple "OK" response.
+        """
+        args = [key, group_name, stream_id]
+        if entries_read_id is not None:
+            args.extend(["ENTRIESREAD", entries_read_id])
+
+        return self.append_command(RequestType.XGroupSetId, args)
+
     def xreadgroup(
         self: TTransaction,
         keys_and_ids: Mapping[str, str],

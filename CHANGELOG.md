@@ -58,6 +58,7 @@
 * Python: Added XREADGROUP command ([#1679](https://github.com/aws/glide-for-redis/pull/1679))
 * Python: Added XACK command ([#1681](https://github.com/aws/glide-for-redis/pull/1681))
 * Python: Added FLUSHDB command ([#1680](https://github.com/aws/glide-for-redis/pull/1680))
+* Python: Added XGROUP SETID command ([#1683](https://github.com/aws/glide-for-redis/pull/1683))
 * Python: Added FUNCTION LOAD command ([#1699](https://github.com/aws/glide-for-redis/pull/1699))
 
 ### Breaking Changes

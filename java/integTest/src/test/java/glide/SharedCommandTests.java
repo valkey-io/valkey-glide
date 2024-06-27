@@ -4184,6 +4184,20 @@ public class SharedCommandTests {
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
+        // group doesn't exists, throws a request error with "NOGROUP"
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xreadgroup(Map.of(key, timestamp_1_1), "not_a_group", consumerName).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+        // consumer doesn't exist and will be created
+        var emptyResult =
+                client.xreadgroup(Map.of(key, timestamp_1_1), groupName, "non_existing_consumer").get();
+        // no available pending messages
+        assertEquals(0, emptyResult.get(key).size());
+
         try (var testClient =
                 client instanceof RedisClient
                         ? RedisClient.CreateClient(commonClientConfig().build()).get()

@@ -519,6 +519,8 @@ async def transaction_test(
     args.append({key11: {"0-2": [["foo", "bar"]]}})
     transaction.xack(key11, group_name1, ["0-2"])
     args.append(1)
+    transaction.xgroup_set_id(key11, group_name1, "0-2")
+    args.append(OK)
     transaction.xgroup_del_consumer(key11, group_name1, consumer)
     args.append(0)
     transaction.xgroup_destroy(key11, group_name1)
