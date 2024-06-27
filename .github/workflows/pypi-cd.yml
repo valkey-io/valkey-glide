@@ -136,6 +136,7 @@ jobs:
                   target: ${{ matrix.build.TARGET }}
                   publish: "true"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "7.2.5"
 
             - name: Include protobuf files in the package
               working-directory: ./python

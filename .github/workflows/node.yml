@@ -208,6 +208,7 @@ jobs:
                 arch: x64
                 target: x86_64-unknown-linux-musl
                 github-token: ${{ secrets.GITHUB_TOKEN }}
+                engine-version: "7.2.5"
           
           - name: Test compatibility
             shell: bash
