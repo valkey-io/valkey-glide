@@ -5564,6 +5564,90 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xgroup_set_id(
+        self, redis_client: TGlideClient, cluster_mode, protocol, request
+    ):
+        key = f"{{testKey}}:{get_random_string(10)}"
+        non_existing_key = f"{{testKey}}:{get_random_string(10)}"
+        string_key = f"{{testKey}}:{get_random_string(10)}"
+        group_name = get_random_string(10)
+        consumer_name = get_random_string(10)
+        stream_id0 = "0"
+        stream_id1_0 = "1-0"
+        stream_id1_1 = "1-1"
+        stream_id1_2 = "1-2"
+
+        # setup: create stream with 3 entries, create consumer group, read entries to add them to the Pending Entries
+        # List
+        assert (
+            await redis_client.xadd(key, [("f0", "v0")], StreamAddOptions(stream_id1_0))
+            == stream_id1_0
+        )
+        assert (
+            await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
+            == stream_id1_1
+        )
+        assert (
+            await redis_client.xadd(key, [("f2", "v2")], StreamAddOptions(stream_id1_2))
+            == stream_id1_2
+        )
+        assert await redis_client.xgroup_create(key, group_name, stream_id0) == OK
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
+            key: {
+                stream_id1_0: [["f0", "v0"]],
+                stream_id1_1: [["f1", "v1"]],
+                stream_id1_2: [["f2", "v2"]],
+            }
+        }
+        # sanity check: xreadgroup should not return more entries since they're all already in the Pending Entries List
+        assert (
+            await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) is None
+        )
+
+        # reset the last delivered ID for the consumer group to "1-1"
+        # ENTRIESREAD is only supported in Redis version 7.0.0 and above
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert await redis_client.xgroup_set_id(key, group_name, stream_id1_1) == OK
+        else:
+            assert (
+                await redis_client.xgroup_set_id(
+                    key, group_name, stream_id1_1, entries_read_id=stream_id0
+                )
+                == OK
+            )
+
+            # the entries_read_id cannot be the first, last, or zero ID. Here we pass the first ID and assert that an
+            # error is raised.
+            with pytest.raises(RequestError):
+                await redis_client.xgroup_set_id(
+                    key, group_name, stream_id1_1, entries_read_id=stream_id1_0
+                )
+
+        # xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
+            key: {
+                stream_id1_2: [["f2", "v2"]],
+            }
+        }
+
+        # an error is raised if XGROUP SETID is called with a non-existing key
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_set_id(non_existing_key, group_name, stream_id0)
+
+        # an error is raised if XGROUP SETID is called with a non-existing group
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_set_id(key, "non_existing_group", stream_id0)
+
+        # setting the ID to a non-existing ID is allowed
+        assert await redis_client.xgroup_set_id(key, group_name, "99-99") == OK
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xgroup_set_id(string_key, group_name, stream_id0)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_pfadd(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.pfadd(key, []) == 1
