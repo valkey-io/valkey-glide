@@ -325,7 +325,6 @@ import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.ArrayList;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
