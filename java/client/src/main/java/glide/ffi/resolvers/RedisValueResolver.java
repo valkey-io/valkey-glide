@@ -6,10 +6,12 @@ import java.util.List;
 import response.ResponseOuterClass.Response;
 
 public class RedisValueResolver {
+    public static final long MAX_REQUEST_ARGS_LENGTH;
 
     // TODO: consider lazy loading the glide_rs library
     static {
         NativeUtils.loadGlideLib();
+        MAX_REQUEST_ARGS_LENGTH = getMaxRequestArgsLength();
     }
 
     /**
@@ -36,4 +38,10 @@ public class RedisValueResolver {
      * @return A C-style pointer to a native representation of the arguments.
      */
     public static native long createLeakedBytesVec(byte[][] args);
+
+    /**
+     * Get the maximum length in bytes of request arguments.
+     * @return The maximum length in bytes of request arguments.
+     */
+    private static native long getMaxRequestArgsLength();
 }
