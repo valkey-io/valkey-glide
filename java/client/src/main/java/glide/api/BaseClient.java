@@ -15,6 +15,7 @@ import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
@@ -632,15 +633,24 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> mset(@NonNull Map<GlideString, GlideString> keyValueMap) {
-        GlideString[] args = convertMapToKeyValueStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
-    }
+    public <ArgType> CompletableFuture<String> mset(@NonNull Map<ArgType, ArgType> keyValueMap) {
+        if (keyValueMap.isEmpty()) {
+            throw new IllegalArgumentException("empty map");
+        }
 
-    @Override
-    public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToKeyValueStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+        ArgType firstValue = keyValueMap.keySet().iterator().next();
+
+        Object[] args;
+        if (firstValue instanceof String) {
+            args = convertMapToKeyValueStringArray((Map<String, ?>) keyValueMap);
+            return commandManager.submitNewCommand(MSet, (String[]) args, this::handleStringResponse);
+        } else if (firstValue instanceof GlideString) {
+            args = convertMapToKeyValueGlideStringArray((Map<GlideString, GlideString>) keyValueMap);
+            return commandManager.submitNewCommand(
+                    MSet, (GlideString[]) args, this::handleStringResponse);
+        } else {
+            throw new IllegalArgumentException("Expected String or GlideString");
+        }
     }
 
     @Override
@@ -2657,7 +2667,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<GlideString> lcs(@NonNull GlideString key1, @NonNull GlideString key2) {
         GlideString[] arguments = new GlideString[] {key1, key2};
-        return commandManager.submitNewCommand(LCS, arguments, this::handleStringResponse);
+        return commandManager.submitNewCommand(LCS, arguments, this::handleGlideStringResponse);
     }
 
     @Override

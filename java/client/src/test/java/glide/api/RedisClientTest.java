@@ -8525,7 +8525,7 @@ public class RedisClientTest {
         testResponse.complete(value);
 
         // match on protobuf request
-        when(commandManager.<String>submitNewCommand(eq(LCS), eq(arguments), any()))
+        when(commandManager.<GlideString>submitNewCommand(eq(LCS), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
