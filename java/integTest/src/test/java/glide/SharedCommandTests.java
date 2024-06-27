@@ -6693,6 +6693,36 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void lcs_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString nonStringKey = gs("{key}-4" + UUID.randomUUID());
+
+        // keys does not exist or is empty
+        assertEquals(gs(""), client.lcs(key1, key2).get());
+
+        // setting string values
+        client.set(key1, gs("abcd"));
+        client.set(key2, gs("bcde"));
+        client.set(key3, gs("wxyz"));
+
+        // getting the lcs
+        assertEquals(gs(""), client.lcs(key1, key3).get());
+        assertEquals(gs("bcd"), client.lcs(key1, key2).get());
+
+        // non set keys are used
+        client.sadd(nonStringKey, new GlideString[] {gs("setmember")}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void lcs_with_len_option(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
         // setup

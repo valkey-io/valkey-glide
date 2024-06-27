@@ -537,6 +537,28 @@ public interface StringBaseCommands {
     CompletableFuture<String> lcs(String key1, String key2);
 
     /**
+     * Returns the longest common subsequence between strings stored at <code>key1</code> and <code>
+     * key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, <code>key1</code> and <code>key2</code> must map to the same
+     *     hash slot.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return A <code>String</code> containing the longest common subsequence between the 2 strings.
+     *     An empty <code>String</code> is returned if the keys do not exist or have no common
+     *     subsequences.
+     * @example
+     *     <pre>{@code
+     * // testKey1 = abcd, testKey2 = axcd
+     * GlideString result = client.lcs(gs("testKey1"), gs("testKey2")).get();
+     * assert result.equals("acd");
+     * }</pre>
+     */
+    CompletableFuture<GlideString> lcs(GlideString key1, GlideString key2);
+
+    /**
      * Returns the length of the longest common subsequence between strings stored at <code>key1
      * </code> and <code>key2</code>.
      *

@@ -2649,6 +2649,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> lcs(@NonNull GlideString key1, @NonNull GlideString key2) {
+        GlideString[] arguments = new GlideString[] {key1, key2};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> lcsLen(@NonNull String key1, @NonNull String key2) {
         String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
         return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
