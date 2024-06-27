@@ -48,7 +48,14 @@ runs:
           shell: bash
           run: |
             cd ~/valkey
-            sudo make install
+            if command -v sudo &> /dev/null
+            then
+                echo "sudo command exists"
+                sudo make install
+            else
+                echo "sudo command does not exist"
+                make install
+            fi
             echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
         - name: Check if the current version is a Valkey release
