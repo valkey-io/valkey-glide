@@ -527,6 +527,7 @@ public class TransactionTestUtilities {
 
         transaction
                 .sadd(setKey1, new String[] {"baz", "foo"})
+                .srem(setKey1, new String[] {"foo"})
                 .sscan(setKey1, 0)
                 .sscan(setKey1, 0, SScanOptions.builder().matchPattern("*").count(10L).build())
                 .srem(setKey1, new String[] {"foo"})
@@ -562,8 +563,6 @@ public class TransactionTestUtilities {
         var expectedResults =
                 new Object[] {
                     2L, // sadd(setKey1, new String[] {"baz", "foo"});
-                    new Object[] {"0", new String[] {"baz", "foo"}}, // sscan(setKey1, 0)
-                    new Object[] {"0", new String[] {"baz", "foo"}}, // sscan(key1, 0, match "*", count(10L))
                     1L, // srem(setKey1, new String[] {"foo"});
                     new Object[] {"0", new String[] {"baz"}}, // sscan(setKey1, "0")
                     new Object[] {"0", new String[] {"baz"}}, // sscan(key1, "0", match "*", count(10L))
