@@ -60,19 +60,6 @@ jobs:
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
-
-            # - name: Install redis
-            #   if: ${{ matrix.engine.type == 'redis' }}
-            #   uses: ./.github/workflows/install-redis
-            #   with:
-            #       redis-version: ${{ matrix.engine.version }}
-
-            - name: Install Valkey
-              if: ${{ matrix.engine.type == 'valkey' }}
-              uses: ./.github/workflows/install-valkey
-              with:
-                  engine-version: ${{ matrix.engine.version }}
-                  target: "x86_64-unknown-linux-gnu"
             
             - name: Set up Python 3.10
               uses: actions/setup-python@v4
@@ -109,6 +96,7 @@ jobs:
                   os: "ubuntu"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: ${{ matrix.engine.version }}
 
             - name: Type check with mypy
               working-directory: ./python
@@ -161,12 +149,7 @@ jobs:
                   os: "macos"
                   target: "aarch64-apple-darwin"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-  
-            - name: Install Valkey
-              uses: ./.github/workflows/install-valkey
-              with:
                   engine-version: "7.2.5"
-                  target: "aarch64-apple-darwin"
 
             - name: Test compatibility with pytest
               working-directory: ./python
@@ -204,12 +187,7 @@ jobs:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install Valkey
-              uses: ./.github/workflows/install-valkey
-              with:
                   engine-version: "7.2.5"
-                  target: "x86_64-unknown-linux-gnu"
 
             - name: Test compatibility with pytest
               working-directory: ./python

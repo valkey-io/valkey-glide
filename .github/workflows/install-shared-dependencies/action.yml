@@ -21,11 +21,10 @@ inputs:
             - aarch64-apple-darwin
             - aarch64-unknown-linux-musl
             - x86_64-unknown-linux-musl
-    # install-redis:
-    #     description: "Indicates if redis should be installed from the package manager"
-    #     required: false
-    #     type: boolean
-    #     default: "true"
+    engine-version:
+      description: "Engine version to install"
+      required: true
+      type: string
 
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
@@ -87,3 +86,9 @@ runs:
           with:
             target: ${{ inputs.target }}
             github-token: ${{ inputs.github-token }}
+
+        - name: Install Valkey
+          uses: ./.github/workflows/install-valkey
+          with:
+              engine-version: ${{ inputs.engine-version }}
+              target: ${{ inputs.target }}

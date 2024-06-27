@@ -80,13 +80,6 @@ jobs:
               with:
                   redis-version: ${{ matrix.engine.version }}
 
-            - name: Install Valkey
-              if: ${{ matrix.engine.type == 'valkey' }}
-              uses: ./.github/workflows/install-valkey
-              with:
-                  engine-version: ${{ matrix.engine.version }}
-                  target: ${{ matrix.host.TARGET }}
-
             - name: Set up dotnet ${{ matrix.dotnet }}
               uses: actions/setup-dotnet@v4
               with:
@@ -98,7 +91,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  # install-redis: ${{ ((matrix.engine.type == 'valkey' || matrix.host.OS == 'ubuntu') && 'false') || 'true' }}
+                  engine-version: ${{ matrix.engine.version }}
 
             - name: Format
               working-directory: ./csharp

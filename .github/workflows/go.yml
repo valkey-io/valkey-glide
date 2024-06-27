@@ -70,28 +70,13 @@ jobs:
                   go-version: ${{ matrix.go }}
                   cache-dependency-path: go/go.sum
 
-            - name: Install redis
-              if: ${{ matrix.engine.type == 'redis' && matrix.host.OS == 'ubuntu' }}
-              # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: ${{ matrix.engine.version }}
-
-            - name: Install Valkey
-              if: ${{ matrix.engine.type == 'valkey' }}
-              uses: ./.github/workflows/install-valkey
-              with:
-                  engine-version: ${{ matrix.engine.version }}
-                  target: ${{ matrix.host.TARGET }}
-
-
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  # install-redis: ${{ ((matrix.engine.type == 'valkey' || matrix.host.OS == 'ubuntu') && 'false') || 'true' }}
+                  engine-version: ${{ matrix.engine.version }}
 
             - name: Install tools for Go ${{ matrix.go }}
               working-directory: ./go
@@ -148,12 +133,7 @@ jobs:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Install Valkey
-              uses: ./.github/workflows/install-valkey
-              with:
                   engine-version: "7.2.5"
-                  target: "x86_64-unknown-linux-gnu"   
 
             - name: Install Go
               run: |

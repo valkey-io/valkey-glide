@@ -83,13 +83,6 @@ jobs:
               uses: ./.github/workflows/install-redis
               with:
                   redis-version: ${{ matrix.engine.version }}
-
-            - name: Install Valkey
-              if: ${{ matrix.engine.type == 'valkey' }}
-              uses: ./.github/workflows/install-valkey
-              with:
-                  engine-version: ${{ matrix.engine.version }}
-                  target: ${{ matrix.host.TARGET }}
             
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
@@ -97,7 +90,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  # install-redis: ${{ ((matrix.engine.type == 'valkey' || matrix.host.OS == 'ubuntu') && 'false') || 'true' }}
+                  engine-version: ${{ matrix.engine.version }}
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -164,6 +157,7 @@ jobs:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+                  engine-version: "7.2.5"
 
             - name: Install protoc (protobuf)
               uses: arduino/setup-protoc@v3
@@ -174,12 +168,6 @@ jobs:
             - name: Install Java
               run: |
                   yum install -y java-${{ matrix.java }}
-
-            - name: Install Valkey
-              uses: ./.github/workflows/install-valkey
-              with:
-                  engine-version: "7.2.5"
-                  target: "x86_64-unknown-linux-gnu"  
 
             - name: Build rust part
               working-directory: java
