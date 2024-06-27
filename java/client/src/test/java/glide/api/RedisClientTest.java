@@ -1523,6 +1523,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void mset_returns_success_binary() {
+        // setup
+        Map<GlideString, GlideString> keyValueMap = new LinkedHashMap<>();
+        keyValueMap.put(gs("key1"), gs("value1"));
+        keyValueMap.put(gs("key2"), gs("value2"));
+        GlideString[] args = {gs("key1"), gs("value1"), gs("key2"), gs("value2")};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(MSet), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.mset(keyValueMap);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void msetnx_returns_success() {
         // setup
         Map<String, String> keyValueMap = new LinkedHashMap<>();

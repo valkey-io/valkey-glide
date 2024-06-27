@@ -632,6 +632,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> mset(@NonNull Map<GlideString, GlideString> keyValueMap) {
+        GlideString[] args = convertMapToKeyValueStringArray(keyValueMap);
+        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
         String[] args = convertMapToKeyValueStringArray(keyValueMap);
         return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);

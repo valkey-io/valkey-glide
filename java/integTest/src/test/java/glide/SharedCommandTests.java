@@ -541,7 +541,7 @@ public class SharedCommandTests {
         String key2 = UUID.randomUUID().toString();
         String key3 = UUID.randomUUID().toString();
         String value = UUID.randomUUID().toString();
-        Map<String, String> keyValueMap = Map.of(key1, value, key2, value, key3, value);
+        Map<GlideString, GlideString> keyValueMap = Map.of(gs(key1), gs(value), gs(key2), gs(value), gs(key3), gs(value));
 
         assertEquals(OK, client.mset(keyValueMap).get());
         assertArrayEquals(
