@@ -672,12 +672,13 @@ class TestCommands:
     async def test_config_get_set(self, redis_client: TGlideClient):
         previous_timeout = await redis_client.config_get(["timeout"])
         assert await redis_client.config_set({"timeout": "1000"}) == OK
-        assert await redis_client.config_get(["timeout"]) == {"timeout": "1000"}
+        assert await redis_client.config_get(["timeout"]) == {b"timeout": b"1000"}
         # revert changes to previous timeout
-        assert isinstance(previous_timeout, dict)
-        assert isinstance(previous_timeout["timeout"], str)
+        previous_timeout_decoded = convert_bytes_to_string_dict(previous_timeout)
+        assert isinstance(previous_timeout_decoded, dict)
+        assert isinstance(previous_timeout_decoded["timeout"], str)
         assert (
-            await redis_client.config_set({"timeout": previous_timeout["timeout"]})
+            await redis_client.config_set({"timeout": previous_timeout_decoded["timeout"]})
             == OK
         )
 
@@ -5037,13 +5038,13 @@ class TestCommands:
             await redis_client.xadd(
                 key1, [("f1_1", "v1_1")], StreamAddOptions(id=stream_id1_1)
             )
-            == stream_id1_1
+            == stream_id1_1.encode()
         )
         assert (
             await redis_client.xadd(
                 key2, [("f2_1", "v2_1")], StreamAddOptions(id=stream_id2_1)
             )
-            == stream_id2_1
+            == stream_id2_1.encode()
         )
 
         # setup second entries in streams key1 and key2
@@ -5051,13 +5052,13 @@ class TestCommands:
             await redis_client.xadd(
                 key1, [("f1_2", "v1_2")], StreamAddOptions(id=stream_id1_2)
             )
-            == stream_id1_2
+            == stream_id1_2.encode()
         )
         assert (
             await redis_client.xadd(
                 key2, [("f2_2", "v2_2")], StreamAddOptions(id=stream_id2_2)
             )
-            == stream_id2_2
+            == stream_id2_2.encode()
         )
 
         # setup third entries in streams key1 and key2
@@ -5065,23 +5066,23 @@ class TestCommands:
             await redis_client.xadd(
                 key1, [("f1_3", "v1_3")], StreamAddOptions(id=stream_id1_3)
             )
-            == stream_id1_3
+            == stream_id1_3.encode()
         )
         assert (
             await redis_client.xadd(
                 key2, [("f2_3", "v2_3")], StreamAddOptions(id=stream_id2_3)
             )
-            == stream_id2_3
+            == stream_id2_3.encode()
         )
 
         assert await redis_client.xread({key1: stream_id1_1, key2: stream_id2_1}) == {
-            key1: {
-                stream_id1_2: [["f1_2", "v1_2"]],
-                stream_id1_3: [["f1_3", "v1_3"]],
+            key1.encode(): {
+                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
+                stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
             },
-            key2: {
-                stream_id2_2: [["f2_2", "v2_2"]],
-                stream_id2_3: [["f2_3", "v2_3"]],
+            key2.encode(): {
+                stream_id2_2.encode(): [[b"f2_2", b"v2_2"]],
+                stream_id2_3.encode(): [[b"f2_3", b"v2_3"]],
             },
         }
 
@@ -5090,24 +5091,24 @@ class TestCommands:
 
         # passing an empty read options argument has no effect
         assert await redis_client.xread({key1: stream_id1_1}, StreamReadOptions()) == {
-            key1: {
-                stream_id1_2: [["f1_2", "v1_2"]],
-                stream_id1_3: [["f1_3", "v1_3"]],
+            key1.encode(): {
+                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
+                stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
             },
         }
 
         assert await redis_client.xread(
             {key1: stream_id1_1}, StreamReadOptions(count=1)
         ) == {
-            key1: {
-                stream_id1_2: [["f1_2", "v1_2"]],
+            key1.encode(): {
+                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
             },
         }
         assert await redis_client.xread(
             {key1: stream_id1_1}, StreamReadOptions(count=1, block_ms=1000)
         ) == {
-            key1: {
-                stream_id1_2: [["f1_2", "v1_2"]],
+            key1.encode(): {
+                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
             },
         }
 
@@ -5126,13 +5127,13 @@ class TestCommands:
             await redis_client.xadd(
                 key1, [("f1", "v1")], StreamAddOptions(id=stream_id1)
             )
-            == stream_id1
+            == stream_id1.encode()
         )
         assert (
             await redis_client.xadd(
                 key1, [("f2", "v2")], StreamAddOptions(id=stream_id2)
             )
-            == stream_id2
+            == stream_id2.encode()
         )
 
         test_client = await create_client(
@@ -5158,17 +5159,17 @@ class TestCommands:
         assert await redis_client.xread(
             {key1: stream_id0}, StreamReadOptions(count=0)
         ) == {
-            key1: {
-                stream_id1: [["f1", "v1"]],
-                stream_id2: [["f2", "v2"]],
+            key1.encode(): {
+                stream_id1.encode(): [[b"f1", b"v1"]],
+                stream_id2.encode(): [[b"f2", b"v2"]],
             },
         }
         assert await redis_client.xread(
             {key1: stream_id0}, StreamReadOptions(count=-1)
         ) == {
-            key1: {
-                stream_id1: [["f1", "v1"]],
-                stream_id2: [["f2", "v2"]],
+            key1.encode(): {
+                stream_id1.encode(): [[b"f1", b"v1"]],
+                stream_id2.encode(): [[b"f2", b"v2"]],
             },
         }
 
@@ -6740,7 +6741,9 @@ class TestCommands:
         non_existing_key = get_random_string(10)
         maxmemory_policy_key = "maxmemory-policy"
         config = await redis_client.config_get([maxmemory_policy_key])
-        maxmemory_policy = cast(str, config.get(maxmemory_policy_key))
+        config_decoded = convert_bytes_to_string_dict(config)
+        assert config_decoded is not None
+        maxmemory_policy = cast(str, config_decoded.get(maxmemory_policy_key))
 
         try:
             assert (
@@ -7240,33 +7243,38 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut(self, redis_client: TGlideClient):
         result = await redis_client.lolwut()
-        assert "Redis ver. " in result
+        assert b"Redis ver. " in result
         result = await redis_client.lolwut(parameters=[])
-        assert "Redis ver. " in result
+        assert b"Redis ver. " in result
         result = await redis_client.lolwut(parameters=[50, 20])
-        assert "Redis ver. " in result
+        assert b"Redis ver. " in result
         result = await redis_client.lolwut(6)
-        assert "Redis ver. " in result
+        assert b"Redis ver. " in result
         result = await redis_client.lolwut(5, [30, 4, 4])
-        assert "Redis ver. " in result
+        assert b"Redis ver. " in result
 
         if isinstance(redis_client, GlideClusterClient):
             # test with multi-node route
             result = await redis_client.lolwut(route=AllNodes())
             assert isinstance(result, dict)
-            for node_result in result.values():
+            result_decoded = convert_bytes_to_string_dict(result)
+            assert result_decoded is not None
+            for node_result in result_decoded.values():
                 assert "Redis ver. " in node_result
 
             result = await redis_client.lolwut(parameters=[10, 20], route=AllNodes())
             assert isinstance(result, dict)
+            result_decoded = convert_bytes_to_string_dict(result)
             for node_result in result.values():
                 assert "Redis ver. " in node_result
 
             # test with single-node route
             result = await redis_client.lolwut(2, route=RandomNode())
+            result_decoded = convert_bytes_to_string_dict(result)
             assert "Redis ver. " in node_result
 
             result = await redis_client.lolwut(2, [10, 20], RandomNode())
+            result_decoded = convert_bytes_to_string_dict(result)
             assert "Redis ver. " in node_result
 
     @pytest.mark.parametrize("cluster_mode", [True])

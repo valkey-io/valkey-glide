@@ -4,7 +4,8 @@ from glide.constants import TClusterDecodedResponse, TClusterResponse
 
 
 def convert_bytes_to_string_dict(
-    byte_string_dict: Optional[Union[Mapping[bytes, Any], Dict[bytes, Any]]]
+        # TODO: remove the str options
+    byte_string_dict: Optional[Union[Mapping[bytes, Any], Dict[bytes, Any], Mapping[str, Any], Dict[str, Any]]]
 ) -> Optional[Dict[str, Any]]:
     """
     Recursively convert the keys and values of a dictionary from byte strings to regular strings,

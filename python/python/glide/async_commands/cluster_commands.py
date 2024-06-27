@@ -18,7 +18,6 @@ from glide.async_commands.utils.utils import (
 )
 from glide.constants import (
     TOK,
-    TClusterDecodedResponse,
     TClusterResponse,
     TResult,
     TSingleNodeRoute,
@@ -73,8 +72,11 @@ class ClusterCommands(CoreCommands):
             the queried node and value containing the information regarding the requested sections.
         """
         args = [section.value for section in sections] if sections else []
-        result_bytes = await self._execute_command(RequestType.Info, args, route)
-        return cast(TClusterResponse[bytes], result_bytes)
+
+        return cast(
+            TClusterResponse[bytes],
+            await self._execute_command(RequestType.Info, args, route),
+        )
 
     async def exec(
         self,
@@ -193,7 +195,7 @@ class ClusterCommands(CoreCommands):
 
     async def config_get(
         self, parameters: List[str], route: Optional[Route] = None
-    ) -> TClusterDecodedResponse[Dict[str, str]]:
+    ) -> TClusterResponse[Dict[str, str]]:
         """
         Get the values of configuration parameters.
         See https://redis.io/commands/config-get/ for details.
@@ -205,7 +207,7 @@ class ClusterCommands(CoreCommands):
             in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterDecodedResponse[Dict[str, str]]: A dictionary of values corresponding to the
+            TClusterResponse[Dict[str, str]]: A dictionary of values corresponding to the
             configuration parameters.
             When specifying a route other than a single node, response will be : {Address (str) : response (Dict[str, str]) , ... }
             with type of Dict[str, Dict[str, str]].
@@ -216,13 +218,9 @@ class ClusterCommands(CoreCommands):
             >>> await client.config_get(["timeout" , "maxmemory"])
             {'timeout': '1000', "maxmemory": "1GB"}
         """
-        result_bytes = await self._execute_command(
-            RequestType.ConfigGet, parameters, route
-        )
-        result_str = convert_bytes_to_string_cluster_response(result_bytes)
         return cast(
-            TClusterDecodedResponse[Dict[str, str]],
-            result_str,
+            TClusterResponse[Dict[str, str]],
+            await self._execute_command(RequestType.ConfigGet, parameters, route),
         )
 
     async def config_set(

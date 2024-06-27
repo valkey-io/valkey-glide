@@ -59,6 +59,7 @@ from tests.utils.utils import (
     check_if_server_version_lt,
     generate_lua_lib_code,
     get_random_string,
+    convert_bytes_to_string_dict,
 )
 
 
@@ -520,7 +521,7 @@ async def transaction_test(
     transaction.xlen(key11)
     args.append(2)
     transaction.xread({key11: "0-1"})
-    args.append({key11: {"0-2": [["foo", "bar"]]}})
+    args.append({key11.encode(): {b"0-2": [[b"foo", b"bar"]]}})
     transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
     args.append({b"0-1": [[b"foo", b"bar"]]})
     transaction.xrevrange(key11, IdBound("0-1"), IdBound("0-1"))
@@ -870,7 +871,9 @@ class TestTransaction:
         string_key = get_random_string(10)
         maxmemory_policy_key = "maxmemory-policy"
         config = await redis_client.config_get([maxmemory_policy_key])
-        maxmemory_policy = cast(str, config.get(maxmemory_policy_key))
+        config_decoded = convert_bytes_to_string_dict(config)
+        assert config_decoded is not None
+        maxmemory_policy = cast(str, config_decoded.get(maxmemory_policy_key))
 
         try:
             transaction = ClusterTransaction() if cluster_mode else Transaction()
@@ -924,5 +927,5 @@ class TestTransaction:
         assert results is not None
 
         for element in results:
-            assert isinstance(element, str)
-            assert "Redis ver. " in element
+            assert isinstance(element, bytes)
+            assert b"Redis ver. " in element

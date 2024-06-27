@@ -55,7 +55,7 @@ async def test_standalone_client(host: str = "localhost", port: int = 6379):
     print(f"PONG response is = {pong.decode()}")
 
 
-async def test_cluster_client(host: str = "localhost", port: int = 45027):
+async def test_cluster_client(host: str = "localhost", port: int = 6379):
     # When in Redis is cluster mode, add address of any nodes, and the client will find all nodes in the cluster.
     addresses = [NodeAddress(host, port)]
     # Check `GlideClientConfiguration/ClusterClientConfiguration` for additional options.
@@ -75,7 +75,7 @@ async def test_cluster_client(host: str = "localhost", port: int = 45027):
     print(f"PONG response is = {pong.decode()}")
     # Send INFO REPLICATION with routing option to all nodes
     info_repl_resps = await client.custom_command(["INFO", "REPLICATION"], AllNodes())
-    print(f"INFO REPLICATION responses to all nodes are = {info_repl_resps!r}")
+    print(f"INFO REPLICATION responses from all nodes are = {info_repl_resps!r}")
 
 
 async def main():
