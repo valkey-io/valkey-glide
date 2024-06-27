@@ -1,9 +1,10 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.utils;
 
-import glide.api.models.GlideString;
 import static glide.api.models.GlideString.gs;
+
 import glide.api.commands.GeospatialIndicesBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
@@ -59,7 +60,7 @@ public class ArrayTransformUtils {
                 .toArray(String[]::new);
     }
 
-        /**
+    /**
      * Converts a geospatial members to geospatial data mapping in to an array of arguments in the
      * form of [Longitude, Latitude, Member ...].
      *

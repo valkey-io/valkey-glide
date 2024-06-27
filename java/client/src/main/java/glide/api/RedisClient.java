@@ -392,10 +392,13 @@ public class RedisClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<GlideString[]> sort(@NonNull GlideString key, @NonNull SortOptions sortOptions) {
+    public CompletableFuture<GlideString[]> sort(
+            @NonNull GlideString key, @NonNull SortOptions sortOptions) {
         GlideString[] arguments = ArrayUtils.addFirst(sortOptions.toGlideStringArgs(), key);
         return commandManager.submitNewCommand(
-                Sort, arguments, response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+                Sort,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -429,7 +432,9 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<Long> sortStore(
-            @NonNull GlideString key, @NonNull GlideString destination, @NonNull SortOptions sortOptions) {
+            @NonNull GlideString key,
+            @NonNull GlideString destination,
+            @NonNull SortOptions sortOptions) {
         GlideString[] storeArguments = new GlideString[] {gs(STORE_COMMAND_STRING), destination};
         GlideString[] arguments =
                 concatenateArrays(new GlideString[] {key}, sortOptions.toGlideStringArgs(), storeArguments);

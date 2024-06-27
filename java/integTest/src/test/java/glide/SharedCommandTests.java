@@ -898,7 +898,8 @@ public class SharedCommandTests {
         GlideString field1 = gs(UUID.randomUUID().toString());
         GlideString field2 = gs(UUID.randomUUID().toString());
         GlideString value = gs(UUID.randomUUID().toString());
-        Map<String, String> fieldValueMap = Map.of(field1.toString(), value.toString(), field2.toString(), value.toString());
+        Map<String, String> fieldValueMap =
+                Map.of(field1.toString(), value.toString(), field2.toString(), value.toString());
 
         assertEquals(2, client.hset(key.toString(), fieldValueMap).get());
         assertArrayEquals(
@@ -908,7 +909,6 @@ public class SharedCommandTests {
                 new GlideString[] {null, null},
                 client.hmget(gs("non_existing_key"), new GlideString[] {field1, field2}).get());
     }
-
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -5561,7 +5561,6 @@ public class SharedCommandTests {
                 assertEquals(expected[i][j], actual[i][j], 1e-9);
             }
         }
-
 
         // key exists but holding the wrong kind of value (non-ZSET)
         assertEquals(OK, client.set(key2, gs("geopos")).get());

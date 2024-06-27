@@ -392,7 +392,7 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> srandmember(String key);
-    
+
     /**
      * Returns a random element from the set value stored at <code>key</code>.
      *

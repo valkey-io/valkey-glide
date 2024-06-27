@@ -60,7 +60,9 @@ public interface GeospatialIndicesBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> geoadd(
-            GlideString key, Map<GlideString, GeospatialData> membersToGeospatialData, GeoAddOptions options);
+            GlideString key,
+            Map<GlideString, GeospatialData> membersToGeospatialData,
+            GeoAddOptions options);
 
     /**
      * Adds geospatial members with their positions to the specified sorted set stored at <code>key
@@ -102,7 +104,8 @@ public interface GeospatialIndicesBaseCommands {
      * assert num == 2L; // Indicates that two elements have been added to the sorted set gs("mySortedSet").
      * }</pre>
      */
-    CompletableFuture<Long> geoadd(GlideString key, Map<GlideString, GeospatialData> membersToGeospatialData);
+    CompletableFuture<Long> geoadd(
+            GlideString key, Map<GlideString, GeospatialData> membersToGeospatialData);
 
     /**
      * Returns the positions (longitude,latitude) of all the specified <code>members</code> of the

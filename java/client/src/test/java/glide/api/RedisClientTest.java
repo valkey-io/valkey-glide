@@ -6782,7 +6782,15 @@ public class RedisClientTest {
         membersToGeoSpatialData.put(gs("Catania"), new GeospatialData(15.087269, 40));
         membersToGeoSpatialData.put(gs("Palermo"), new GeospatialData(13.361389, 38.115556));
         GlideString[] arguments =
-                new GlideString[] {key, gs("15.087269"), gs("40.0"), gs("Catania"), gs("13.361389"), gs("38.115556"), gs("Palermo")};
+                new GlideString[] {
+                    key,
+                    gs("15.087269"),
+                    gs("40.0"),
+                    gs("Catania"),
+                    gs("13.361389"),
+                    gs("38.115556"),
+                    gs("Palermo")
+                };
         Long value = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6980,7 +6988,8 @@ public class RedisClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString[] members = {gs("Catania"), gs("Palermo"), gs("NonExisting")};
-        GlideString[] arguments = new GlideString[] {key, gs("Catania"), gs("Palermo"), gs("NonExisting")};
+        GlideString[] arguments =
+                new GlideString[] {key, gs("Catania"), gs("Palermo"), gs("NonExisting")};
         GlideString[] value = {gs("sqc8b49rny0"), gs("sqdtr74hyu0"), null};
 
         CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
@@ -9056,7 +9065,9 @@ public class RedisClientTest {
         String byPattern = "byPattern";
         String getPattern = "getPattern";
         GlideString[] args =
-                new GlideString[] {key, gs(BY_COMMAND_STRING), gs(byPattern), gs(GET_COMMAND_STRING), gs(getPattern)};
+                new GlideString[] {
+                    key, gs(BY_COMMAND_STRING), gs(byPattern), gs(GET_COMMAND_STRING), gs(getPattern)
+                };
         CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
         testResponse.complete(result);
 
@@ -9126,7 +9137,7 @@ public class RedisClientTest {
         assertEquals(result, payload);
     }
 
-        @SneakyThrows
+    @SneakyThrows
     @Test
     public void sortStore_with_options_binary_returns_success() {
         // setup
