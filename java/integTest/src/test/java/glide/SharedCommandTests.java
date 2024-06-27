@@ -1276,7 +1276,8 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void lpos_binary(BaseClient client) {
         GlideString key = gs("{ListKey}-1-" + UUID.randomUUID());
-        GlideString[] valueArray = new GlideString[] {gs("a"), gs("a"), gs("b"), gs("c"), gs("a"), gs("b")};
+        GlideString[] valueArray =
+                new GlideString[] {gs("a"), gs("a"), gs("b"), gs("c"), gs("a"), gs("b")};
         assertEquals(6L, client.rpush(key, valueArray).get());
 
         // simplest case
@@ -1294,7 +1295,8 @@ public class SharedCommandTests {
                 0L, client.lpos(key, gs("a"), LPosOptions.builder().rank(1L).maxLength(0L).build()).get());
 
         // limited comparisons
-        assertNull(client.lpos(key, gs("c"), LPosOptions.builder().rank(1L).maxLength(2L).build()).get());
+        assertNull(
+                client.lpos(key, gs("c"), LPosOptions.builder().rank(1L).maxLength(2L).build()).get());
 
         // invalid rank value
         ExecutionException lposException =
@@ -1370,7 +1372,8 @@ public class SharedCommandTests {
     @MethodSource("getClients")
     public void lposCount_binary(BaseClient client) {
         GlideString key = gs("{ListKey}-1-" + UUID.randomUUID());
-        GlideString[] valueArray = new GlideString[] {gs("a"), gs("a"), gs("b"), gs("c"), gs("a"), gs("b")};
+        GlideString[] valueArray =
+                new GlideString[] {gs("a"), gs("a"), gs("b"), gs("c"), gs("a"), gs("b")};
         assertEquals(6L, client.rpush(key, valueArray).get());
 
         assertArrayEquals(new Long[] {0L, 1L}, client.lposCount(key, gs("a"), 2L).get());
@@ -3677,7 +3680,10 @@ public class SharedCommandTests {
                                 StreamAddOptions.builder().id(timestamp1).build())
                         .get());
 
-        assertNotNull(client.xadd(key.toString(), Map.of(field1.toString(), "foo2", field2.toString(), "bar2")).get());
+        assertNotNull(
+                client
+                        .xadd(key.toString(), Map.of(field1.toString(), "foo2", field2.toString(), "bar2"))
+                        .get());
         assertEquals(2L, client.xlen(key).get());
 
         // this will trim the first entry.

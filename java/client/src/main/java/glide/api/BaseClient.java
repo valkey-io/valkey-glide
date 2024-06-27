@@ -582,7 +582,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<GlideString> getex(@NonNull GlideString key, @NonNull GetExOptions options) {
+    public CompletableFuture<GlideString> getex(
+            @NonNull GlideString key, @NonNull GetExOptions options) {
         GlideString[] arguments = ArrayUtils.addFirst(options.toGlideStringArgs(), key);
         return commandManager.submitNewCommand(GetEx, arguments, this::handleGlideStringOrNullResponse);
     }
@@ -973,7 +974,8 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> lpos(
             @NonNull GlideString key, @NonNull GlideString element, @NonNull LPosOptions options) {
-        GlideString[] arguments = concatenateArrays(new GlideString[] {key, element}, options.toGlideStringArgs());
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {key, element}, options.toGlideStringArgs());
         return commandManager.submitNewCommand(LPos, arguments, this::handleLongOrNullResponse);
     }
 
@@ -1008,10 +1010,14 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long[]> lposCount(
-            @NonNull GlideString key, @NonNull GlideString element, long count, @NonNull LPosOptions options) {
+            @NonNull GlideString key,
+            @NonNull GlideString element,
+            long count,
+            @NonNull LPosOptions options) {
         GlideString[] arguments =
                 concatenateArrays(
-                        new GlideString[] {key, element, gs(COUNT_REDIS_API), gs(Long.toString(count))}, options.toGlideStringArgs());
+                        new GlideString[] {key, element, gs(COUNT_REDIS_API), gs(Long.toString(count))},
+                        options.toGlideStringArgs());
 
         return commandManager.submitNewCommand(
                 LPos, arguments, response -> castArray(handleArrayResponse(response), Long.class));
@@ -1853,7 +1859,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Long> xtrim(@NonNull GlideString key, @NonNull StreamTrimOptions options) {
+    public CompletableFuture<Long> xtrim(
+            @NonNull GlideString key, @NonNull StreamTrimOptions options) {
         GlideString[] arguments = ArrayUtils.addFirst(options.toGlideStringArgs(), key);
         return commandManager.submitNewCommand(XTrim, arguments, this::handleLongResponse);
     }

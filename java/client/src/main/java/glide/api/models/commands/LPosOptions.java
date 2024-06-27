@@ -1,7 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
-import glide.api.models.GlideString;
+
 import glide.api.commands.ListBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;

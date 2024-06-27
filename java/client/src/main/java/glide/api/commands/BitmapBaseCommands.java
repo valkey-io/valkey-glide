@@ -605,5 +605,6 @@ public interface BitmapBaseCommands {
      * assertArrayEquals(payload, new Long[] {2L}); // Value is from 0(10)00001
      * }</pre>
      */
-    CompletableFuture<Long[]> bitfieldReadOnly(GlideString key, BitFieldReadOnlySubCommands[] subCommands);
+    CompletableFuture<Long[]> bitfieldReadOnly(
+            GlideString key, BitFieldReadOnlySubCommands[] subCommands);
 }

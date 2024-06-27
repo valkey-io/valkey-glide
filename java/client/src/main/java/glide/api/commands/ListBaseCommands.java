@@ -210,7 +210,8 @@ public interface ListBaseCommands {
      * assertArrayEquals(new Long[]{4L, 5L, 6L}, position);
      * }</pre>
      */
-    CompletableFuture<Long[]> lposCount(@NonNull GlideString key, @NonNull GlideString element, long count);
+    CompletableFuture<Long[]> lposCount(
+            @NonNull GlideString key, @NonNull GlideString element, long count);
 
     /**
      * Returns an <code>array</code> of indices of matching elements within a list based on the given
@@ -268,7 +269,10 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long[]> lposCount(
-            @NonNull GlideString key, @NonNull GlideString element, long count, @NonNull LPosOptions options);
+            @NonNull GlideString key,
+            @NonNull GlideString element,
+            long count,
+            @NonNull LPosOptions options);
 
     /**
      * Removes and returns up to <code>count</code> elements of the list stored at <code>key</code>,

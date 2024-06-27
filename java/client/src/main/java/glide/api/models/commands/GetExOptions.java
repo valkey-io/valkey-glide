@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
-import glide.api.models.GlideString;
-import java.util.Arrays;
+
 import static glide.api.models.commands.GetExOptions.ExpiryType.MILLISECONDS;
 import static glide.api.models.commands.GetExOptions.ExpiryType.PERSIST;
 import static glide.api.models.commands.GetExOptions.ExpiryType.SECONDS;
@@ -9,7 +8,9 @@ import static glide.api.models.commands.GetExOptions.ExpiryType.UNIX_MILLISECOND
 import static glide.api.models.commands.GetExOptions.ExpiryType.UNIX_SECONDS;
 
 import glide.api.commands.StringBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 

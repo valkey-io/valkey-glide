@@ -576,7 +576,6 @@ public class RedisClientTest {
         assertEquals(value, payload);
     }
 
-    
     @SneakyThrows
     @Test
     public void getex_binary() {
@@ -585,7 +584,8 @@ public class RedisClientTest {
         GlideString value = gs("testValue");
         CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
-        when(commandManager.<GlideString>submitNewCommand(eq(GetEx), eq(new GlideString[] {key}), any()))
+        when(commandManager.<GlideString>submitNewCommand(
+                        eq(GetEx), eq(new GlideString[] {key}), any()))
                 .thenReturn(testResponse);
 
         // exercise
@@ -2385,12 +2385,16 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(index, payload);
     }
+
     @SneakyThrows
     @Test
     public void lpos_withOptions_binary() {
         // setup
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
-        GlideString[] args = new GlideString[] {gs("list"), gs("element"), gs("RANK"), gs("1"), gs("MAXLEN"), gs("1000")};
+        GlideString[] args =
+                new GlideString[] {
+                    gs("list"), gs("element"), gs("RANK"), gs("1"), gs("MAXLEN"), gs("1000")
+                };
         long index = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -2483,7 +2487,17 @@ public class RedisClientTest {
     public void lposCount_withOptions_binary() {
         // setup
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
-        GlideString[] args = new GlideString[] {gs("list"), gs("element"), gs("COUNT"), gs("0"), gs("RANK"), gs("1"), gs("MAXLEN"), gs("1000")};
+        GlideString[] args =
+                new GlideString[] {
+                    gs("list"),
+                    gs("element"),
+                    gs("COUNT"),
+                    gs("0"),
+                    gs("RANK"),
+                    gs("1"),
+                    gs("MAXLEN"),
+                    gs("1000")
+                };
         Long[] index = new Long[] {0L};
 
         CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
@@ -5167,7 +5181,8 @@ public class RedisClientTest {
         // setup
         GlideString key = gs("testKey");
         StreamTrimOptions limit = new MinId(true, "id");
-        GlideString[] arguments = new GlideString[] {key, gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("id")};
+        GlideString[] arguments =
+                new GlideString[] {key, gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("id")};
         Long completedResult = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
