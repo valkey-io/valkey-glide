@@ -381,6 +381,21 @@ public interface StringBaseCommands {
     CompletableFuture<Long> decr(String key);
 
     /**
+     * Decrements the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/decr/">redis.io</a> for details.
+     * @param key The key to decrement its value.
+     * @return The value of <code>key</code> after the decrement.
+     * @example
+     *     <pre>{@code
+     * Long num = client.decr(gs("key")).get();
+     * assert num == 4L;
+     * }</pre>
+     */
+    CompletableFuture<Long> decr(GlideString key);
+
+    /**
      * Decrements the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *
@@ -395,6 +410,22 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> decrBy(String key, long amount);
+
+    /**
+     * Decrements the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
+     * does not exist, it is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/decrby/">redis.io</a> for details.
+     * @param key The key to decrement its value.
+     * @param amount The amount to decrement.
+     * @return The value of <code>key</code> after the decrement.
+     * @example
+     *     <pre>{@code
+     * Long num = client.decrBy(gs("key"), 2).get();
+     * assert num == 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> decrBy(GlideString key, long amount);
 
     /**
      * Returns the length of the string value stored at <code>key</code>.

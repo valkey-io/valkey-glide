@@ -115,6 +115,24 @@ public interface HashBaseCommands {
     CompletableFuture<Long> hdel(String key, String[] fields);
 
     /**
+     * Removes the specified fields from the hash stored at <code>key</code>. Specified fields that do
+     * not exist within this hash are ignored.
+     *
+     * @see <a href="https://redis.io/commands/hdel/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields to remove from the hash stored at <code>key</code>.
+     * @return The number of fields that were removed from the hash, not including specified but
+     *     non-existing fields.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
+     * @example
+     *     <pre>{@code
+     * Long num = client.hdel("my_hash", new String[] {gs("field1"), gs("field2")}).get();
+     * assert num == 2L; //Indicates that two fields were successfully removed from the hash.
+     * }</pre>
+     */
+    CompletableFuture<Long> hdel(GlideString key, GlideString[] fields);
+
+    /**
      * Returns the number of fields contained in the hash stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/hlen/">redis.io</a> for details.
