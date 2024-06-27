@@ -10,12 +10,12 @@ import pytest
 from glide.async_commands.core import CoreCommands
 from glide.config import (
     ClusterClientConfiguration,
+    GlideClientConfiguration,
     ProtocolVersion,
-    RedisClientConfiguration,
 )
 from glide.constants import OK
 from glide.exceptions import ConfigurationError
-from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from tests.conftest import create_client
 from tests.utils.utils import check_if_server_version_lt, get_random_string
 
@@ -40,7 +40,7 @@ async def create_two_clients(
     pub_sub2: Optional[Any] = None,
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
 ) -> Tuple[
-    Union[RedisClient, RedisClusterClient], Union[RedisClient, RedisClusterClient]
+    Union[GlideClient, GlideClusterClient], Union[GlideClient, GlideClusterClient]
 ]:
     """
     Sets 2 up clients for testing purposes.
@@ -80,7 +80,7 @@ async def create_two_clients(
 
 async def get_message_by_method(
     method: MethodTesting,
-    client: TRedisClient,
+    client: TGlideClient,
     messages: Optional[List[CoreCommands.PubSubMsg]] = None,
     index: Optional[int] = None,
 ):
@@ -94,7 +94,7 @@ async def get_message_by_method(
 
 async def check_no_messages_left(
     method,
-    client: TRedisClient,
+    client: TGlideClient,
     callback: Optional[List[Any]] = None,
     expected_callback_messages_count: int = 0,
 ):
@@ -115,7 +115,7 @@ def create_pubsub_subscription(
         ClusterClientConfiguration.PubSubChannelModes, Set[str]
     ],
     standalone_channels_and_patterns: Dict[
-        RedisClientConfiguration.PubSubChannelModes, Set[str]
+        GlideClientConfiguration.PubSubChannelModes, Set[str]
     ],
     callback=None,
     context=None,
@@ -126,7 +126,7 @@ def create_pubsub_subscription(
             callback=callback,
             context=context,
         )
-    return RedisClientConfiguration.PubSubSubscriptions(
+    return GlideClientConfiguration.PubSubSubscriptions(
         channels_and_patterns=standalone_channels_and_patterns,
         callback=callback,
         context=context,
@@ -170,7 +170,7 @@ class TestPubSub:
         pub_sub = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {RedisClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
             callback=callback,
             context=context,
         )
@@ -219,7 +219,7 @@ class TestPubSub:
         pub_sub = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {RedisClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
         )
 
         publishing_client, listening_client = await create_two_clients(
@@ -298,7 +298,7 @@ class TestPubSub:
                 )
             },
             {
-                RedisClientConfiguration.PubSubChannelModes.Exact: set(
+                GlideClientConfiguration.PubSubChannelModes.Exact: set(
                     channels_and_messages.keys()
                 )
             },
@@ -375,7 +375,7 @@ class TestPubSub:
                 )
             },
             {
-                RedisClientConfiguration.PubSubChannelModes.Exact: set(
+                GlideClientConfiguration.PubSubChannelModes.Exact: set(
                     channels_and_messages.keys()
                 )
             },
@@ -464,7 +464,7 @@ class TestPubSub:
 
         try:
             assert (
-                await cast(RedisClusterClient, publishing_client).publish(
+                await cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == publish_response
@@ -522,13 +522,13 @@ class TestPubSub:
 
         try:
             assert (
-                await cast(RedisClusterClient, publishing_client).publish(
+                await cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == publish_response
             )
             assert (
-                await cast(RedisClusterClient, publishing_client).publish(
+                await cast(GlideClusterClient, publishing_client).publish(
                     message2, channel, sharded=True
                 )
                 == publish_response
@@ -617,7 +617,7 @@ class TestPubSub:
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
                 assert (
-                    await cast(RedisClusterClient, publishing_client).publish(
+                    await cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
                     )
                     == publish_response
@@ -682,7 +682,7 @@ class TestPubSub:
         pub_sub = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-            {RedisClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
+            {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
             callback=callback,
             context=context,
         )
@@ -741,7 +741,7 @@ class TestPubSub:
         pub_sub = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-            {RedisClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
+            {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
         )
 
         publishing_client, listening_client = await create_two_clients(
@@ -815,7 +815,7 @@ class TestPubSub:
         pub_sub = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-            {RedisClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
+            {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
             callback=callback,
             context=context,
         )
@@ -910,10 +910,10 @@ class TestPubSub:
                 ClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN},
             },
             {
-                RedisClientConfiguration.PubSubChannelModes.Exact: set(
+                GlideClientConfiguration.PubSubChannelModes.Exact: set(
                     exact_channels_and_messages.keys()
                 ),
-                RedisClientConfiguration.PubSubChannelModes.Pattern: {PATTERN},
+                GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN},
             },
             callback=callback,
             context=context,
@@ -1023,7 +1023,7 @@ class TestPubSub:
                 )
             },
             {
-                RedisClientConfiguration.PubSubChannelModes.Exact: set(
+                GlideClientConfiguration.PubSubChannelModes.Exact: set(
                     exact_channels_and_messages.keys()
                 )
             },
@@ -1046,7 +1046,7 @@ class TestPubSub:
         pub_sub_pattern = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-            {RedisClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
+            {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
             callback=callback,
             context=context,
         )
@@ -1203,7 +1203,7 @@ class TestPubSub:
             # Publish sharded messages to all channels
             for channel, message in sharded_channels_and_messages.items():
                 assert (
-                    await cast(RedisClusterClient, publishing_client).publish(
+                    await cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
                     )
                     == publish_response
@@ -1311,7 +1311,7 @@ class TestPubSub:
                 )
             },
             {
-                RedisClientConfiguration.PubSubChannelModes.Exact: set(
+                GlideClientConfiguration.PubSubChannelModes.Exact: set(
                     exact_channels_and_messages.keys()
                 )
             },
@@ -1336,7 +1336,7 @@ class TestPubSub:
         pub_sub_pattern = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
-            {RedisClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
+            {GlideClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
             callback=callback,
             context=context,
         )
@@ -1374,7 +1374,7 @@ class TestPubSub:
             # Publish sharded messages to all channels
             for channel, message in sharded_channels_and_messages.items():
                 assert (
-                    await cast(RedisClusterClient, publishing_client).publish(
+                    await cast(GlideClusterClient, publishing_client).publish(
                         message, channel, sharded=True
                     )
                     == publish_response
@@ -1498,7 +1498,7 @@ class TestPubSub:
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
-            {RedisClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
             callback=callback,
             context=context,
         )
@@ -1521,7 +1521,7 @@ class TestPubSub:
         pub_sub_pattern = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
-            {RedisClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
+            {GlideClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
             callback=callback,
             context=context,
         )
@@ -1546,7 +1546,7 @@ class TestPubSub:
             assert await publishing_client.publish(MESSAGE_EXACT, CHANNEL_NAME) == 2
             assert await publishing_client.publish(MESSAGE_PATTERN, CHANNEL_NAME) == 2
             assert (
-                await cast(RedisClusterClient, publishing_client).publish(
+                await cast(GlideClusterClient, publishing_client).publish(
                     MESSAGE_SHARDED, CHANNEL_NAME, sharded=True
                 )
                 == 1
@@ -1639,7 +1639,7 @@ class TestPubSub:
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
-            {RedisClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
             callback=callback,
             context=context_exact,
         )
@@ -1647,7 +1647,7 @@ class TestPubSub:
         pub_sub_pattern = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
-            {RedisClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
+            {GlideClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
             callback=callback,
             context=context_pattern,
         )
@@ -1744,7 +1744,7 @@ class TestPubSub:
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
-            {RedisClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {CHANNEL_NAME}},
             callback=callback,
             context=context_exact,
         )
@@ -1752,7 +1752,7 @@ class TestPubSub:
         pub_sub_pattern = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
-            {RedisClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
+            {GlideClientConfiguration.PubSubChannelModes.Pattern: {CHANNEL_NAME}},
             callback=callback,
             context=context_pattern,
         )
@@ -1786,7 +1786,7 @@ class TestPubSub:
                 == publish_response
             )
             assert (
-                await cast(RedisClusterClient, client_exact).publish(
+                await cast(GlideClusterClient, client_exact).publish(
                     MESSAGE_SHARDED, CHANNEL_NAME, sharded=True
                 )
                 == 1
@@ -1862,7 +1862,7 @@ class TestPubSub:
         pub_sub = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {RedisClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
         )
 
         publishing_client, listening_client = await create_two_clients(
@@ -1942,7 +1942,7 @@ class TestPubSub:
 
         try:
             assert (
-                await cast(RedisClusterClient, publishing_client).publish(
+                await cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == publish_response
@@ -2008,7 +2008,7 @@ class TestPubSub:
         pub_sub = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {RedisClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
             callback=callback,
             context=context,
         )
@@ -2080,7 +2080,7 @@ class TestPubSub:
 
         try:
             assert (
-                await cast(RedisClusterClient, publishing_client).publish(
+                await cast(GlideClusterClient, publishing_client).publish(
                     message, channel, sharded=True
                 )
                 == publish_response
@@ -2109,7 +2109,7 @@ class TestPubSub:
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {RedisClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
         )
 
         with pytest.raises(ConfigurationError):
@@ -2127,7 +2127,7 @@ class TestPubSub:
         pub_sub_exact = create_pubsub_subscription(
             cluster_mode,
             {ClusterClientConfiguration.PubSubChannelModes.Exact: {channel}},
-            {RedisClientConfiguration.PubSubChannelModes.Exact: {channel}},
+            {GlideClientConfiguration.PubSubChannelModes.Exact: {channel}},
             context=context,
         )
 
