@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import argparse
 import logging
@@ -497,7 +497,7 @@ def wait_for_a_message_in_redis_logs(
             continue
         log_file = f"{dir}/redis.log"
 
-        if server_ports and str(dir) not in server_ports:
+        if server_ports and os.path.basename(os.path.normpath(dir)) not in server_ports:
             continue
         if not wait_for_message(log_file, message, 10):
             raise Exception(

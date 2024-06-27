@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
 import static glide.TestConfiguration.REDIS_VERSION;
@@ -13,6 +13,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 
 import glide.api.models.BaseTransaction;
 import glide.api.models.commands.ExpireOptions;
+import glide.api.models.commands.GetExOptions;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.InfLexBound;
@@ -37,7 +38,10 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
+import glide.api.models.commands.stream.StreamReadGroupOptions;
+import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import java.util.HashMap;
 import java.util.Map;
@@ -103,6 +107,8 @@ public class TransactionTestUtilities {
         String genericKey2 = "{GenericKey}-2-" + UUID.randomUUID();
         String genericKey3 = "{GenericKey}-3-" + UUID.randomUUID();
         String genericKey4 = "{GenericKey}-4-" + UUID.randomUUID();
+        String[] ascendingList = new String[] {"1", "2", "3"};
+        String[] descendingList = new String[] {"3", "2", "1"};
 
         transaction
                 .set(genericKey1, value1)
@@ -124,7 +130,11 @@ public class TransactionTestUtilities {
                 .expireAt(genericKey1, 42) // expire (delete) key immediately
                 .pexpire(genericKey1, 42)
                 .pexpireAt(genericKey1, 42)
-                .ttl(genericKey2);
+                .ttl(genericKey2)
+                .lpush(genericKey3, new String[] {"3", "1", "2"})
+                .sort(genericKey3)
+                .sortStore(genericKey3, genericKey4)
+                .lrange(genericKey4, 0, -1);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
@@ -134,7 +144,8 @@ public class TransactionTestUtilities {
                     .pexpire(genericKey1, 42, ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
                     .pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                     .expiretime(genericKey1)
-                    .pexpiretime(genericKey1);
+                    .pexpiretime(genericKey1)
+                    .sortReadOnly(genericKey3);
         }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
@@ -167,6 +178,10 @@ public class TransactionTestUtilities {
                     false, // pexpire(genericKey1, 42)
                     false, // pexpireAt(genericKey1, 42)
                     -2L, // ttl(genericKey2)
+                    3L, // lpush(genericKey3, new String[] {"3", "1", "2"})
+                    ascendingList, // sort(genericKey3)
+                    3L, // sortStore(genericKey3, genericKey4)
+                    ascendingList, // lrange(genericKey4, 0, -1)
                 };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
@@ -181,6 +196,7 @@ public class TransactionTestUtilities {
                                 false, // pexpireAt(genericKey1, 42, ExpireOptions.HAS_NO_EXPIRY)
                                 -2L, // expiretime(genericKey1)
                                 -2L, // pexpiretime(genericKey1)
+                                ascendingList, // sortReadOnly(genericKey3)
                             });
         }
 
@@ -207,9 +223,22 @@ public class TransactionTestUtilities {
         String stringKey6 = "{StringKey}-6-" + UUID.randomUUID();
         String stringKey7 = "{StringKey}-7-" + UUID.randomUUID();
         String stringKey8 = "{StringKey}-8-" + UUID.randomUUID();
+        String stringKey9 = "{StringKey}-9-" + UUID.randomUUID();
+
+        Map<String, Object> expectedLcsIdxObject =
+                Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+
+        Map<String, Object> expectedLcsIdxWithMatchLenObject =
+                Map.of(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
 
         transaction
+                .flushall()
                 .set(stringKey1, value1)
+                .randomKey()
                 .get(stringKey1)
                 .getdel(stringKey1)
                 .set(stringKey2, value2, SetOptions.builder().returnOldValue(true).build())
@@ -238,12 +267,25 @@ public class TransactionTestUtilities {
                     .lcs(stringKey6, stringKey7)
                     .lcs(stringKey6, stringKey8)
                     .lcsLen(stringKey6, stringKey7)
-                    .lcsLen(stringKey6, stringKey8);
+                    .lcsLen(stringKey6, stringKey8)
+                    .lcsIdx(stringKey6, stringKey7)
+                    .lcsIdx(stringKey6, stringKey7, 1)
+                    .lcsIdxWithMatchLen(stringKey6, stringKey7)
+                    .lcsIdxWithMatchLen(stringKey6, stringKey7, 1);
+        }
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            transaction
+                    .set(stringKey9, value1)
+                    .getex(stringKey9)
+                    .getex(stringKey9, GetExOptions.Seconds(20L));
         }
 
         var expectedResults =
                 new Object[] {
+                    OK, // flushall()
                     OK, // set(stringKey1, value1)
+                    stringKey1, // randomKey()
                     value1, // get(stringKey1)
                     value1, // getdel(stringKey1)
                     null, // set(stringKey2, value2, returnOldValue(true))
@@ -277,6 +319,21 @@ public class TransactionTestUtilities {
                                 "", // lcs(stringKey6, stringKey8)
                                 3L, // lcsLEN(stringKey6, stringKey7)
                                 0L, // lcsLEN(stringKey6, stringKey8)
+                                expectedLcsIdxObject, // lcsIdx(stringKey6, stringKey7)
+                                expectedLcsIdxObject, // lcsIdx(stringKey6, stringKey7, minMatchLen(1L)
+                                expectedLcsIdxWithMatchLenObject, // lcsIdxWithMatchLen(stringKey6, stringKey7)
+                                expectedLcsIdxWithMatchLenObject, // lcsIdxWithMatchLen(key6, key7, minMatchLen(1L))
+                            });
+        }
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                OK, // set(stringKey9, value1)
+                                value1, // getex(stringKey1)
+                                value1, // getex(stringKey1,GetExOptions.Seconds(20L))
                             });
         }
 
@@ -469,6 +526,7 @@ public class TransactionTestUtilities {
                 .smismember(setKey1, new String[] {"baz", "foo"})
                 .sinter(new String[] {setKey1, setKey1})
                 .sadd(setKey2, new String[] {"a", "b"})
+                .sunion(new String[] {setKey2, setKey1})
                 .sunionstore(setKey3, new String[] {setKey2, setKey1})
                 .sdiffstore(setKey3, new String[] {setKey2, setKey1})
                 .sinterstore(setKey3, new String[] {setKey2, setKey1})
@@ -499,6 +557,7 @@ public class TransactionTestUtilities {
                     new Boolean[] {true, false}, // smismembmer(setKey1, new String[] {"baz", "foo"})
                     Set.of("baz"), // sinter(new String[] { setKey1, setKey1 })
                     2L, // sadd(setKey2, new String[] { "a", "b" })
+                    Set.of("a", "b", "baz"), // sunion(new String[] {setKey2, setKey1})
                     3L, // sunionstore(setKey3, new String[] { setKey2, setKey1 })
                     2L, // sdiffstore(setKey3, new String[] { setKey2, setKey1 })
                     0L, // sinterstore(setKey3, new String[] { setKey2, setKey1 })
@@ -669,6 +728,8 @@ public class TransactionTestUtilities {
                 .lolwut(1)
                 .flushall()
                 .flushall(ASYNC)
+                .flushdb()
+                .flushdb(ASYNC)
                 .dbsize();
 
         return new Object[] {
@@ -678,6 +739,8 @@ public class TransactionTestUtilities {
             "Redis ver. " + REDIS_VERSION + '\n', // lolwut(1)
             OK, // flushall()
             OK, // flushall(ASYNC)
+            OK, // flushdb()
+            OK, // flushdb(ASYNC)
             0L, // dbsize()
         };
     }
@@ -718,6 +781,7 @@ public class TransactionTestUtilities {
         final String streamKey1 = "{streamKey}-1-" + UUID.randomUUID();
         final String groupName1 = "{groupName}-1-" + UUID.randomUUID();
         final String groupName2 = "{groupName}-2-" + UUID.randomUUID();
+        final String consumer1 = "{consumer}-1-" + UUID.randomUUID();
 
         transaction
                 .xadd(streamKey1, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
@@ -725,14 +789,31 @@ public class TransactionTestUtilities {
                 .xadd(streamKey1, Map.of("field3", "value3"), StreamAddOptions.builder().id("0-3").build())
                 .xlen(streamKey1)
                 .xread(Map.of(streamKey1, "0-2"))
+                .xread(Map.of(streamKey1, "0-2"), StreamReadOptions.builder().count(1L).build())
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
                 .xrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
                 .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"))
                 .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
                 .xtrim(streamKey1, new MinId(true, "0-2"))
-                .xgroupCreate(streamKey1, groupName1, "0-0")
+                .xgroupCreate(streamKey1, groupName1, "0-2")
                 .xgroupCreate(
                         streamKey1, groupName2, "0-0", StreamGroupOptions.builder().makeStream().build())
+                .xgroupCreateConsumer(streamKey1, groupName1, consumer1)
+                .xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1)
+                .xreadgroup(
+                        Map.of(streamKey1, "0-3"),
+                        groupName1,
+                        consumer1,
+                        StreamReadGroupOptions.builder().count(2L).build())
+                .xpending(streamKey1, groupName1)
+                .xack(streamKey1, groupName1, new String[] {"0-3"})
+                .xpending(
+                        streamKey1,
+                        groupName1,
+                        StreamRange.InfRangeBound.MIN,
+                        StreamRange.InfRangeBound.MAX,
+                        1L)
+                .xgroupDelConsumer(streamKey1, groupName1, consumer1)
                 .xgroupDestroy(streamKey1, groupName1)
                 .xgroupDestroy(streamKey1, groupName2)
                 .xdel(streamKey1, new String[] {"0-3", "0-5"});
@@ -745,6 +826,11 @@ public class TransactionTestUtilities {
             Map.of(
                     streamKey1,
                     Map.of("0-3", new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"));
+            Map.of(
+                    streamKey1,
+                    Map.of(
+                            "0-3",
+                            new String[][] {{"field3", "value3"}})), // xread(Map.of(key9, "0-2"), options);
             Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1")
             Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrange(streamKey1, "0-1", "0-1", 1l)
             Map.of("0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1")
@@ -753,6 +839,23 @@ public class TransactionTestUtilities {
             1L, // xtrim(streamKey1, new MinId(true, "0-2"))
             OK, // xgroupCreate(streamKey1, groupName1, "0-0")
             OK, // xgroupCreate(streamKey1, groupName1, "0-0", options)
+            true, // xgroupCreateConsumer(streamKey1, groupName1, consumer1)
+            Map.of(
+                    streamKey1,
+                    Map.of(
+                            "0-3",
+                            new String[][] {
+                                {"field3", "value3"}
+                            })), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1);
+            Map.of(
+                    streamKey1,
+                    Map.of()), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1, options);
+            new Object[] {
+                1L, "0-3", "0-3", new Object[][] {{consumer1, "1"}}
+            }, // xpending(streamKey1, groupName1)
+            1L, // xack(streamKey1, groupName1, new String[] {"0-3"})
+            new Object[] {}, // xpending(streamKey1, groupName1, MIN, MAX, 1L)
+            0L, // xgroupDelConsumer(streamKey1, groupName1, consumer1)
             true, // xgroupDestroy(streamKey1, groupName1)
             true, // xgroupDestroy(streamKey1, groupName2)
             1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"});
