@@ -26,11 +26,14 @@ class MethodTesting(IntEnum):
     """
 
     Async = 0
+    "Uses asynchronous subscription method."
     Sync = 1
+    "Uses synchronous subscription method."
     Callback = 2
+    "Uses callback-based subscription method."
 
 
-async def create_clients_with_subscription(
+async def create_two_clients(
     request,
     cluster_mode,
     pub_sub,
@@ -172,7 +175,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -219,7 +222,7 @@ class TestPubSub:
             {RedisClientConfiguration.PubSubChannelModes.Exact: {channel}},
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -302,7 +305,7 @@ class TestPubSub:
             callback=callback,
             context=context,
         )
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -378,7 +381,7 @@ class TestPubSub:
             },
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -452,7 +455,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
         min_version = "7.0.0"
@@ -509,7 +512,7 @@ class TestPubSub:
             {},
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -602,7 +605,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -683,7 +686,7 @@ class TestPubSub:
             callback=callback,
             context=context,
         )
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -741,7 +744,7 @@ class TestPubSub:
             {RedisClientConfiguration.PubSubChannelModes.Pattern: {PATTERN}},
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -816,7 +819,7 @@ class TestPubSub:
             callback=callback,
             context=context,
         )
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -916,7 +919,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request,
             cluster_mode,
             pub_sub_exact,
@@ -1028,12 +1031,10 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client_exact = (
-            await create_clients_with_subscription(
-                request,
-                cluster_mode,
-                pub_sub_exact,
-            )
+        publishing_client, listening_client_exact = await create_two_clients(
+            request,
+            cluster_mode,
+            pub_sub_exact,
         )
 
         callback_messages_pattern: List[CoreCommands.PubSubMsg] = []
@@ -1050,7 +1051,7 @@ class TestPubSub:
             context=context,
         )
 
-        _, listening_client_pattern = await create_clients_with_subscription(
+        _, listening_client_pattern = await create_two_clients(
             request, cluster_mode, pub_sub_pattern
         )
 
@@ -1178,7 +1179,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request,
             cluster_mode,
             pub_sub_exact,
@@ -1318,12 +1319,10 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client_exact = (
-            await create_clients_with_subscription(
-                request,
-                cluster_mode,
-                pub_sub_exact,
-            )
+        publishing_client, listening_client_exact = await create_two_clients(
+            request,
+            cluster_mode,
+            pub_sub_exact,
         )
 
         # Setup PUBSUB for sharded channels (Redis version > 7)
@@ -1357,10 +1356,8 @@ class TestPubSub:
             context=context,
         )
 
-        listening_client_sharded, listening_client_pattern = (
-            await create_clients_with_subscription(
-                request, cluster_mode, pub_sub_pattern, pub_sub_sharded
-            )
+        listening_client_sharded, listening_client_pattern = await create_two_clients(
+            request, cluster_mode, pub_sub_pattern, pub_sub_sharded
         )
 
         try:
@@ -1506,12 +1503,10 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client_exact = (
-            await create_clients_with_subscription(
-                request,
-                cluster_mode,
-                pub_sub_exact,
-            )
+        publishing_client, listening_client_exact = await create_two_clients(
+            request,
+            cluster_mode,
+            pub_sub_exact,
         )
 
         # (Redis version > 7)
@@ -1542,10 +1537,8 @@ class TestPubSub:
             context=context,
         )
 
-        listening_client_sharded, listening_client_pattern = (
-            await create_clients_with_subscription(
-                request, cluster_mode, pub_sub_pattern, pub_sub_sharded
-            )
+        listening_client_sharded, listening_client_pattern = await create_two_clients(
+            request, cluster_mode, pub_sub_pattern, pub_sub_sharded
         )
 
         try:
@@ -1629,7 +1622,7 @@ class TestPubSub:
         - Verifying that no messages are left unread.
         - Properly unsubscribing from all channels to avoid interference with other tests.
         """
-        CHANNEL_NAME = "same-channel-name"
+        CHANNEL_NAME = "channel-name"
         MESSAGE_EXACT = get_random_string(10)
         MESSAGE_PATTERN = get_random_string(7)
         publish_response = 2 if cluster_mode else OK
@@ -1659,7 +1652,7 @@ class TestPubSub:
             context=context_pattern,
         )
 
-        client_pattern, client_exact = await create_clients_with_subscription(
+        client_pattern, client_exact = await create_two_clients(
             request, cluster_mode, pub_sub_exact, pub_sub_pattern
         )
 
@@ -1772,10 +1765,10 @@ class TestPubSub:
             context=context_sharded,
         )
 
-        client_pattern, client_exact = await create_clients_with_subscription(
+        client_pattern, client_exact = await create_two_clients(
             request, cluster_mode, pub_sub_exact, pub_sub_pattern
         )
-        _, client_sharded = await create_clients_with_subscription(
+        _, client_sharded = await create_two_clients(
             request, cluster_mode, pub_sub_sharded
         )
         # (Redis version > 7)
@@ -1872,7 +1865,7 @@ class TestPubSub:
             {RedisClientConfiguration.PubSubChannelModes.Exact: {channel}},
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -1939,7 +1932,7 @@ class TestPubSub:
             {},
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -2020,7 +2013,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -2077,7 +2070,7 @@ class TestPubSub:
             context=context,
         )
 
-        publishing_client, listening_client = await create_clients_with_subscription(
+        publishing_client, listening_client = await create_two_clients(
             request, cluster_mode, pub_sub
         )
 
@@ -2120,7 +2113,7 @@ class TestPubSub:
         )
 
         with pytest.raises(ConfigurationError):
-            await create_clients_with_subscription(
+            await create_two_clients(
                 request, cluster_mode, pub_sub_exact, protocol=ProtocolVersion.RESP2
             )
 
@@ -2139,4 +2132,4 @@ class TestPubSub:
         )
 
         with pytest.raises(ConfigurationError):
-            await create_clients_with_subscription(request, cluster_mode, pub_sub_exact)
+            await create_two_clients(request, cluster_mode, pub_sub_exact)
