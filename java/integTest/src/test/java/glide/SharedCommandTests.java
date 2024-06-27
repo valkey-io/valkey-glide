@@ -359,6 +359,52 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void getex_binary(BaseClient client) {
+
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0"), "This feature added in redis 6.2.0");
+
+        GlideString key1 = gs("{key}" + UUID.randomUUID());
+        GlideString value1 = gs(String.valueOf(UUID.randomUUID()));
+        GlideString key2 = gs("{key}" + UUID.randomUUID());
+
+        client.set(key1, value1).get();
+        GlideString data = client.getex(key1).get();
+        assertEquals(data, value1);
+        assertEquals(-1, client.ttl(key1).get());
+
+        data = client.getex(key1, GetExOptions.Seconds(10L)).get();
+        Long ttlValue = client.ttl(key1).get();
+        assertTrue(ttlValue >= 0L);
+
+        // non-existent key
+        data = client.getex(key2).get();
+        assertNull(data);
+
+        // key isn't a string
+        client.sadd(key2, new GlideString[] {gs("a")}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.getex(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // with option
+        data = client.getex(key1, GetExOptions.Seconds(10L)).get();
+        assertEquals(data, value1);
+
+        // invalid time measurement
+        ExecutionException invalidTimeException =
+                assertThrows(
+                        ExecutionException.class, () -> client.getex(key1, GetExOptions.Seconds(-10L)).get());
+        assertInstanceOf(RequestException.class, invalidTimeException.getCause());
+
+        // setting and clearing expiration timer
+        assertEquals(value1, client.getex(key1, GetExOptions.Seconds(10L)).get());
+        assertEquals(value1, client.getex(key1, GetExOptions.Persist()).get());
+        assertEquals(-1L, client.ttl(key1).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void set_only_if_exists_overwrite(BaseClient client) {
         String key = "set_only_if_exists_overwrite";
         SetOptions options = SetOptions.builder().conditionalSet(ONLY_IF_EXISTS).build();
@@ -1228,6 +1274,56 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void lpos_binary(BaseClient client) {
+        GlideString key = gs("{ListKey}-1-" + UUID.randomUUID());
+        GlideString[] valueArray = new GlideString[] {gs("a"), gs("a"), gs("b"), gs("c"), gs("a"), gs("b")};
+        assertEquals(6L, client.rpush(key, valueArray).get());
+
+        // simplest case
+        assertEquals(0L, client.lpos(key, gs("a")).get());
+        assertEquals(5L, client.lpos(key, gs("b"), LPosOptions.builder().rank(2L).build()).get());
+
+        // element doesn't exist
+        assertNull(client.lpos(key, gs("e")).get());
+
+        // reverse traversal
+        assertEquals(2L, client.lpos(key, gs("b"), LPosOptions.builder().rank(-2L).build()).get());
+
+        // unlimited comparisons
+        assertEquals(
+                0L, client.lpos(key, gs("a"), LPosOptions.builder().rank(1L).maxLength(0L).build()).get());
+
+        // limited comparisons
+        assertNull(client.lpos(key, gs("c"), LPosOptions.builder().rank(1L).maxLength(2L).build()).get());
+
+        // invalid rank value
+        ExecutionException lposException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lpos(key, gs("a"), LPosOptions.builder().rank(0L).build()).get());
+        assertTrue(lposException.getCause() instanceof RequestException);
+
+        // invalid maxlen value
+        ExecutionException lposMaxlenException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lpos(key, gs("a"), LPosOptions.builder().maxLength(-1L).build()).get());
+        assertTrue(lposMaxlenException.getCause() instanceof RequestException);
+
+        // non-existent key
+        assertNull(client.lpos(gs("non-existent_key"), gs("a")).get());
+
+        // wrong key data type
+        GlideString wrong_data_type = gs("key" + UUID.randomUUID());
+        assertEquals(2L, client.sadd(wrong_data_type, new GlideString[] {gs("a"), gs("b")}).get());
+        ExecutionException lposWrongKeyDataTypeException =
+                assertThrows(ExecutionException.class, () -> client.lpos(wrong_data_type, gs("a")).get());
+        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void lposCount(BaseClient client) {
         String key = "{ListKey}-1-" + UUID.randomUUID();
         String[] valueArray = new String[] {"a", "a", "b", "c", "a", "b"};
@@ -1266,6 +1362,50 @@ public class SharedCommandTests {
         ExecutionException lposWrongKeyDataTypeException =
                 assertThrows(
                         ExecutionException.class, () -> client.lposCount(wrong_data_type, "a", 1L).get());
+        assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lposCount_binary(BaseClient client) {
+        GlideString key = gs("{ListKey}-1-" + UUID.randomUUID());
+        GlideString[] valueArray = new GlideString[] {gs("a"), gs("a"), gs("b"), gs("c"), gs("a"), gs("b")};
+        assertEquals(6L, client.rpush(key, valueArray).get());
+
+        assertArrayEquals(new Long[] {0L, 1L}, client.lposCount(key, gs("a"), 2L).get());
+        assertArrayEquals(new Long[] {0L, 1L, 4L}, client.lposCount(key, gs("a"), 0L).get());
+
+        // invalid count value
+        ExecutionException lposCountException =
+                assertThrows(ExecutionException.class, () -> client.lposCount(key, gs("a"), -1L).get());
+        assertTrue(lposCountException.getCause() instanceof RequestException);
+
+        // with option
+        assertArrayEquals(
+                new Long[] {0L, 1L, 4L},
+                client.lposCount(key, gs("a"), 0L, LPosOptions.builder().rank(1L).build()).get());
+        assertArrayEquals(
+                new Long[] {1L, 4L},
+                client.lposCount(key, gs("a"), 0L, LPosOptions.builder().rank(2L).build()).get());
+        assertArrayEquals(
+                new Long[] {4L},
+                client.lposCount(key, gs("a"), 0L, LPosOptions.builder().rank(3L).build()).get());
+
+        // reverse traversal
+        assertArrayEquals(
+                new Long[] {4L, 1L, 0L},
+                client.lposCount(key, gs("a"), 0L, LPosOptions.builder().rank(-1L).build()).get());
+
+        // non-existent key
+        assertArrayEquals(new Long[] {}, client.lposCount(gs("non-existent_key"), gs("a"), 1L).get());
+
+        // wrong key data type
+        GlideString wrong_data_type = gs("key" + UUID.randomUUID());
+        assertEquals(2L, client.sadd(wrong_data_type, new GlideString[] {gs("a"), gs("b")}).get());
+        ExecutionException lposWrongKeyDataTypeException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lposCount(wrong_data_type, gs("a"), 1L).get());
         assertTrue(lposWrongKeyDataTypeException.getCause() instanceof RequestException);
     }
 
@@ -3503,6 +3643,74 @@ public class SharedCommandTests {
 
         // Throw Exception: Key exists - but it is not a stream
         assertEquals(OK, client.set(key2, "xtrimtest").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.xtrim(key2, new MinId("0-1")).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException = assertThrows(ExecutionException.class, () -> client.xlen(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xadd_xlen_and_xtrim_binary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+
+        assertNull(
+                client
+                        .xadd(
+                                key.toString(),
+                                Map.of(field1.toString(), "foo0", field2.toString(), "bar0"),
+                                StreamAddOptions.builder().makeStream(Boolean.FALSE).build())
+                        .get());
+
+        String timestamp1 = "0-1";
+        assertEquals(
+                timestamp1,
+                client
+                        .xadd(
+                                key.toString(),
+                                Map.of(field1.toString(), "foo1", field2.toString(), "bar1"),
+                                StreamAddOptions.builder().id(timestamp1).build())
+                        .get());
+
+        assertNotNull(client.xadd(key.toString(), Map.of(field1.toString(), "foo2", field2.toString(), "bar2")).get());
+        assertEquals(2L, client.xlen(key).get());
+
+        // this will trim the first entry.
+        String id =
+                client
+                        .xadd(
+                                key.toString(),
+                                Map.of(field1.toString(), "foo3", field2.toString(), "bar3"),
+                                StreamAddOptions.builder().trim(new MaxLen(true, 2L)).build())
+                        .get();
+        assertNotNull(id);
+        assertEquals(2L, client.xlen(key).get());
+
+        // this will trim the second entry.
+        assertNotNull(
+                client
+                        .xadd(
+                                key.toString(),
+                                Map.of(field1.toString(), "foo4", field2.toString(), "bar4"),
+                                StreamAddOptions.builder().trim(new MinId(true, id)).build())
+                        .get());
+        assertEquals(2L, client.xlen(key).get());
+
+        // test xtrim to remove 1 element
+        assertEquals(1L, client.xtrim(key, new MaxLen(1)).get());
+        assertEquals(1L, client.xlen(key).get());
+
+        // Key does not exist - returns 0
+        assertEquals(0L, client.xtrim(key2, new MaxLen(true, 1)).get());
+        assertEquals(0L, client.xlen(key2).get());
+
+        // Throw Exception: Key exists - but it is not a stream
+        assertEquals(OK, client.set(key2, gs("xtrimtest")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.xtrim(key2, new MinId("0-1")).get());
         assertTrue(executionException.getCause() instanceof RequestException);
@@ -6110,6 +6318,111 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void bitfieldReadOnly_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        BitFieldGet unsignedOffsetGet = new BitFieldGet(new UnsignedEncoding(2), new Offset(1));
+        GlideString emptyKey = gs(UUID.randomUUID().toString());
+        GlideString foobar = gs("foobar");
+
+        client.set(key1, foobar);
+        assertArrayEquals(
+                new Long[] {3L, -2L, 118L, 111L},
+                client
+                        .bitfieldReadOnly(
+                                key1,
+                                new BitFieldReadOnlySubCommands[] {
+                                    // Get value in: 0(11)00110 01101111 01101111 01100010 01100001 01110010 00010100
+                                    unsignedOffsetGet,
+                                    // Get value in: 01100(110) 01101111 01101111 01100010 01100001 01110010 00010100
+                                    new BitFieldGet(new SignedEncoding(3), new Offset(5)),
+                                    // Get value in: 01100110 01101111 01101(111 0110)0010 01100001 01110010 00010100
+                                    new BitFieldGet(new UnsignedEncoding(7), new OffsetMultiplier(3)),
+                                    // Get value in: 01100110 01101111 (01101111) 01100010 01100001 01110010 00010100
+                                    new BitFieldGet(new SignedEncoding(8), new OffsetMultiplier(2))
+                                })
+                        .get());
+        assertArrayEquals(
+                new Long[] {0L},
+                client
+                        .bitfieldReadOnly(emptyKey, new BitFieldReadOnlySubCommands[] {unsignedOffsetGet})
+                        .get());
+
+        // Empty subcommands return an empty array
+        assertArrayEquals(
+                new Long[] {}, client.bitfieldReadOnly(key2, new BitFieldReadOnlySubCommands[] {}).get());
+
+        // Exception thrown due to the key holding a value with the wrong type
+        assertEquals(1, client.sadd(key2, new GlideString[] {foobar}).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfieldReadOnly(key2, new BitFieldReadOnlySubCommands[] {unsignedOffsetGet})
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Offset must be >= 0
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfieldReadOnly(
+                                                key1,
+                                                new BitFieldReadOnlySubCommands[] {
+                                                    new BitFieldGet(new UnsignedEncoding(5), new Offset(-1))
+                                                })
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Encoding must be > 0
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfieldReadOnly(
+                                                key1,
+                                                new BitFieldReadOnlySubCommands[] {
+                                                    new BitFieldGet(new UnsignedEncoding(-1), new Offset(1))
+                                                })
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Encoding must be < 64 for unsigned bit encoding
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfieldReadOnly(
+                                                key1,
+                                                new BitFieldReadOnlySubCommands[] {
+                                                    new BitFieldGet(new UnsignedEncoding(64), new Offset(1))
+                                                })
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Encoding must be < 65 for signed bit encoding
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfieldReadOnly(
+                                                key1,
+                                                new BitFieldReadOnlySubCommands[] {
+                                                    new BitFieldGet(new SignedEncoding(65), new Offset(1))
+                                                })
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void bitfield(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -6265,6 +6578,178 @@ public class SharedCommandTests {
 
         // Exception thrown due to the key holding a value with the wrong type
         assertEquals(1, client.sadd(setKey, new String[] {foobar}).get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfield(
+                                                setKey,
+                                                new BitFieldSubCommands[] {
+                                                    new BitFieldSet(new SignedEncoding(3), new Offset(1), 2)
+                                                })
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void bitfield_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString setKey = gs(UUID.randomUUID().toString());
+        GlideString foobar = gs("foobar");
+        UnsignedEncoding u2 = new UnsignedEncoding(2);
+        UnsignedEncoding u7 = new UnsignedEncoding(7);
+        SignedEncoding i3 = new SignedEncoding(3);
+        SignedEncoding i8 = new SignedEncoding(8);
+        Offset offset1 = new Offset(1);
+        Offset offset5 = new Offset(5);
+        OffsetMultiplier offsetMultiplier4 = new OffsetMultiplier(4);
+        OffsetMultiplier offsetMultiplier8 = new OffsetMultiplier(8);
+        BitFieldSet overflowSet = new BitFieldSet(u2, offset1, -10);
+        BitFieldGet overflowGet = new BitFieldGet(u2, offset1);
+
+        client.set(key1, foobar); // binary value: 01100110 01101111 01101111 01100010 01100001 01110010
+
+        // SET tests
+        assertArrayEquals(
+                new Long[] {3L, -2L, 19L, 0L, 2L, 3L, 18L, 20L},
+                client
+                        .bitfield(
+                                key1,
+                                new BitFieldSubCommands[] {
+                                    // binary value becomes: 0(10)00110 01101111 01101111 01100010 01100001 01110010
+                                    new BitFieldSet(u2, offset1, 2),
+                                    // binary value becomes: 01000(011) 01101111 01101111 01100010 01100001 01110010
+                                    new BitFieldSet(i3, offset5, 3),
+                                    // binary value becomes: 01000011 01101111 01101111 0110(0010 010)00001 01110010
+                                    new BitFieldSet(u7, offsetMultiplier4, 18),
+                                    // binary value becomes: 01000011 01101111 01101111 01100010 01000001 01110010
+                                    // 00000000 00000000 (00010100)
+                                    new BitFieldSet(i8, offsetMultiplier8, 20),
+                                    new BitFieldGet(u2, offset1),
+                                    new BitFieldGet(i3, offset5),
+                                    new BitFieldGet(u7, offsetMultiplier4),
+                                    new BitFieldGet(i8, offsetMultiplier8)
+                                })
+                        .get());
+
+        // INCRBY tests
+        assertArrayEquals(
+                new Long[] {3L, -3L, 15L, 30L},
+                client
+                        .bitfield(
+                                key1,
+                                new BitFieldSubCommands[] {
+                                    // binary value becomes: 0(11)00011 01101111 01101111 01100010 01000001 01110010
+                                    // 00000000 00000000  00010100
+                                    new BitFieldIncrby(u2, offset1, 1),
+                                    // binary value becomes: 01100(101) 01101111 01101111 01100010 01000001 01110010
+                                    // 00000000 00000000 00010100
+                                    new BitFieldIncrby(i3, offset5, 2),
+                                    // binary value becomes: 01100101 01101111 01101111 0110(0001 111)00001 01110010
+                                    // 00000000 00000000 00010100
+                                    new BitFieldIncrby(u7, offsetMultiplier4, -3),
+                                    // binary value becomes: 01100101 01101111 01101111 01100001 11100001 01110010
+                                    // 00000000 00000000 (00011110)
+                                    new BitFieldIncrby(i8, offsetMultiplier8, 10)
+                                })
+                        .get());
+
+        // OVERFLOW WRAP is used by default if no OVERFLOW is specified
+        assertArrayEquals(
+                new Long[] {0L, 2L, 2L},
+                client
+                        .bitfield(
+                                key2,
+                                new BitFieldSubCommands[] {
+                                    overflowSet,
+                                    new BitFieldOverflow(BitOverflowControl.WRAP),
+                                    overflowSet,
+                                    overflowGet
+                                })
+                        .get());
+
+        // OVERFLOW affects only SET or INCRBY after OVERFLOW subcommand
+        assertArrayEquals(
+                new Long[] {2L, 2L, 3L, null},
+                client
+                        .bitfield(
+                                key2,
+                                new BitFieldSubCommands[] {
+                                    overflowSet,
+                                    new BitFieldOverflow(BitOverflowControl.SAT),
+                                    overflowSet,
+                                    overflowGet,
+                                    new BitFieldOverflow(BitOverflowControl.FAIL),
+                                    overflowSet
+                                })
+                        .get());
+
+        // Empty subcommands return an empty array
+        assertArrayEquals(new Long[] {}, client.bitfield(key2, new BitFieldSubCommands[] {}).get());
+
+        // Exceptions
+        // Encoding must be > 0
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfield(
+                                                key1,
+                                                new BitFieldSubCommands[] {
+                                                    new BitFieldSet(new UnsignedEncoding(-1), new Offset(1), 1)
+                                                })
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Offset must be > 0
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfield(
+                                                key1,
+                                                new BitFieldSubCommands[] {
+                                                    new BitFieldIncrby(new UnsignedEncoding(5), new Offset(-1), 1)
+                                                })
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Unsigned bit encoding must be < 64
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfield(
+                                                key1,
+                                                new BitFieldSubCommands[] {
+                                                    new BitFieldIncrby(new UnsignedEncoding(64), new Offset(1), 1)
+                                                })
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Signed bit encoding must be < 65
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .bitfield(
+                                                key1,
+                                                new BitFieldSubCommands[] {
+                                                    new BitFieldSet(new SignedEncoding(65), new Offset(1), 1)
+                                                })
+                                        .get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // Exception thrown due to the key holding a value with the wrong type
+        assertEquals(1, client.sadd(setKey, new GlideString[] {foobar}).get());
         executionException =
                 assertThrows(
                         ExecutionException.class,

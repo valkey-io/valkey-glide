@@ -576,6 +576,27 @@ public class RedisClientTest {
         assertEquals(value, payload);
     }
 
+    
+    @SneakyThrows
+    @Test
+    public void getex_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString value = gs("testValue");
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<GlideString>submitNewCommand(eq(GetEx), eq(new GlideString[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.getex(key);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
     private static List<Arguments> getGetExOptions() {
         return List.of(
                 Arguments.of(
@@ -2322,6 +2343,28 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lpos_binary() {
+        // setup
+        GlideString[] args = new GlideString[] {gs("list"), gs("element")};
+        long index = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpos(gs("list"), gs("element"));
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lpos_withOptions() {
         // setup
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
@@ -2336,6 +2379,28 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.lpos("list", "element", options);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(index, payload);
+    }
+    @SneakyThrows
+    @Test
+    public void lpos_withOptions_binary() {
+        // setup
+        LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+        GlideString[] args = new GlideString[] {gs("list"), gs("element"), gs("RANK"), gs("1"), gs("MAXLEN"), gs("1000")};
+        long index = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpos(gs("list"), gs("element"), options);
         Long payload = response.get();
 
         // verify
@@ -2368,6 +2433,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lposCount_binary() {
+        // setup
+        GlideString[] args = new GlideString[] {gs("list"), gs("element"), gs("COUNT"), gs("1")};
+        Long[] index = new Long[] {1L};
+
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(LPos), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response = service.lposCount(gs("list"), gs("element"), 1L);
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lposCount_withOptions() {
         // setup
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
@@ -2383,6 +2471,30 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long[]> response = service.lposCount("list", "element", 0L, options);
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lposCount_withOptions_binary() {
+        // setup
+        LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+        GlideString[] args = new GlideString[] {gs("list"), gs("element"), gs("COUNT"), gs("0"), gs("RANK"), gs("1"), gs("MAXLEN"), gs("1000")};
+        Long[] index = new Long[] {0L};
+
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(LPos), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response = service.lposCount(gs("list"), gs("element"), 0L, options);
         Long[] payload = response.get();
 
         // verify
@@ -5031,6 +5143,31 @@ public class RedisClientTest {
         String key = "testKey";
         StreamTrimOptions limit = new MinId(true, "id");
         String[] arguments = new String[] {key, TRIM_MINID_REDIS_API, TRIM_EXACT_REDIS_API, "id"};
+        Long completedResult = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(XTrim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xtrim(key, limit);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @Test
+    @SneakyThrows
+    public void xtrim_binary_with_exact_MinId() {
+        // setup
+        GlideString key = gs("testKey");
+        StreamTrimOptions limit = new MinId(true, "id");
+        GlideString[] arguments = new GlideString[] {key, gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("id")};
         Long completedResult = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -7994,6 +8131,42 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void bitfieldReadOnly_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long[] result = new Long[] {7L, 8L};
+        Offset offset = new Offset(1);
+        OffsetMultiplier offsetMultiplier = new OffsetMultiplier(8);
+        BitFieldGet subcommand1 = new BitFieldGet(new UnsignedEncoding(4), offset);
+        BitFieldGet subcommand2 = new BitFieldGet(new SignedEncoding(5), offsetMultiplier);
+        GlideString[] args = {
+            key,
+            gs(BitFieldOptions.GET_COMMAND_STRING),
+            gs(BitFieldOptions.UNSIGNED_ENCODING_PREFIX.concat("4")),
+            gs(offset.getOffset()),
+            gs(BitFieldOptions.GET_COMMAND_STRING),
+            gs(BitFieldOptions.SIGNED_ENCODING_PREFIX.concat("5")),
+            gs(offsetMultiplier.getOffset())
+        };
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(BitFieldReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response =
+                service.bitfieldReadOnly(key, new BitFieldReadOnlySubCommands[] {subcommand1, subcommand2});
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bitfield_returns_success() {
         // setup
         String key = "testKey";
@@ -8020,6 +8193,59 @@ public class RedisClientTest {
                     u2.getEncoding(),
                     offset.getOffset(),
                     Long.toString(incrbyValue)
+                };
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(BitField), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response =
+                service.bitfield(
+                        key,
+                        new BitFieldSubCommands[] {
+                            new BitFieldSet(u2, offset, setValue),
+                            new BitFieldGet(i8, offsetMultiplier),
+                            new BitFieldOptions.BitFieldOverflow(SAT),
+                            new BitFieldOptions.BitFieldIncrby(u2, offset, incrbyValue),
+                        });
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitfield_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long[] result = new Long[] {7L, 8L, 9L};
+        UnsignedEncoding u2 = new UnsignedEncoding(2);
+        SignedEncoding i8 = new SignedEncoding(8);
+        Offset offset = new Offset(1);
+        OffsetMultiplier offsetMultiplier = new OffsetMultiplier(8);
+        long setValue = 2;
+        long incrbyValue = 5;
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    gs(SET_COMMAND_STRING),
+                    gs(u2.getEncoding()),
+                    gs(offset.getOffset()),
+                    gs(Long.toString(setValue)),
+                    gs(GET_COMMAND_STRING),
+                    gs(i8.getEncoding()),
+                    gs(offsetMultiplier.getOffset()),
+                    gs(OVERFLOW_COMMAND_STRING),
+                    gs(SAT.toString()),
+                    gs(INCRBY_COMMAND_STRING),
+                    gs(u2.getEncoding()),
+                    gs(offset.getOffset()),
+                    gs(Long.toString(incrbyValue))
                 };
         CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
         testResponse.complete(result);

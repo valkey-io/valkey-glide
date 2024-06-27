@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
-
+import glide.api.models.GlideString;
+import java.util.Arrays;
 import static glide.api.models.commands.GetExOptions.ExpiryType.MILLISECONDS;
 import static glide.api.models.commands.GetExOptions.ExpiryType.PERSIST;
 import static glide.api.models.commands.GetExOptions.ExpiryType.SECONDS;
@@ -107,5 +108,14 @@ public class GetExOptions {
         }
         System.out.println(optionArgs);
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Converts GetExOptions into a GlideString[] to pass to the <code>GETEX</code> command.
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toGlideStringArgs() {
+        return Arrays.stream(toArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }
