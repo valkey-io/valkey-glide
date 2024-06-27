@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -460,7 +460,7 @@ class ClusterCommands(CoreCommands):
 
     async def publish(self, message: str, channel: str, sharded: bool = False) -> int:
         """
-        Publish message on pubsub channel.
+        Publish a message on pubsub channel.
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
         The mode is selected using the 'sharded' parameter
         See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
@@ -515,6 +515,39 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.FlushAll, args, route),
         )
 
+    async def flushdb(
+        self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TClusterResponse[TOK]:
+        """
+        Deletes all the keys of the currently selected database. This command never fails.
+
+        See https://valkey.io/commands/flushdb for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: OK.
+
+        Examples:
+             >>> await client.flushdb()
+                 OK  # The keys of the currently selected database were deleted.
+             >>> await client.flushdb(FlushMode.ASYNC)
+                 OK  # The keys of the currently selected database were deleted asynchronously.
+             >>> await client.flushdb(FlushMode.ASYNC, AllNodes())
+                 OK  # The keys of the currently selected database were deleted asynchronously on all nodes.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+
+        return cast(
+            TClusterResponse[TOK],
+            await self._execute_command(RequestType.FlushDB, args, route),
+        )
+
     async def copy(
         self,
         source: str,
@@ -553,4 +586,41 @@ class ClusterCommands(CoreCommands):
         return cast(
             bool,
             await self._execute_command(RequestType.Copy, args),
+        )
+
+    async def lolwut(
+        self,
+        version: Optional[int] = None,
+        parameters: Optional[List[int]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[str]:
+        """
+        Displays a piece of generative computer art and the Redis version.
+
+        See https://valkey.io/commands/lolwut for more details.
+
+        Args:
+            version (Optional[int]): Version of computer art to generate.
+            parameters (Optional[List[int]]): Additional set of arguments in order to change the output:
+                For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+                For version `6`, those are number of columns and number of lines.
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[str]: A piece of generative computer art along with the current Redis version.
+
+        Examples:
+            >>> await client.lolwut(6, [40, 20], ALL_NODES);
+            "Redis ver. 7.2.3" # Indicates the current Redis version
+        """
+        args = []
+        if version is not None:
+            args.extend(["VERSION", str(version)])
+        if parameters:
+            for var in parameters:
+                args.extend(str(var))
+        return cast(
+            TClusterResponse[str],
+            await self._execute_command(RequestType.Lolwut, args, route),
         )

@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import threading
 from typing import List, Mapping, Optional, Tuple, TypeVar, Union
@@ -44,7 +44,10 @@ from glide.async_commands.sorted_set import (
 )
 from glide.async_commands.stream import (
     StreamAddOptions,
+    StreamGroupOptions,
     StreamRangeBound,
+    StreamReadGroupOptions,
+    StreamReadOptions,
     StreamTrimOptions,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -1879,7 +1882,7 @@ class BaseTransaction:
 
         Command response:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range arguments
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range arguments
                 are not applicable.
         """
         args = [key, start.to_arg(), end.to_arg()]
@@ -1916,7 +1919,7 @@ class BaseTransaction:
 
         Command response:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range arguments
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range arguments
                 are not applicable.
         """
         args = [key, end.to_arg(), start.to_arg()]
@@ -1924,6 +1927,176 @@ class BaseTransaction:
             args.extend(["COUNT", str(count)])
 
         return self.append_command(RequestType.XRevRange, args)
+
+    def xread(
+        self: TTransaction,
+        keys_and_ids: Mapping[str, str],
+        options: Optional[StreamReadOptions] = None,
+    ) -> TTransaction:
+        """
+        Reads entries from the given streams.
+
+        See https://valkey.io/commands/xread for more details.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of keys and entry IDs to read from. The mapping is composed of a
+                stream's key and the ID of the entry after which the stream will be read.
+            options (Optional[StreamReadOptions]): Options detailing how to read the stream.
+
+        Command response:
+            Optional[Mapping[str, Mapping[str, List[List[str]]]]]: A mapping of stream keys, to a mapping of stream IDs,
+                to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                None will be returned under the following conditions:
+                - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no entries after the given ID.
+                - The `BLOCK` option is specified and the timeout is hit.
+        """
+        args = [] if options is None else options.to_args()
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return self.append_command(RequestType.XRead, args)
+
+    def xgroup_create(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        group_id: str,
+        options: Optional[StreamGroupOptions] = None,
+    ) -> TTransaction:
+        """
+        Creates a new consumer group uniquely identified by `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-create for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The newly created consumer group name.
+            group_id (str): The stream entry ID that specifies the last delivered entry in the stream from the new
+                group’s perspective. The special ID "$" can be used to specify the last entry in the stream.
+            options (Optional[StreamGroupOptions]): Options for creating the stream group.
+
+        Command response:
+            TOK: A simple "OK" response.
+        """
+        args = [key, group_name, group_id]
+        if options is not None:
+            args.extend(options.to_args())
+
+        return self.append_command(RequestType.XGroupCreate, args)
+
+    def xgroup_destroy(self: TTransaction, key: str, group_name: str) -> TTransaction:
+        """
+        Destroys the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-destroy for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name to delete.
+
+        Command response:
+            bool: True if the consumer group was destroyed. Otherwise, returns False.
+        """
+        return self.append_command(RequestType.XGroupDestroy, [key, group_name])
+
+    def xgroup_create_consumer(
+        self: TTransaction, key: str, group_name: str, consumer_name: str
+    ) -> TTransaction:
+        """
+        Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-createconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The newly created consumer.
+
+        Command response:
+            bool: True if the consumer is created. Otherwise, returns False.
+        """
+        return self.append_command(
+            RequestType.XGroupCreateConsumer, [key, group_name, consumer_name]
+        )
+
+    def xgroup_del_consumer(
+        self: TTransaction, key: str, group_name: str, consumer_name: str
+    ) -> TTransaction:
+        """
+        Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-delconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer to delete.
+
+        Command response:
+            int: The number of pending messages the `consumer` had before it was deleted.
+        """
+        return self.append_command(
+            RequestType.XGroupDelConsumer, [key, group_name, consumer_name]
+        )
+
+    def xreadgroup(
+        self: TTransaction,
+        keys_and_ids: Mapping[str, str],
+        group_name: str,
+        consumer_name: str,
+        options: Optional[StreamReadGroupOptions] = None,
+    ) -> TTransaction:
+        """
+        Reads entries from the given streams owned by a consumer group.
+
+        See https://valkey.io/commands/xreadgroup for more details.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of stream keys to stream entry IDs to read from. The special ">"
+                ID returns messages that were never delivered to any other consumer. Any other valid ID will return
+                entries pending for the consumer with IDs greater than the one provided.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name. The consumer will be auto-created if it does not already exist.
+            options (Optional[StreamReadGroupOptions]): Options detailing how to read the stream.
+
+        Command response:
+            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]: A mapping of stream keys, to a mapping of
+                stream IDs, to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                Returns None if the BLOCK option is given and a timeout occurs, or if there is no stream that can be served.
+        """
+        args = ["GROUP", group_name, consumer_name]
+        if options is not None:
+            args.extend(options.to_args())
+
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return self.append_command(RequestType.XReadGroup, args)
+
+    def xack(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        ids: List[str],
+    ) -> TTransaction:
+        """
+        Removes one or multiple messages from the Pending Entries List (PEL) of a stream consumer group.
+        This command should be called on pending messages so that such messages do not get processed again by the
+        consumer group.
+
+        See https://valkey.io/commands/xack for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            ids (List[str]): The stream entry IDs to acknowledge and consume for the given consumer group.
+
+        Command response:
+            int: The number of messages that were successfully acknowledged.
+        """
+        return self.append_command(RequestType.XAck, [key, group_name] + ids)
 
     def geoadd(
         self: TTransaction,
@@ -3494,6 +3667,25 @@ class BaseTransaction:
             args.append(flush_mode.value)
         return self.append_command(RequestType.FlushAll, args)
 
+    def flushdb(
+        self: TTransaction, flush_mode: Optional[FlushMode] = None
+    ) -> TTransaction:
+        """
+        Deletes all the keys of the currently selected database. This command never fails.
+
+        See https://valkey.io/commands/flushdb for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Command Response:
+            TOK: OK.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+        return self.append_command(RequestType.FlushDB, args)
+
     def getex(
         self: TTransaction, key: str, expiry: Optional[ExpiryGetEx] = None
     ) -> TTransaction:
@@ -3517,6 +3709,33 @@ class BaseTransaction:
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
         return self.append_command(RequestType.GetEx, args)
+
+    def lolwut(
+        self: TTransaction,
+        version: Optional[int] = None,
+        parameters: Optional[List[int]] = None,
+    ) -> TTransaction:
+        """
+        Displays a piece of generative computer art and the Redis version.
+
+        See https://valkey.io/commands/lolwut for more details.
+
+        Args:
+            version (Optional[int]): Version of computer art to generate.
+            parameters (Optional[List[int]]): Additional set of arguments in order to change the output:
+                For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+                For version `6`, those are number of columns and number of lines.
+
+        Command Response:
+            str: A piece of generative computer art along with the current Redis version.
+        """
+        args = []
+        if version is not None:
+            args.extend(["VERSION", str(version)])
+        if parameters:
+            for var in parameters:
+                args.extend(str(var))
+        return self.append_command(RequestType.Lolwut, args)
 
 
 class Transaction(BaseTransaction):

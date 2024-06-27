@@ -1,6 +1,7 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import asyncio
+import sys
 import threading
 from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 
@@ -29,6 +30,8 @@ from typing_extensions import Self
 
 from .glide import (
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
+    MAX_REQUEST_ARGS_LEN,
+    create_leaked_bytes_vec,
     start_socket_listener_external,
     value_from_pointer,
 )
@@ -194,6 +197,46 @@ class BaseRedisClient(CoreCommands):
         self._writer.write(b_arr)
         await self._writer.drain()
 
+    # TODO: change `str` to `TEncodable` where `TEncodable = Union[str, bytes]`
+    def _encode_arg(self, arg: str) -> bytes:
+        """
+        Converts a string argument to bytes.
+
+        Args:
+            arg (str): An encodable argument.
+
+        Returns:
+            bytes: The encoded argument as bytes.
+        """
+
+        # TODO: Allow passing different encoding options
+        return bytes(arg, encoding="utf8")
+
+    # TODO: change `List[str]` to `List[TEncodable]` where `TEncodable = Union[str, bytes]`
+    def _encode_and_sum_size(
+        self,
+        args_list: Optional[List[str]],
+    ) -> Tuple[List[bytes], int]:
+        """
+        Encodes the list and calculates the total memory size.
+
+        Args:
+            args_list (Optional[List[str]]): A list of strings to be converted to bytes.
+                                                    If None or empty, returns ([], 0).
+
+        Returns:
+            int: The total memory size of the encoded arguments in bytes.
+        """
+        args_size = 0
+        encoded_args_list: List[bytes] = []
+        if not args_list:
+            return (encoded_args_list, args_size)
+        for arg in args_list:
+            encoded_arg = self._encode_arg(arg)
+            encoded_args_list.append(encoded_arg)
+            args_size += sys.getsizeof(encoded_arg)
+        return (encoded_args_list, args_size)
+
     async def _execute_command(
         self,
         request_type: RequestType.ValueType,
@@ -207,9 +250,13 @@ class BaseRedisClient(CoreCommands):
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
-        request.single_command.args_array.args[:] = [
-            bytes(elem, encoding="utf8") for elem in args
-        ]  # TODO - use arg pointer
+        (encoded_args, args_size) = self._encode_and_sum_size(args)
+        if args_size < MAX_REQUEST_ARGS_LEN:
+            request.single_command.args_array.args[:] = encoded_args
+        else:
+            request.single_command.args_vec_pointer = create_leaked_bytes_vec(
+                encoded_args
+            )
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -229,8 +276,12 @@ class BaseRedisClient(CoreCommands):
             command = Command()
             command.request_type = requst_type
             # For now, we allow the user to pass the command as array of strings
-            # we convert them here into bytearray (the datatype that our rust core expects)
-            command.args_array.args[:] = [bytes(elem, encoding="utf8") for elem in args]
+            # we convert them here into bytes (the datatype that our rust core expects)
+            (encoded_args, args_size) = self._encode_and_sum_size(args)
+            if args_size < MAX_REQUEST_ARGS_LEN:
+                command.args_array.args[:] = encoded_args
+            else:
+                command.args_vec_pointer = create_leaked_bytes_vec(encoded_args)
             transaction_commands.append(command)
         request.transaction.commands.extend(transaction_commands)
         set_protobuf_route(request, route)
@@ -263,7 +314,7 @@ class BaseRedisClient(CoreCommands):
 
         if not self.config._is_pubsub_configured():
             raise WrongConfiguration(
-                "The operation will never complete since there was no pubsbub subscriptions applied to the client."
+                "The operation will never complete since there was no pubsub subscriptions applied to the client."
             )
 
         if self.config._get_pubsub_callback_and_context()[0] is not None:
@@ -323,13 +374,11 @@ class BaseRedisClient(CoreCommands):
             Dict[str, Any], value_from_pointer(response.resp_pointer)
         )
         message_kind = push_notification["kind"]
-        if message_kind == "Disconnect":
-            # cancel all futures since we dont know how many (if any) messages wont arrive
-            # TODO: consider cancelling a single future
-            self._cancel_pubsub_futures_with_exception_safe(
-                ConnectionError(
-                    "Warning, transport disconnect occured, messages might be lost"
-                )
+        if message_kind == "Disconnection":
+            ClientLogger.log(
+                LogLevel.WARN,
+                "disconnect notification",
+                "Transport disconnected, messages might be lost",
             )
         elif (
             message_kind == "Message"
@@ -353,11 +402,11 @@ class BaseRedisClient(CoreCommands):
         ):
             pass
         else:
-            err_msg = f"Unsupported push message: '{message_kind}'"
-            ClientLogger.log(LogLevel.ERROR, "pubsub message", err_msg)
-            # cancel all futures since its a serious
-            # TODO: consider cancelling a single future
-            self._cancel_pubsub_futures_with_exception_safe(ConnectionError(err_msg))
+            ClientLogger.log(
+                LogLevel.WARN,
+                "unknown notification",
+                f"Unknown notification message: '{message_kind}'",
+            )
 
         return pubsub_message
 

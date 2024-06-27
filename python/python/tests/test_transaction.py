@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -37,7 +37,13 @@ from glide.async_commands.sorted_set import (
     ScoreBoundary,
     ScoreFilter,
 )
-from glide.async_commands.stream import IdBound, StreamAddOptions, TrimByMinId
+from glide.async_commands.stream import (
+    IdBound,
+    StreamAddOptions,
+    StreamGroupOptions,
+    StreamReadGroupOptions,
+    TrimByMinId,
+)
 from glide.async_commands.transaction import (
     BaseTransaction,
     ClusterTransaction,
@@ -474,12 +480,39 @@ async def transaction_test(
     args.append("0-2")
     transaction.xlen(key11)
     args.append(2)
+    transaction.xread({key11: "0-1"})
+    args.append({key11: {"0-2": [["foo", "bar"]]}})
     transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
     args.append({"0-1": [["foo", "bar"]]})
     transaction.xrevrange(key11, IdBound("0-1"), IdBound("0-1"))
     args.append({"0-1": [["foo", "bar"]]})
     transaction.xtrim(key11, TrimByMinId(threshold="0-2", exact=True))
     args.append(1)
+
+    group_name1 = get_random_string(10)
+    group_name2 = get_random_string(10)
+    consumer = get_random_string(10)
+    transaction.xgroup_create(key11, group_name1, "0-1")
+    args.append(OK)
+    transaction.xgroup_create(
+        key11, group_name2, "0-0", StreamGroupOptions(make_stream=True)
+    )
+    args.append(OK)
+    transaction.xgroup_create_consumer(key11, group_name1, consumer)
+    args.append(True)
+    transaction.xreadgroup(
+        {key11: ">"}, group_name1, consumer, StreamReadGroupOptions(count=5)
+    )
+    args.append({key11: {"0-2": [["foo", "bar"]]}})
+    transaction.xack(key11, group_name1, ["0-2"])
+    args.append(1)
+    transaction.xgroup_del_consumer(key11, group_name1, consumer)
+    args.append(0)
+    transaction.xgroup_destroy(key11, group_name1)
+    args.append(True)
+    transaction.xgroup_destroy(key11, group_name2)
+    args.append(True)
+
     transaction.xdel(key11, ["0-2", "0-3"])
     args.append(1)
 
@@ -510,10 +543,16 @@ async def transaction_test(
     args.append(OK)
     transaction.flushall()
     args.append(OK)
+    transaction.flushdb(FlushMode.ASYNC)
+    args.append(OK)
+    transaction.flushdb()
+    args.append(OK)
 
     min_version = "6.2.0"
     if not await check_if_server_version_lt(redis_client, min_version):
         transaction.flushall(FlushMode.SYNC)
+        args.append(OK)
+        transaction.flushdb(FlushMode.SYNC)
         args.append(OK)
 
     min_version = "6.2.0"
@@ -653,6 +692,23 @@ class TestTransaction:
 
         await client2.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_large_values(self, request, cluster_mode, protocol):
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+        )
+        length = 2**25  # 33mb
+        key = "0" * length
+        value = "0" * length
+        transaction = Transaction()
+        transaction.set(key, value)
+        transaction.get(key)
+        result = await redis_client.exec(transaction)
+        assert isinstance(result, list)
+        assert result[0] == OK
+        assert result[1] == value
+
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_standalone_transaction(self, redis_client: RedisClient):
@@ -791,3 +847,15 @@ class TestTransaction:
         lastsave_time = response[0]
         assert isinstance(lastsave_time, int)
         assert lastsave_time > yesterday_unix_time
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_lolwut_transaction(self, redis_client: RedisClusterClient):
+        transaction = Transaction()
+        transaction.lolwut().lolwut(5).lolwut(parameters=[1, 2]).lolwut(6, [42])
+        results = await redis_client.exec(transaction)
+        assert results is not None
+
+        for element in results:
+            assert isinstance(element, str)
+            assert "Redis ver. " in element

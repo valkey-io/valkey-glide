@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
 import static glide.TestConfiguration.CLUSTER_PORTS;
@@ -71,6 +71,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
@@ -95,6 +96,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import lombok.Getter;
 import lombok.SneakyThrows;
+import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
@@ -1109,6 +1111,30 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void ltrim_binary_existing_non_existing_key_and_type_error(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString[] valueArray =
+                new GlideString[] {gs("value4"), gs("value3"), gs("value2"), gs("value1")};
+
+        assertEquals(4, client.lpush(key, valueArray).get());
+        assertEquals(OK, client.ltrim(key, 0, 1).get());
+        assertArrayEquals(
+                new String[] {"value1", "value2"}, client.lrange(key.toString(), 0, -1).get());
+
+        // `start` is greater than `end` so the key will be removed.
+        assertEquals(OK, client.ltrim(key, 4, 2).get());
+        assertArrayEquals(new String[] {}, client.lrange(key.toString(), 0, -1).get());
+
+        assertEquals(OK, client.set(key, gs("foo")).get());
+
+        Exception ltrimException =
+                assertThrows(ExecutionException.class, () -> client.ltrim(key, 0, 1).get());
+        assertTrue(ltrimException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void llen_existing_non_existing_key_and_type_error(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -1285,10 +1311,34 @@ public class SharedCommandTests {
         Set<String> expectedMembers = Set.of("member1", "member2", "member4");
         assertEquals(expectedMembers, client.smembers(key).get());
 
-        Set<GlideString> expectedMembersBin = Set.of(gs("member1"), gs("member2"), gs("member4"));
-        assertEquals(expectedMembersBin, client.smembers(gs(key)).get());
+        Set<String> expectedMembersBin = Set.of("member1", "member2", "member4");
+        assertEquals(expectedMembersBin, client.smembers(key).get());
 
         assertEquals(1, client.srem(key, new String[] {"member1"}).get());
+        assertEquals(2, client.scard(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sadd_srem_scard_smembers_binary_existing_set(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        assertEquals(
+                4,
+                client
+                        .sadd(
+                                key, new GlideString[] {gs("member1"), gs("member2"), gs("member3"), gs("member4")})
+                        .get());
+        assertEquals(
+                1, client.srem(key, new GlideString[] {gs("member3"), gs("nonExistingMember")}).get());
+
+        Set<GlideString> expectedMembers = Set.of(gs("member1"), gs("member2"), gs("member4"));
+        assertEquals(expectedMembers, client.smembers(key).get());
+
+        Set<GlideString> expectedMembersBin = Set.of(gs("member1"), gs("member2"), gs("member4"));
+        assertEquals(expectedMembersBin, client.smembers(key).get());
+
+        assertEquals(1, client.srem(key, new GlideString[] {gs("member1")}).get());
         assertEquals(2, client.scard(key).get());
     }
 
@@ -1377,11 +1427,65 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void smove_binary(BaseClient client) {
+        GlideString setKey1 = gs("{key}" + UUID.randomUUID());
+        GlideString setKey2 = gs("{key}" + UUID.randomUUID());
+        GlideString setKey3 = gs("{key}" + UUID.randomUUID());
+        GlideString nonSetKey = gs("{key}" + UUID.randomUUID());
+
+        assertEquals(3, client.sadd(setKey1, new GlideString[] {gs("1"), gs("2"), gs("3")}).get());
+        assertEquals(2, client.sadd(setKey2, new GlideString[] {gs("2"), gs("3")}).get());
+
+        // move an elem
+        assertTrue(client.smove(setKey1, setKey2, gs("1")).get());
+        assertEquals(Set.of(gs("2"), gs("3")), client.smembers(setKey1).get());
+        assertEquals(Set.of(gs("1"), gs("2"), gs("3")), client.smembers(setKey2).get());
+
+        // move an elem which preset at destination
+        assertTrue(client.smove(setKey2, setKey1, gs("2")).get());
+        assertEquals(Set.of(gs("2"), gs("3")), client.smembers(setKey1).get());
+        assertEquals(Set.of(gs("1"), gs("3")), client.smembers(setKey2).get());
+
+        // move from missing key
+        assertFalse(client.smove(setKey3, setKey1, gs("4")).get());
+        assertEquals(Set.of(gs("2"), gs("3")), client.smembers(setKey1).get());
+
+        // move to a new set
+        assertTrue(client.smove(setKey1, setKey3, gs("2")).get());
+        assertEquals(Set.of(gs("3")), client.smembers(setKey1).get());
+        assertEquals(Set.of(gs("2")), client.smembers(setKey3).get());
+
+        // move missing element
+        assertFalse(client.smove(setKey1, setKey3, gs("42")).get());
+        assertEquals(Set.of(gs("3")), client.smembers(setKey1).get());
+        assertEquals(Set.of(gs("2")), client.smembers(setKey3).get());
+
+        // move missing element to missing key
+        assertFalse(client.smove(setKey1, nonSetKey, gs("42")).get());
+        assertEquals(Set.of(gs("3")), client.smembers(setKey1).get());
+        assertEquals("none", client.type(nonSetKey.toString()).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(nonSetKey, gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.smove(nonSetKey, setKey1, gs("_")).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.smove(setKey1, nonSetKey, gs("_")).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void rename(BaseClient client) {
         String key1 = "{key}" + UUID.randomUUID();
 
         assertEquals(OK, client.set(key1, "foo").get());
-        assertEquals(OK, client.rename(key1, key1 + "_rename").get());
+        assertEquals(OK, client.rename(gs(key1), gs((key1 + "_rename"))).get());
         assertEquals(1L, client.exists(new String[] {key1 + "_rename"}).get());
 
         // key doesn't exist
@@ -1410,8 +1514,8 @@ public class SharedCommandTests {
 
         // rename a string
         assertEquals(OK, client.set(key1, "key1").get());
-        assertTrue(client.renamenx(key1, key2).get());
-        assertFalse(client.renamenx(key2, key3).get());
+        assertTrue(client.renamenx(gs(key1), gs(key2)).get());
+        assertFalse(client.renamenx(gs(key2), gs(key3)).get());
         assertEquals("key1", client.get(key2).get());
         assertEquals(1, client.del(new String[] {key1, key2}).get());
 
@@ -1670,6 +1774,24 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void exists_binary_multiple_keys(BaseClient client) {
+        GlideString key1 = gs("{key}" + UUID.randomUUID());
+        GlideString key2 = gs("{key}" + UUID.randomUUID());
+        GlideString value = gs(UUID.randomUUID().toString());
+
+        String setResult = client.set(key1, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key2, value).get();
+        assertEquals(OK, setResult);
+
+        Long existsKeysNum =
+                client.exists(new GlideString[] {key1, key2, key1, gs(UUID.randomUUID().toString())}).get();
+        assertEquals(3L, existsKeysNum);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void expire_pexpire_ttl_and_expiretime_with_positive_timeout(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "expire_timeout").get());
@@ -1678,6 +1800,35 @@ public class SharedCommandTests {
 
         // set command clears the timeout.
         assertEquals(OK, client.set(key, "pexpire_timeout").get());
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+            assertTrue(client.pexpire(key, 10000L).get());
+        } else {
+            assertTrue(client.pexpire(key, 10000L, ExpireOptions.HAS_NO_EXPIRY).get());
+        }
+        assertTrue(client.ttl(key).get() <= 10L);
+
+        // TTL will be updated to the new value = 15
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+            assertTrue(client.expire(key, 15L).get());
+        } else {
+            assertTrue(client.expire(key, 15L, ExpireOptions.HAS_EXISTING_EXPIRY).get());
+            assertTrue(client.expiretime(key).get() > Instant.now().getEpochSecond());
+            assertTrue(client.pexpiretime(key).get() > Instant.now().toEpochMilli());
+        }
+        assertTrue(client.ttl(key).get() <= 15L);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void expire_pexpire_ttl_and_expiretime_binary_with_positive_timeout(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(key, gs("expire_timeout")).get());
+        assertTrue(client.expire(key, 10L).get());
+        assertTrue(client.ttl(key).get() <= 10L);
+
+        // set command clears the timeout.
+        assertEquals(OK, client.set(key, gs("pexpire_timeout")).get());
         if (REDIS_VERSION.isLowerThan("7.0.0")) {
             assertTrue(client.pexpire(key, 10000L).get());
         } else {
@@ -1735,6 +1886,42 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void expireAt_pexpireAt_and_ttl_binary_with_positive_timeout(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(key, gs("expireAt_timeout")).get());
+        assertTrue(client.expireAt(key, Instant.now().getEpochSecond() + 10L).get());
+        assertTrue(client.ttl(key).get() <= 10L);
+
+        // extend TTL
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+            assertTrue(client.expireAt(key, Instant.now().getEpochSecond() + 50L).get());
+        } else {
+            assertTrue(
+                    client
+                            .expireAt(
+                                    key,
+                                    Instant.now().getEpochSecond() + 50L,
+                                    ExpireOptions.NEW_EXPIRY_GREATER_THAN_CURRENT)
+                            .get());
+        }
+        assertTrue(client.ttl(key).get() <= 50L);
+
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+            assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() + 50000L).get());
+        } else {
+            // set command clears the timeout.
+            assertEquals(OK, client.set(key, gs("pexpireAt_timeout")).get());
+            assertFalse(
+                    client
+                            .pexpireAt(
+                                    key, Instant.now().toEpochMilli() + 50000L, ExpireOptions.HAS_EXISTING_EXPIRY)
+                            .get());
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void expire_pexpire_ttl_and_expiretime_with_timestamp_in_the_past_or_negative_timeout(
             BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -1751,6 +1938,30 @@ public class SharedCommandTests {
         assertEquals(-2L, client.ttl(key).get());
 
         assertEquals(OK, client.set(key, "pexpire_with_past_timestamp").get());
+        assertTrue(client.pexpire(key, -10000L).get());
+        assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void
+            expire_pexpire_ttl_and_expiretime_binary_with_timestamp_in_the_past_or_negative_timeout(
+                    BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+
+        assertEquals(OK, client.set(key, gs("expire_with_past_timestamp")).get());
+        // no timeout set yet
+        assertEquals(-1L, client.ttl(key).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(-1L, client.expiretime(key).get());
+            assertEquals(-1L, client.pexpiretime(key).get());
+        }
+
+        assertTrue(client.expire(key, -10L).get());
+        assertEquals(-2L, client.ttl(key).get());
+
+        assertEquals(OK, client.set(key, gs("pexpire_with_past_timestamp")).get());
         assertTrue(client.pexpire(key, -10000L).get());
         assertEquals(-2L, client.ttl(key).get());
     }
@@ -1776,6 +1987,24 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void expireAt_pexpireAt_ttl_binary_with_timestamp_in_the_past_or_negative_timeout(
+            BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+
+        assertEquals(OK, client.set(key, gs("expireAt_with_past_timestamp")).get());
+        // set timeout in the past
+        assertTrue(client.expireAt(key, Instant.now().getEpochSecond() - 50L).get());
+        assertEquals(-2L, client.ttl(key).get());
+
+        assertEquals(OK, client.set(key, gs("pexpireAt_with_past_timestamp")).get());
+        // set timeout in the past
+        assertTrue(client.pexpireAt(key, Instant.now().toEpochMilli() - 50000L).get());
+        assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void expire_pexpire_ttl_and_expiretime_with_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
@@ -1792,8 +2021,36 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void expire_pexpire_ttl_and_expiretime_binary_with_non_existing_key(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+
+        assertFalse(client.expire(key, 10L).get());
+        assertFalse(client.pexpire(key, 10000L).get());
+
+        assertEquals(-2L, client.ttl(key).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(-2L, client.expiretime(key).get());
+            assertEquals(-2L, client.pexpiretime(key).get());
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void expireAt_pexpireAt_and_ttl_with_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
+
+        assertFalse(client.expireAt(key, Instant.now().getEpochSecond() + 10L).get());
+        assertFalse(client.pexpireAt(key, Instant.now().toEpochMilli() + 10000L).get());
+
+        assertEquals(-2L, client.ttl(key).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void expireAt_pexpireAt_and_ttl_binary_with_non_existing_key(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
 
         assertFalse(client.expireAt(key, Instant.now().getEpochSecond() + 10L).get());
         assertFalse(client.pexpireAt(key, Instant.now().toEpochMilli() + 10000L).get());
@@ -1827,19 +2084,41 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void expire_pexpire_and_pttl_binary_with_positive_timeout(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+
+        assertEquals(-2L, client.pttl(key).get());
+
+        assertEquals(OK, client.set(key, gs("expire_timeout")).get());
+        assertTrue(client.expire(key, 10L).get());
+        Long pttlResult = client.pttl(key).get();
+        assertTrue(0 <= pttlResult);
+        assertTrue(pttlResult <= 10000L);
+
+        assertEquals(OK, client.set(key, gs("pexpire_timeout")).get());
+        assertEquals(-1L, client.pttl(key).get());
+
+        assertTrue(client.pexpire(key, 10000L).get());
+        pttlResult = client.pttl(key).get();
+        assertTrue(0 <= pttlResult);
+        assertTrue(pttlResult <= 10000L);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void persist_on_existing_and_non_existing_key(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
         assertFalse(client.persist(key).get());
 
-        assertEquals(OK, client.set(key, "persist_value").get());
-        assertFalse(client.persist(key).get());
+        assertEquals(OK, client.set(gs(key), gs("persist_value")).get());
+        assertFalse(client.persist(gs(key)).get());
 
         assertTrue(client.expire(key, 10L).get());
         Long persistAmount = client.ttl(key).get();
         assertTrue(0L <= persistAmount && persistAmount <= 10L);
-        assertTrue(client.persist(key).get());
-
+        assertTrue(client.persist(gs(key)).get());
         assertEquals(-1L, client.ttl(key).get());
     }
 
@@ -2300,10 +2579,15 @@ public class SharedCommandTests {
         assertArrayEquals(
                 new Double[] {1.0, null, null, 3.0},
                 client
-                        .zmscore(key1, new String[] {"one", "nonExistentMember", "nonExistentMember", "three"})
+                        .zmscore(
+                                gs(key1),
+                                new GlideString[] {
+                                    gs("one"), gs("nonExistentMember"), gs("nonExistentMember"), gs("three")
+                                })
                         .get());
         assertArrayEquals(
-                new Double[] {null}, client.zmscore("nonExistentKey", new String[] {"one"}).get());
+                new Double[] {null},
+                client.zmscore(gs("nonExistentKey"), new GlideString[] {gs("one")}).get());
 
         // Key exists, but it is not a set
         assertEquals(OK, client.set(key2, "bar").get());
@@ -3668,7 +3952,11 @@ public class SharedCommandTests {
         assertNotNull(streamid_3);
 
         // xack that streamid_1, and streamid_2 was received
-        assertEquals(2L, client.xack(key, groupName, new String[] {streamid_1, streamid_2}).get());
+        assertEquals(
+                2L,
+                client
+                        .xack(gs(key), gs(groupName), new GlideString[] {gs(streamid_1), gs(streamid_2)})
+                        .get());
 
         // Delete the consumer group and expect 1 pending messages (one was received)
         assertEquals(0L, client.xgroupDelConsumer(key, groupName, consumerName).get());
@@ -3681,7 +3969,8 @@ public class SharedCommandTests {
         assertEquals(1, result_3.get(key).size());
 
         // wrong group, so xack streamid_3 returns 0
-        assertEquals(0L, client.xack(key, "not_a_group", new String[] {streamid_3}).get());
+        assertEquals(
+                0L, client.xack(gs(key), gs("not_a_group"), new GlideString[] {gs(streamid_3)}).get());
 
         // Delete the consumer group and expect the pending message
         assertEquals(1L, client.xgroupDelConsumer(key, groupName, consumerName).get());
@@ -3785,7 +4074,7 @@ public class SharedCommandTests {
                     testClient
                             .xreadgroup(Map.of(timeoutKey, ">"), timeoutGroupName, timeoutConsumerName)
                             .get();
-            // returns an null result on the key
+            // returns a null result on the key
             assertNull(result_1.get(key));
 
             // subsequent calls to read ">" will block:
@@ -3851,6 +4140,292 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.xack(nonStreamKey, groupName, new String[] {zeroStreamId}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xpending(BaseClient client) {
+
+        String key = UUID.randomUUID().toString();
+        String groupName = "group" + UUID.randomUUID();
+        String zeroStreamId = "0";
+        String consumer1 = "consumer-1-" + UUID.randomUUID();
+        String consumer2 = "consumer-2-" + UUID.randomUUID();
+
+        // create group and consumer for the group
+        assertEquals(
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumer2).get());
+
+        // Add two stream entries for consumer 1
+        String streamid_1 = client.xadd(key, Map.of("field1", "value1")).get();
+        assertNotNull(streamid_1);
+        String streamid_2 = client.xadd(key, Map.of("field2", "value2")).get();
+        assertNotNull(streamid_2);
+
+        // read the entire stream for the consumer and mark messages as pending
+        var result_1 = client.xreadgroup(Map.of(key, ">"), groupName, consumer1).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamid_1, new String[][] {{"field1", "value1"}},
+                                streamid_2, new String[][] {{"field2", "value2"}})),
+                result_1);
+
+        // Add three stream entries for consumer 2
+        String streamid_3 = client.xadd(key, Map.of("field3", "value3")).get();
+        assertNotNull(streamid_3);
+        String streamid_4 = client.xadd(key, Map.of("field4", "value4")).get();
+        assertNotNull(streamid_4);
+        String streamid_5 = client.xadd(key, Map.of("field5", "value5")).get();
+        assertNotNull(streamid_5);
+
+        // read the entire stream for the consumer and mark messages as pending
+        var result_2 = client.xreadgroup(Map.of(key, ">"), groupName, consumer2).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamid_3, new String[][] {{"field3", "value3"}},
+                                streamid_4, new String[][] {{"field4", "value4"}},
+                                streamid_5, new String[][] {{"field5", "value5"}})),
+                result_2);
+
+        Object[] pending_results = client.xpending(key, groupName).get();
+        Object[] expectedResult = {
+            Long.valueOf(5L), streamid_1, streamid_5, new Object[][] {{consumer1, "2"}, {consumer2, "3"}}
+        };
+        assertDeepEquals(expectedResult, pending_results);
+
+        Object[][] pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L).get();
+
+        // because of idle time return, we have to remove it from the expected results
+        // and check it separately
+        assertArrayEquals(
+                new Object[] {streamid_1, consumer1, 1L},
+                ArrayUtils.remove(pending_results_extended[0], 2));
+        assertTrue((Long) pending_results_extended[0][2] > 0L);
+
+        assertArrayEquals(
+                new Object[] {streamid_2, consumer1, 1L},
+                ArrayUtils.remove(pending_results_extended[1], 2));
+        assertTrue((Long) pending_results_extended[1][2] > 0L);
+
+        assertArrayEquals(
+                new Object[] {streamid_3, consumer2, 1L},
+                ArrayUtils.remove(pending_results_extended[2], 2));
+        assertTrue((Long) pending_results_extended[2][2] >= 0L);
+
+        assertArrayEquals(
+                new Object[] {streamid_4, consumer2, 1L},
+                ArrayUtils.remove(pending_results_extended[3], 2));
+        assertTrue((Long) pending_results_extended[3][2] >= 0L);
+
+        assertArrayEquals(
+                new Object[] {streamid_5, consumer2, 1L},
+                ArrayUtils.remove(pending_results_extended[4], 2));
+        assertTrue((Long) pending_results_extended[4][2] >= 0L);
+
+        // acknowledge streams 2-4 and remove them from the xpending results
+        assertEquals(
+                3L, client.xack(key, groupName, new String[] {streamid_2, streamid_3, streamid_4}).get());
+
+        pending_results_extended =
+                client
+                        .xpending(key, groupName, IdBound.ofExclusive(streamid_3), InfRangeBound.MAX, 10L)
+                        .get();
+        assertEquals(1, pending_results_extended.length);
+        assertEquals(streamid_5, pending_results_extended[0][0]);
+        assertEquals(consumer2, pending_results_extended[0][1]);
+
+        pending_results_extended =
+                client
+                        .xpending(key, groupName, InfRangeBound.MIN, IdBound.ofExclusive(streamid_5), 10L)
+                        .get();
+        assertEquals(1, pending_results_extended.length);
+        assertEquals(streamid_1, pending_results_extended[0][0]);
+        assertEquals(consumer1, pending_results_extended[0][1]);
+
+        pending_results_extended =
+                client
+                        .xpending(
+                                key,
+                                groupName,
+                                InfRangeBound.MIN,
+                                InfRangeBound.MAX,
+                                10L,
+                                StreamPendingOptions.builder().minIdleTime(1L).consumer(consumer2).build())
+                        .get();
+        assertEquals(1, pending_results_extended.length);
+        assertEquals(streamid_5, pending_results_extended[0][0]);
+        assertEquals(consumer2, pending_results_extended[0][1]);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xpending_return_failures(BaseClient client) {
+
+        String key = UUID.randomUUID().toString();
+        String stringkey = UUID.randomUUID().toString();
+        String groupName = "group" + UUID.randomUUID();
+        String zeroStreamId = "0";
+        String consumer1 = "consumer-1-" + UUID.randomUUID();
+
+        // create group and consumer for the group
+        assertEquals(
+                OK,
+                client
+                        .xgroupCreate(
+                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                        .get());
+        assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
+
+        // Add two stream entries for consumer 1
+        String streamid_1 = client.xadd(key, Map.of("field1", "value1")).get();
+        assertNotNull(streamid_1);
+        String streamid_2 = client.xadd(key, Map.of("field2", "value2")).get();
+        assertNotNull(streamid_2);
+
+        // no pending messages yet...
+        var pending_results_summary = client.xpending(key, groupName).get();
+        assertArrayEquals(new Object[] {0L, null, null, null}, pending_results_summary);
+
+        var pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MAX, InfRangeBound.MIN, 10L).get();
+        assertEquals(0, pending_results_extended.length);
+
+        // read the entire stream for the consumer and mark messages as pending
+        var result_1 = client.xreadgroup(Map.of(key, ">"), groupName, consumer1).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamid_1, new String[][] {{"field1", "value1"}},
+                                streamid_2, new String[][] {{"field2", "value2"}})),
+                result_1);
+
+        // sanity check - expect some results:
+        pending_results_summary = client.xpending(key, groupName).get();
+        assertTrue((Long) pending_results_summary[0] > 0L);
+
+        pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 1L).get();
+        assertTrue(pending_results_extended.length > 0);
+
+        // returns empty if + before -
+        pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MAX, InfRangeBound.MIN, 10L).get();
+        assertEquals(0, pending_results_extended.length);
+
+        // min idletime of 100 seconds shouldn't produce any results
+        pending_results_extended =
+                client
+                        .xpending(
+                                key,
+                                groupName,
+                                InfRangeBound.MIN,
+                                InfRangeBound.MAX,
+                                10L,
+                                StreamPendingOptions.builder().minIdleTime(100000L).build())
+                        .get();
+        assertEquals(0, pending_results_extended.length);
+
+        // invalid consumer - no results
+        pending_results_extended =
+                client
+                        .xpending(
+                                key,
+                                groupName,
+                                InfRangeBound.MIN,
+                                InfRangeBound.MAX,
+                                10L,
+                                StreamPendingOptions.builder().consumer("invalid_consumer").build())
+                        .get();
+        assertEquals(0, pending_results_extended.length);
+
+        // xpending when range bound is not valid ID throws a RequestError
+        Exception executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xpending(
+                                                key,
+                                                groupName,
+                                                IdBound.ofExclusive("not_a_stream_id"),
+                                                InfRangeBound.MAX,
+                                                10L)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xpending(
+                                                key,
+                                                groupName,
+                                                InfRangeBound.MIN,
+                                                IdBound.ofExclusive("not_a_stream_id"),
+                                                10L)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // invalid count should return no results
+        pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, -10L).get();
+        assertEquals(0, pending_results_extended.length);
+
+        pending_results_extended =
+                client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 0L).get();
+        assertEquals(0, pending_results_extended.length);
+
+        // invalid group throws a RequestError (NOGROUP)
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xpending(key, "not_a_group").get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+        // non-existent key throws a RequestError (NOGROUP)
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xpending(stringkey, groupName).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xpending(stringkey, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+        // Key exists, but it is not a stream
+        assertEquals(OK, client.set(stringkey, "bar").get());
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.xpending(stringkey, groupName).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xpending(stringkey, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L)
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -4331,12 +4906,33 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void objectEncoding_binary_returns_null(BaseClient client) {
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        assertNull(client.objectEncoding(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void objectEncoding_returns_string_raw(BaseClient client) {
         String stringRawKey = UUID.randomUUID().toString();
         assertEquals(
                 OK,
                 client
                         .set(stringRawKey, "a really loooooooooooooooooooooooooooooooooooooooong value")
+                        .get());
+        assertEquals("raw", client.objectEncoding(stringRawKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_binary_returns_string_raw(BaseClient client) {
+        GlideString stringRawKey = gs(UUID.randomUUID().toString());
+        assertEquals(
+                OK,
+                client
+                        .set(stringRawKey, gs("a really loooooooooooooooooooooooooooooooooooooooong value"))
                         .get());
         assertEquals("raw", client.objectEncoding(stringRawKey).get());
     }
@@ -4353,6 +4949,15 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void objectEncoding_binary_returns_string_int(BaseClient client) {
+        GlideString stringIntKey = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(stringIntKey, gs("2")).get());
+        assertEquals("int", client.objectEncoding(stringIntKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void objectEncoding_returns_string_embstr(BaseClient client) {
         String stringEmbstrKey = UUID.randomUUID().toString();
         assertEquals(OK, client.set(stringEmbstrKey, "value").get());
@@ -4362,9 +4967,31 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void objectEncoding_binary_returns_string_embstr(BaseClient client) {
+        GlideString stringEmbstrKey = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(stringEmbstrKey, gs("value")).get());
+        assertEquals("embstr", client.objectEncoding(stringEmbstrKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void objectEncoding_returns_list_listpack(BaseClient client) {
         String listListpackKey = UUID.randomUUID().toString();
         assertEquals(1, client.lpush(listListpackKey, new String[] {"1"}).get());
+        // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
+        // actual behavior returns a quicklist.
+        assertEquals(
+                REDIS_VERSION.isLowerThan("7.0.0") ? "quicklist" : "listpack",
+                client.objectEncoding(listListpackKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectEncoding_binary_returns_list_listpack(BaseClient client) {
+        GlideString listListpackKey = gs(UUID.randomUUID().toString());
+        assertEquals(1, client.lpush(listListpackKey, new GlideString[] {gs("1")}).get());
         // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
         // actual behavior returns a quicklist.
         assertEquals(
@@ -4470,8 +5097,24 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void objectFreq_binary_returns_null(BaseClient client) {
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        assertNull(client.objectFreq(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void objectIdletime_returns_null(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
+        assertNull(client.objectIdletime(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectIdletime_binary_returns_null(BaseClient client) {
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
         assertNull(client.objectIdletime(nonExistingKey).get());
     }
 
@@ -4488,7 +5131,25 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void objectIdletime_binary_(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(key, gs("")).get());
+        Thread.sleep(2000);
+        assertTrue(client.objectIdletime(key).get() > 0L);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void objectRefcount_returns_null(BaseClient client) {
+        String nonExistingKey = UUID.randomUUID().toString();
+        assertNull(client.objectRefcount(nonExistingKey).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectRefcount_binary_returns_null(BaseClient client) {
         String nonExistingKey = UUID.randomUUID().toString();
         assertNull(client.objectRefcount(nonExistingKey).get());
     }
@@ -4499,6 +5160,15 @@ public class SharedCommandTests {
     public void objectRefcount(BaseClient client) {
         String key = UUID.randomUUID().toString();
         assertEquals(OK, client.set(key, "").get());
+        assertTrue(client.objectRefcount(key).get() >= 0L);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void objectRefcount_binary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        assertEquals(OK, client.set(key, gs("")).get());
         assertTrue(client.objectRefcount(key).get() >= 0L);
     }
 
@@ -4598,6 +5268,7 @@ public class SharedCommandTests {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
         String[] members = {"Palermo", "Catania"};
+        GlideString[] members_gs = {gs("Palermo"), gs("Catania")};
         Double[][] expected = {
             {13.36138933897018433, 38.11555639549629859}, {15.08726745843887329, 37.50266842333162032}
         };
@@ -4610,6 +5281,14 @@ public class SharedCommandTests {
 
         // Loop through the arrays and perform assertions
         Double[][] actual = client.geopos(key1, members).get();
+        for (int i = 0; i < expected.length; i++) {
+            for (int j = 0; j < expected[i].length; j++) {
+                assertEquals(expected[i][j], actual[i][j], 1e-9);
+            }
+        }
+
+        // Loop through the arrays and perform assertions
+        actual = client.geopos(gs(key1), members_gs).get();
         for (int i = 0; i < expected.length; i++) {
             for (int j = 0; j < expected[i].length; j++) {
                 assertEquals(expected[i][j], actual[i][j], 1e-9);
@@ -4644,11 +5323,11 @@ public class SharedCommandTests {
         assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
 
         // assert correct result with default metric
-        Double actual = client.geodist(key1, member1, member2).get();
+        Double actual = client.geodist(gs(key1), gs(member1), gs(member2)).get();
         assertEquals(expected, actual, delta);
 
         // assert correct result with manual metric specification kilometers
-        Double actualKM = client.geodist(key1, member1, member2, geoUnitKM).get();
+        Double actualKM = client.geodist(gs(key1), gs(member1), gs(member2), geoUnitKM).get();
         assertEquals(expectedKM, actualKM, delta);
 
         // assert null result when member index is missing
@@ -4756,6 +5435,8 @@ public class SharedCommandTests {
 
         assertEquals(0, client.setbit(key1, 0, 1).get());
         assertEquals(1, client.setbit(key1, 0, 0).get());
+        assertEquals(0, client.setbit(gs(key1), 0, 1).get());
+        assertEquals(1, client.setbit(gs(key1), 0, 0).get());
 
         // Exception thrown due to the negative offset
         ExecutionException executionException =
@@ -4782,11 +5463,13 @@ public class SharedCommandTests {
         String key2 = UUID.randomUUID().toString();
         String missingKey = UUID.randomUUID().toString();
         String value = "foobar";
-
         assertEquals(OK, client.set(key1, value).get());
         assertEquals(1, client.getbit(key1, 1).get());
         assertEquals(0, client.getbit(key1, 1000).get());
         assertEquals(0, client.getbit(missingKey, 1).get());
+        assertEquals(1, client.getbit(gs(key1), 1).get());
+        assertEquals(0, client.getbit(gs(key1), 1000).get());
+        assertEquals(0, client.getbit(gs(missingKey), 1).get());
         if (client instanceof RedisClient) {
             assertEquals(
                     1L, ((RedisClient) client).customCommand(new String[] {"SETBIT", key1, "5", "0"}).get());
@@ -5940,6 +6623,88 @@ public class SharedCommandTests {
         assertEquals(7, client.lpush(key2, key2LpushArgs).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sort(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lcsIdx(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String nonStringKey = "{key}-4" + UUID.randomUUID();
+
+        // keys does not exist or is empty
+        Map<String, Object> result = client.lcsIdx(key1, key2).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+        result = client.lcsIdx(key1, key2, 10L).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+        result = client.lcsIdxWithMatchLen(key1, key2).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+
+        // setting string values
+        client.set(key1, "abcdefghijk");
+        client.set(key2, "defjkjuighijk");
+
+        // LCS with only IDX
+        Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
+        result = client.lcsIdx(key1, key2).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and WITHMATCHLEN
+        expectedMatchesObject =
+                new Object[] {
+                    new Object[] {new Long[] {6L, 10L}, new Long[] {8L, 12L}, 5L},
+                    new Object[] {new Long[] {3L, 5L}, new Long[] {0L, 2L}, 3L}
+                };
+        result = client.lcsIdxWithMatchLen(key1, key2).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and MINMATCHLEN
+        expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}};
+        result = client.lcsIdx(key1, key2, 4).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and a negative MINMATCHLEN
+        expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
+        result = client.lcsIdx(key1, key2, -1L).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX, MINMATCHLEN, and WITHMATCHLEN
+        expectedMatchesObject =
+                new Object[] {new Object[] {new Long[] {6L, 10L}, new Long[] {8L, 12L}, 5L}};
+        result = client.lcsIdxWithMatchLen(key1, key2, 4L).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // non-string keys are used
+        client.sadd(nonStringKey, new String[] {"setmember"}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcsIdx(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(ExecutionException.class, () -> client.lcsIdx(nonStringKey, key1, 10L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lcsIdxWithMatchLen(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lcsIdxWithMatchLen(nonStringKey, key1, 10L).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }

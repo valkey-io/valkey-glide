@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide;
 
 import static glide.TestConfiguration.REDIS_VERSION;
@@ -38,6 +38,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
@@ -224,6 +225,16 @@ public class TransactionTestUtilities {
         String stringKey8 = "{StringKey}-8-" + UUID.randomUUID();
         String stringKey9 = "{StringKey}-9-" + UUID.randomUUID();
 
+        Map<String, Object> expectedLcsIdxObject =
+                Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+
+        Map<String, Object> expectedLcsIdxWithMatchLenObject =
+                Map.of(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
+
         transaction
                 .flushall()
                 .set(stringKey1, value1)
@@ -256,7 +267,11 @@ public class TransactionTestUtilities {
                     .lcs(stringKey6, stringKey7)
                     .lcs(stringKey6, stringKey8)
                     .lcsLen(stringKey6, stringKey7)
-                    .lcsLen(stringKey6, stringKey8);
+                    .lcsLen(stringKey6, stringKey8)
+                    .lcsIdx(stringKey6, stringKey7)
+                    .lcsIdx(stringKey6, stringKey7, 1)
+                    .lcsIdxWithMatchLen(stringKey6, stringKey7)
+                    .lcsIdxWithMatchLen(stringKey6, stringKey7, 1);
         }
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
@@ -304,6 +319,10 @@ public class TransactionTestUtilities {
                                 "", // lcs(stringKey6, stringKey8)
                                 3L, // lcsLEN(stringKey6, stringKey7)
                                 0L, // lcsLEN(stringKey6, stringKey8)
+                                expectedLcsIdxObject, // lcsIdx(stringKey6, stringKey7)
+                                expectedLcsIdxObject, // lcsIdx(stringKey6, stringKey7, minMatchLen(1L)
+                                expectedLcsIdxWithMatchLenObject, // lcsIdxWithMatchLen(stringKey6, stringKey7)
+                                expectedLcsIdxWithMatchLenObject, // lcsIdxWithMatchLen(key6, key7, minMatchLen(1L))
                             });
         }
 
@@ -786,7 +805,14 @@ public class TransactionTestUtilities {
                         groupName1,
                         consumer1,
                         StreamReadGroupOptions.builder().count(2L).build())
+                .xpending(streamKey1, groupName1)
                 .xack(streamKey1, groupName1, new String[] {"0-3"})
+                .xpending(
+                        streamKey1,
+                        groupName1,
+                        StreamRange.InfRangeBound.MIN,
+                        StreamRange.InfRangeBound.MAX,
+                        1L)
                 .xgroupDelConsumer(streamKey1, groupName1, consumer1)
                 .xgroupDestroy(streamKey1, groupName1)
                 .xgroupDestroy(streamKey1, groupName2)
@@ -824,7 +850,11 @@ public class TransactionTestUtilities {
             Map.of(
                     streamKey1,
                     Map.of()), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1, options);
+            new Object[] {
+                1L, "0-3", "0-3", new Object[][] {{consumer1, "1"}}
+            }, // xpending(streamKey1, groupName1)
             1L, // xack(streamKey1, groupName1, new String[] {"0-3"})
+            new Object[] {}, // xpending(streamKey1, groupName1, MIN, MAX, 1L)
             0L, // xgroupDelConsumer(streamKey1, groupName1, consumer1)
             true, // xgroupDestroy(streamKey1, groupName1)
             true, // xgroupDestroy(streamKey1, groupName2)

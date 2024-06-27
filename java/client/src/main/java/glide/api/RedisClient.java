@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
 import static glide.api.models.GlideString.gs;
@@ -249,6 +249,12 @@ public class RedisClient extends BaseClient
     public CompletableFuture<Boolean> move(@NonNull String key, long dbIndex) {
         return commandManager.submitNewCommand(
                 Move, new String[] {key, Long.toString(dbIndex)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> move(@NonNull GlideString key, long dbIndex) {
+        return commandManager.submitNewCommand(
+                Move, new GlideString[] {key, gs(Long.toString(dbIndex))}, this::handleBooleanResponse);
     }
 
     @Override

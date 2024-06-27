@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from glide.async_commands.bitmap import (
     BitEncoding,
@@ -52,7 +52,10 @@ from glide.async_commands.stream import (
     MaxId,
     MinId,
     StreamAddOptions,
+    StreamGroupOptions,
     StreamRangeBound,
+    StreamReadGroupOptions,
+    StreamReadOptions,
     StreamTrimOptions,
     TrimByMaxLen,
     TrimByMinId,
@@ -158,7 +161,10 @@ __all__ = [
     "MaxId",
     "MinId",
     "StreamAddOptions",
+    "StreamGroupOptions",
+    "StreamReadGroupOptions",
     "StreamRangeBound",
+    "StreamReadOptions",
     "StreamTrimOptions",
     "TrimByMaxLen",
     "TrimByMinId",

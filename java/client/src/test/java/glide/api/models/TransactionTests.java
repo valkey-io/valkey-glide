@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
 import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
@@ -7,6 +7,9 @@ import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
+import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
+import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
 import static glide.api.models.commands.ExpireOptions.HAS_EXISTING_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.HAS_NO_EXPIRY;
 import static glide.api.models.commands.ExpireOptions.NEW_EXPIRY_LESS_THAN_CURRENT;
@@ -27,6 +30,8 @@ import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_R
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
+import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
+import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MINIMUM_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.RANGE_COUNT_REDIS_API;
@@ -176,6 +181,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
+import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
 import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
@@ -243,6 +249,8 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamPendingOptions;
+import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
@@ -833,6 +841,35 @@ public class TransactionTests {
         transaction.xack("key", "group", new String[] {"12345-1", "98765-4"});
         results.add(Pair.of(XAck, buildArgs("key", "group", "12345-1", "98765-4")));
 
+        transaction.xpending("key", "group");
+        results.add(Pair.of(XPending, buildArgs("key", "group")));
+
+        transaction.xpending("key", "group", InfRangeBound.MAX, InfRangeBound.MIN, 99L);
+        results.add(
+                Pair.of(
+                        XPending,
+                        buildArgs("key", "group", MAXIMUM_RANGE_REDIS_API, MINIMUM_RANGE_REDIS_API, "99")));
+
+        transaction.xpending(
+                "key",
+                "group",
+                StreamRange.IdBound.ofExclusive("11"),
+                StreamRange.IdBound.ofExclusive("1234-0"),
+                99L,
+                StreamPendingOptions.builder().minIdleTime(5L).consumer("consumer").build());
+        results.add(
+                Pair.of(
+                        XPending,
+                        buildArgs(
+                                "key",
+                                "group",
+                                IDLE_TIME_REDIS_API,
+                                "5",
+                                EXCLUSIVE_RANGE_REDIS_API + "11",
+                                EXCLUSIVE_RANGE_REDIS_API + "1234-0",
+                                "99",
+                                "consumer")));
+
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
 
@@ -1096,6 +1133,30 @@ public class TransactionTests {
 
         transaction.lcsLen("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2", "LEN")));
+
+        transaction.lcsIdx("key1", "key2");
+        results.add(Pair.of(LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING)));
+
+        transaction.lcsIdx("key1", "key2", 10);
+        results.add(
+                Pair.of(
+                        LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, "10")));
+
+        transaction.lcsIdxWithMatchLen("key1", "key2");
+        results.add(
+                Pair.of(LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING)));
+
+        transaction.lcsIdxWithMatchLen("key1", "key2", 10);
+        results.add(
+                Pair.of(
+                        LCS,
+                        buildArgs(
+                                "key1",
+                                "key2",
+                                IDX_COMMAND_STRING,
+                                MINMATCHLEN_COMMAND_STRING,
+                                "10",
+                                WITHMATCHLEN_COMMAND_STRING)));
 
         transaction.sunion(new String[] {"key1", "key2"});
         results.add(Pair.of(SUnion, buildArgs("key1", "key2")));

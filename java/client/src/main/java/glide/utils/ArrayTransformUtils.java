@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.utils;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
@@ -96,6 +96,27 @@ public class ArrayTransformUtils {
             convertedArr[i] = (T) castArray((T[]) outerObjectArr[i], clazz);
         }
         return (U[][]) castArray(convertedArr, Array.newInstance(clazz, 0).getClass());
+    }
+
+    /**
+     * Casts an <code>Object[][][]</code> to <code>T[][][]</code> by casting each nested array and
+     * every array element.
+     *
+     * @param outerObjectArr 3D array of objects to cast.
+     * @param clazz The class of the array elements to cast to.
+     * @return An array of arrays of type U, containing the elements from the input array.
+     * @param <T> The base type from which the elements are being cast.
+     * @param <U> The subtype of T to which the elements are cast.
+     */
+    public static <T, U extends T> U[][][] cast3DArray(T[] outerObjectArr, Class<U> clazz) {
+        if (outerObjectArr == null) {
+            return null;
+        }
+        T[] convertedArr = (T[]) new Object[outerObjectArr.length];
+        for (int i = 0; i < outerObjectArr.length; i++) {
+            convertedArr[i] = (T) castArrayofArrays((T[]) outerObjectArr[i], clazz);
+        }
+        return (U[][][]) castArrayofArrays(convertedArr, Array.newInstance(clazz, 0).getClass());
     }
 
     /**

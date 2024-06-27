@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
 import static glide.api.models.GlideString.gs;
@@ -8,6 +8,7 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlyS
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
+import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
@@ -136,6 +137,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
+import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
 import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
@@ -207,6 +209,7 @@ import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
@@ -519,6 +522,21 @@ public abstract class BaseClient
         return response;
     }
 
+    /** Process a <code>LCS key1 key2 IDX</code> response */
+    protected Map<String, Object> handleLcsIdxResponse(Map<String, Object> response)
+            throws RedisException {
+        Long[][][] convertedMatchesObject =
+                cast3DArray((Object[]) (response.get(LCS_MATCHES_RESULT_KEY)), Long.class);
+
+        if (convertedMatchesObject == null) {
+            throw new NullPointerException(
+                    "LCS result does not contain the key \"" + LCS_MATCHES_RESULT_KEY + "\"");
+        }
+
+        response.put("matches", convertedMatchesObject);
+        return response;
+    }
+
     @Override
     public CompletableFuture<Long> del(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);
@@ -626,9 +644,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> objectEncoding(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ObjectEncoding, new GlideString[] {key}, this::handleStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> objectFreq(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectFreq, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectFreq(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ObjectFreq, new GlideString[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
@@ -638,9 +668,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> objectIdletime(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ObjectIdleTime, new GlideString[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> objectRefcount(@NonNull String key) {
         return commandManager.submitNewCommand(
                 ObjectRefCount, new String[] {key}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> objectRefcount(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ObjectRefCount, new GlideString[] {key}, this::handleLongOrNullResponse);
     }
 
     @Override
@@ -650,9 +692,22 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> rename(@NonNull GlideString key, @NonNull GlideString newKey) {
+        return commandManager.submitNewCommand(
+                Rename, new GlideString[] {key, newKey}, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> renamenx(@NonNull String key, @NonNull String newKey) {
         return commandManager.submitNewCommand(
                 RenameNX, new String[] {key, newKey}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> renamenx(
+            @NonNull GlideString key, @NonNull GlideString newKey) {
+        return commandManager.submitNewCommand(
+                RenameNX, new GlideString[] {key, newKey}, this::handleBooleanResponse);
     }
 
     @Override
@@ -868,6 +923,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> lpush(@NonNull GlideString key, @NonNull GlideString[] elements) {
+        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(LPush, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<String> lpop(@NonNull String key) {
         return commandManager.submitNewCommand(
                 LPop, new String[] {key}, this::handleStringOrNullResponse);
@@ -937,6 +998,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> ltrim(@NonNull GlideString key, long start, long end) {
+        return commandManager.submitNewCommand(
+                LTrim,
+                new GlideString[] {key, gs(Long.toString(start)), gs(Long.toString(end))},
+                this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> llen(@NonNull String key) {
         return commandManager.submitNewCommand(LLen, new String[] {key}, this::handleLongResponse);
     }
@@ -953,8 +1022,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> lrem(
+            @NonNull GlideString key, long count, @NonNull GlideString element) {
+        return commandManager.submitNewCommand(
+                LRem,
+                new GlideString[] {key, gs(Long.toString(count).getBytes()), element},
+                this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> rpush(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(RPush, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> rpush(@NonNull GlideString key, @NonNull GlideString[] elements) {
+        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
         return commandManager.submitNewCommand(RPush, arguments, this::handleLongResponse);
     }
 
@@ -979,6 +1063,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> sadd(@NonNull GlideString key, @NonNull GlideString[] members) {
+        GlideString[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(SAdd, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> sismember(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 SIsMember, new String[] {key, member}, this::handleBooleanResponse);
@@ -987,6 +1077,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> srem(@NonNull String key, @NonNull String[] members) {
         String[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(SRem, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> srem(@NonNull GlideString key, @NonNull GlideString[] members) {
+        GlideString[] arguments = ArrayUtils.addFirst(members, key);
         return commandManager.submitNewCommand(SRem, arguments, this::handleLongResponse);
     }
 
@@ -1004,6 +1100,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> scard(@NonNull String key) {
         return commandManager.submitNewCommand(SCard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> scard(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                SCard, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1032,6 +1134,13 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> smove(
+            @NonNull GlideString source, @NonNull GlideString destination, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                SMove, new GlideString[] {source, destination, member}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> sinterstore(@NonNull String destination, @NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, destination);
         return commandManager.submitNewCommand(SInterStore, arguments, this::handleLongResponse);
@@ -1054,6 +1163,11 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> exists(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(Exists, keys, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> unlink(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Unlink, keys, this::handleLongResponse);
     }
@@ -1065,6 +1179,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> expire(@NonNull GlideString key, long seconds) {
+        return commandManager.submitNewCommand(
+                Expire, new GlideString[] {key, gs(Long.toString(seconds))}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> expire(
             @NonNull String key, long seconds, @NonNull ExpireOptions expireOptions) {
         String[] arguments =
@@ -1073,9 +1193,26 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> expire(
+            @NonNull GlideString key, long seconds, @NonNull ExpireOptions expireOptions) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(seconds))}, expireOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(Expire, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> expireAt(@NonNull String key, long unixSeconds) {
         return commandManager.submitNewCommand(
                 ExpireAt, new String[] {key, Long.toString(unixSeconds)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> expireAt(@NonNull GlideString key, long unixSeconds) {
+        return commandManager.submitNewCommand(
+                ExpireAt,
+                new GlideString[] {key, gs(Long.toString(unixSeconds))},
+                this::handleBooleanResponse);
     }
 
     @Override
@@ -1087,9 +1224,27 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> expireAt(
+            @NonNull GlideString key, long unixSeconds, @NonNull ExpireOptions expireOptions) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(unixSeconds))},
+                        expireOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(ExpireAt, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> pexpire(@NonNull String key, long milliseconds) {
         return commandManager.submitNewCommand(
                 PExpire, new String[] {key, Long.toString(milliseconds)}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> pexpire(@NonNull GlideString key, long milliseconds) {
+        return commandManager.submitNewCommand(
+                PExpire,
+                new GlideString[] {key, gs(Long.toString(milliseconds))},
+                this::handleBooleanResponse);
     }
 
     @Override
@@ -1101,10 +1256,28 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> pexpire(
+            @NonNull GlideString key, long milliseconds, @NonNull ExpireOptions expireOptions) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(milliseconds))},
+                        expireOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(PExpire, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> pexpireAt(@NonNull String key, long unixMilliseconds) {
         return commandManager.submitNewCommand(
                 PExpireAt,
                 new String[] {key, Long.toString(unixMilliseconds)},
+                this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> pexpireAt(@NonNull GlideString key, long unixMilliseconds) {
+        return commandManager.submitNewCommand(
+                PExpireAt,
+                new GlideString[] {key, gs(Long.toString(unixMilliseconds))},
                 this::handleBooleanResponse);
     }
 
@@ -1118,8 +1291,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> pexpireAt(
+            @NonNull GlideString key, long unixMilliseconds, @NonNull ExpireOptions expireOptions) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {key, gs(Long.toString(unixMilliseconds))},
+                        expireOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(PExpireAt, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> ttl(@NonNull String key) {
         return commandManager.submitNewCommand(TTL, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> ttl(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(TTL, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1129,9 +1317,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> expiretime(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ExpireTime, new GlideString[] {key}, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> pexpiretime(@NonNull String key) {
         return commandManager.submitNewCommand(
                 PExpireTime, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> pexpiretime(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                PExpireTime, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1211,8 +1411,20 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zrem(@NonNull GlideString key, @NonNull GlideString[] members) {
+        GlideString[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(ZRem, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zcard(@NonNull String key) {
         return commandManager.submitNewCommand(ZCard, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zcard(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                ZCard, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1256,9 +1468,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Double> zscore(@NonNull GlideString key, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                ZScore, new GlideString[] {key, member}, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zrank(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 ZRank, new String[] {key, member}, this::handleLongOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zrank(@NonNull GlideString key, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                ZRank, new GlideString[] {key, member}, this::handleLongOrNullResponse);
     }
 
     @Override
@@ -1292,6 +1516,16 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Double[]> zmscore(
+            @NonNull GlideString key, @NonNull GlideString[] members) {
+        GlideString[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(
+                ZMScore,
+                arguments,
+                response -> castArray(handleArrayOrNullResponse(response), Double.class));
+    }
+
+    @Override
     public CompletableFuture<String[]> zdiff(@NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, Long.toString(keys.length));
         return commandManager.submitNewCommand(
@@ -1313,6 +1547,15 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> zdiffstore(
+            @NonNull GlideString destination, @NonNull GlideString[] keys) {
+        GlideString[] arguments =
+                ArrayUtils.addAll(
+                        new GlideString[] {destination, gs(Long.toString(keys.length).getBytes())}, keys);
+        return commandManager.submitNewCommand(ZDiffStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zcount(
             @NonNull String key, @NonNull ScoreRange minScore, @NonNull ScoreRange maxScore) {
         return commandManager.submitNewCommand(
@@ -1324,6 +1567,16 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 ZRemRangeByRank,
                 new String[] {key, Long.toString(start), Long.toString(end)},
+                this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zremrangebyrank(@NonNull GlideString key, long start, long end) {
+        return commandManager.submitNewCommand(
+                ZRemRangeByRank,
+                new GlideString[] {
+                    key, gs(Long.toString(start).getBytes()), gs(Long.toString(end).getBytes())
+                },
                 this::handleLongResponse);
     }
 
@@ -1484,8 +1737,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Double> zincrby(
+            @NonNull GlideString key, double increment, @NonNull GlideString member) {
+        GlideString[] arguments =
+                new GlideString[] {key, gs(Double.toString(increment).getBytes()), member};
+        return commandManager.submitNewCommand(ZIncrBy, arguments, this::handleDoubleResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> zintercard(@NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, Integer.toString(keys.length));
+        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zintercard(@NonNull GlideString[] keys) {
+        GlideString[] arguments =
+                ArrayUtils.addFirst(keys, gs(Integer.toString(keys.length).getBytes()));
         return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
     }
 
@@ -1496,6 +1764,16 @@ public abstract class BaseClient
                         new String[] {Integer.toString(keys.length)},
                         keys,
                         new String[] {LIMIT_REDIS_API, Long.toString(limit)});
+        return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zintercard(@NonNull GlideString[] keys, long limit) {
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {gs(Integer.toString(keys.length).getBytes())},
+                        keys,
+                        new GlideString[] {gs(LIMIT_REDIS_API), gs(Long.toString(limit).getBytes())});
         return commandManager.submitNewCommand(ZInterCard, arguments, this::handleLongResponse);
     }
 
@@ -1651,14 +1929,61 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> xack(
+            @NonNull GlideString key, @NonNull GlideString group, @NonNull GlideString[] ids) {
+        GlideString[] args = concatenateArrays(new GlideString[] {key, group}, ids);
+        return commandManager.submitNewCommand(XAck, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> xpending(@NonNull String key, @NonNull String group) {
+        return commandManager.submitNewCommand(
+                XPending, new String[] {key, group}, this::handleArrayOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> xpending(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull StreamRange start,
+            @NonNull StreamRange end,
+            long count) {
+        return xpending(key, group, start, end, count, StreamPendingOptions.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> xpending(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull StreamRange start,
+            @NonNull StreamRange end,
+            long count,
+            @NonNull StreamPendingOptions options) {
+        String[] args = concatenateArrays(new String[] {key, group}, options.toArgs(start, end, count));
+        return commandManager.submitNewCommand(
+                XPending, args, response -> castArray(handleArrayResponse(response), Object[].class));
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> pttl(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(PTTL, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
     public CompletableFuture<Boolean> persist(@NonNull String key) {
         return commandManager.submitNewCommand(
                 Persist, new String[] {key}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> persist(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                Persist, new GlideString[] {key}, this::handleBooleanResponse);
     }
 
     @Override
@@ -1697,8 +2022,20 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> rpushx(@NonNull GlideString key, @NonNull GlideString[] elements) {
+        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(RPushX, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> lpushx(@NonNull String key, @NonNull String[] elements) {
         String[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(LPushX, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> lpushx(@NonNull GlideString key, @NonNull GlideString[] elements) {
+        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
         return commandManager.submitNewCommand(LPushX, arguments, this::handleLongResponse);
     }
 
@@ -1823,6 +2160,16 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Double[][]> geopos(
+            @NonNull GlideString key, @NonNull GlideString[] members) {
+        GlideString[] arguments = concatenateArrays(new GlideString[] {key}, members);
+        return commandManager.submitNewCommand(
+                GeoPos,
+                arguments,
+                response -> castArrayofArrays(handleArrayResponse(response), Double.class));
+    }
+
+    @Override
     public CompletableFuture<Double> geodist(
             @NonNull String key,
             @NonNull String member1,
@@ -1834,8 +2181,25 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Double> geodist(
+            @NonNull GlideString key,
+            @NonNull GlideString member1,
+            @NonNull GlideString member2,
+            @NonNull GeoUnit geoUnit) {
+        GlideString[] arguments = new GlideString[] {key, member1, member2, gs(geoUnit.getRedisApi())};
+        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> geodist(
             @NonNull String key, @NonNull String member1, @NonNull String member2) {
         String[] arguments = new String[] {key, member1, member2};
+        return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<Double> geodist(
+            @NonNull GlideString key, @NonNull GlideString member1, @NonNull GlideString member2) {
+        GlideString[] arguments = new GlideString[] {key, member1, member2};
         return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
     }
 
@@ -1903,8 +2267,21 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> setbit(@NonNull GlideString key, long offset, long value) {
+        GlideString[] arguments =
+                new GlideString[] {key, gs(Long.toString(offset)), gs(Long.toString(value))};
+        return commandManager.submitNewCommand(SetBit, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> getbit(@NonNull String key, long offset) {
         String[] arguments = new String[] {key, Long.toString(offset)};
+        return commandManager.submitNewCommand(GetBit, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> getbit(@NonNull GlideString key, long offset) {
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(offset))};
         return commandManager.submitNewCommand(GetBit, arguments, this::handleLongResponse);
     }
 
@@ -2192,6 +2569,47 @@ public abstract class BaseClient
     public CompletableFuture<Long> lcsLen(@NonNull String key1, @NonNull String key2) {
         String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
         return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(@NonNull String key1, @NonNull String key2) {
+        String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING};
+        return commandManager.submitNewCommand(
+                LCS, arguments, response -> handleLcsIdxResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(
+            @NonNull String key1, @NonNull String key2, long minMatchLen) {
+        String[] arguments =
+                new String[] {
+                    key1, key2, IDX_COMMAND_STRING, MINMATCHLEN_COMMAND_STRING, String.valueOf(minMatchLen)
+                };
+        return commandManager.submitNewCommand(
+                LCS, arguments, response -> handleLcsIdxResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(
+            @NonNull String key1, @NonNull String key2) {
+        String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(
+            @NonNull String key1, @NonNull String key2, long minMatchLen) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {
+                            key1,
+                            key2,
+                            IDX_COMMAND_STRING,
+                            MINMATCHLEN_COMMAND_STRING,
+                            String.valueOf(minMatchLen),
+                            WITHMATCHLEN_COMMAND_STRING
+                        });
+        return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
     }
 
     @Override

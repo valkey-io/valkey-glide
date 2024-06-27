@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
 import static glide.TestConfiguration.REDIS_VERSION;
@@ -820,6 +820,11 @@ public class CommandTests {
                 Arguments.of("msetnx", null, clusterClient.msetnx(Map.of("abc", "def", "ghi", "jkl"))),
                 Arguments.of("lcs", "7.0.0", clusterClient.lcs("abc", "def")),
                 Arguments.of("lcsLEN", "7.0.0", clusterClient.lcsLen("abc", "def")),
+                Arguments.of("lcsIdx", "7.0.0", clusterClient.lcsIdx("abc", "def")),
+                Arguments.of("lcsIdx", "7.0.0", clusterClient.lcsIdx("abc", "def", 10)),
+                Arguments.of("lcsIdxWithMatchLen", "7.0.0", clusterClient.lcsIdxWithMatchLen("abc", "def")),
+                Arguments.of(
+                        "lcsIdxWithMatchLen", "7.0.0", clusterClient.lcsIdxWithMatchLen("abc", "def", 10)),
                 Arguments.of("sunion", "1.0.0", clusterClient.sunion(new String[] {"abc", "def", "ghi"})),
                 Arguments.of("sortStore", "1.0.0", clusterClient.sortStore("abc", "def")),
                 Arguments.of(
@@ -1275,6 +1280,7 @@ public class CommandTests {
                 }
 
                 assertEquals(OK, clusterClient.functionKill().get());
+                Thread.sleep(404); // sometimes kill doesn't happen immediately
 
                 exception =
                         assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
@@ -1361,7 +1367,7 @@ public class CommandTests {
 
                 // redis kills a function with 5 sec delay
                 assertEquals(OK, clusterClient.functionKill(route).get());
-                Thread.sleep(404);
+                Thread.sleep(404); // sometimes kill doesn't happen immediately
 
                 exception =
                         assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
@@ -1432,6 +1438,7 @@ public class CommandTests {
 
                 // redis kills a function with 5 sec delay
                 assertEquals(OK, clusterClient.functionKill(route).get());
+                Thread.sleep(404); // sometimes kill doesn't happen immediately
 
                 exception =
                         assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());

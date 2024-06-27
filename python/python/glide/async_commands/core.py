@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -47,7 +47,10 @@ from glide.async_commands.sorted_set import (
 )
 from glide.async_commands.stream import (
     StreamAddOptions,
+    StreamGroupOptions,
     StreamRangeBound,
+    StreamReadGroupOptions,
+    StreamReadOptions,
     StreamTrimOptions,
 )
 from glide.constants import TOK, TResult
@@ -2683,7 +2686,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range
                 arguments are not applicable.
 
         Examples:
@@ -2732,7 +2735,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
-                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns null if the range
+                list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range
                 arguments are not applicable.
 
         Examples:
@@ -2751,6 +2754,257 @@ class CoreCommands(Protocol):
         return cast(
             Optional[Mapping[str, List[List[str]]]],
             await self._execute_command(RequestType.XRevRange, args),
+        )
+
+    async def xread(
+        self,
+        keys_and_ids: Mapping[str, str],
+        options: Optional[StreamReadOptions] = None,
+    ) -> Optional[Mapping[str, Mapping[str, List[List[str]]]]]:
+        """
+        Reads entries from the given streams.
+
+        See https://valkey.io/commands/xread for more details.
+
+        Note:
+            When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of keys and entry IDs to read from. The mapping is composed of a
+                stream's key and the ID of the entry after which the stream will be read.
+            options (Optional[StreamReadOptions]): Options detailing how to read the stream.
+
+        Returns:
+            Optional[Mapping[str, Mapping[str, List[List[str]]]]]: A mapping of stream keys, to a mapping of stream IDs,
+                to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                None will be returned under the following conditions:
+                - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no entries after the given ID.
+                - The `BLOCK` option is specified and the timeout is hit.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="0-1"))
+            >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
+            >>> await client.xread({"mystream": "0-0"}, StreamReadOptions(block_ms=1000))
+                {
+                    "mystream": {
+                        "0-1": [["field1", "value1"]],
+                        "0-2": [["field2", "value2"], ["field2", "value3"]],
+                    }
+                }
+                # Indicates the stream entries for "my_stream" with IDs greater than "0-0". The operation blocks up to
+                # 1000ms if there is no stream data.
+        """
+        args = [] if options is None else options.to_args()
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return cast(
+            Optional[Mapping[str, Mapping[str, List[List[str]]]]],
+            await self._execute_command(RequestType.XRead, args),
+        )
+
+    async def xgroup_create(
+        self,
+        key: str,
+        group_name: str,
+        group_id: str,
+        options: Optional[StreamGroupOptions] = None,
+    ) -> TOK:
+        """
+        Creates a new consumer group uniquely identified by `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-create for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The newly created consumer group name.
+            group_id (str): The stream entry ID that specifies the last delivered entry in the stream from the new
+                group’s perspective. The special ID "$" can be used to specify the last entry in the stream.
+            options (Optional[StreamGroupOptions]): Options for creating the stream group.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.xgroup_create("mystream", "mygroup", "$", StreamGroupOptions(make_stream=True))
+                OK
+                # Created the consumer group "mygroup" for the stream "mystream", which will track entries created after
+                # the most recent entry. The stream was created with length 0 if it did not already exist.
+        """
+        args = [key, group_name, group_id]
+        if options is not None:
+            args.extend(options.to_args())
+
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.XGroupCreate, args),
+        )
+
+    async def xgroup_destroy(self, key: str, group_name: str) -> bool:
+        """
+        Destroys the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-destroy for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name to delete.
+
+        Returns:
+            bool: True if the consumer group was destroyed. Otherwise, returns False.
+
+        Examples:
+            >>> await client.xgroup_destroy("mystream", "mygroup")
+                True  # The consumer group "mygroup" for stream "mystream" was destroyed.
+        """
+        return cast(
+            bool,
+            await self._execute_command(RequestType.XGroupDestroy, [key, group_name]),
+        )
+
+    async def xgroup_create_consumer(
+        self, key: str, group_name: str, consumer_name: str
+    ) -> bool:
+        """
+        Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-createconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The newly created consumer.
+
+        Returns:
+            bool: True if the consumer is created. Otherwise, returns False.
+
+        Examples:
+            >>> await client.xgroup_create_consumer("mystream", "mygroup", "myconsumer")
+                True  # The consumer "myconsumer" was created in consumer group "mygroup" for the stream "mystream".
+        """
+        return cast(
+            bool,
+            await self._execute_command(
+                RequestType.XGroupCreateConsumer, [key, group_name, consumer_name]
+            ),
+        )
+
+    async def xgroup_del_consumer(
+        self, key: str, group_name: str, consumer_name: str
+    ) -> int:
+        """
+        Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
+
+        See https://valkey.io/commands/xgroup-delconsumer for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer to delete.
+
+        Returns:
+            int: The number of pending messages the `consumer` had before it was deleted.
+
+        Examples:
+            >>> await client.xgroup_del_consumer("mystream", "mygroup", "myconsumer")
+                5  # Consumer "myconsumer" was deleted, and had 5 pending messages unclaimed.
+        """
+        return cast(
+            int,
+            await self._execute_command(
+                RequestType.XGroupDelConsumer, [key, group_name, consumer_name]
+            ),
+        )
+
+    async def xreadgroup(
+        self,
+        keys_and_ids: Mapping[str, str],
+        group_name: str,
+        consumer_name: str,
+        options: Optional[StreamReadGroupOptions] = None,
+    ) -> Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]:
+        """
+        Reads entries from the given streams owned by a consumer group.
+
+        See https://valkey.io/commands/xreadgroup for more details.
+
+        Note:
+            When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of stream keys to stream entry IDs to read from. The special ">"
+                ID returns messages that were never delivered to any other consumer. Any other valid ID will return
+                entries pending for the consumer with IDs greater than the one provided.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name. The consumer will be auto-created if it does not already exist.
+            options (Optional[StreamReadGroupOptions]): Options detailing how to read the stream.
+
+        Returns:
+            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]: A mapping of stream keys, to a mapping of
+                stream IDs, to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                Returns None if the BLOCK option is given and a timeout occurs, or if there is no stream that can be served.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="1-0"))
+            >>> await client.xgroup_create("mystream", "mygroup", "0-0")
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer", StreamReadGroupOptions(count=1))
+                {
+                    "mystream": {
+                        "1-0": [["field1", "value1"]],
+                    }
+                }  # Read one stream entry from "mystream" using "myconsumer" in the consumer group "mygroup".
+        """
+        args = ["GROUP", group_name, consumer_name]
+        if options is not None:
+            args.extend(options.to_args())
+
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return cast(
+            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]],
+            await self._execute_command(RequestType.XReadGroup, args),
+        )
+
+    async def xack(
+        self,
+        key: str,
+        group_name: str,
+        ids: List[str],
+    ) -> int:
+        """
+        Removes one or multiple messages from the Pending Entries List (PEL) of a stream consumer group.
+        This command should be called on pending messages so that such messages do not get processed again by the
+        consumer group.
+
+        See https://valkey.io/commands/xack for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            ids (List[str]): The stream entry IDs to acknowledge and consume for the given consumer group.
+
+        Returns:
+            int: The number of messages that were successfully acknowledged.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="1-0"))
+            >>> await client.xgroup_create("mystream", "mygroup", "0-0")
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer")
+                {
+                    "mystream": {
+                        "1-0": [["field1", "value1"]],
+                    }
+                }  # Read one stream entry, the entry is now in the Pending Entries List for "mygroup".
+            >>> await client.xack("mystream", "mygroup", ["1-0"])
+                1  # 1 pending message was acknowledged and removed from the Pending Entries List for "mygroup".
+        """
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.XAck, [key, group_name] + ids),
         )
 
     async def geoadd(
@@ -5007,7 +5261,8 @@ class CoreCommands(Protocol):
 
     @dataclass
     class PubSubMsg:
-        """Describes incoming pubsub message
+        """
+        Describes the incoming pubsub message
 
         Attributes:
             message (str): Incoming message.
@@ -5038,7 +5293,7 @@ class CoreCommands(Protocol):
 
     def try_get_pubsub_message(self) -> Optional[PubSubMsg]:
         """
-        Tries to returns the next pubsub message.
+        Tries to return the next pubsub message.
         Throws WrongConfiguration in cases:
         1. No pubsub subscriptions are configured for the client
         2. Callback is configured with the pubsub subsciptions
