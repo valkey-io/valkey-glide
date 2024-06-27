@@ -833,6 +833,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> hexists(@NonNull GlideString key, @NonNull GlideString field) {
+        return commandManager.submitNewCommand(
+                HExists, new GlideString[] {key, field}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Map<String, String>> hgetall(@NonNull String key) {
         return commandManager.submitNewCommand(HGetAll, new String[] {key}, this::handleMapResponse);
     }
@@ -1075,6 +1081,13 @@ public abstract class BaseClient
     public CompletableFuture<Boolean> sismember(@NonNull String key, @NonNull String member) {
         return commandManager.submitNewCommand(
                 SIsMember, new String[] {key, member}, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> sismember(
+            @NonNull GlideString key, @NonNull GlideString member) {
+        return commandManager.submitNewCommand(
+                SIsMember, new GlideString[] {key, member}, this::handleBooleanResponse);
     }
 
     @Override
@@ -2451,6 +2464,13 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> lset(
+            @NonNull GlideString key, long index, @NonNull GlideString element) {
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(index)), element};
+        return commandManager.submitNewCommand(LSet, arguments, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> lmove(
             @NonNull String source,
             @NonNull String destination,
@@ -2562,8 +2582,25 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source, @NonNull GlideString destination, boolean replace) {
+        GlideString[] arguments = new GlideString[] {source, destination};
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, gs(REPLACE_REDIS_API));
+        }
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> copy(@NonNull String source, @NonNull String destination) {
         String[] arguments = new String[] {source, destination};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source, @NonNull GlideString destination) {
+        GlideString[] arguments = new GlideString[] {source, destination};
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 

@@ -1020,6 +1020,28 @@ public interface GenericBaseCommands {
     CompletableFuture<Boolean> copy(String source, String destination);
 
     /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
+     * <code>destination</code> key does not yet exist.
+     *
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("test1"), gs("one")).get();
+     * client.set(gs("test2"), gs("two")).get();
+     * assert !client.copy(gs("test1", gs("test2")).get();
+     * assert client.copy(gs("test1"), gs("test2")).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(GlideString source, GlideString destination);
+
+    /**
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key. When
      * <code>replace</code> is true, removes the <code>destination</code> key first if it already
      * exists, otherwise performs no action.
@@ -1042,6 +1064,30 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> copy(String source, String destination, boolean replace);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key. When
+     * <code>replace</code> is true, removes the <code>destination</code> key first if it already
+     * exists, otherwise performs no action.
+     *
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("test1"), gs("one")).get();
+     * client.set(gs("test2"), gs("two")).get();
+     * assert !client.copy(gs("test1", gs("test2"), false).get();
+     * assert client.copy(gs("test1", gs("test2"), true).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(GlideString source, GlideString destination, boolean replace);
 
     /**
      * Serialize the value stored at <code>key</code> in a Valkey-specific format and return it to the
