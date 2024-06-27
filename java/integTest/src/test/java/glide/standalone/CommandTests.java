@@ -11,6 +11,7 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -107,6 +108,13 @@ public class CommandTests {
     public void ping_with_message() {
         String data = regularClient.ping("H3LL0").get();
         assertEquals("H3LL0", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_binary_with_message() {
+        GlideString data = regularClient.ping(gs("H3LL0")).get();
+        assertEquals(gs("H3LL0"), data);
     }
 
     @Test

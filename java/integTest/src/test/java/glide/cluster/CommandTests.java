@@ -192,6 +192,13 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void ping_binary_with_message() {
+        GlideString data = clusterClient.ping(gs("H3LL0")).get();
+        assertEquals(gs("H3LL0"), data);
+    }
+
+    @Test
+    @SneakyThrows
     public void ping_with_route() {
         String data = clusterClient.ping(ALL_NODES).get();
         assertEquals("PONG", data);
@@ -202,6 +209,13 @@ public class CommandTests {
     public void ping_with_message_with_route() {
         String data = clusterClient.ping("H3LL0", ALL_PRIMARIES).get();
         assertEquals("H3LL0", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_binary_with_message_with_route() {
+        GlideString data = clusterClient.ping(gs("H3LL0"), ALL_PRIMARIES).get();
+        assertEquals(gs("H3LL0"), data);
     }
 
     @Test

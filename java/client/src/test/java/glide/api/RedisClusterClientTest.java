@@ -287,6 +287,28 @@ public class RedisClusterClientTest {
 
     @SneakyThrows
     @Test
+    public void ping_binary_with_message_returns_success() {
+        // setup
+        GlideString message = gs("RETURN OF THE PONG");
+        GlideString[] arguments = new GlideString[] {message};
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(message);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(Ping), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.ping(message);
+        GlideString pong = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(message, pong);
+    }
+
+    @SneakyThrows
+    @Test
     public void ping_with_route_returns_success() {
         // setup
         CompletableFuture<String> testResponse = new CompletableFuture<>();
@@ -325,6 +347,30 @@ public class RedisClusterClientTest {
         // exercise
         CompletableFuture<String> response = service.ping(message, route);
         String pong = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(message, pong);
+    }
+
+    @SneakyThrows
+    @Test
+    public void ping_binary_with_message_with_route_returns_success() {
+        // setup
+        GlideString message = gs("RETURN OF THE PONG");
+        GlideString[] arguments = new GlideString[] {message};
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(message);
+
+        Route route = ALL_PRIMARIES;
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(Ping), eq(arguments), eq(route), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.ping(message, route);
+        GlideString pong = response.get();
 
         // verify
         assertEquals(testResponse, response);

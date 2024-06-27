@@ -143,6 +143,12 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> ping(@NonNull GlideString message) {
+        return commandManager.submitNewCommand(
+                Ping, new GlideString[] {message}, this::handleStringResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<String> ping(@NonNull Route route) {
         return commandManager.submitNewCommand(Ping, new String[0], route, this::handleStringResponse);
     }
@@ -151,6 +157,12 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> ping(@NonNull String message, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 Ping, new String[] {message}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> ping(@NonNull GlideString message, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Ping, new GlideString[] {message}, route, this::handleStringResponseBinary);
     }
 
     @Override
