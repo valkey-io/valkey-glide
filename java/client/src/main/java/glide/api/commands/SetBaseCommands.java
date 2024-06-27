@@ -392,6 +392,21 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> srandmember(String key);
+    
+    /**
+     * Returns a random element from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set member.
+     * @return A random element from the set, or <code>null</code> if <code>key</code> does not exist.
+     * @example
+     *     <pre>{@code
+     * client.sadd(gs("test"), new GlideString[] {gs("one")}).get();
+     * GlideString response = client.srandmember(gs("test")).get();
+     * assertEquals(gs("one"), response);
+     * }</pre>
+     */
+    CompletableFuture<GlideString> srandmember(GlideString key);
 
     /**
      * Returns one or more random elements from the set value stored at <code>key</code>.
@@ -411,6 +426,25 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<String[]> srandmember(String key, long count);
+
+    /**
+     * Returns one or more random elements from the set value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/srandmember/">redis.io</a> for details.
+     * @param key The key from which to retrieve the set members.
+     * @param count The number of elements to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.<br>
+     * @return An <code>array</code> of elements from the set, or an empty <code>array</code> if
+     *     <code>key</code> does not exist.
+     * @example
+     *     <pre>{@code
+     * client.sadd(gs("test"), new GlideString[] {gs("one")}).get();
+     * GlideString[] response = client.srandmember(gs("test"), -2).get();
+     * assertArrayEquals(new GlideString[] {gs("one"), gs("one")}, response);
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> srandmember(GlideString key, long count);
 
     /**
      * Removes and returns one random member from the set stored at <code>key</code>.

@@ -846,6 +846,32 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void hvals_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        String field1 = UUID.randomUUID().toString();
+        String field2 = UUID.randomUUID().toString();
+        Map<String, String> fieldValueMap = Map.of(field1, "value1", field2, "value2");
+
+        assertEquals(2, client.hset(key1.toString(), fieldValueMap).get());
+
+        GlideString[] hvalsPayload = client.hvals(key1).get();
+        Arrays.sort(hvalsPayload); // ordering for values by hvals is not guaranteed
+        assertArrayEquals(new GlideString[] {gs("value1"), gs("value2")}, hvalsPayload);
+
+        assertEquals(1, client.hdel(key1.toString(), new String[] {field1}).get());
+        assertArrayEquals(new GlideString[] {gs("value2")}, client.hvals(key1).get());
+        assertArrayEquals(new GlideString[] {}, client.hvals(gs("nonExistingKey")).get());
+
+        assertEquals(OK, client.set(key2, gs("value2")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hvals(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void hmget_multiple_existing_fields_non_existing_field_non_existing_key(
             BaseClient client) {
         String key = UUID.randomUUID().toString();
@@ -862,6 +888,27 @@ public class SharedCommandTests {
                 new String[] {null, null},
                 client.hmget("non_existing_key", new String[] {field1, field2}).get());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hmget_binary_multiple_existing_fields_non_existing_field_non_existing_key(
+            BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString field1 = gs(UUID.randomUUID().toString());
+        GlideString field2 = gs(UUID.randomUUID().toString());
+        GlideString value = gs(UUID.randomUUID().toString());
+        Map<String, String> fieldValueMap = Map.of(field1.toString(), value.toString(), field2.toString(), value.toString());
+
+        assertEquals(2, client.hset(key.toString(), fieldValueMap).get());
+        assertArrayEquals(
+                new GlideString[] {value, null, value},
+                client.hmget(key, new GlideString[] {field1, gs("non_existing_field"), field2}).get());
+        assertArrayEquals(
+                new GlideString[] {null, null},
+                client.hmget(gs("non_existing_key"), new GlideString[] {field1, field2}).get());
+    }
+
 
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
@@ -997,6 +1044,28 @@ public class SharedCommandTests {
 
         // Key exists, but it is not a hash
         assertEquals(OK, client.set(key2, "value").get());
+        Exception executionException =
+                assertThrows(ExecutionException.class, () -> client.hkeys(key2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hkeys_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+
+        var data = new LinkedHashMap<String, String>();
+        data.put("f 1", "v 1");
+        data.put("f 2", "v 2");
+        assertEquals(2, client.hset(key1.toString(), data).get());
+        assertArrayEquals(new GlideString[] {gs("f 1"), gs("f 2")}, client.hkeys(key1).get());
+
+        assertEquals(0, client.hkeys(key2).get().length);
+
+        // Key exists, but it is not a hash
+        assertEquals(OK, client.set(key2, gs("value")).get());
         Exception executionException =
                 assertThrows(ExecutionException.class, () -> client.hkeys(key2).get());
         assertTrue(executionException.getCause() instanceof RequestException);
@@ -5331,6 +5400,44 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void geoadd_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        Map<GlideString, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put(gs("Palermo"), new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put(gs("Catania"), new GeospatialData(15.087269, 37.502669));
+
+        assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
+
+        membersToCoordinates.put(gs("Catania"), new GeospatialData(15.087269, 39));
+        assertEquals(
+                0,
+                client
+                        .geoadd(
+                                key1,
+                                membersToCoordinates,
+                                new GeoAddOptions(ConditionalChange.ONLY_IF_DOES_NOT_EXIST))
+                        .get());
+        assertEquals(
+                0,
+                client
+                        .geoadd(key1, membersToCoordinates, new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS))
+                        .get());
+
+        membersToCoordinates.put(gs("Catania"), new GeospatialData(15.087269, 40));
+        membersToCoordinates.put(gs("Tel-Aviv"), new GeospatialData(32.0853, 34.7818));
+        assertEquals(2, client.geoadd(key1, membersToCoordinates, new GeoAddOptions(true)).get());
+
+        assertEquals(OK, client.set(key2, gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.geoadd(key2, membersToCoordinates).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void geoadd_invalid_args(BaseClient client) {
         String key = UUID.randomUUID().toString();
 
@@ -5366,11 +5473,45 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void geoadd_binary_invalid_args(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.geoadd(key, Map.of()).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.geoadd(key, Map.of(gs("Place"), new GeospatialData(-181, 0))).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.geoadd(key, Map.of(gs("Place"), new GeospatialData(181, 0))).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.geoadd(key, Map.of(gs("Place"), new GeospatialData(0, 86))).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.geoadd(key, Map.of(gs("Place"), new GeospatialData(0, -86))).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void geopos(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
         String[] members = {"Palermo", "Catania"};
-        GlideString[] members_gs = {gs("Palermo"), gs("Catania")};
         Double[][] expected = {
             {13.36138933897018433, 38.11555639549629859}, {15.08726745843887329, 37.50266842333162032}
         };
@@ -5389,16 +5530,41 @@ public class SharedCommandTests {
             }
         }
 
+        // key exists but holding the wrong kind of value (non-ZSET)
+        assertEquals(OK, client.set(key2, "geopos").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.geopos(key2, members).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geopos_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString[] members = {gs("Palermo"), gs("Catania")};
+        Double[][] expected = {
+            {13.36138933897018433, 38.11555639549629859}, {15.08726745843887329, 37.50266842333162032}
+        };
+
+        // adding locations
+        Map<GlideString, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put(gs("Palermo"), new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put(gs("Catania"), new GeospatialData(15.087269, 37.502669));
+        assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
+
         // Loop through the arrays and perform assertions
-        actual = client.geopos(gs(key1), members_gs).get();
+        Double[][] actual = client.geopos(key1, members).get();
         for (int i = 0; i < expected.length; i++) {
             for (int j = 0; j < expected[i].length; j++) {
                 assertEquals(expected[i][j], actual[i][j], 1e-9);
             }
         }
 
+
         // key exists but holding the wrong kind of value (non-ZSET)
-        assertEquals(OK, client.set(key2, "geopos").get());
+        assertEquals(OK, client.set(key2, gs("geopos")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geopos(key2, members).get());
         assertTrue(executionException.getCause() instanceof RequestException);
@@ -5446,6 +5612,45 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void geodist_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString member1 = gs("Palermo");
+        GlideString member2 = gs("Catania");
+        GlideString member3 = gs("NonExisting");
+        GeoUnit geoUnitKM = GeoUnit.KILOMETERS;
+        Double expected = 166274.1516;
+        Double expectedKM = 166.2742;
+        Double delta = 1e-9;
+
+        // adding locations
+        Map<GlideString, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put(gs("Palermo"), new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put(gs("Catania"), new GeospatialData(15.087269, 37.502669));
+        assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
+
+        // assert correct result with default metric
+        Double actual = client.geodist(key1, member1, member2).get();
+        assertEquals(expected, actual, delta);
+
+        // assert correct result with manual metric specification kilometers
+        Double actualKM = client.geodist(key1, member1, member2, geoUnitKM).get();
+        assertEquals(expectedKM, actualKM, delta);
+
+        // assert null result when member index is missing
+        Double actualMissing = client.geodist(key1, member1, member3).get();
+        assertNull(actualMissing);
+
+        // key exists but holds a non-ZSET value
+        assertEquals(OK, client.set(key2, gs("geodist")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.geodist(key2, member1, member2).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void geohash(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -5467,6 +5672,35 @@ public class SharedCommandTests {
 
         // key exists but holding the wrong kind of value (non-ZSET)
         assertEquals(OK, client.set(key2, "geohash").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.geohash(key2, members).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geohash_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString[] members = {gs("Palermo"), gs("Catania"), gs("NonExisting")};
+        GlideString[] empty = {};
+        GlideString[] expected = {gs("sqc8b49rny0"), gs("sqdtr74hyu0"), null};
+
+        // adding locations
+        Map<GlideString, GeospatialData> membersToCoordinates = new HashMap<>();
+        membersToCoordinates.put(gs("Palermo"), new GeospatialData(13.361389, 38.115556));
+        membersToCoordinates.put(gs("Catania"), new GeospatialData(15.087269, 37.502669));
+        assertEquals(2, client.geoadd(key1, membersToCoordinates).get());
+
+        GlideString[] actual = client.geohash(key1, members).get();
+        assertArrayEquals(expected, actual);
+
+        // members array is empty
+        assertEquals(client.geohash(key1, empty).get().length, 0);
+
+        // key exists but holding the wrong kind of value (non-ZSET)
+        assertEquals(OK, client.set(key2, gs("geohash")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.geohash(key2, members).get());
         assertTrue(executionException.getCause() instanceof RequestException);
@@ -6099,6 +6333,51 @@ public class SharedCommandTests {
 
         // key exists but is not a list type key
         assertEquals(OK, client.set(nonSetKey, "notaset").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.srandmember(nonSetKey).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        ExecutionException executionExceptionWithCount =
+                assertThrows(ExecutionException.class, () -> client.srandmember(nonSetKey, count).get());
+        assertInstanceOf(RequestException.class, executionExceptionWithCount.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void srandmember_binary(BaseClient client) {
+        // setup
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString nonExistingKey = gs("nonExisting");
+        GlideString nonSetKey = gs("NonSet");
+        long count = 2;
+        long countNegative = -2;
+        GlideString[] singleArr = new GlideString[] {gs("one")};
+
+        // expected results
+        GlideString expectedNoCount = gs("one");
+        GlideString[] expectedNegCount = new GlideString[] {gs("one"), gs("one")};
+
+        // key does not exist, without count the command returns null, and with count command returns an
+        // empty array
+        assertNull(client.srandmember(nonExistingKey).get());
+        assertEquals(0, client.srandmember(nonExistingKey, count).get().length);
+
+        // adding element to set
+        client.sadd(key, singleArr).get();
+
+        // with no count or a positive count, single array result should only contain element "one"
+        GlideString resultNoCount = client.srandmember(key).get();
+        assertEquals(resultNoCount, expectedNoCount);
+        GlideString[] resultPosCount = client.srandmember(key, count).get();
+        assertArrayEquals(resultPosCount, singleArr);
+
+        // with negative count, the same element can be returned multiple times
+        GlideString[] resultNegCount = client.srandmember(key, countNegative).get();
+        assertArrayEquals(resultNegCount, expectedNegCount);
+
+        // key exists but is not a list type key
+        assertEquals(OK, client.set(nonSetKey, gs("notaset")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.srandmember(nonSetKey).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -6792,6 +7071,40 @@ public class SharedCommandTests {
         // SORT with STORE
         assertEquals(4, client.sortStore(key1, key3).get());
         assertArrayEquals(key1AscendingList, client.lrange(key3, 0, -1).get());
+
+        // Exceptions
+        // SORT with strings require ALPHA
+        assertEquals(7, client.lpush(key2, key2LpushArgs).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sort(key2).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sort_binary(BaseClient client) {
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString[] key1LpushArgs = {gs("2"), gs("1"), gs("4"), gs("3")};
+        String[] key1AscendingList = {"1", "2", "3", "4"};
+        GlideString[] key1AscendingList_gs = {gs("1"), gs("2"), gs("3"), gs("4")};
+        GlideString[] key2LpushArgs = {gs("2"), gs("1"), gs("a"), gs("x"), gs("c"), gs("4"), gs("3")};
+
+        assertArrayEquals(new GlideString[0], client.sort(key3).get());
+        assertEquals(4, client.lpush(key1, key1LpushArgs).get());
+        assertArrayEquals(key1AscendingList_gs, client.sort(key1).get());
+
+        // SORT_R0
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(new GlideString[0], client.sortReadOnly(key3).get());
+            assertArrayEquals(key1AscendingList_gs, client.sortReadOnly(key1).get());
+        }
+
+        // SORT with STORE
+        assertEquals(4, client.sortStore(key1, key3).get());
+        assertArrayEquals(key1AscendingList, client.lrange(key3.toString(), 0, -1).get());
 
         // Exceptions
         // SORT with strings require ALPHA
