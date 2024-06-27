@@ -81,7 +81,7 @@ jobs:
               if: ${{ matrix.engine.type == 'valkey' }}
               uses: ./.github/workflows/install-valkey
               with:
-                  valkey-version: ${{ matrix.engine.version }}
+                  engine-version: ${{ matrix.engine.version }}
                   target: ${{ matrix.host.TARGET }}
 
 
@@ -91,7 +91,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  install-redis: ${{ ((matrix.engine.type == 'valkey' || matrix.host.OS == 'ubuntu') && 'false') || 'true' }}
+                  # install-redis: ${{ ((matrix.engine.type == 'valkey' || matrix.host.OS == 'ubuntu') && 'false') || 'true' }}
 
             - name: Install tools for Go ${{ matrix.go }}
               working-directory: ./go

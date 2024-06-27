@@ -78,13 +78,13 @@ jobs:
               # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
               uses: ./.github/workflows/install-redis
               with:
-                  redis-version: ${{ matrix.engine.version }}
+                  redis-version: ${{ matrix.engine.version_tag }}
 
             - name: Install Valkey
               if: ${{ matrix.engine.type == 'valkey' }}
               uses: ./.github/workflows/install-valkey
               with:
-                  valkey-version: ${{ matrix.engine.version }}
+                  engine-version: ${{ matrix.engine.version_tag }}
                   target: ${{ matrix.host.TARGET }}
 
             - name: Set up dotnet ${{ matrix.dotnet }}
@@ -98,7 +98,7 @@ jobs:
                   os: ${{ matrix.host.OS }}
                   target: ${{ matrix.host.TARGET }}
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-                  install-redis: ${{ ((matrix.engine.type == 'valkey' || matrix.host.OS == 'ubuntu') && 'false') || 'true' }}
+                  # install-redis: ${{ ((matrix.engine.type == 'valkey' || matrix.host.OS == 'ubuntu') && 'false') || 'true' }}
 
             - name: Format
               working-directory: ./csharp
