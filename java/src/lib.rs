@@ -2,6 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener as start_socket_listener_core;
+use glide_core::MAX_REQUEST_ARGS_LENGTH;
 
 use bytes::Bytes;
 use jni::objects::{JClass, JObject, JObjectArray, JByteArray, JString};
@@ -159,6 +160,16 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedB
         };
     };
     Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as jlong
+}
+
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_getMaxRequestArgsLength<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> jlong {
+    MAX_REQUEST_ARGS_LENGTH as jlong
 }
 
 #[no_mangle]
