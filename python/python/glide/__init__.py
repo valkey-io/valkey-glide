@@ -76,6 +76,7 @@ from glide.config import (
 from glide.constants import OK
 from glide.exceptions import (
     ClosingError,
+    ConfigurationError,
     ExecAbortError,
     RedisError,
     RequestError,
@@ -182,6 +183,7 @@ __all__ = [
     "SlotIdRoute",
     # Exceptions
     "ClosingError",
+    "ConfigurationError",
     "ExecAbortError",
     "RedisError",
     "RequestError",
