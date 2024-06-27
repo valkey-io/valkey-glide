@@ -181,7 +181,7 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
             groupId = 'software.amazon.glide'
-            artifactId = 'valkey-client'
+            artifactId = 'glide-for-redis'
             version = "0.4.3"
             pom {
                 name = 'glide-for-valkey'
@@ -230,6 +230,6 @@ tasks.withType(Test) {
 }
 
 jar {
-    archiveBaseName = "valkey-client"
+    archiveBaseName = "glide-for-redis"
     archiveClassifier = "placeholder"
 }
