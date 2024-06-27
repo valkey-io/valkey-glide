@@ -6,7 +6,6 @@ import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
-import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
@@ -1208,7 +1207,4 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> sortStore(String key, String destination);
-    CompletableFuture<Object[]> sscan(String key, long cursor);
-
-    CompletableFuture<Object[]> sscan(String key, long cursor, SScanOptions scanOptions);
 }
