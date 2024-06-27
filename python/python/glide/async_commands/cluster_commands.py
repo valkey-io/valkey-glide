@@ -362,7 +362,7 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/docs/latest/commands/function-flush/ for more details.
 
         Args:
-            mode (FlushMode): The flushing mode, could be either `FlushMode.SYNC` or `FlushMode.ASYNC`.
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
                 in which case the client will route the command to the nodes defined by `route`.
 
@@ -370,7 +370,7 @@ class ClusterCommands(CoreCommands):
             TOK: A simple `OK`.
 
         Examples:
-            >>> await client.function_flush(FlushMode.SYNC)
+            >>> await client.function_flush(SYNC)
                 "OK"
 
         Since: Redis 7.0.0.

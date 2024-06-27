@@ -1808,7 +1808,7 @@ class BaseTransaction:
         See https://valkey.io/docs/latest/commands/function-flush/ for more details.
 
         Args:
-            mode (FlushMode): The flushing mode, could be either `FlushMode.SYNC` or `FlushMode.ASYNC`.
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
 
         Commands response:
             TOK: A simple `OK`.
