@@ -7675,6 +7675,8 @@ public class SharedCommandTests {
                         "secondResultValues: {%s}, numberMembersSet: {%s}",
                         secondResultValues, numberMembersSet));
 
+        assertTrue(secondResultValues.containsAll(numberMembersSet));
+
         // Test match pattern
         result =
                 client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern("*").build()).get();
