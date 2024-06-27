@@ -58,6 +58,7 @@
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
+* Node: Rename RedisClient to GlideClient and RedisClusterClient to GlideClusterClient ([#1670](https://github.com/aws/glide-for-redis/pull/1670))
 
 ## 0.4.1 (2024-02-06)
 
