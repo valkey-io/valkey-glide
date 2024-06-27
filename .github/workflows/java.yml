@@ -76,13 +76,6 @@ jobs:
               with:
                   distribution: "temurin"
                   java-version: ${{ matrix.java }}
-
-            - name: Install redis
-              if: ${{ matrix.engine.type == 'redis' && matrix.host.OS == 'ubuntu' }}
-              # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: ${{ matrix.engine.version }}
             
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies

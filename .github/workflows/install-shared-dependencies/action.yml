@@ -42,11 +42,6 @@ runs:
               brew update
               brew upgrade || true
               brew install git gcc pkgconfig openssl coreutils
-              # if [ "${{ inputs.install-redis }}" == 'true' ]; then
-              #   brew install redis
-              # else
-              #   echo "Skipping Redis installation via package manager"
-              # fi
 
         - name: Install software dependencies for Ubuntu GNU
           shell: bash
@@ -63,22 +58,12 @@ runs:
               wget -O - https://sh.rustup.rs | sh -s -- -y
               source "$HOME/.cargo/env"
               apk add protobuf-dev musl-dev make gcc envsubst
-              # if [ "${{ inputs.install-redis }}" == 'true' ]; then
-              #   apk add redis
-              # else
-              #   echo "Skipping Redis installation via package manager"
-              # fi
 
         - name: Install software dependencies for Amazon-Linux
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
               yum install -y gcc pkgconfig openssl openssl-devel which curl gettext --allowerasing
-              # if [ "${{ inputs.install-redis }}" == 'true' ]; then
-              #   yum install -y redis6 --allowerasing
-              # else
-              #   echo "Skipping Redis installation via package manager"
-              # fi
 
         - name: Install Rust toolchain and protoc
           if: "${{ !contains(inputs.target, 'musl') }}"
