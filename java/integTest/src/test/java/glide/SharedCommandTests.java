@@ -4047,9 +4047,10 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(executionException.getMessage().contains("NOGROUP"));
 
-        // consumer doesn't exists, returns an empty response
+        // consumer doesn't exist and will be created
         var emptyResult =
-                client.xreadgroup(Map.of(key, timestamp_1_1), groupName, "not_a_consumer").get();
+                client.xreadgroup(Map.of(key, timestamp_1_1), groupName, "non_existing_consumer").get();
+        // no available pending messages
         assertEquals(0, emptyResult.get(key).size());
 
         try (var testClient =
