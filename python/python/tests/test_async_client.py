@@ -4456,7 +4456,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_load(self, redis_client: RedisClient):
+    async def test_function_load(self, redis_client: TRedisClient):
         # TODO: Test function with FCALL
         # TODO: Test with FUNCTION LIST
         min_version = "7.0.0"
@@ -4483,16 +4483,15 @@ class TestCommands:
 
         # TODO: add FUNCTION LIST once implemented
 
-        # re-load library without overwriting
+        # re-load library without replace
         with pytest.raises(RequestError) as e:
             await redis_client.function_load(code)
         assert "Library '" + lib_name + "' already exists" in str(e)
 
-        # re-load library with overwriting
+        # re-load library with replace
         assert await redis_client.function_load(code, True) == lib_name
 
         func2_name = f"myfunc2c{get_random_string(5)}"
-        new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
         new_code = generate_lua_lib_code(
             lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
         )
@@ -4536,16 +4535,15 @@ class TestCommands:
 
         # TODO: add FUNCTION LIST once implemented
 
-        # re-load library without overwriting
+        # re-load library without replace
         with pytest.raises(RequestError) as e:
             await redis_client.function_load(code, False, route)
         assert "Library '" + lib_name + "' already exists" in str(e)
 
-        # re-load library with overwriting
+        # re-load library with replace
         assert await redis_client.function_load(code, True, route) == lib_name
 
         func2_name = f"myfunc2c{get_random_string(5)}"
-        new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
         new_code = generate_lua_lib_code(
             lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
         )

@@ -26,11 +26,11 @@
 * Node: Added ZINTERCARD command ([#1553](https://github.com/aws/glide-for-redis/pull/1553))
 * Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
 * Python: Added MSETNX command ([#1565](https://github.com/aws/glide-for-redis/pull/1565))
-* Python: Added FUNCTION LOAD command ([#1589](https://github.com/aws/glide-for-redis/pull/1589))
 * Python: Added MOVE command ([#1566](https://github.com/aws/glide-for-redis/pull/1566))
 * Node: Added OBJECT IDLETIME command ([#1567](https://github.com/aws/glide-for-redis/pull/1567))
 * Node: Added OBJECT REFCOUNT command ([#1568](https://github.com/aws/glide-for-redis/pull/1568))
 * Python: Added SETBIT command ([#1571](https://github.com/aws/glide-for-redis/pull/1571))
+* Python: Added FUNCTION LOAD command ([#1699](https://github.com/aws/glide-for-redis/pull/1699))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
