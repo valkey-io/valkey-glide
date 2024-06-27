@@ -211,9 +211,9 @@ public interface ConnectionManagementClusterCommands {
      * assert message.equals(gs("GLIDE"));
      *
      * // Command sent to all nodes via ALL_NODES route, expecting a MultiValue result.
-     * Map<String, GlideString> msgForAllNodes = client.echo("GLIDE", ALL_NODES).get().getMultiValue();
+     * Map<String, GlideString> msgForAllNodes = client.echo(gs("GLIDE"), ALL_NODES).get().getMultiValue();
      * for(var msgPerNode : msgForAllNodes.entrySet()) {
-     *     assert msgPerNode.equals("GLIDE");
+     *     assert msgPerNode.equals(gs("GLIDE"));
      * }
      * }</pre>
      */
