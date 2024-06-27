@@ -51,7 +51,7 @@ def get_request_error_class(
     return RequestError
 
 
-class BaseRedisClient(CoreCommands):
+class BaseClient(CoreCommands):
     def __init__(self, config: BaseClientConfiguration):
         """
         To create a new client, use the `create` classmethod
@@ -70,14 +70,14 @@ class BaseRedisClient(CoreCommands):
 
     @classmethod
     async def create(cls, config: BaseClientConfiguration) -> Self:
-        """Creates a Redis client.
+        """Creates a Glide client.
 
         Args:
             config (ClientConfiguration): The client configurations.
                 If no configuration is provided, a default client to "localhost":6379 will be created.
 
         Returns:
-            Self: a Redis Client instance.
+            Self: a Glide Client instance.
         """
         config = config
         self = cls(config)
@@ -387,11 +387,11 @@ class BaseRedisClient(CoreCommands):
         ):
             values: List = push_notification["values"]
             if message_kind == "PMessage":
-                pubsub_message = BaseRedisClient.PubSubMsg(
+                pubsub_message = BaseClient.PubSubMsg(
                     message=values[2], channel=values[1], pattern=values[0]
                 )
             else:
-                pubsub_message = BaseRedisClient.PubSubMsg(
+                pubsub_message = BaseClient.PubSubMsg(
                     message=values[1], channel=values[0], pattern=None
                 )
         elif (
@@ -509,9 +509,9 @@ class BaseRedisClient(CoreCommands):
                     await self._process_response(response=response)
 
 
-class RedisClusterClient(BaseRedisClient, ClusterCommands):
+class GlideClusterClient(BaseClient, ClusterCommands):
     """
-    Client used for connection to cluster Redis servers.
+    Client used for connection to cluster servers.
     For full documentation, see
     https://github.com/aws/babushka/wiki/Python-wrapper#redis-cluster
     """
@@ -520,12 +520,12 @@ class RedisClusterClient(BaseRedisClient, ClusterCommands):
         return self.config._create_a_protobuf_conn_request(cluster_mode=True)
 
 
-class RedisClient(BaseRedisClient, StandaloneCommands):
+class GlideClient(BaseClient, StandaloneCommands):
     """
-    Client used for connection to standalone Redis servers.
+    Client used for connection to standalone servers.
     For full documentation, see
     https://github.com/aws/babushka/wiki/Python-wrapper#redis-standalone
     """
 
 
-TRedisClient = Union[RedisClient, RedisClusterClient]
+TGlideClient = Union[GlideClient, GlideClusterClient]
