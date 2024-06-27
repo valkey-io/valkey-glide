@@ -6454,7 +6454,7 @@ class TestCommands:
         assert await redis_client.function_load(code, False, route) == lib_name
 
         # Clean up by flushing functions again
-        assert await redis_client.function_flush(route=route) == OK        
+        assert await redis_client.function_flush(route=route) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
