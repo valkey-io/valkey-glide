@@ -62,7 +62,7 @@ pub fn handle_errors<T>(env: &mut JNIEnv, result: Result<T, FFIError>) -> Option
                 error => throw_java_exception(env, ExceptionType::Exception, &error.to_string()),
             };
             // Return `None` because we need to still return a value after throwing.
-            // This signals to `handle_panics` that we need to return the default value.
+            // This signals to the caller that we need to return the default value.
             None
         }
     }
@@ -70,20 +70,17 @@ pub fn handle_errors<T>(env: &mut JNIEnv, result: Result<T, FFIError>) -> Option
 
 // This function handles Rust panics by converting them into Java exceptions and throwing them.
 // `func` returns an `Option<T>` because this is intended to wrap the output of `handle_errors`.
-// When an exception is thrown, a value still need to be returned, so a `default_value` is used for this.
 pub fn handle_panics<T, F: std::panic::UnwindSafe + FnOnce() -> Option<T>>(
     func: F,
     ffi_func_name: &str,
-    default_value: T,
-) -> T {
+) -> Option<T> {
     match std::panic::catch_unwind(func) {
-        Ok(Some(value)) => value,
-        Ok(None) => default_value,
+        Ok(value) => value,
         Err(_err) => {
             // Following https://github.com/jni-rs/jni-rs/issues/76#issuecomment-363523906
             // and throwing a runtime exception is not feasible here because of https://github.com/jni-rs/jni-rs/issues/432
             error!("Native function {} panicked.", ffi_func_name);
-            default_value
+            None
         }
     }
 }

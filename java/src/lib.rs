@@ -110,8 +110,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
             handle_errors(&mut env, result)
         },
         "valueFromPointer",
-        JObject::null(),
     )
+    .unwrap_or(JObject::null())
 }
 
 #[no_mangle]
@@ -135,8 +135,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
             handle_errors(&mut env, result)
         },
         "valueFromPointerBinary",
-        JObject::null(),
     )
+    .unwrap_or(JObject::null())
 }
 
 #[no_mangle]
@@ -172,8 +172,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSock
             handle_errors(&mut env, result)
         },
         "startSocketListener",
-        JObject::null(),
     )
+    .unwrap_or(JObject::null())
 }
 
 #[no_mangle]
@@ -196,8 +196,8 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'loca
             handle_errors(&mut env, result)
         },
         "storeScript",
-        JObject::null(),
     )
+    .unwrap_or(JObject::null())
 }
 
 #[no_mangle]
@@ -217,6 +217,6 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_dropScript<'local
             handle_errors(&mut env, result)
         },
         "dropScript",
-        (),
     )
+    .unwrap_or(())
 }

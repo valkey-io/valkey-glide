@@ -168,8 +168,8 @@ pub extern "system" fn Java_glide_ffi_FfiTest_handlePanics<'local>(
             }
         },
         "handlePanics",
-        default_value,
     )
+    .unwrap_or(default_value)
 }
 
 #[no_mangle]
