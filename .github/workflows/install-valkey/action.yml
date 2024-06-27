@@ -51,21 +51,9 @@ runs:
             sudo make install
             echo 'export PATH=/usr/local/bin:$PATH' >>~/.bash_profile
 
-        - name: Check if it's a Valkey released version
-          shell: bash
-          id: version_calc
-          run: |
-            VALKEY_MIN_VER_CLEAN=`echo "7.2.5" | tr -dc '0-9'`
-            CURR_VER_CLEAN=`echo ${{ inputs.engine-version }} | tr -dc '0-9'`
-            if [[ $CURR_VER_CLEAN -lt 100 ]]; then CURR_VER_CLEAN=`echo $(($CURR_VER_CLEAN * 10))`; fi
-            if [[ $CURR_VER_CLEAN -ge $VALKEY_MIN_VER_CLEAN ]]; then
-                VALKEY_RELEASE=true
-            else
-                VALKEY_RELEASE=false
-
         - name: Check if the current version is a Valkey release
           id: is_valkey_release
-          uses: ./.github/actions/compare-versions
+          uses: ./.github/workflows/compare-versions
           with:
               version1: ${{ inputs.engine-version }}
               version2: ${{ env.VALKEY_MIN_VERSION }}
