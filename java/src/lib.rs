@@ -3,8 +3,9 @@
  */
 use glide_core::start_socket_listener as start_socket_listener_core;
 
-use jni::objects::{JClass, JObject, JObjectArray, JString};
-use jni::sys::jlong;
+use bytes::Bytes;
+use jni::objects::{JClass, JObject, JObjectArray, JByteArray, JString};
+use jni::sys::{jlong, jsize};
 use jni::JNIEnv;
 use redis::Value;
 use std::sync::mpsc;
@@ -137,6 +138,27 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
         "valueFromPointerBinary",
     )
     .unwrap_or(JObject::null())
+}
+
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedBytesVec<
+    'local,
+>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    args: JObjectArray<'local>,
+) -> jlong {
+    let num_elements = env.get_array_length(&args).unwrap();
+    let mut bytes_vec = Vec::with_capacity(num_elements as usize);
+
+    for index in 0..num_elements {
+        unsafe {
+            let value = env.get_object_array_element(&args, index as jsize).unwrap();
+            let bytes = Bytes::from(env.convert_byte_array(JByteArray::from(value)).unwrap());
+            bytes_vec.push(bytes)
+        };
+    };
+    Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as jlong
 }
 
 #[no_mangle]
