@@ -370,7 +370,7 @@ class ClusterCommands(CoreCommands):
             TOK: A simple `OK`.
 
         Examples:
-            >>> await client.function_flush(SYNC)
+            >>> await client.function_flush(FlushMode.SYNC)
                 "OK"
 
         Since: Redis 7.0.0.
