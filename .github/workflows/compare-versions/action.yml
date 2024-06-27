@@ -48,5 +48,6 @@ runs:
         }
 
         result=$(compare_versions "${{ inputs.version1 }}" "${{ inputs.version2 }}")
-        echo "::set-output name=result::$result"
+        echo "comparison result=$result"
+        echo "result=$result" >> $GITHUB_OUTPUT
       shell: bash

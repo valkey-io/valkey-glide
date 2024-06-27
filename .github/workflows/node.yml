@@ -128,6 +128,12 @@ jobs:
             - name: Set up Homebrew
               uses: Homebrew/actions/setup-homebrew@master
 
+            - name: Install Valkey
+              uses: ./.github/workflows/install-valkey
+              with:
+                  engine-version: "7.2.5"
+                  target: "aarch64-apple-darwin"
+
             - name: Install NodeJS
               run: |
                   brew update
@@ -171,6 +177,12 @@ jobs:
                   git config --global --add safe.directory "$GITHUB_WORKSPACE"
                   git submodule update --init --recursive
 
+            - name: Install Valkey
+              uses: ./.github/workflows/install-valkey
+              with:
+                  engine-version: "7.2.5"
+                  target: "x86_64-unknown-linux-gnu"   
+   
             - name: Install NodeJS
               run: |
                   yum install -y nodejs
@@ -181,12 +193,6 @@ jobs:
                   os: "amazon-linux"
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
-
-            - name: Create a symbolic Link for redis6 binaries
-              working-directory: ./node
-              run: |
-                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
-                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
 
             - name: Test compatibility
               run: npm test -- -t "set and get flow works"

@@ -70,10 +70,12 @@ runs:
             EXPECTED_VERSION=`echo ${{ inputs.engine-version }} | sed -e "s/^redis-//"`
             REDIS_SERVER_VER=$(redis-server -v)
             if [[ $IS_VALKEY == "true" ]]; then
+                echo "Is a Valkey version"
                 # Prior to the minimum Valkey version, only redis-server is installed
                 VALKEY_SERVER_VER=$(valkey-server -v)
                 INSTALLED_VER=$VALKEY_SERVER_VER
             else
+                echo "Isn't a Valkey version"
                 INSTALLED_VER=$REDIS_SERVER_VER
             fi
 

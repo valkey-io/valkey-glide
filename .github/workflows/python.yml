@@ -154,6 +154,12 @@ jobs:
                   submodules: recursive
             - name: Set up Homebrew
               uses: Homebrew/actions/setup-homebrew@master
+  
+            - name: Install Valkey
+              uses: ./.github/workflows/install-valkey
+              with:
+                  engine-version: "7.2.5"
+                  target: "aarch64-apple-darwin"
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -187,6 +193,12 @@ jobs:
               run: |
                   git config --global --add safe.directory "$GITHUB_WORKSPACE"
                   git submodule update --init --recursive
+
+            - name: Install Valkey
+              uses: ./.github/workflows/install-valkey
+              with:
+                  engine-version: "7.2.5"
+                  target: "x86_64-unknown-linux-gnu"    
 
             - name: Install python
               run: |
