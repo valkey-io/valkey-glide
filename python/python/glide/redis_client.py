@@ -13,11 +13,11 @@ from glide.config import BaseClientConfiguration
 from glide.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
 from glide.exceptions import (
     ClosingError,
+    ConfigurationError,
     ConnectionError,
     ExecAbortError,
     RequestError,
     TimeoutError,
-    WrongConfiguration,
 )
 from glide.logger import Level as LogLevel
 from glide.logger import Logger as ClientLogger
@@ -313,12 +313,12 @@ class BaseRedisClient(CoreCommands):
             )
 
         if not self.config._is_pubsub_configured():
-            raise WrongConfiguration(
+            raise ConfigurationError(
                 "The operation will never complete since there was no pubsub subscriptions applied to the client."
             )
 
         if self.config._get_pubsub_callback_and_context()[0] is not None:
-            raise WrongConfiguration(
+            raise ConfigurationError(
                 "The operation will never complete since messages will be passed to the configured callback."
             )
 
@@ -339,12 +339,12 @@ class BaseRedisClient(CoreCommands):
             )
 
         if not self.config._is_pubsub_configured():
-            raise WrongConfiguration(
+            raise ConfigurationError(
                 "The operation will never succeed since there was no pubsbub subscriptions applied to the client."
             )
 
         if self.config._get_pubsub_callback_and_context()[0] is not None:
-            raise WrongConfiguration(
+            raise ConfigurationError(
                 "The operation will never succeed since messages will be passed to the configured callback."
             )
 
