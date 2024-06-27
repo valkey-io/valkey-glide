@@ -5607,7 +5607,7 @@ class TestCommands:
         # reset the last delivered ID for the consumer group to "1-1"
         # ENTRIESREAD is only supported in Redis version 7.0.0 and above
         if await check_if_server_version_lt(redis_client, "7.0.0"):
-            assert await redis_client.xgroup_set_id(key, group_name, stream_id0) == OK
+            assert await redis_client.xgroup_set_id(key, group_name, stream_id1_1) == OK
         else:
             assert (
                 await redis_client.xgroup_set_id(
