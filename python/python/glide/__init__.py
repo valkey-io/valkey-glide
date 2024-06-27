@@ -152,7 +152,6 @@ __all__ = [
     "InfoSection",
     "InsertPosition",
     "json",
-    "FlushMode",
     "LexBoundary",
     "Limit",
     "ListDirection",
