@@ -6218,7 +6218,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_load(self, redis_client: TRedisClient):
+    async def test_function_load(self, redis_client: TGlideClient):
         # TODO: Test function with FCALL
         # TODO: Test with FUNCTION LIST
         min_version = "7.0.0"
@@ -6264,7 +6264,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
     async def test_function_load_cluster_with_route(
-        self, redis_client: RedisClusterClient, single_route: bool
+        self, redis_client: GlideClusterClient, single_route: bool
     ):
         # TODO: Test function with FCALL
         # TODO: Test with FUNCTION LIST
