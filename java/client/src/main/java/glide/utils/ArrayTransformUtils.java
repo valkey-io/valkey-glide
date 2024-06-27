@@ -2,6 +2,7 @@
 package glide.utils;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
@@ -24,6 +25,19 @@ public class ArrayTransformUtils {
         return args.entrySet().stream()
                 .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue().toString()))
                 .toArray(String[]::new);
+    }
+
+    /**
+     * Converts a map of string keys and values of any type in to an array of strings with alternating
+     * keys and values.
+     *
+     * @param args Map of string keys to values of any type to convert.
+     * @return Array of strings [key1, value1.toString(), key2, value2.toString(), ...].
+     */
+    public static GlideString[] convertMapToKeyValueStringArrayBinary(Map<GlideString, ?> args) {
+        return args.entrySet().stream()
+                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue().toString()))
+                .toArray(GlideString[]::new);
     }
 
     /**
@@ -146,6 +160,26 @@ public class ArrayTransformUtils {
      */
     public static <T> Map<String, T[][]> castMapOf2DArray(
             Map<String, Object[][]> mapOfArrays, Class<T> clazz) {
+        if (mapOfArrays == null) {
+            return null;
+        }
+        return mapOfArrays.entrySet().stream()
+                .collect(
+                        HashMap::new,
+                        (m, e) -> m.put(e.getKey(), castArrayofArrays(e.getValue(), clazz)),
+                        HashMap::putAll);
+    }
+
+    /**
+     * Maps a Map of Object[][] with value type T[][] to value of U[][].
+     *
+     * @param mapOfArrays Map of 2D Array values to cast.
+     * @param clazz The class of the array values to cast to.
+     * @return A Map of arrays of type U[][], containing the key/values from the input Map.
+     * @param <T> The target type which the elements are cast.
+     */
+    public static <T> Map<GlideString, T[][]> castMapOf2DArrayBinary(
+            Map<GlideString, Object[][]> mapOfArrays, Class<T> clazz) {
         if (mapOfArrays == null) {
             return null;
         }
