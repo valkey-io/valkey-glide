@@ -166,6 +166,12 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> echo(@NonNull GlideString message) {
+        return commandManager.submitNewCommand(
+                Echo, new GlideString[] {message}, this::handleGlideStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String[]> time() {
         return commandManager.submitNewCommand(
                 Time, new String[0], response -> castArray(handleArrayResponse(response), String.class));
