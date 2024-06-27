@@ -69,12 +69,12 @@ from glide.async_commands.stream import (
 )
 from glide.config import (
     ClusterClientConfiguration,
+    GlideClientConfiguration,
     ProtocolVersion,
-    RedisClientConfiguration,
     RedisCredentials,
 )
 from glide.constants import OK, TResult
-from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import (
     AllNodes,
     AllPrimaries,
@@ -97,10 +97,10 @@ from tests.utils.utils import (
 
 
 @pytest.mark.asyncio
-class TestRedisClients:
+class TestGlideClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_register_client_name_and_version(self, redis_client: TRedisClient):
+    async def test_register_client_name_and_version(self, redis_client: TGlideClient):
         min_version = "7.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
@@ -126,7 +126,7 @@ class TestRedisClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_send_and_receive_non_ascii_unicode(self, redis_client: TRedisClient):
+    async def test_send_and_receive_non_ascii_unicode(self, redis_client: TGlideClient):
         key = "foo"
         value = "שלום hello 汉字"
         assert value == "שלום hello 汉字"
@@ -137,7 +137,7 @@ class TestRedisClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_client_handle_concurrent_workload_without_dropping_or_changing_values(
-        self, redis_client: TRedisClient, value_size
+        self, redis_client: TGlideClient, value_size
     ):
         num_of_concurrent_tasks = 100
         running_tasks = set()
@@ -158,9 +158,9 @@ class TestRedisClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_can_connect_with_auth_requirepass(
-        self, redis_client: TRedisClient, request
+        self, redis_client: TGlideClient, request
     ):
-        is_cluster = isinstance(redis_client, RedisClusterClient)
+        is_cluster = isinstance(redis_client, GlideClusterClient)
         password = "TEST_AUTH"
         credentials = RedisCredentials(password)
         try:
@@ -198,9 +198,9 @@ class TestRedisClients:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_can_connect_with_auth_acl(
-        self, redis_client: Union[RedisClient, RedisClusterClient], request
+        self, redis_client: Union[GlideClient, GlideClusterClient], request
     ):
-        is_cluster = isinstance(redis_client, RedisClusterClient)
+        is_cluster = isinstance(redis_client, GlideClusterClient)
         username = "testuser"
         password = "TEST_AUTH"
         try:
@@ -263,7 +263,7 @@ class TestRedisClients:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_closed_client_raises_error(self, redis_client: TRedisClient):
+    async def test_closed_client_raises_error(self, redis_client: TGlideClient):
         await redis_client.close()
         with pytest.raises(ClosingError) as e:
             await redis_client.set("foo", "bar")
@@ -275,7 +275,7 @@ class TestCommands:
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_socket_set_get(self, redis_client: TRedisClient):
+    async def test_socket_set_get(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
         assert await redis_client.set(key, value) == OK
@@ -283,21 +283,21 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP3])
-    async def test_use_resp3_protocol(self, redis_client: TRedisClient):
+    async def test_use_resp3_protocol(self, redis_client: TGlideClient):
         result = cast(Dict[str, str], await redis_client.custom_command(["HELLO"]))
 
         assert int(result["proto"]) == 3
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2])
-    async def test_allow_opt_in_to_resp2_protocol(self, redis_client: TRedisClient):
+    async def test_allow_opt_in_to_resp2_protocol(self, redis_client: TGlideClient):
         result = cast(Dict[str, str], await redis_client.custom_command(["HELLO"]))
 
         assert int(result["proto"]) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_conditional_set(self, redis_client: TRedisClient):
+    async def test_conditional_set(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
         res = await redis_client.set(
@@ -317,7 +317,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_set_return_old_value(self, redis_client: TRedisClient):
+    async def test_set_return_old_value(self, redis_client: TGlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
@@ -334,14 +334,14 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_custom_command_single_arg(self, redis_client: TRedisClient):
+    async def test_custom_command_single_arg(self, redis_client: TGlideClient):
         # Test single arg command
         res = await redis_client.custom_command(["PING"])
         assert res == "PONG"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_custom_command_multi_arg(self, redis_client: TRedisClient):
+    async def test_custom_command_multi_arg(self, redis_client: TGlideClient):
         # Test multi args command
         client_list = await redis_client.custom_command(
             ["CLIENT", "LIST", "TYPE", "NORMAL"]
@@ -355,7 +355,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_custom_command_lower_and_upper_case(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         # Test multi args command
         client_list = await redis_client.custom_command(
@@ -369,7 +369,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_request_error_raises_exception(self, redis_client: TRedisClient):
+    async def test_request_error_raises_exception(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
         await redis_client.set(key, value)
@@ -379,11 +379,11 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_info_server_replication(self, redis_client: TRedisClient):
+    async def test_info_server_replication(self, redis_client: TGlideClient):
         info = get_first_result(await redis_client.info([InfoSection.SERVER]))
         assert "# Server" in info
         cluster_mode = parse_info_response(info)["redis_mode"]
-        expected_cluster_mode = isinstance(redis_client, RedisClusterClient)
+        expected_cluster_mode = isinstance(redis_client, GlideClusterClient)
         assert cluster_mode == "cluster" if expected_cluster_mode else "standalone"
         info = get_first_result(await redis_client.info([InfoSection.REPLICATION]))
         assert "# Replication" in info
@@ -391,8 +391,8 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_info_default(self, redis_client: TRedisClient):
-        cluster_mode = isinstance(redis_client, RedisClusterClient)
+    async def test_info_default(self, redis_client: TGlideClient):
+        cluster_mode = isinstance(redis_client, GlideClusterClient)
         info_result = await redis_client.info()
         if cluster_mode:
             cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
@@ -405,7 +405,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_select(self, redis_client: RedisClient):
+    async def test_select(self, redis_client: GlideClient):
         assert await redis_client.select(0) == OK
         key = get_random_string(10)
         value = get_random_string(10)
@@ -418,7 +418,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_move(self, redis_client: RedisClient):
+    async def test_move(self, redis_client: GlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
 
@@ -438,7 +438,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_delete(self, redis_client: TRedisClient):
+    async def test_delete(self, redis_client: TGlideClient):
         keys = [get_random_string(10), get_random_string(10), get_random_string(10)]
         value = get_random_string(10)
         [await redis_client.set(key, value) for key in keys]
@@ -451,7 +451,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_getdel(self, redis_client: TRedisClient):
+    async def test_getdel(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -471,7 +471,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_getrange(self, redis_client: TRedisClient):
+    async def test_getrange(self, redis_client: TGlideClient):
         key = get_random_string(16)
         value = get_random_string(10)
         non_string_key = get_random_string(10)
@@ -505,7 +505,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_config_reset_stat(self, redis_client: TRedisClient):
+    async def test_config_reset_stat(self, redis_client: TGlideClient):
         # we execute set and info so the commandstats will show `cmdstat_set::calls` greater than 1
         # after the configResetStat call we initiate an info command and the the commandstats won't contain `cmdstat_set`.
         await redis_client.set("foo", "bar")
@@ -521,7 +521,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_config_rewrite(self, redis_client: TRedisClient):
+    async def test_config_rewrite(self, redis_client: TGlideClient):
         info_server = parse_info_response(
             get_first_result(await redis_client.info([InfoSection.SERVER]))
         )
@@ -535,14 +535,14 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_client_id(self, redis_client: TRedisClient):
+    async def test_client_id(self, redis_client: TGlideClient):
         client_id = await redis_client.client_id()
         assert type(client_id) is int
         assert client_id > 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_incr_commands_existing_key(self, redis_client: TRedisClient):
+    async def test_incr_commands_existing_key(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "10") == OK
         assert await redis_client.incr(key) == 11
@@ -554,7 +554,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_incr_commands_non_existing_key(self, redis_client: TRedisClient):
+    async def test_incr_commands_non_existing_key(self, redis_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(10)
         key3 = get_random_string(10)
@@ -573,7 +573,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_incr_commands_with_str_value(self, redis_client: TRedisClient):
+    async def test_incr_commands_with_str_value(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
         with pytest.raises(RequestError) as e:
@@ -592,7 +592,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_client_getname(self, redis_client: TRedisClient):
+    async def test_client_getname(self, redis_client: TGlideClient):
         assert await redis_client.client_getname() is None
         assert (
             await redis_client.custom_command(["CLIENT", "SETNAME", "GlideConnection"])
@@ -602,7 +602,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_mset_mget(self, redis_client: TRedisClient):
+    async def test_mset_mget(self, redis_client: TGlideClient):
         keys = [get_random_string(10), get_random_string(10), get_random_string(10)]
         non_existing_key = get_random_string(10)
         key_value_pairs = {key: value for key, value in zip(keys, keys)}
@@ -617,7 +617,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_touch(self, redis_client: TRedisClient):
+    async def test_touch(self, redis_client: TGlideClient):
         keys = [get_random_string(10), get_random_string(10)]
         key_value_pairs = {key: value for key, value in zip(keys, keys)}
 
@@ -629,7 +629,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_msetnx(self, redis_client: TRedisClient):
+    async def test_msetnx(self, redis_client: TGlideClient):
         key1 = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"
         key3 = f"{{key}}-3{get_random_string(5)}"
@@ -648,13 +648,13 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_ping(self, redis_client: TRedisClient):
+    async def test_ping(self, redis_client: TGlideClient):
         assert await redis_client.ping() == "PONG"
         assert await redis_client.ping("HELLO") == "HELLO"
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_config_get_set(self, redis_client: TRedisClient):
+    async def test_config_get_set(self, redis_client: TGlideClient):
         previous_timeout = await redis_client.config_get(["timeout"])
         assert await redis_client.config_set({"timeout": "1000"}) == OK
         assert await redis_client.config_get(["timeout"]) == {"timeout": "1000"}
@@ -668,7 +668,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_decr_decrby_existing_key(self, redis_client: TRedisClient):
+    async def test_decr_decrby_existing_key(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "10") == OK
         assert await redis_client.decr(key) == 9
@@ -678,7 +678,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_decr_decrby_non_existing_key(self, redis_client: TRedisClient):
+    async def test_decr_decrby_non_existing_key(self, redis_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(10)
 
@@ -692,7 +692,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_decr_with_str_value(self, redis_client: TRedisClient):
+    async def test_decr_with_str_value(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
         with pytest.raises(RequestError) as e:
@@ -707,7 +707,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_setrange(self, redis_client: TRedisClient):
+    async def test_setrange(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
 
@@ -729,7 +729,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hset_hget_hgetall(self, redis_client: TRedisClient):
+    async def test_hset_hget_hgetall(self, redis_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field2 = get_random_string(5)
@@ -747,7 +747,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hdel(self, redis_client: TRedisClient):
+    async def test_hdel(self, redis_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field2 = get_random_string(5)
@@ -761,7 +761,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hsetnx(self, redis_client: TRedisClient):
+    async def test_hsetnx(self, redis_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
 
@@ -775,7 +775,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hmget(self, redis_client: TRedisClient):
+    async def test_hmget(self, redis_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field2 = get_random_string(5)
@@ -794,7 +794,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hset_without_data(self, redis_client: TRedisClient):
+    async def test_hset_without_data(self, redis_client: TGlideClient):
         with pytest.raises(RequestError) as e:
             await redis_client.hset("key", {})
 
@@ -802,7 +802,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hincrby_hincrbyfloat(self, redis_client: TRedisClient):
+    async def test_hincrby_hincrbyfloat(self, redis_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field_value_map = {field: "10"}
@@ -814,7 +814,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hincrby_non_existing_key_field(self, redis_client: TRedisClient):
+    async def test_hincrby_non_existing_key_field(self, redis_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(10)
         field = get_random_string(5)
@@ -828,7 +828,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hincrby_invalid_value(self, redis_client: TRedisClient):
+    async def test_hincrby_invalid_value(self, redis_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field_value_map = {field: "value"}
@@ -845,7 +845,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hexist(self, redis_client: TRedisClient):
+    async def test_hexist(self, redis_client: TGlideClient):
         key = get_random_string(10)
         field = get_random_string(5)
         field2 = get_random_string(5)
@@ -858,7 +858,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hlen(self, redis_client: TRedisClient):
+    async def test_hlen(self, redis_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
@@ -877,7 +877,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hvals(self, redis_client: TRedisClient):
+    async def test_hvals(self, redis_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
@@ -896,7 +896,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hkeys(self, redis_client: TRedisClient):
+    async def test_hkeys(self, redis_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
@@ -915,7 +915,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hrandfield(self, redis_client: TRedisClient):
+    async def test_hrandfield(self, redis_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
@@ -932,7 +932,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hrandfield_count(self, redis_client: TRedisClient):
+    async def test_hrandfield_count(self, redis_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
@@ -960,7 +960,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hrandfield_withvalues(self, redis_client: TRedisClient):
+    async def test_hrandfield_withvalues(self, redis_client: TGlideClient):
         key = get_random_string(10)
         key2 = get_random_string(5)
         field = get_random_string(5)
@@ -989,7 +989,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_hstrlen(self, redis_client: TRedisClient):
+    async def test_hstrlen(self, redis_client: TGlideClient):
         key = get_random_string(10)
 
         assert await redis_client.hstrlen(key, "field") == 0
@@ -1004,7 +1004,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lpush_lpop_lrange(self, redis_client: TRedisClient):
+    async def test_lpush_lpop_lrange(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
 
@@ -1018,7 +1018,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpush_lpop_lrange_wrong_type_raise_error(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
@@ -1037,7 +1037,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lpushx(self, redis_client: TRedisClient):
+    async def test_lpushx(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
 
@@ -1058,7 +1058,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_blpop(self, redis_client: TRedisClient):
+    async def test_blpop(self, redis_client: TGlideClient):
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         value1 = "value1"
@@ -1085,7 +1085,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lmpop(self, redis_client: TRedisClient):
+    async def test_lmpop(self, redis_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -1124,7 +1124,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_blmpop(self, redis_client: TRedisClient):
+    async def test_blmpop(self, redis_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -1172,7 +1172,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lindex(self, redis_client: TRedisClient):
+    async def test_lindex(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value_list = [get_random_string(5), get_random_string(5)]
         assert await redis_client.lpush(key, value_list) == 2
@@ -1183,7 +1183,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_rpush_rpop(self, redis_client: TRedisClient):
+    async def test_rpush_rpop(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
 
@@ -1195,7 +1195,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_rpush_rpop_wrong_type_raise_error(self, redis_client: TRedisClient):
+    async def test_rpush_rpop_wrong_type_raise_error(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
 
@@ -1209,7 +1209,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_rpushx(self, redis_client: TRedisClient):
+    async def test_rpushx(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
 
@@ -1230,7 +1230,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_brpop(self, redis_client: TRedisClient):
+    async def test_brpop(self, redis_client: TGlideClient):
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         value1 = "value1"
@@ -1258,7 +1258,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_linsert(self, redis_client: TRedisClient):
+    async def test_linsert(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
 
@@ -1289,7 +1289,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lmove(self, redis_client: TRedisClient):
+    async def test_lmove(self, redis_client: TGlideClient):
         key1 = "{SameSlot}" + get_random_string(10)
         key2 = "{SameSlot}" + get_random_string(10)
 
@@ -1358,7 +1358,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_blmove(self, redis_client: TRedisClient):
+    async def test_blmove(self, redis_client: TGlideClient):
         key1 = "{SameSlot}" + get_random_string(10)
         key2 = "{SameSlot}" + get_random_string(10)
 
@@ -1448,7 +1448,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lset(self, redis_client: TRedisClient):
+    async def test_lset(self, redis_client: TGlideClient):
         key = get_random_string(10)
         element = get_random_string(5)
         values = [get_random_string(5) for _ in range(4)]
@@ -1478,7 +1478,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sadd_srem_smembers_scard(self, redis_client: TRedisClient):
+    async def test_sadd_srem_smembers_scard(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value_list = ["member1", "member2", "member3", "member4"]
 
@@ -1493,7 +1493,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sadd_srem_smembers_scard_non_existing_key(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         non_existing_key = get_random_string(10)
         assert await redis_client.srem(non_existing_key, ["member"]) == 0
@@ -1503,7 +1503,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sadd_srem_smembers_scard_wrong_type_raise_error(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
@@ -1526,7 +1526,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sismember(self, redis_client: TRedisClient):
+    async def test_sismember(self, redis_client: TGlideClient):
         key = get_random_string(10)
         member = get_random_string(5)
         assert await redis_client.sadd(key, [member]) == 1
@@ -1536,7 +1536,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_spop(self, redis_client: TRedisClient):
+    async def test_spop(self, redis_client: TGlideClient):
         key = get_random_string(10)
         member = get_random_string(5)
         assert await redis_client.sadd(key, [member]) == 1
@@ -1554,7 +1554,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_smove(self, redis_client: TRedisClient):
+    async def test_smove(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -1600,7 +1600,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sunion(self, redis_client: TRedisClient):
+    async def test_sunion(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
@@ -1625,7 +1625,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sunionstore(self, redis_client: TRedisClient):
+    async def test_sunionstore(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -1672,7 +1672,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sinter(self, redis_client: TRedisClient):
+    async def test_sinter(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
@@ -1699,7 +1699,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sinterstore(self, redis_client: TRedisClient):
+    async def test_sinterstore(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         key3 = f"{{testKey}}:{get_random_string(10)}"
@@ -1742,7 +1742,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sintercard(self, redis_client: TRedisClient):
+    async def test_sintercard(self, redis_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -1789,7 +1789,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sdiff(self, redis_client: TRedisClient):
+    async def test_sdiff(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
@@ -1815,7 +1815,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_sdiffstore(self, redis_client: TRedisClient):
+    async def test_sdiffstore(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -1860,7 +1860,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_smismember(self, redis_client: TRedisClient):
+    async def test_smismember(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -1881,7 +1881,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_ltrim(self, redis_client: TRedisClient):
+    async def test_ltrim(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
 
@@ -1901,7 +1901,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lrem(self, redis_client: TRedisClient):
+    async def test_lrem(self, redis_client: TGlideClient):
         key = get_random_string(10)
         value_list = ["value1", "value2", "value1", "value1", "value2"]
 
@@ -1920,7 +1920,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_llen(self, redis_client: TRedisClient):
+    async def test_llen(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -1937,7 +1937,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_strlen(self, redis_client: TRedisClient):
+    async def test_strlen(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         value_list = ["value4", "value3", "value2", "value1"]
@@ -1952,7 +1952,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_rename(self, redis_client: TRedisClient):
+    async def test_rename(self, redis_client: TGlideClient):
         key1 = "{" + get_random_string(10) + "}"
         assert await redis_client.set(key1, "foo") == OK
         assert await redis_client.rename(key1, key1 + "_rename") == OK
@@ -1965,7 +1965,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_renamenx(self, redis_client: TRedisClient):
+    async def test_renamenx(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -1989,7 +1989,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_exists(self, redis_client: TRedisClient):
+    async def test_exists(self, redis_client: TGlideClient):
         keys = [get_random_string(10), get_random_string(10)]
 
         assert await redis_client.set(keys[0], "value") == OK
@@ -2002,7 +2002,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_unlink(self, redis_client: TRedisClient):
+    async def test_unlink(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         key3 = get_random_string(10)
@@ -2015,7 +2015,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_expire_pexpire_ttl_expiretime_pexpiretime_with_positive_timeout(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
@@ -2047,7 +2047,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_expireat_pexpireat_ttl_with_positive_timeout(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
@@ -2077,7 +2077,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_expire_pexpire_expireat_pexpireat_expiretime_pexpiretime_past_or_negative_timeout(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         key = get_random_string(10)
         assert await redis_client.set(key, "foo") == OK
@@ -2117,7 +2117,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_expire_pexpire_expireAt_pexpireAt_ttl_expiretime_pexpiretime_non_existing_key(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         key = get_random_string(10)
 
@@ -2132,7 +2132,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_pttl(self, redis_client: TRedisClient):
+    async def test_pttl(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.pttl(key) == -2
         current_time = int(time.time())
@@ -2151,7 +2151,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_persist(self, redis_client: TRedisClient):
+    async def test_persist(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK
         assert not await redis_client.persist(key)
@@ -2161,7 +2161,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geoadd(self, redis_client: TRedisClient):
+    async def test_geoadd(self, redis_client: TGlideClient):
         key, key2 = get_random_string(10), get_random_string(10)
         members_coordinates = {
             "Palermo": GeospatialData(13.361389, 38.115556),
@@ -2202,7 +2202,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geoadd_invalid_args(self, redis_client: TRedisClient):
+    async def test_geoadd_invalid_args(self, redis_client: TGlideClient):
         key = get_random_string(10)
 
         with pytest.raises(RequestError):
@@ -2222,7 +2222,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearch_by_box(self, redis_client: TRedisClient):
+    async def test_geosearch_by_box(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members = ["Catania", "Palermo", "edge2", "edge1"]
         members_coordinates = {
@@ -2319,7 +2319,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearch_by_radius(self, redis_client: TRedisClient):
+    async def test_geosearch_by_radius(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_coordinates = {
             "Palermo": GeospatialData(13.361389, 38.115556),
@@ -2406,7 +2406,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearch_no_result(self, redis_client: TRedisClient):
+    async def test_geosearch_no_result(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_coordinates = {
             "Palermo": GeospatialData(13.361389, 38.115556),
@@ -2468,7 +2468,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearchstore_by_box(self, redis_client: TRedisClient):
+    async def test_geosearchstore_by_box(self, redis_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
         members_coordinates = {
@@ -2584,7 +2584,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearchstore_by_radius(self, redis_client: TRedisClient):
+    async def test_geosearchstore_by_radius(self, redis_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
         members_coordinates = {
@@ -2697,7 +2697,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geosearchstore_no_result(self, redis_client: TRedisClient):
+    async def test_geosearchstore_no_result(self, redis_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
         members_coordinates = {
@@ -2770,7 +2770,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geohash(self, redis_client: TRedisClient):
+    async def test_geohash(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_coordinates = {
             "Palermo": GeospatialData(13.361389, 38.115556),
@@ -2801,7 +2801,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geodist(self, redis_client: TRedisClient):
+    async def test_geodist(self, redis_client: TGlideClient):
         key, key2 = get_random_string(10), get_random_string(10)
         members_coordinates = {
             "Palermo": GeospatialData(13.361389, 38.115556),
@@ -2828,7 +2828,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_geopos(self, redis_client: TRedisClient):
+    async def test_geopos(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_coordinates = {
             "Palermo": GeospatialData(13.361389, 38.115556),
@@ -2872,7 +2872,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zadd_zaddincr(self, redis_client: TRedisClient):
+    async def test_zadd_zaddincr(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -2880,7 +2880,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zadd_nx_xx(self, redis_client: TRedisClient):
+    async def test_zadd_nx_xx(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
         assert (
@@ -2922,7 +2922,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zadd_gt_lt(self, redis_client: TRedisClient):
+    async def test_zadd_gt_lt(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": -3, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -2969,7 +2969,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zincrby(self, redis_client: TRedisClient):
+    async def test_zincrby(self, redis_client: TGlideClient):
         key, member, member2 = (
             get_random_string(10),
             get_random_string(5),
@@ -2995,7 +2995,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrem(self, redis_client: TRedisClient):
+    async def test_zrem(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -3007,7 +3007,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zremrangebyscore(self, redis_client: TRedisClient):
+    async def test_zremrangebyscore(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores) == 3
@@ -3035,7 +3035,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zremrangebylex(self, redis_client: TRedisClient):
+    async def test_zremrangebylex(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         range = RangeByIndex(0, -1)
@@ -3080,7 +3080,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zremrangebyrank(self, redis_client: TRedisClient):
+    async def test_zremrangebyrank(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         range = RangeByIndex(0, -1)
@@ -3109,7 +3109,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zlexcount(self, redis_client: TRedisClient):
+    async def test_zlexcount(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
@@ -3153,7 +3153,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zcard(self, redis_client: TRedisClient):
+    async def test_zcard(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -3165,7 +3165,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zcount(self, redis_client: TRedisClient):
+    async def test_zcount(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -3208,7 +3208,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zscore(self, redis_client: TRedisClient):
+    async def test_zscore(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -3221,7 +3221,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zmscore(self, redis_client: TRedisClient):
+    async def test_zmscore(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
@@ -3243,7 +3243,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zinter_commands(self, redis_client: TRedisClient):
+    async def test_zinter_commands(self, redis_client: TGlideClient):
         key1 = "{testKey}:1-" + get_random_string(10)
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
@@ -3373,7 +3373,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zunion_commands(self, redis_client: TRedisClient):
+    async def test_zunion_commands(self, redis_client: TGlideClient):
         key1 = "{testKey}:1-" + get_random_string(10)
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
@@ -3526,7 +3526,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zpopmin(self, redis_client: TRedisClient):
+    async def test_zpopmin(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -3545,7 +3545,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bzpopmin(self, redis_client: TRedisClient):
+    async def test_bzpopmin(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
@@ -3579,7 +3579,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zpopmax(self, redis_client: TRedisClient):
+    async def test_zpopmax(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await redis_client.zadd(key, members_scores) == 3
@@ -3598,7 +3598,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bzpopmax(self, redis_client: TRedisClient):
+    async def test_bzpopmax(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
@@ -3632,7 +3632,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrange_by_index(self, redis_client: TRedisClient):
+    async def test_zrange_by_index(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -3663,7 +3663,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrange_byscore(self, redis_client: TRedisClient):
+    async def test_zrange_byscore(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -3745,7 +3745,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrange_bylex(self, redis_client: TRedisClient):
+    async def test_zrange_bylex(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"a": 1, "b": 2, "c": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
@@ -3799,7 +3799,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrange_different_types_of_keys(self, redis_client: TRedisClient):
+    async def test_zrange_different_types_of_keys(self, redis_client: TGlideClient):
         key = get_random_string(10)
 
         assert (
@@ -3822,7 +3822,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrangestore_by_index(self, redis_client: TRedisClient):
+    async def test_zrangestore_by_index(self, redis_client: TGlideClient):
         destination = f"{{testKey}}:{get_random_string(10)}"
         source = f"{{testKey}}:{get_random_string(10)}"
         string_key = f"{{testKey}}:{get_random_string(10)}"
@@ -3880,7 +3880,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrangestore_by_score(self, redis_client: TRedisClient):
+    async def test_zrangestore_by_score(self, redis_client: TGlideClient):
         destination = f"{{testKey}}:{get_random_string(10)}"
         source = f"{{testKey}}:{get_random_string(10)}"
         string_key = f"{{testKey}}:{get_random_string(10)}"
@@ -3983,7 +3983,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrangestore_by_lex(self, redis_client: TRedisClient):
+    async def test_zrangestore_by_lex(self, redis_client: TGlideClient):
         destination = f"{{testKey}}:{get_random_string(10)}"
         source = f"{{testKey}}:{get_random_string(10)}"
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
@@ -4086,7 +4086,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrank(self, redis_client: TRedisClient):
+    async def test_zrank(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members_scores = {"one": 1.5, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores) == 3
@@ -4107,7 +4107,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrevrank(self, redis_client: TRedisClient):
+    async def test_zrevrank(self, redis_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         string_key = get_random_string(10)
@@ -4142,7 +4142,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zdiff(self, redis_client: TRedisClient):
+    async def test_zdiff(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -4196,7 +4196,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zdiffstore(self, redis_client: TRedisClient):
+    async def test_zdiffstore(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -4235,7 +4235,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bzmpop(self, redis_client: TRedisClient):
+    async def test_bzmpop(self, redis_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -4302,7 +4302,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrandmember(self, redis_client: TRedisClient):
+    async def test_zrandmember(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         scores = {"one": 1, "two": 2}
@@ -4319,7 +4319,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrandmember_count(self, redis_client: TRedisClient):
+    async def test_zrandmember_count(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         scores = {"one": 1, "two": 2}
@@ -4346,7 +4346,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zrandmember_withscores(self, redis_client: TRedisClient):
+    async def test_zrandmember_withscores(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         scores = {"one": 1, "two": 2}
@@ -4375,7 +4375,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zintercard(self, redis_client: TRedisClient):
+    async def test_zintercard(self, redis_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -4409,7 +4409,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_zmpop(self, redis_client: TRedisClient):
+    async def test_zmpop(self, redis_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -4462,7 +4462,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_type(self, redis_client: TRedisClient):
+    async def test_type(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.set(key, "value") == OK
         assert (await redis_client.type(key)).lower() == "string"
@@ -4493,7 +4493,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sort_and_sort_store_with_get_or_by_args(
-        self, redis_client: RedisClient
+        self, redis_client: GlideClient
     ):
         key = "{SameSlotKey}" + get_random_string(10)
         store = "{SameSlotKey}" + get_random_string(10)
@@ -4576,7 +4576,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sort_and_sort_store_without_get_or_by_args(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         key = "{SameSlotKey}" + get_random_string(10)
         store = "{SameSlotKey}" + get_random_string(10)
@@ -4632,10 +4632,10 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_echo(self, redis_client: TRedisClient):
+    async def test_echo(self, redis_client: TGlideClient):
         message = get_random_string(5)
         assert await redis_client.echo(message) == message
-        if isinstance(redis_client, RedisClusterClient):
+        if isinstance(redis_client, GlideClusterClient):
             echo_dict = await redis_client.echo(message, AllNodes())
             assert isinstance(echo_dict, dict)
             for value in echo_dict.values():
@@ -4643,7 +4643,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_dbsize(self, redis_client: TRedisClient):
+    async def test_dbsize(self, redis_client: TGlideClient):
         assert await redis_client.custom_command(["FLUSHALL"]) == OK
 
         assert await redis_client.dbsize() == 0
@@ -4653,7 +4653,7 @@ class TestCommands:
             assert await redis_client.set(key, value) == OK
         assert await redis_client.dbsize() == 10
 
-        if isinstance(redis_client, RedisClusterClient):
+        if isinstance(redis_client, GlideClusterClient):
             assert await redis_client.custom_command(["FLUSHALL"]) == OK
             key = get_random_string(5)
             assert await redis_client.set(key, value) == OK
@@ -4664,7 +4664,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_time(self, redis_client: TRedisClient):
+    async def test_time(self, redis_client: TGlideClient):
         current_time = int(time.time()) - 1
         result = await redis_client.time()
         assert len(result) == 2
@@ -4676,7 +4676,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lastsave(self, redis_client: TRedisClient):
+    async def test_lastsave(self, redis_client: TGlideClient):
         yesterday = date.today() - timedelta(1)
         yesterday_unix_time = time.mktime(yesterday.timetuple())
 
@@ -4684,7 +4684,7 @@ class TestCommands:
         assert isinstance(result, int)
         assert result > yesterday_unix_time
 
-        if isinstance(redis_client, RedisClusterClient):
+        if isinstance(redis_client, GlideClusterClient):
             # test with single-node route
             result = await redis_client.lastsave(RandomNode())
             assert isinstance(result, int)
@@ -4698,7 +4698,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_append(self, redis_client: TRedisClient):
+    async def test_append(self, redis_client: TGlideClient):
         key, value = get_random_string(10), get_random_string(5)
         assert await redis_client.append(key, value) == 5
 
@@ -4707,7 +4707,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xadd_xtrim_xlen(self, redis_client: TRedisClient):
+    async def test_xadd_xtrim_xlen(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -4780,7 +4780,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xdel(self, redis_client: TRedisClient):
+    async def test_xdel(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -4817,7 +4817,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xrange_and_xrevrange(self, redis_client: TRedisClient):
+    async def test_xrange_and_xrevrange(self, redis_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         string_key = get_random_string(10)
@@ -4905,7 +4905,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xread(
-        self, redis_client: TRedisClient, cluster_mode, protocol, request
+        self, redis_client: TGlideClient, cluster_mode, protocol, request
     ):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
@@ -5000,7 +5000,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xread_edge_cases_and_failures(
-        self, redis_client: TRedisClient, cluster_mode, protocol, request
+        self, redis_client: TGlideClient, cluster_mode, protocol, request
     ):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         string_key = f"{{testKey}}:2-{get_random_string(10)}"
@@ -5080,7 +5080,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xgroup_create_xgroup_destroy(
-        self, redis_client: TRedisClient, cluster_mode, protocol, request
+        self, redis_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -5160,7 +5160,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xgroup_create_consumer_xreadgroup_xgroup_del_consumer(
-        self, redis_client: TRedisClient, cluster_mode, protocol, request
+        self, redis_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
@@ -5323,7 +5323,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xreadgroup_edge_cases_and_failures(
-        self, redis_client: TRedisClient, cluster_mode, protocol, request
+        self, redis_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
@@ -5488,7 +5488,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xack(
-        self, redis_client: TRedisClient, cluster_mode, protocol, request
+        self, redis_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
@@ -5564,7 +5564,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_pfadd(self, redis_client: TRedisClient):
+    async def test_pfadd(self, redis_client: TGlideClient):
         key = get_random_string(10)
         assert await redis_client.pfadd(key, []) == 1
         assert await redis_client.pfadd(key, ["one", "two"]) == 1
@@ -5577,7 +5577,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_pfcount(self, redis_client: TRedisClient):
+    async def test_pfcount(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -5605,7 +5605,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_pfmerge(self, redis_client: TRedisClient):
+    async def test_pfmerge(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         key3 = f"{{testKey}}:3-{get_random_string(10)}"
@@ -5642,7 +5642,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitcount(self, redis_client: TRedisClient):
+    async def test_bitcount(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         set_key = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -5706,7 +5706,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_setbit(self, redis_client: TRedisClient):
+    async def test_setbit(self, redis_client: TGlideClient):
         key = get_random_string(10)
         set_key = get_random_string(10)
 
@@ -5724,7 +5724,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_getbit(self, redis_client: TRedisClient):
+    async def test_getbit(self, redis_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         set_key = get_random_string(10)
@@ -5749,7 +5749,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitpos_and_bitpos_interval(self, redis_client: TRedisClient):
+    async def test_bitpos_and_bitpos_interval(self, redis_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         set_key = get_random_string(10)
@@ -5816,7 +5816,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitop(self, redis_client: TRedisClient):
+    async def test_bitop(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
         keys = [key1, key2]
@@ -5901,7 +5901,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitfield(self, redis_client: TRedisClient):
+    async def test_bitfield(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -6029,7 +6029,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_bitfield_read_only(self, redis_client: TRedisClient):
+    async def test_bitfield_read_only(self, redis_client: TGlideClient):
         min_version = "6.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -6100,7 +6100,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_object_encoding(self, redis_client: TRedisClient):
+    async def test_object_encoding(self, redis_client: TGlideClient):
         string_key = get_random_string(10)
         list_key = get_random_string(10)
         hashtable_key = get_random_string(10)
@@ -6173,7 +6173,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_object_freq(self, redis_client: TRedisClient):
+    async def test_object_freq(self, redis_client: TGlideClient):
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         maxmemory_policy_key = "maxmemory-policy"
@@ -6194,7 +6194,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_object_idletime(self, redis_client: TRedisClient):
+    async def test_object_idletime(self, redis_client: TGlideClient):
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
 
@@ -6206,7 +6206,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_object_refcount(self, redis_client: TRedisClient):
+    async def test_object_refcount(self, redis_client: TGlideClient):
         string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
 
@@ -6217,7 +6217,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_srandmember(self, redis_client: TRedisClient):
+    async def test_srandmember(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         elements = ["one", "two"]
@@ -6234,7 +6234,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_srandmember_count(self, redis_client: TRedisClient):
+    async def test_srandmember_count(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
         elements = ["one", "two"]
@@ -6262,7 +6262,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_flushall(self, redis_client: TRedisClient):
+    async def test_flushall(self, redis_client: TGlideClient):
         min_version = "6.2.0"
         key = f"{{key}}-1{get_random_string(5)}"
         value = get_random_string(5)
@@ -6275,7 +6275,7 @@ class TestCommands:
             assert await redis_client.flushall(FlushMode.SYNC) is OK
         assert await redis_client.dbsize() == 0
 
-        if isinstance(redis_client, RedisClusterClient):
+        if isinstance(redis_client, GlideClusterClient):
             await redis_client.set(key, value)
             assert await redis_client.flushall(route=AllPrimaries()) is OK
             assert await redis_client.flushall(FlushMode.ASYNC, AllPrimaries()) is OK
@@ -6285,7 +6285,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_standalone_flushdb(self, redis_client: RedisClient):
+    async def test_standalone_flushdb(self, redis_client: GlideClient):
         min_version = "6.2.0"
         key1 = f"{{key}}-1{get_random_string(5)}"
         key2 = f"{{key}}-2{get_random_string(5)}"
@@ -6320,7 +6320,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_getex(self, redis_client: TRedisClient):
+    async def test_getex(self, redis_client: TGlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -6355,7 +6355,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_copy_no_database(self, redis_client: TRedisClient):
+    async def test_copy_no_database(self, redis_client: TGlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -6388,7 +6388,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_copy_database(self, redis_client: RedisClient):
+    async def test_copy_database(self, redis_client: GlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -6456,7 +6456,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lolwut(self, redis_client: TRedisClient):
+    async def test_lolwut(self, redis_client: TGlideClient):
         result = await redis_client.lolwut()
         assert "Redis ver. " in result
         result = await redis_client.lolwut(parameters=[])
@@ -6468,7 +6468,7 @@ class TestCommands:
         result = await redis_client.lolwut(5, [30, 4, 4])
         assert "Redis ver. " in result
 
-        if isinstance(redis_client, RedisClusterClient):
+        if isinstance(redis_client, GlideClusterClient):
             # test with multi-node route
             result = await redis_client.lolwut(route=AllNodes())
             assert isinstance(result, dict)
@@ -6492,7 +6492,7 @@ class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_multi_key_command_returns_cross_slot_error(
-        self, redis_client: RedisClusterClient
+        self, redis_client: GlideClusterClient
     ):
         promises: list[Any] = [
             redis_client.blpop(["abc", "zxy", "lkn"], 0.1),
@@ -6566,7 +6566,7 @@ class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_multi_key_command_routed_to_multiple_nodes(
-        self, redis_client: RedisClusterClient
+        self, redis_client: GlideClusterClient
     ):
         await redis_client.exists(["abc", "zxy", "lkn"])
         await redis_client.unlink(["abc", "zxy", "lkn"])
@@ -6672,7 +6672,7 @@ class TestCommandsUnitTests:
 class TestClusterRoutes:
     async def cluster_route_custom_command_multi_nodes(
         self,
-        redis_client: RedisClusterClient,
+        redis_client: GlideClusterClient,
         route: Route,
     ):
         cluster_nodes = await redis_client.custom_command(["CLUSTER", "NODES"])
@@ -6706,14 +6706,14 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_all_nodes(
-        self, redis_client: RedisClusterClient
+        self, redis_client: GlideClusterClient
     ):
         await self.cluster_route_custom_command_multi_nodes(redis_client, AllNodes())
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_all_primaries(
-        self, redis_client: RedisClusterClient
+        self, redis_client: GlideClusterClient
     ):
         await self.cluster_route_custom_command_multi_nodes(
             redis_client, AllPrimaries()
@@ -6722,7 +6722,7 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_random_node(
-        self, redis_client: RedisClusterClient
+        self, redis_client: GlideClusterClient
     ):
         info_res = await redis_client.custom_command(
             ["INFO", "REPLICATION"], RandomNode()
@@ -6731,7 +6731,7 @@ class TestClusterRoutes:
         assert "role:master" in info_res or "role:slave" in info_res
 
     async def cluster_route_custom_command_slot_route(
-        self, redis_client: RedisClusterClient, is_slot_key: bool
+        self, redis_client: GlideClusterClient, is_slot_key: bool
     ):
         route_class = SlotKeyRoute if is_slot_key else SlotIdRoute
         route_second_arg = "foo" if is_slot_key else 4000
@@ -6758,20 +6758,20 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_slot_key_route(
-        self, redis_client: RedisClusterClient
+        self, redis_client: GlideClusterClient
     ):
         await self.cluster_route_custom_command_slot_route(redis_client, True)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_custom_command_slot_id_route(
-        self, redis_client: RedisClusterClient
+        self, redis_client: GlideClusterClient
     ):
         await self.cluster_route_custom_command_slot_route(redis_client, False)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_info_random_route(self, redis_client: RedisClusterClient):
+    async def test_info_random_route(self, redis_client: GlideClusterClient):
         info = await redis_client.info([InfoSection.SERVER], RandomNode())
         assert isinstance(info, str)
         assert "# Server" in info
@@ -6779,7 +6779,7 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_route_by_address_reaches_correct_node(
-        self, redis_client: RedisClusterClient
+        self, redis_client: GlideClusterClient
     ):
         # returns the line that contains the word "myself", up to that point. This is done because the values after it might change with time.
         def clean_result(value: TResult):
@@ -6819,14 +6819,14 @@ class TestClusterRoutes:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_cluster_fail_routing_by_address_if_no_port_is_provided(
-        self, redis_client: RedisClusterClient
+        self, redis_client: GlideClusterClient
     ):
         with pytest.raises(RequestError):
             await redis_client.info(route=ByAddressRoute("foo"))
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_cluster_flushdb(self, redis_client: RedisClusterClient):
+    async def test_cluster_flushdb(self, redis_client: GlideClusterClient):
         min_version = "6.2.0"
         key = f"{{key}}-1{get_random_string(5)}"
         value = get_random_string(5)
@@ -6853,7 +6853,7 @@ class TestScripts:
     @pytest.mark.smoke_test
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_script(self, redis_client: TRedisClient):
+    async def test_script(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         script = Script("return 'Hello'")
