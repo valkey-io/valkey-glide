@@ -74,9 +74,9 @@ function loadNativeBinding() {
 function initialize() {
     const nativeBinding = loadNativeBinding();
     const {
-        RedisClient,
-        RedisClusterClient,
-        RedisClientConfiguration,
+        GlideClient,
+        GlideClusterClient,
+        GlideClientConfiguration,
         SlotIdTypes,
         SlotKeyTypes,
         RouteByAddress,
@@ -117,9 +117,9 @@ function initialize() {
     } = nativeBinding;
 
     module.exports = {
-        RedisClient,
-        RedisClusterClient,
-        RedisClientConfiguration,
+        GlideClient,
+        GlideClusterClient,
+        GlideClientConfiguration,
         SlotIdTypes,
         SlotKeyTypes,
         RouteByAddress,
