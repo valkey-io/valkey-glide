@@ -154,12 +154,6 @@ jobs:
                   submodules: recursive
             - name: Set up Homebrew
               uses: Homebrew/actions/setup-homebrew@master
-  
-            - name: Install Valkey
-              uses: ./.github/workflows/install-valkey
-              with:
-                  engine-version: "7.2.5"
-                  target: "aarch64-apple-darwin"
 
             - name: Build Python wrapper
               uses: ./.github/workflows/build-python-wrapper
@@ -167,6 +161,12 @@ jobs:
                   os: "macos"
                   target: "aarch64-apple-darwin"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
+  
+            - name: Install Valkey
+              uses: ./.github/workflows/install-valkey
+              with:
+                  engine-version: "7.2.5"
+                  target: "aarch64-apple-darwin"
 
             - name: Test compatibility with pytest
               working-directory: ./python
@@ -194,12 +194,6 @@ jobs:
                   git config --global --add safe.directory "$GITHUB_WORKSPACE"
                   git submodule update --init --recursive
 
-            - name: Install Valkey
-              uses: ./.github/workflows/install-valkey
-              with:
-                  engine-version: "7.2.5"
-                  target: "x86_64-unknown-linux-gnu"    
-
             - name: Install python
               run: |
                   yum install -y python3
@@ -211,11 +205,11 @@ jobs:
                   target: "x86_64-unknown-linux-gnu"
                   github-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Create a symbolic Link for redis6 binaries
-              working-directory: ./python
-              run: |
-                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
-                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+            - name: Install Valkey
+              uses: ./.github/workflows/install-valkey
+              with:
+                  engine-version: "7.2.5"
+                  target: "x86_64-unknown-linux-gnu"
 
             - name: Test compatibility with pytest
               working-directory: ./python

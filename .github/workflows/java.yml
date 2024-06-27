@@ -158,12 +158,6 @@ jobs:
                   git config --global --add safe.directory "$GITHUB_WORKSPACE"
                   git submodule update --init --recursive
 
-            - name: Install Valkey
-              uses: ./.github/workflows/install-valkey
-              with:
-                  engine-version: "7.2.5"
-                  target: "x86_64-unknown-linux-gnu"      
-
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
@@ -177,14 +171,15 @@ jobs:
                   version: "26.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Create a symbolic Link for redis6 binaries
-              run: |
-                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
-                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
-
             - name: Install Java
               run: |
                   yum install -y java-${{ matrix.java }}
+
+            - name: Install Valkey
+              uses: ./.github/workflows/install-valkey
+              with:
+                  engine-version: "7.2.5"
+                  target: "x86_64-unknown-linux-gnu"  
 
             - name: Build rust part
               working-directory: java
