@@ -207,6 +207,7 @@ pub enum RequestType {
     FunctionDump = 196,
     FunctionRestore = 197,
     XPending = 198,
+    XGroupSetId = 199,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -417,6 +418,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FunctionDump => RequestType::FunctionDump,
             ProtobufRequestType::FunctionRestore => RequestType::FunctionRestore,
             ProtobufRequestType::XPending => RequestType::XPending,
+            ProtobufRequestType::XGroupSetId => RequestType::XGroupSetId,
         }
     }
 }
@@ -625,6 +627,7 @@ impl RequestType {
             RequestType::FunctionDump => Some(get_two_word_command("FUNCTION", "DUMP")),
             RequestType::FunctionRestore => Some(get_two_word_command("FUNCTION", "RESTORE")),
             RequestType::XPending => Some(cmd("XPENDING")),
+            RequestType::XGroupSetId => Some(get_two_word_command("XGROUP", "SETID")),
         }
     }
 }

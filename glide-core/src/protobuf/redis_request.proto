@@ -237,6 +237,7 @@ enum RequestType {
     FunctionDump = 196;
     FunctionRestore = 197;
     XPending = 198;
+    XGroupSetId = 199;
 }
 
 message Command {
