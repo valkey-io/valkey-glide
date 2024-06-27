@@ -1141,6 +1141,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean[]> smismember(
+            @NonNull GlideString key, @NonNull GlideString[] members) {
+        GlideString[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(
+                SMIsMember, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
     public CompletableFuture<Long> sdiffstore(@NonNull String destination, @NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, destination);
         return commandManager.submitNewCommand(SDiffStore, arguments, this::handleLongResponse);

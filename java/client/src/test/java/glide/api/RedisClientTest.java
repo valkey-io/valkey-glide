@@ -3024,6 +3024,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void smismember_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] members = {gs("1"), gs("2")};
+        GlideString[] arguments = {gs("testKey"), gs("1"), gs("2")};
+        Boolean[] value = {true, false};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(SMIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.smismember(key, members);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sdiffstore_returns_success() {
         // setup
         String destination = "dest";
