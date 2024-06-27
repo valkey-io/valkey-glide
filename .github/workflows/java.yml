@@ -154,7 +154,7 @@ jobs:
             - name: Bundle JAR
               working-directory: java
               run: |
-                  src_folder=~/.m2/repository/software/amazon/glide/glide/0.4.3
+                  src_folder=~/.m2/repository/software/amazon/glide/valkey-client/0.4.3
                   cd $src_folder
                   jar -cvf bundle.jar *
                   ls -ltr
