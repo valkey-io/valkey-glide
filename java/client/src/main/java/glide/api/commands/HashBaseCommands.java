@@ -47,7 +47,7 @@ public interface HashBaseCommands {
      * String payload = client.hget(gs("my_hash"), gs("field1")).get();
      * assert payload.equals(gs("value"));
      *
-     * String payload = client.hget("my_hash", "nonexistent_field").get();
+     * String payload = client.hget(gs("my_hash"), gs("nonexistent_field")).get();
      * assert payload.equals(null);
      * }</pre>
      */

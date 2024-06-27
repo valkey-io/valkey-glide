@@ -243,10 +243,10 @@ public interface ListBaseCommands {
      * @example
      *     <pre>{@code
      * String payload1 = client.lindex("myList", 0).get();
-     * assert payload1.equals('value1'); // Returns the first element in the list stored at 'myList'.
+     * assert payload1.equals("value1"); // Returns the first element in the list stored at 'myList'.
      *
      * String payload2 = client.lindex("myList", -1).get();
-     * assert payload2.equals('value3'); // Returns the last element in the list stored at 'myList'.
+     * assert payload2.equals("value3"); // Returns the last element in the list stored at 'myList'.
      * }</pre>
      */
     CompletableFuture<String> lindex(String key, long index);
@@ -267,10 +267,10 @@ public interface ListBaseCommands {
      * @example
      *     <pre>{@code
      * String payload1 = client.lindex(gs("myList"), 0).get();
-     * assert payload1.equals(gs('value1')); // Returns the first element in the list stored at 'myList'.
+     * assert payload1.equals(gs("value1")); // Returns the first element in the list stored at 'myList'.
      *
      * String payload2 = client.lindex(gs("myList"), -1).get();
-     * assert payload2.equals(gs('value3')); // Returns the last element in the list stored at 'myList'.
+     * assert payload2.equals(gs("value3")); // Returns the last element in the list stored at 'myList'.
      * }</pre>
      */
     CompletableFuture<GlideString> lindex(GlideString key, long index);
@@ -838,10 +838,10 @@ public interface ListBaseCommands {
      * client.lpush(gs("testKey2"), new GlideString[] {gs("four"), gs("three")}).get();
      * var result = client.lmove(gs("testKey1"), gs("testKey2"), ListDirection.LEFT, ListDirection.LEFT).get();
      * assertEquals(result, gs("one"));
-     * String[] upratedArray1 = client.lrange("testKey1", 0, -1).get();
-     * String[] upratedArray2 = client.lrange("testKey2", 0, -1).get();
-     * assertArrayEquals(new String[] {"two"}, updatedArray1);
-     * assertArrayEquals(new String[] {"one", "three", "four"}, updatedArray2);
+     * GlideString[] upratedArray1 = client.lrange(gs("testKey1"), 0, -1).get();
+     * GlideString[] upratedArray2 = client.lrange(gs("testKey2"), 0, -1).get();
+     * assertArrayEquals(new GlideString[] {gs("two")}, updatedArray1);
+     * assertArrayEquals(new GlideString[] {gs("one"), gs("three"), gs("four)"}, updatedArray2);
      * }</pre>
      */
     CompletableFuture<GlideString> lmove(
@@ -926,10 +926,10 @@ public interface ListBaseCommands {
      * client.lpush(gs("testKey2"), new GlideString[] {gs("four"), gs("three")}).get();
      * var result = client.blmove(gs("testKey1"), gs("testKey2"), ListDirection.LEFT, ListDirection.LEFT, 0.1).get();
      * assertEquals(result, gs("one"));
-     * String[] upratedArray1 = client.lrange("testKey1", 0, -1).get();
-     * String[] upratedArray2 = client.lrange("testKey2", 0, -1).get();
-     * assertArrayEquals(new String[] {"two"}, updatedArray1);
-     * assertArrayEquals(new String[] {"one", "three", "four"}, updatedArray2);
+     * GlideString[] upratedArray1 = client.lrange(gs("testKey1"), 0, -1).get();
+     * GlideString[] upratedArray2 = client.lrange(gs("testKey2"), 0, -1).get();
+     * assertArrayEquals(new GlideString[] {gs("two")}, updatedArray1);
+     * assertArrayEquals(new GlideString[] {gs("one"), gs("three"), gs("four")}, updatedArray2);
      * }</pre>
      */
     CompletableFuture<GlideString> blmove(
