@@ -1,0 +1,52 @@
+name: 'Compare Versions'
+description: 'Compares two versions to determine if version1 is greater than or equal to version2'
+inputs:
+  version1:
+    description: 'The first version to compare'
+    required: true
+  version2:
+    description: 'The second version to compare'
+    required: true
+outputs:
+  result:
+    description: 'True if version1 is greater than or equal to version2, false otherwise'
+runs:
+  using: 'composite'
+  steps:
+    - run: |
+        # Function to normalize the version string to "x.y.z" format
+        normalize_version() {
+            local version=$1
+            # Remove any prefix like "redis-"
+            version=$(echo "$version" | sed 's/^redis-//')
+            # Append ".0" if it's in "x.y" format
+            if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+                version="$version.0"
+            fi
+            echo "$version"
+        }
+
+        # Function to compare two versions
+        compare_versions() {
+            local v1=$(normalize_version "$1")
+            local v2=$(normalize_version "$2")
+
+            # Split the versions into parts
+            IFS='.' read -r -a v1_parts <<< "$v1"
+            IFS='.' read -r -a v2_parts <<< "$v2"
+
+            for i in {0..2}; do
+                if [[ ${v1_parts[$i]} -gt ${v2_parts[$i]} ]]; then
+                    echo "true"
+                    return
+                elif [[ ${v1_parts[$i]} -lt ${v2_parts[$i]} ]]; then
+                    echo "false"
+                    return
+                fi
+            done
+            echo "true"
+        }
+
+        result=$(compare_versions "${{ inputs.version1 }}" "${{ inputs.version2 }}")
+        echo "::set-output name=result::$result"
+      shell: bash
