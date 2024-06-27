@@ -61,17 +61,17 @@ jobs:
               with:
                   submodules: recursive
 
-            - name: Install redis
-              if: ${{ matrix.engine.type == 'redis' }}
-              uses: ./.github/workflows/install-redis
-              with:
-                  redis-version: ${{ matrix.engine.version }}
+            # - name: Install redis
+            #   if: ${{ matrix.engine.type == 'redis' }}
+            #   uses: ./.github/workflows/install-redis
+            #   with:
+            #       redis-version: ${{ matrix.engine.version }}
 
             - name: Install Valkey
               if: ${{ matrix.engine.type == 'valkey' }}
               uses: ./.github/workflows/install-valkey
               with:
-                  valkey-version: ${{ matrix.engine.version }}
+                  engine-version: ${{ matrix.engine.version }}
                   target: "x86_64-unknown-linux-gnu"
             
             - name: Set up Python 3.10

@@ -1,7 +1,7 @@
 name: Install Valkey
 
 inputs:
-    valkey-version:
+    engine-version:
         description: "valkey version to install"
         required: true
         type: string
@@ -30,17 +30,17 @@ runs:
           with:
             path: |
                 ~/valkey
-            key: valkey-${{ inputs.valkey-version }}-${{ inputs.target }}
+            key: valkey-${{ inputs.engine-version }}-${{ inputs.target }}
 
         - name: Build Valkey
           if: ${{ steps.cache-valkey.outputs.cache-hit != 'true' }}
           shell: bash
           run: | 
-            echo "Building valkey ${{ inputs.valkey-version }}"
+            echo "Building valkey ${{ inputs.engine-version }}"
             cd ~
             git clone https://github.com/valkey-io/valkey.git
             cd valkey
-            git checkout ${{ inputs.valkey-version }}
+            git checkout ${{ inputs.engine-version }}
             make BUILD_TLS=yes
 
         - name: Install Valkey
@@ -61,8 +61,8 @@ runs:
                 $'\nvalkey: '"$VALKEY_SERVER_VER"$', path:'"$(which valkey-server)" \
                 $'\nredis: '"$REDIS_SERVER_VER"$', path:'"$(which redis-server)"
                 exit 1
-            elif [[ $VALKEY_SERVER_VER != *"${{ inputs.valkey-version }}"* ]]; then
-                echo "Wrong valkey version has been installed. Expected: ${{ inputs.valkey-version }}, Installed: $VALKEY_SERVER_VER"
+            elif [[ $VALKEY_SERVER_VER != *"${{ inputs.engine-version }}"* ]]; then
+                echo "Wrong valkey version has been installed. Expected: ${{ inputs.engine-version }}, Installed: $VALKEY_SERVER_VER"
                 exit 1
             else
                 echo "Successfully installed valkey: $VALKEY_SERVER_VER"
