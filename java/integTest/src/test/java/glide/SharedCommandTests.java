@@ -170,6 +170,26 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void unlink_binary_multiple_keys(BaseClient client) {
+        GlideString key1 = gs("{key}" + UUID.randomUUID());
+        GlideString key2 = gs("{key}" + UUID.randomUUID());
+        GlideString key3 = gs("{key}" + UUID.randomUUID());
+        GlideString value = gs(UUID.randomUUID().toString());
+
+        String setResult = client.set(key1, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key2, value).get();
+        assertEquals(OK, setResult);
+        setResult = client.set(key3, value).get();
+        assertEquals(OK, setResult);
+
+        Long unlinkedKeysNum = client.unlink(new GlideString[] {key1, key2, key3}).get();
+        assertEquals(3L, unlinkedKeysNum);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void unlink_non_existent_key(BaseClient client) {
         Long unlinkedKeysNum = client.unlink(new String[] {UUID.randomUUID().toString()}).get();
         assertEquals(0L, unlinkedKeysNum);
@@ -734,6 +754,25 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key2, "value").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hsetnx(key2, field, "value").get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hsetnx_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString field = gs(UUID.randomUUID().toString());
+
+        assertTrue(client.hsetnx(key1, field, gs("value")).get());
+        assertFalse(client.hsetnx(key1, field, gs("newValue")).get());
+        assertEquals("value", client.hget(key1.toString(), field.toString()).get());
+
+        // Key exists, but it is not a hash
+        assertEquals(OK, client.set(key2, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hsetnx(key2, field, gs("value")).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -4576,6 +4615,34 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void type_binary(BaseClient client) {
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
+        GlideString stringKey = gs(UUID.randomUUID().toString());
+        GlideString listKey = gs(UUID.randomUUID().toString());
+        String hashKey = UUID.randomUUID().toString();
+        String setKey = UUID.randomUUID().toString();
+        String zsetKey = UUID.randomUUID().toString();
+        String streamKey = UUID.randomUUID().toString();
+
+        assertEquals(OK, client.set(stringKey, gs("value")).get());
+        assertEquals(1, client.lpush(listKey, new GlideString[] {gs("value")}).get());
+        assertEquals(1, client.hset(hashKey, Map.of("1", "2")).get());
+        assertEquals(1, client.sadd(setKey, new String[] {"value"}).get());
+        assertEquals(1, client.zadd(zsetKey, Map.of("1", 2d)).get());
+        assertNotNull(client.xadd(streamKey, Map.of("field", "value")));
+
+        assertTrue("none".equalsIgnoreCase(client.type(nonExistingKey).get()));
+        assertTrue("string".equalsIgnoreCase(client.type(stringKey).get()));
+        assertTrue("list".equalsIgnoreCase(client.type(listKey).get()));
+        assertTrue("hash".equalsIgnoreCase(client.type(hashKey).get()));
+        assertTrue("set".equalsIgnoreCase(client.type(setKey).get()));
+        assertTrue("zset".equalsIgnoreCase(client.type(zsetKey).get()));
+        assertTrue("stream".equalsIgnoreCase(client.type(streamKey).get()));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void linsert(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -5595,14 +5662,14 @@ public class SharedCommandTests {
 
         // Returns null when all keys hold empty strings
         assertEquals(0L, client.bitop(BitwiseOperation.AND, destination, emptyKeys).get());
-        assertEquals(null, client.get(destination).get());
+        assertNull(client.get(destination).get());
         assertEquals(0L, client.bitop(BitwiseOperation.OR, destination, emptyKeys).get());
-        assertEquals(null, client.get(destination).get());
+        assertNull(client.get(destination).get());
         assertEquals(0L, client.bitop(BitwiseOperation.XOR, destination, emptyKeys).get());
-        assertEquals(null, client.get(destination).get());
+        assertNull(client.get(destination).get());
         assertEquals(
                 0L, client.bitop(BitwiseOperation.NOT, destination, new String[] {emptyKey1}).get());
-        assertEquals(null, client.get(destination).get());
+        assertNull(client.get(destination).get());
 
         // Exception thrown due to the key holding a value with the wrong type
         assertEquals(1, client.sadd(emptyKey1, new String[] {value1}).get());

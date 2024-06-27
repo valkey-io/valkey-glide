@@ -518,6 +518,28 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void unlink_binary_returns_long_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("testKey1"), gs("testKey2")};
+        Long numberUnlinked = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(numberUnlinked);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Unlink), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.unlink(keys);
+        Long result = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(numberUnlinked, result);
+    }
+
+    @SneakyThrows
+    @Test
     public void get_returns_success() {
         // setup
         String key = "testKey";
@@ -1806,6 +1828,31 @@ public class RedisClientTest {
         String field = "testField";
         String value = "testValue";
         String[] args = new String[] {key, field, value};
+
+        CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
+        testResponse.complete(Boolean.TRUE);
+
+        // match on protobuf request
+        when(commandManager.<Boolean>submitNewCommand(eq(HSetNX), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean> response = service.hsetnx(key, field, value);
+        Boolean payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertTrue(payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hsetnx_binary_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString field = gs("testField");
+        GlideString value = gs("testValue");
+        GlideString[] args = new GlideString[] {key, field, value};
 
         CompletableFuture<Boolean> testResponse = new CompletableFuture<>();
         testResponse.complete(Boolean.TRUE);
@@ -5772,6 +5819,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void type_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key};
+        String value = "none";
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Type), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.type(key);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void randomKey() {
         // setup
         String key1 = "key1";
@@ -8367,6 +8438,29 @@ public class RedisClientTest {
         String key1 = "testKey1";
         String key2 = "testKey2";
         String[] arguments = new String[] {key1, key2};
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Watch), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.watch(arguments);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void watch_binary_returns_success() {
+        // setup
+        GlideString key1 = gs("testKey1");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments = new GlideString[] {key1, key2};
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
 
