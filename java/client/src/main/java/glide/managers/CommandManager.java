@@ -16,9 +16,14 @@ import glide.api.models.exceptions.ClosingException;
 import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
+import glide.ffi.resolvers.RedisValueResolver;
+
+import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
 import redis_request.RedisRequestOuterClass.Command;
@@ -198,17 +203,14 @@ public class CommandManager {
      */
     protected RedisRequest.Builder prepareRedisRequest(
             RequestType requestType, String[] arguments, Route route) {
-        ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
-        for (var arg : arguments) {
-            commandArgs.addArgs(ByteString.copyFromUtf8(arg));
-        }
+        final Command.Builder commandBuilder = Command.newBuilder();
+        populateRequestWithArgs(arguments, commandBuilder);
 
         var builder =
                 RedisRequest.newBuilder()
                         .setSingleCommand(
-                                Command.newBuilder()
+                                commandBuilder
                                         .setRequestType(requestType)
-                                        .setArgsArray(commandArgs.build())
                                         .build());
 
         return prepareRedisRequestRoute(builder, route);
@@ -225,17 +227,14 @@ public class CommandManager {
      */
     protected RedisRequest.Builder prepareRedisRequest(
             RequestType requestType, GlideString[] arguments, Route route) {
-        ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
-        for (var arg : arguments) {
-            commandArgs.addArgs(ByteString.copyFrom(arg.getBytes()));
-        }
+        final Command.Builder commandBuilder = Command.newBuilder();
+        populateRequestWithArgs(arguments, commandBuilder);
 
         var builder =
                 RedisRequest.newBuilder()
                         .setSingleCommand(
-                                Command.newBuilder()
+                            commandBuilder
                                         .setRequestType(requestType)
-                                        .setArgsArray(commandArgs.build())
                                         .build());
 
         return prepareRedisRequestRoute(builder, route);
@@ -298,16 +297,13 @@ public class CommandManager {
      *     adding a callback id.
      */
     protected RedisRequest.Builder prepareRedisRequest(RequestType requestType, String[] arguments) {
-        ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
-        for (var arg : arguments) {
-            commandArgs.addArgs(ByteString.copyFromUtf8(arg));
-        }
+        final Command.Builder commandBuilder = Command.newBuilder();
+        populateRequestWithArgs(arguments, commandBuilder);
 
         return RedisRequest.newBuilder()
                 .setSingleCommand(
-                        Command.newBuilder()
+                        commandBuilder
                                 .setRequestType(requestType)
-                                .setArgsArray(commandArgs.build())
                                 .build());
     }
 
@@ -321,16 +317,13 @@ public class CommandManager {
      */
     protected RedisRequest.Builder prepareRedisRequest(
             RequestType requestType, GlideString[] arguments) {
-        ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
-        for (var arg : arguments) {
-            commandArgs.addArgs(ByteString.copyFrom(arg.getBytes()));
-        }
+        final Command.Builder commandBuilder = Command.newBuilder();
+        populateRequestWithArgs(arguments, commandBuilder);
 
         return RedisRequest.newBuilder()
                 .setSingleCommand(
-                        Command.newBuilder()
+                        commandBuilder
                                 .setRequestType(requestType)
-                                .setArgsArray(commandArgs.build())
                                 .build());
     }
 
@@ -391,5 +384,44 @@ public class CommandManager {
             throw (RuntimeException) e;
         }
         throw new RuntimeException(e);
+    }
+
+    /**
+     * Add the given set of arguments to the output Command.Builder.
+     *
+     * @param arguments         The arguments to add to the builder.
+     * @param outputBuilder     The builder to populate with arguments.
+     */
+    private static void populateRequestWithArgs(String[] arguments, Command.Builder outputBuilder) {
+        populateRequestWithArgs(Arrays.stream(arguments)
+            .map(value -> value.getBytes(StandardCharsets.UTF_8)).toList(), outputBuilder);
+    }
+
+    /**
+     * Add the given set of arguments to the output Command.Builder.
+     *
+     * @param arguments         The arguments to add to the builder.
+     * @param outputBuilder     The builder to populate with arguments.
+     */
+    private static void populateRequestWithArgs(GlideString[] arguments, Command.Builder outputBuilder) {
+        populateRequestWithArgs(Arrays.stream(arguments).map(GlideString::getBytes).toList(), outputBuilder);
+    }
+
+    /**
+     * Add the given set of arguments to the output Command.Builder.
+     *
+     * @param arguments         The arguments to add to the builder.
+     * @param outputBuilder     The builder to populate with arguments.
+     */
+    private static void populateRequestWithArgs(List<byte[]> arguments, Command.Builder outputBuilder) {
+        final long totalArgSize = arguments.stream().mapToLong(arg -> arg.length).sum();
+        if (totalArgSize < RedisValueResolver.MAX_REQUEST_ARGS_LENGTH) {
+            ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
+            arguments.forEach(arg -> commandArgs.addArgs(ByteString.copyFrom(arg)));
+            outputBuilder.setArgsArray(commandArgs);
+        } else {
+            outputBuilder.setArgsVecPointer(
+                RedisValueResolver.createLeakedBytesVec(arguments.toArray(new byte[][] {})));
+        }
     }
 }
