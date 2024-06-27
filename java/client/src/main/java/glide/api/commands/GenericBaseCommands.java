@@ -5,7 +5,6 @@ import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.RestoreOptions;
-import glide.api.models.commands.ScanOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
