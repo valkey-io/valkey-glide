@@ -1,10 +1,13 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.assertDeepEquals;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
+import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleSingleNodeRoute.RANDOM;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -15,6 +18,7 @@ import glide.TestConfiguration;
 import glide.TransactionTestUtilities.TransactionBuilder;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
+import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -61,17 +65,6 @@ public class ClusterTransactionTests {
         ClusterTransaction transaction = new ClusterTransaction().customCommand(new String[] {"info"});
         Object[] result = clusterClient.exec(transaction).get();
         assertTrue(((String) result[0]).contains("# Stats"));
-    }
-
-    @Test
-    @SneakyThrows
-    public void WATCH_transaction_failure_returns_null() {
-        ClusterTransaction transaction = new ClusterTransaction();
-        transaction.get("key");
-        assertEquals(
-                OK, clusterClient.customCommand(new String[] {"WATCH", "key"}).get().getSingleValue());
-        assertEquals(OK, clusterClient.set("key", "foo").get());
-        assertNull(clusterClient.exec(transaction).get());
     }
 
     @Test
@@ -175,5 +168,123 @@ public class ClusterTransactionTests {
         assertEquals(3L, result[0]);
         assertArrayEquals(new Object[] {0L, 1.0}, (Object[]) result[1]);
         assertArrayEquals(new Object[] {2L, 1.0}, (Object[]) result[2]);
+    }
+
+    @Test
+    @SneakyThrows
+    public void watch() {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String key4 = "{key}-4" + UUID.randomUUID();
+        String foobarString = "foobar";
+        String helloString = "hello";
+        String[] keys = new String[] {key1, key2, key3};
+        ClusterTransaction setFoobarTransaction = new ClusterTransaction();
+        ClusterTransaction setHelloTransaction = new ClusterTransaction();
+        String[] expectedExecResponse = new String[] {OK, OK, OK};
+
+        // Returns null when a watched key is modified before it is executed in a transaction command.
+        // Transaction commands are not performed.
+        assertEquals(OK, clusterClient.watch(keys).get());
+        assertEquals(OK, clusterClient.set(key2, helloString).get());
+        setFoobarTransaction.set(key1, foobarString).set(key2, foobarString).set(key3, foobarString);
+        assertNull(clusterClient.exec(setFoobarTransaction).get()); // Sanity check
+        assertNull(clusterClient.get(key1).get());
+        assertEquals(helloString, clusterClient.get(key2).get());
+        assertNull(clusterClient.get(key3).get());
+
+        // Transaction executes command successfully with a read command on the watch key before
+        // transaction is executed.
+        assertEquals(OK, clusterClient.watch(keys).get());
+        assertEquals(helloString, clusterClient.get(key2).get());
+        assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
+        assertEquals(foobarString, clusterClient.get(key1).get()); // Sanity check
+        assertEquals(foobarString, clusterClient.get(key2).get());
+        assertEquals(foobarString, clusterClient.get(key3).get());
+
+        // Transaction executes command successfully with unmodified watched keys
+        assertEquals(OK, clusterClient.watch(keys).get());
+        assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
+        assertEquals(foobarString, clusterClient.get(key1).get()); // Sanity check
+        assertEquals(foobarString, clusterClient.get(key2).get());
+        assertEquals(foobarString, clusterClient.get(key3).get());
+
+        // Transaction executes command successfully with a modified watched key but is not in the
+        // transaction.
+        assertEquals(OK, clusterClient.watch(new String[] {key4}).get());
+        setHelloTransaction.set(key1, helloString).set(key2, helloString).set(key3, helloString);
+        assertArrayEquals(expectedExecResponse, clusterClient.exec(setHelloTransaction).get());
+        assertEquals(helloString, clusterClient.get(key1).get()); // Sanity check
+        assertEquals(helloString, clusterClient.get(key2).get());
+        assertEquals(helloString, clusterClient.get(key3).get());
+
+        // WATCH can not have an empty String array parameter
+        // Test fails due to https://github.com/amazon-contributing/redis-rs/issues/158
+        // ExecutionException executionException =
+        //         assertThrows(ExecutionException.class, () -> clusterClient.watch(new String[]
+        // {}).get());
+        // assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @Test
+    @SneakyThrows
+    public void unwatch() {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String foobarString = "foobar";
+        String helloString = "hello";
+        String[] keys = new String[] {key1, key2};
+        ClusterTransaction setFoobarTransaction = new ClusterTransaction();
+        String[] expectedExecResponse = new String[] {OK, OK};
+
+        // UNWATCH returns OK when there no watched keys
+        assertEquals(OK, clusterClient.unwatch().get());
+
+        // Transaction executes successfully after modifying a watched key then calling UNWATCH
+        assertEquals(OK, clusterClient.watch(keys).get());
+        assertEquals(OK, clusterClient.set(key2, helloString).get());
+        assertEquals(OK, clusterClient.unwatch().get());
+        assertEquals(OK, clusterClient.unwatch(ALL_PRIMARIES).get());
+        setFoobarTransaction.set(key1, foobarString).set(key2, foobarString);
+        assertArrayEquals(expectedExecResponse, clusterClient.exec(setFoobarTransaction).get());
+        assertEquals(foobarString, clusterClient.get(key1).get());
+        assertEquals(foobarString, clusterClient.get(key2).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void sort() {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String[] descendingList = new String[] {"3", "2", "1"};
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction
+                .lpush(key1, new String[] {"3", "1", "2"})
+                .sort(key1, SortClusterOptions.builder().orderBy(DESC).build())
+                .sortStore(key1, key2, SortClusterOptions.builder().orderBy(DESC).build())
+                .lrange(key2, 0, -1);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction.sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build());
+        }
+
+        Object[] results = clusterClient.exec(transaction).get();
+        Object[] expectedResult =
+                new Object[] {
+                    3L, // lpush(key1, new String[] {"3", "1", "2"})
+                    descendingList, // sort(key1, SortClusterOptions.builder().orderBy(DESC).build())
+                    3L, // sortStore(key1, key2, DESC))
+                    descendingList, // lrange(key2, 0, -1)
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            expectedResult =
+                    concatenateArrays(
+                            expectedResult, new Object[] {descendingList} // sortReadOnly(key1, DESC)
+                            );
+        }
+
+        assertDeepEquals(expectedResult, results);
     }
 }

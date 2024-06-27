@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener;
 
@@ -45,7 +45,7 @@ fn redis_value_to_java<'local>(
                     }
                 }
             } else {
-                let Ok(bytearr) = env.byte_array_from_slice(data.as_ref()) else {
+                let Ok(bytearr) = env.byte_array_from_slice(&data) else {
                     let _ = env.throw("Failed to allocate byte array");
                     return JObject::null();
                 };

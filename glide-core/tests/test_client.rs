@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 mod utilities;
 
@@ -35,6 +35,7 @@ pub(crate) mod shared_client_tests {
                     Client::new(
                         create_connection_request(&[connection_addr.clone()], &configuration)
                             .into(),
+                        None,
                     )
                     .await
                     .ok()
