@@ -19,6 +19,7 @@ inputs:
 
 env:
     CARGO_TERM_COLOR: always
+    VALKEY_MIN_VERSION: "7.2.5"
 
 runs:
     using: "composite"
@@ -61,13 +62,23 @@ runs:
                 VALKEY_RELEASE=true
             else
                 VALKEY_RELEASE=false
-            fi
-            echo "is_valkey_release=$VALKEY_RELEASE" >> $GITHUB_OUTPUT
+
+        - name: Check if the current version is a Valkey release
+          id: is_valkey_release
+          uses: ./.github/actions/compare-versions
+          with:
+              version1: ${{ inputs.engine-version }}
+              version2: ${{ env.VALKEY_MIN_VERSION }}
+
+        - name: Display comparison result
+          shell: bash
+          run: |
+            echo "Comparison result: ${{ steps.is_valkey_release.outputs.result }}"
 
         - name: Verify Valkey installation and symlinks
           shell: bash
           run: | 
-            IS_VALKEY=${{ steps.version_calc.outputs.is_valkey_release}}
+            IS_VALKEY=${{ steps.is_valkey_release.outputs.result }}
             EXPECTED_VERSION=`echo ${{ inputs.engine-version }} | sed -e "s/^redis-//"`
             REDIS_SERVER_VER=$(redis-server -v)
             if [[ $IS_VALKEY == "true" ]]; then
