@@ -696,7 +696,7 @@ public class SharedCommandTests {
         assertEquals(11L, client.setrange(stringKey, 0, gs("Hello world")).get());
         // existing key
         assertEquals(11L, client.setrange(stringKey, 6, gs("GLIDE")).get());
-        assertEquals("Hello GLIDE", client.get(stringKey).get());
+        assertEquals(gs("Hello GLIDE"), client.get(stringKey).get());
 
         // offset > len
         assertEquals(20L, client.setrange(stringKey, 15, gs("GLIDE")).get());
@@ -773,12 +773,13 @@ public class SharedCommandTests {
 
         // a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
         assertEquals(
-                REDIS_VERSION.isLowerThan("8.0.0") ? "T" : "",
+                gs(REDIS_VERSION.isLowerThan("8.0.0") ? "T" : ""),
                 client.getrange(stringKey, -200, -100).get());
 
         // empty key (returning null isn't implemented)
         assertEquals(
-                REDIS_VERSION.isLowerThan("8.0.0") ? "" : null, client.getrange(nonStringKey, 0, -1).get());
+                gs(REDIS_VERSION.isLowerThan("8.0.0") ? "" : null),
+                client.getrange(nonStringKey, 0, -1).get());
 
         // non-string key
         assertEquals(1, client.lpush(nonStringKey, new GlideString[] {gs("_")}).get());
@@ -3973,7 +3974,7 @@ public class SharedCommandTests {
         String streamId3 = "0-3";
 
         assertEquals(
-                streamId1,
+                gs(streamId1),
                 client
                         .xadd(
                                 key,
@@ -3981,7 +3982,7 @@ public class SharedCommandTests {
                                 StreamAddOptions.builder().id(streamId1).build())
                         .get());
         assertEquals(
-                streamId2,
+                gs(streamId2),
                 client
                         .xadd(
                                 key,
@@ -3994,15 +3995,15 @@ public class SharedCommandTests {
         Map<GlideString, GlideString[][]> result =
                 client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
         assertEquals(2, result.size());
-        assertNotNull(result.get(streamId1));
-        assertNotNull(result.get(streamId2));
+        assertNotNull(result.get(gs(streamId1)));
+        assertNotNull(result.get(gs(streamId2)));
 
         // get everything from the stream using a reverse range search
         Map<GlideString, GlideString[][]> revResult =
                 client.xrevrange(key, InfRangeBound.MAX, InfRangeBound.MIN).get();
         assertEquals(2, revResult.size());
-        assertNotNull(revResult.get(streamId1));
-        assertNotNull(revResult.get(streamId2));
+        assertNotNull(revResult.get(gs(streamId1)));
+        assertNotNull(revResult.get(gs(streamId2)));
 
         // returns empty if + before -
         Map<GlideString, GlideString[][]> emptyResult =
@@ -4015,7 +4016,7 @@ public class SharedCommandTests {
         assertEquals(0, emptyRevResult.size());
 
         assertEquals(
-                streamId3,
+                gs(streamId3),
                 client
                         .xadd(
                                 key,
@@ -4027,12 +4028,12 @@ public class SharedCommandTests {
         Map<GlideString, GlideString[][]> newResult =
                 client.xrange(key, IdBound.ofExclusive(streamId2), IdBound.ofExclusive(5), 1L).get();
         assertEquals(1, newResult.size());
-        assertNotNull(newResult.get(streamId3));
+        assertNotNull(newResult.get(gs(streamId3)));
         // ...and from xrevrange
         Map<GlideString, GlideString[][]> newRevResult =
                 client.xrevrange(key, IdBound.ofExclusive(5), IdBound.ofExclusive(streamId2), 1L).get();
         assertEquals(1, newRevResult.size());
-        assertNotNull(newRevResult.get(streamId3));
+        assertNotNull(newRevResult.get(gs(streamId3)));
 
         // xrange against an emptied stream
         assertEquals(

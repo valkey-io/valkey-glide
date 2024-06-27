@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.utils;
 
+import static glide.api.models.GlideString.gs;
+
 import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
@@ -15,8 +17,8 @@ import java.util.stream.Stream;
 public class ArrayTransformUtils {
 
     /**
-     * Converts a map of string keys and values of any type in to an array of strings with alternating
-     * keys and values.
+     * Converts a map of string keys and values of any type that can be converted in to an array of
+     * strings with alternating keys and values.
      *
      * @param args Map of string keys to values of any type to convert.
      * @return Array of strings [key1, value1.toString(), key2, value2.toString(), ...].
@@ -28,15 +30,15 @@ public class ArrayTransformUtils {
     }
 
     /**
-     * Converts a map of string keys and values of any type in to an array of strings with alternating
-     * keys and values.
+     * Converts a map of GlideString keys and values of any type that can be converted to string in to
+     * an array of strings with alternating keys and values.
      *
-     * @param args Map of string keys to values of any type to convert.
-     * @return Array of strings [key1, value1.toString(), key2, value2.toString(), ...].
+     * @param args Map of GlideString keys to values of any type to convert.
+     * @return Array of GlideString [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
      */
     public static GlideString[] convertMapToKeyValueStringArrayBinary(Map<GlideString, ?> args) {
         return args.entrySet().stream()
-                .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue().toString()))
+                .flatMap(entry -> Stream.of(entry.getKey(), gs(entry.getValue().toString())))
                 .toArray(GlideString[]::new);
     }
 

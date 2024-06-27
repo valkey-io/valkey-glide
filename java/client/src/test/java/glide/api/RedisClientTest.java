@@ -57,6 +57,7 @@ import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDI
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_NOT_EXACT_REDIS_API;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArrayBinary;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -5090,7 +5091,7 @@ public class RedisClientTest {
         Map<GlideString, GlideString> fieldValues = new LinkedHashMap<>();
         fieldValues.put(gs("testField1"), gs("testValue1"));
         fieldValues.put(gs("testField2"), gs("testValue2"));
-        GlideString[] fieldValuesArgs = convertMapToKeyValueStringArray(fieldValues);
+        GlideString[] fieldValuesArgs = convertMapToKeyValueStringArrayBinary(fieldValues);
         GlideString[] arguments = new GlideString[] {key, gs("*")};
         arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
         GlideString returnId = gs("testId");
@@ -5241,13 +5242,13 @@ public class RedisClientTest {
         GlideString[] arguments =
                 new GlideString[] {
                     key,
-                    NO_MAKE_STREAM_REDIS_API,
-                    TRIM_MAXLEN_REDIS_API,
-                    TRIM_EXACT_REDIS_API,
-                    Long.toString(5L),
-                    "id"
+                    gs(NO_MAKE_STREAM_REDIS_API),
+                    gs(TRIM_MAXLEN_REDIS_API),
+                    gs(TRIM_EXACT_REDIS_API),
+                    gs(Long.toString(5L)),
+                    gs("id")
                 };
-        arguments = ArrayUtils.addAll(arguments, convertMapToKeyValueStringArray(fieldValues));
+        arguments = ArrayUtils.addAll(arguments, convertMapToKeyValueStringArrayBinary(fieldValues));
 
         GlideString returnId = gs("testId");
         CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
@@ -5477,35 +5478,6 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.xdel(key, ids);
         Long payload = response.get();
-
-        // verify
-        assertEquals(testResponse, response);
-        assertEquals(completedResult, payload);
-    }
-
-    @Test
-    @SneakyThrows
-    public void xrange_binary_returns_success() {
-        // setup
-        GlideString key = gs("testKey");
-        StreamRange start = IdBound.of(9999L);
-        StreamRange end = IdBound.ofExclusive("696969-10");
-        GlideString[][] fieldValuesResult = {
-            {gs("duration"), gs("12345")}, {gs("event-id"), gs("2")}, {gs("user-id"), gs("42")}
-        };
-        Map<GlideString, GlideString[][]> completedResult = Map.of(key, fieldValuesResult);
-
-        CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
-        testResponse.complete(completedResult);
-
-        // match on protobuf request
-        when(commandManager.<Map<GlideString, GlideString[][]>>submitNewCommand(
-                        eq(XRange), eq(new GlideString[] {key, gs("9999"), gs("(696969-10")}), any()))
-                .thenReturn(testResponse);
-
-        // exercise
-        CompletableFuture<Map<GlideString, GlideString[][]>> response = service.xrange(key, start, end);
-        Map<GlideString, GlideString[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
