@@ -3,6 +3,7 @@ import java.nio.file.Paths
 plugins {
     id 'java-library'
     id 'maven-publish'
+    id 'signing'
 }
 
 repositories {
@@ -180,13 +181,16 @@ publishing {
         mavenJava(MavenPublication) {
             from components.java
             groupId = 'software.amazon.glide'
-            artifactId = 'glide'
+            artifactId = 'glide-for-redis'
             version = "255.255.255"
             pom {
                 name = 'glide-for-valkey'
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
                 url = 'https://github.com/aws/glide-for-redis.git'
                 inceptionYear = '2024'
+                properties = [
+	            classifier: "placeholder"
+                ]
                 scm {
                     url = 'https://github.com/aws/glide-for-redis/tree/main'
                     connection = 'scm:git:ssh://git@github.com/aws/glide-for-redis.git'
@@ -213,6 +217,10 @@ publishing {
     }
 }
 
+signing {
+    sign publishing.publications
+}
+
 tasks.withType(Test) {
     testLogging {
         exceptionFormat "full"
@@ -222,5 +230,6 @@ tasks.withType(Test) {
 }
 
 jar {
-    archiveBaseName = "glide"
+    archiveBaseName = "glide-for-redis"
+    archiveClassifier = "placeholder"
 }

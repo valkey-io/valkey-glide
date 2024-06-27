@@ -10,14 +10,14 @@ repositories {
 }
 
 dependencies {
-    implementation 'software.amazon.glide:glide:255.255.255'
+    implementation group: 'software.amazon.glide', name: 'glide-for-redis', version: '255.255.255', classifier: 'placeholder'
 
     implementation 'redis.clients:jedis:4.4.3'
     implementation 'io.lettuce:lettuce-core:6.2.6.RELEASE'
     implementation 'commons-cli:commons-cli:1.5.0'
 }
 
-run.dependsOn ':client:publishToMavenLocal'
+// run.dependsOn ':client:publishToMavenLocal'
 
 application {
     // Define the main class for the application.
