@@ -22,6 +22,7 @@ import glide.api.models.commands.RangeOptions.LexBoundary;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldGet;
@@ -34,6 +35,11 @@ import glide.api.models.commands.bitmap.BitFieldOptions.SignedEncoding;
 import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.geospatial.GeoSearchOptions;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchResultOptions;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -864,6 +870,7 @@ public class TransactionTestUtilities {
 
     private static Object[] geospatialCommands(BaseTransaction<?> transaction) {
         final String geoKey1 = "{geoKey}-1-" + UUID.randomUUID();
+        final String geoKey2 = "{geoKey}-2-" + UUID.randomUUID();
 
         transaction
                 .geoadd(
@@ -878,18 +885,110 @@ public class TransactionTestUtilities {
                 .geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
                 .geohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"});
 
-        return new Object[] {
-            2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
-            new Double[][] {
-                {13.36138933897018433, 38.11555639549629859},
-                {15.08726745843887329, 37.50266842333162032},
-            }, // geopos(geoKey1, new String[]{"Palermo", "Catania"})
-            166274.1516, // geodist(geoKey1, "Palermo", "Catania")
-            166.2742, // geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
-            new String[] {
-                "sqc8b49rny0", "sqdtr74hyu0", null
-            } // eohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"})
-        };
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            transaction
+                    .geosearch(
+                            geoKey1,
+                            new GeoSearchOrigin.MemberOrigin("Palermo"),
+                            new GeoSearchShape(200, GeoUnit.KILOMETERS),
+                            new GeoSearchResultOptions(SortOrder.ASC))
+                    .geosearch(
+                            geoKey1,
+                            new GeoSearchOrigin.CoordOrigin(new GeospatialData(15, 37)),
+                            new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                    .geosearch(
+                            geoKey1,
+                            new GeoSearchOrigin.MemberOrigin("Palermo"),
+                            new GeoSearchShape(200, GeoUnit.KILOMETERS),
+                            GeoSearchOptions.builder().withhash().withdist().withcoord().build(),
+                            new GeoSearchResultOptions(SortOrder.ASC, 2))
+                    .geosearch(
+                            geoKey1,
+                            new GeoSearchOrigin.CoordOrigin(new GeospatialData(15, 37)),
+                            new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                            GeoSearchOptions.builder().withhash().withdist().withcoord().build(),
+                            new GeoSearchResultOptions(SortOrder.ASC, 2))
+                    .geosearchstore(
+                            geoKey2,
+                            geoKey1,
+                            new GeoSearchOrigin.MemberOrigin("Palermo"),
+                            new GeoSearchShape(200, GeoUnit.KILOMETERS),
+                            new GeoSearchResultOptions(SortOrder.ASC))
+                    .geosearchstore(
+                            geoKey2,
+                            geoKey1,
+                            new GeoSearchOrigin.CoordOrigin(new GeospatialData(15, 37)),
+                            new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                            GeoSearchStoreOptions.builder().storedist().build(),
+                            new GeoSearchResultOptions(SortOrder.ASC, 2));
+        }
+
+        var expectedResults =
+                new Object[] {
+                    2L, // geoadd(geoKey1, Map.of("Palermo", ..., "Catania", ...))
+                    new Double[][] {
+                        {13.36138933897018433, 38.11555639549629859},
+                        {15.08726745843887329, 37.50266842333162032},
+                    }, // geopos(geoKey1, new String[]{"Palermo", "Catania"})
+                    166274.1516, // geodist(geoKey1, "Palermo", "Catania")
+                    166.2742, // geodist(geoKey1, "Palermo", "Catania", GeoUnit.KILOMETERS)
+                    new String[] {
+                        "sqc8b49rny0", "sqdtr74hyu0", null
+                    } // geohash(geoKey1, new String[] {"Palermo", "Catania", "NonExisting"})
+                };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            expectedResults =
+                    concatenateArrays(
+                            expectedResults,
+                            new Object[] {
+                                new String[] {
+                                    "Palermo", "Catania"
+                                }, // geosearch(geoKey1, "Palermo", byradius(200, km))
+                                new String[] {
+                                    "Palermo", "Catania"
+                                }, // geosearch(geoKey1, (15,37), bybox(200,200,km))
+                                new Object[] {
+                                    new Object[] {
+                                        "Palermo",
+                                        new Object[] {
+                                            0.0, 3479099956230698L, new Object[] {13.361389338970184, 38.1155563954963}
+                                        }
+                                    },
+                                    new Object[] {
+                                        "Catania",
+                                        new Object[] {
+                                            166.2742,
+                                            3479447370796909L,
+                                            new Object[] {15.087267458438873, 37.50266842333162}
+                                        }
+                                    }
+                                }, // geosearch(geoKey1, "Palermo", BYRADIUS(200, km), ASC, COUNT 2)
+                                new Object[] {
+                                    new Object[] {
+                                        "Catania",
+                                        new Object[] {
+                                            56.4413,
+                                            3479447370796909L,
+                                            new Object[] {15.087267458438873, 37.50266842333162}
+                                        }
+                                    },
+                                    new Object[] {
+                                        "Palermo",
+                                        new Object[] {
+                                            190.4424,
+                                            3479099956230698L,
+                                            new Object[] {13.361389338970184, 38.1155563954963}
+                                        }
+                                    },
+                                }, // geosearch(geoKey1, (15,37), BYBOX(400,400,km), ASC, COUNT 2)
+                                2L, // geosearch(geoKey2, geoKey1, (15,37), BYBOX(400,400,km), ASC, COUNT 2)
+                                2L, // geosearch(geoKey2, geoKey1, (15,37), BYBOX(400,400,km), STOREDIST, ASC, COUNT
+                                // 2)
+                            });
+        }
+
+        return expectedResults;
     }
 
     private static Object[] scriptingAndFunctionsCommands(BaseTransaction<?> transaction) {
