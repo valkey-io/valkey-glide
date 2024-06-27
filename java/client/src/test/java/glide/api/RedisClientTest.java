@@ -7938,7 +7938,8 @@ public class RedisClientTest {
         GlideString key1 = gs("testKey");
         GlideString key2 = gs("testKey2");
         long limit = 1L;
-        GlideString[] arguments = new GlideString[] {gs("2"), key1, key2, gs(SET_LIMIT_REDIS_API), gs("1")};
+        GlideString[] arguments =
+                new GlideString[] {gs("2"), key1, key2, gs(SET_LIMIT_REDIS_API), gs("1")};
         Long value = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();

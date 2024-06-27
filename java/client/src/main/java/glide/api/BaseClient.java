@@ -1143,7 +1143,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Long> sinterstore(@NonNull GlideString destination, @NonNull GlideString[] keys) {
+    public CompletableFuture<Long> sinterstore(
+            @NonNull GlideString destination, @NonNull GlideString[] keys) {
         GlideString[] arguments = ArrayUtils.addFirst(keys, destination);
         return commandManager.submitNewCommand(SInterStore, arguments, this::handleLongResponse);
     }

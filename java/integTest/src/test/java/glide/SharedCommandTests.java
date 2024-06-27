@@ -1623,7 +1623,8 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key5, gs("value")).get());
         ExecutionException executionException =
                 assertThrows(
-                        ExecutionException.class, () -> client.sinterstore(key1, new GlideString[] {key5}).get());
+                        ExecutionException.class,
+                        () -> client.sinterstore(key1, new GlideString[] {key5}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
 
         // overwrite destination - not a set
@@ -1632,7 +1633,8 @@ public class SharedCommandTests {
 
         // wrong arguments
         executionException =
-                assertThrows(ExecutionException.class, () -> client.sinterstore(key5, new GlideString[0]).get());
+                assertThrows(
+                        ExecutionException.class, () -> client.sinterstore(key5, new GlideString[0]).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
