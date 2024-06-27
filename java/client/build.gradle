@@ -230,6 +230,6 @@ tasks.withType(Test) {
 }
 
 jar {
-    archiveBaseName = "glide"
+    archiveBaseName = "valkey-client"
     archiveClassifier = "placeholder"
 }
