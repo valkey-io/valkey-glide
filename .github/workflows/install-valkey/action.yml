@@ -2,7 +2,7 @@ name: Install Valkey
 
 inputs:
     engine-version:
-        description: "valkey version to install"
+        description: "Engine version to install"
         required: true
         type: string
     target:
