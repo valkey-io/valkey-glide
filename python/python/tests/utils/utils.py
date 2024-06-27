@@ -113,3 +113,18 @@ def compare_maps(
     if map1 is None or map2 is None:
         return False
     return json.dumps(map1) == json.dumps(map2)
+
+
+def generate_lua_lib_code(
+    lib_name: str, functions: Mapping[str, str], readonly: bool
+) -> str:
+    code = f"#!lua name={lib_name}\n"
+    for function_name, function_body in functions.items():
+        code += (
+            f"redis.register_function{{ function_name = '{function_name}', callback = function(keys, args) "
+            f"{function_body} end"
+        )
+        if readonly:
+            code += ", flags = { 'no-writes' }"
+        code += " }\n"
+    return code

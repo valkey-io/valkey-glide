@@ -1776,6 +1776,29 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.Type, [key])
 
+    def function_load(
+        self: TTransaction, library_code: str, replace: bool = False
+    ) -> TTransaction:
+        """
+        Loads a library to Redis.
+
+        See https://valkey.io/docs/latest/commands/function-load/ for more details.
+
+        Args:
+            library_code (str): The source code that implements the library.
+            replace (bool): Whether the given library should overwrite a library with the same name if
+                it already exists.
+
+        Commands response:
+            str: The library name that was loaded.
+
+        Since: Redis 7.0.0.
+        """
+        return self.append_command(
+            RequestType.FunctionLoad,
+            ["REPLACE", library_code] if replace else [library_code],
+        )
+
     def xadd(
         self: TTransaction,
         key: str,

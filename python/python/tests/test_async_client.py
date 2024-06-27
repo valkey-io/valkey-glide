@@ -89,6 +89,7 @@ from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
     compare_maps,
+    generate_lua_lib_code,
     get_first_result,
     get_random_string,
     is_single_response,
@@ -6298,6 +6299,102 @@ class TestCommands:
         assert await redis_client.set(string_key, "foo") == OK
         refcount = await redis_client.object_refcount(string_key)
         assert refcount is not None and refcount >= 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_load(self, redis_client: TGlideClient):
+        # TODO: Test function with FCALL
+        # TODO: Test with FUNCTION LIST
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+
+        assert await redis_client.function_load(code) == lib_name
+
+        # TODO: change when FCALL, FCALL_RO is implemented
+        assert (
+            await redis_client.custom_command(["FCALL", func_name, "0", "one", "two"])
+            == "one"
+        )
+        assert (
+            await redis_client.custom_command(
+                ["FCALL_RO", func_name, "0", "one", "two"]
+            )
+            == "one"
+        )
+
+        # TODO: add FUNCTION LIST once implemented
+
+        # re-load library without replace
+        with pytest.raises(RequestError) as e:
+            await redis_client.function_load(code)
+        assert "Library '" + lib_name + "' already exists" in str(e)
+
+        # re-load library with replace
+        assert await redis_client.function_load(code, True) == lib_name
+
+        func2_name = f"myfunc2c{get_random_string(5)}"
+        new_code = generate_lua_lib_code(
+            lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
+        )
+
+        assert await redis_client.function_load(new_code, True) == lib_name
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("single_route", [True, False])
+    async def test_function_load_cluster_with_route(
+        self, redis_client: GlideClusterClient, single_route: bool
+    ):
+        # TODO: Test function with FCALL
+        # TODO: Test with FUNCTION LIST
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        assert await redis_client.function_load(code, False, route) == lib_name
+
+        # TODO: change when FCALL, FCALL_RO is implemented.
+        assert (
+            await redis_client.custom_command(
+                ["FCALL", func_name, "0", "one", "two"],
+                SlotKeyRoute(SlotType.PRIMARY, "1"),
+            )
+            == "one"
+        )
+        assert (
+            await redis_client.custom_command(
+                ["FCALL_RO", func_name, "0", "one", "two"],
+                SlotKeyRoute(SlotType.PRIMARY, "1"),
+            )
+            == "one"
+        )
+
+        # TODO: add FUNCTION LIST once implemented
+
+        # re-load library without replace
+        with pytest.raises(RequestError) as e:
+            await redis_client.function_load(code, False, route)
+        assert "Library '" + lib_name + "' already exists" in str(e)
+
+        # re-load library with replace
+        assert await redis_client.function_load(code, True, route) == lib_name
+
+        func2_name = f"myfunc2c{get_random_string(5)}"
+        new_code = generate_lua_lib_code(
+            lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
+        )
+
+        assert await redis_client.function_load(new_code, True, route) == lib_name
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
