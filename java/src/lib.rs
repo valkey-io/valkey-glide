@@ -153,11 +153,9 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedB
     let mut bytes_vec = Vec::with_capacity(num_elements as usize);
 
     for index in 0..num_elements {
-        unsafe {
-            let value = env.get_object_array_element(&args, index as jsize).unwrap();
-            let bytes = Bytes::from(env.convert_byte_array(JByteArray::from(value)).unwrap());
-            bytes_vec.push(bytes)
-        };
+        let value = env.get_object_array_element(&args, index as jsize).unwrap();
+        let bytes = Bytes::from(env.convert_byte_array(JByteArray::from(value)).unwrap());
+        bytes_vec.push(bytes)
     };
     Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as jlong
 }
@@ -166,7 +164,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedB
 pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_getMaxRequestArgsLength<
     'local,
 >(
-    mut env: JNIEnv<'local>,
+    mut _env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jlong {
     MAX_REQUEST_ARGS_LENGTH as jlong
