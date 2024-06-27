@@ -413,6 +413,28 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void echo_binary_returns_success() {
+        // setup
+        GlideString message = gs("GLIDE FOR REDIS");
+        GlideString[] arguments = new GlideString[] {message};
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(message);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(Echo), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.echo(message);
+        GlideString echo = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(message, echo);
+    }
+
+    @SneakyThrows
+    @Test
     public void ping_returns_success() {
         // setup
         CompletableFuture<String> testResponse = new CompletableFuture<>();
