@@ -731,7 +731,7 @@ public class CommandTests {
                 Arguments.of(
                         "sunionstore", null, clusterClient.sunionstore("abc", new String[] {"zxy", "lkn"})),
                 Arguments.of(
-                        "sunionstore",
+                        "sunionstore binary",
                         null,
                         clusterClient.sunionstore(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of("zdiff", null, clusterClient.zdiff(new String[] {"abc", "zxy", "lkn"})),
