@@ -5565,7 +5565,7 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xgroup_set_id(
-        self, redis_client: TRedisClient, cluster_mode, protocol, request
+        self, redis_client: TGlideClient, cluster_mode, protocol, request
     ):
         key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
@@ -5616,10 +5616,11 @@ class TestCommands:
                 == OK
             )
 
-            # XGROUP SETID accepts "0" for the entries read ID, but does not accept "0-0"
+            # the entries_read_id cannot be the first, last, or zero ID. Here we pass the first ID and assert that an
+            # error is raised.
             with pytest.raises(RequestError):
                 await redis_client.xgroup_set_id(
-                    key, group_name, stream_id1_1, entries_read_id="0-0"
+                    key, group_name, stream_id1_1, entries_read_id=stream_id1_0
                 )
 
         # xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
