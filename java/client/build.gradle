@@ -188,9 +188,6 @@ publishing {
                 description = 'General Language Independent Driver for the Enterprise (GLIDE) for Valkey'
                 url = 'https://github.com/aws/glide-for-redis.git'
                 inceptionYear = '2024'
-                properties = [
-	            classifier: "placeholder"
-                ]
                 scm {
                     url = 'https://github.com/aws/glide-for-redis/tree/main'
                     connection = 'scm:git:ssh://git@github.com/aws/glide-for-redis.git'
