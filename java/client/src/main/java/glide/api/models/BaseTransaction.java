@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
 import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
@@ -10,7 +10,10 @@ import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
+import static glide.api.commands.StringBaseCommands.IDX_COMMAND_STRING;
 import static glide.api.commands.StringBaseCommands.LEN_REDIS_API;
+import static glide.api.commands.StringBaseCommands.MINMATCHLEN_COMMAND_STRING;
+import static glide.api.commands.StringBaseCommands.WITHMATCHLEN_COMMAND_STRING;
 import static glide.api.models.commands.RangeOptions.createZRangeArgs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
@@ -160,6 +163,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
+import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
 import static redis_request.RedisRequestOuterClass.RequestType.XRead;
 import static redis_request.RedisRequestOuterClass.RequestType.XReadGroup;
@@ -239,7 +243,10 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
+import glide.api.models.commands.stream.StreamRange.IdBound;
+import glide.api.models.commands.stream.StreamRange.InfRangeBound;
 import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
@@ -2879,18 +2886,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
@@ -2908,18 +2915,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
@@ -2942,18 +2949,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @return Command Response - A <code>Map</code> of key to stream entry data, where entry data is an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
@@ -2973,18 +2980,18 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param key The key of the stream.
      * @param start Starting stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MIN} to start with the minimum available ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
      *     </ul>
      *
      * @param end Ending stream ID bound for range.
      *     <ul>
-     *       <li>Use {@link StreamRange.IdBound#of} to specify a stream ID.
-     *       <li>Use {@link StreamRange.IdBound#ofExclusive} to specify an exclusive bounded stream
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream
      *           ID.
-     *       <li>Use {@link StreamRange.InfRangeBound#MAX} to end with the maximum available ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
      *     </ul>
      *
      * @param count Maximum count of stream entries to return.
@@ -3044,7 +3051,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param groupname The newly created consumer group name.
+     * @param groupname The consumer group name to delete.
      * @return Command Response - <code>true</code> if the consumer group is destroyed. Otherwise,
      *     <code>false</code>.
      */
@@ -3077,7 +3084,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer to delete.
      * @return Command Response - The number of pending messages the <code>consumer</code> had before
      *     it was deleted.
      */
@@ -3098,12 +3105,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
      *     </code> to receive only new messages.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer name.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
-     *     with a value of code>null</code> if the stream is empty.
+     *     Returns <code>null</code> if there is no stream that can be served.
      */
     public T xreadgroup(
             @NonNull Map<String, String> keysAndIds, @NonNull String group, @NonNull String consumer) {
@@ -3121,13 +3127,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     will be read. Use the special id of <code>{@literal Map<String, Map<String, String[][]>>}
      *     </code> to receive only new messages.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
      *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code>
-     *     with a value of code>null</code> if the stream is empty.
+     *     Returns <code>null</code> if the {@link StreamReadGroupOptions#block} option is given and a timeout occurs, or if there is no stream that can be served.
      */
     public T xreadgroup(
             @NonNull Map<String, String> keysAndIds,
@@ -3144,6 +3149,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * of a stream. This command should be called on a pending message so that such message does not
      * get processed again.
      *
+     * @see <a href="https://valkey.io/commands/xack/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
      * @param ids Stream entry ID to acknowledge and purge messages.
@@ -3152,6 +3158,121 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T xack(@NonNull String key, @NonNull String group, @NonNull String[] ids) {
         String[] args = concatenateArrays(new String[] {key, group}, ids);
         protobufTransaction.addCommands(buildCommand(XAck, buildArgs(args)));
+        return getThis();
+    }
+
+    /**
+     * Returns stream message summary information for pending messages matching a given range of IDs.
+     *
+     * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @return Command Response - A 2D-<code>array</code> that includes the summary of pending
+     *     messages, with the format <code>
+     *     [NumOfMessages, StartId, EndId, [[Consumer, NumOfMessages], ...]</code>, where:
+     *     <ul>
+     *       <li><code>NumOfMessages</code>: The total number of pending messages for this consumer
+     *           group.
+     *       <li><code>StartId</code>: The smallest ID among the pending messages.
+     *       <li><code>EndId</code>: The greatest ID among the pending messages.
+     *       <li><code>[[Consumer, NumOfMessages], ...]</code>: A 2D-<code>array</code> of every
+     *           consumer in the consumer group with at least one pending message, and the number of
+     *           pending messages it has.
+     *     </ul>
+     */
+    public T xpending(@NonNull String key, @NonNull String group) {
+        String[] args = {key, group};
+        protobufTransaction.addCommands(buildCommand(XPending, buildArgs(args)));
+        return getThis();
+    }
+
+    /**
+     * Returns an extended form of stream message information for pending messages matching a given
+     * range of IDs.
+     *
+     * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param count Limits the number of messages returned.
+     * @return Command Response - A 2D-<code>array</code> of 4-tuples containing extended message
+     *     information with the format <code>[[ID, Consumer, TimeElapsed, NumOfDelivered], ... ]
+     *     </code>, where:
+     *     <ul>
+     *       <li><code>ID</code>: The ID of the message.
+     *       <li><code>Consumer</code>: The name of the consumer that fetched the message and has
+     *           still to acknowledge it. We call it the current owner of the message.
+     *       <li><code>TimeElapsed</code>: The number of milliseconds that elapsed since the last time
+     *           this message was delivered to this consumer.
+     *       <li><code>NumOfDelivered</code>: The number of times this message was delivered.
+     *     </ul>
+     */
+    public T xpending(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull StreamRange start,
+            @NonNull StreamRange end,
+            long count) {
+        return xpending(key, group, start, end, count, StreamPendingOptions.builder().build());
+    }
+
+    /**
+     * Returns an extended form of stream message information for pending messages matching a given
+     * range of IDs.
+     *
+     * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     *
+     * @param count Limits the number of messages returned.
+     * @param options Stream add options {@link StreamPendingOptions}.
+     * @return Command Response - A 2D-<code>array</code> of 4-tuples containing extended message
+     *     information with the format <code>[[ID, Consumer, TimeElapsed, NumOfDelivered], ... ]
+     *     </code>, where:
+     *     <ul>
+     *       <li><code>ID</code>: The ID of the message.
+     *       <li><code>Consumer</code>: The name of the consumer that fetched the message and has
+     *           still to acknowledge it. We call it the current owner of the message.
+     *       <li><code>TimeElapsed</code>: The number of milliseconds that elapsed since the last time
+     *           this message was delivered to this consumer.
+     *       <li><code>NumOfDelivered</code>: The number of times this message was delivered.
+     *     </ul>
+     */
+    public T xpending(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull StreamRange start,
+            @NonNull StreamRange end,
+            long count,
+            @NonNull StreamPendingOptions options) {
+        String[] args = concatenateArrays(new String[] {key, group}, options.toArgs(start, end, count));
+        protobufTransaction.addCommands(buildCommand(XPending, buildArgs(args)));
         return getThis();
     }
 
@@ -4803,6 +4924,205 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T sortStore(@NonNull String key, @NonNull String destination) {
         ArgsArray commandArgs = buildArgs(new String[] {key, STORE_COMMAND_STRING, destination});
         protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return Command Response - A <code>Map</code> containing the indices of the longest common
+     *     subsequence between the 2 strings and the length of the longest common subsequence. The
+     *     resulting map contains two keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the string <code>"abcd123"</code> and <code>key2</code>
+     *     holds the string <code>"bcdef123"</code> then the sample result would be
+     *     <pre>{@code
+     * new Long[][][] {
+     *      {
+     *          {4L, 6L},
+     *          {5L, 7L}
+     *      },
+     *      {
+     *          {1L, 3L},
+     *          {0L, 2L}
+     *      }
+     *  }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>"123"</code> in <code>key1
+     *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
+     *     "bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which matches
+     *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
+     */
+    public T lcsIdx(@NonNull String key1, @NonNull String key2) {
+        ArgsArray args = buildArgs(key1, key2, IDX_COMMAND_STRING);
+        protobufTransaction.addCommands(buildCommand(LCS, args));
+        return getThis();
+    }
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @param minMatchLen The minimum length of matches to include in the result.
+     * @return Command Response - A <code>Map</code> containing the indices of the longest common
+     *     subsequence between the 2 strings and the length of the longest common subsequence. The
+     *     resulting map contains two keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the string <code>"abcd123"</code> and <code>key2</code>
+     *     holds the string <code>"bcdef123"</code> then the sample result would be
+     *     <pre>{@code
+     * new Long[][][] {
+     *      {
+     *          {4L, 6L},
+     *          {5L, 7L}
+     *      },
+     *      {
+     *          {1L, 3L},
+     *          {0L, 2L}
+     *      }
+     *  }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>"123"</code> in <code>key1
+     *     </code> at index <code>4</code> to <code>6</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>7</code>. And the second substring match is <code>
+     *     "bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which matches
+     *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
+     */
+    public T lcsIdx(@NonNull String key1, @NonNull String key2, long minMatchLen) {
+        ArgsArray args =
+                buildArgs(
+                        key1,
+                        key2,
+                        IDX_COMMAND_STRING,
+                        MINMATCHLEN_COMMAND_STRING,
+                        String.valueOf(minMatchLen));
+        protobufTransaction.addCommands(buildCommand(LCS, args));
+        return getThis();
+    }
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @return Command Response - A <code>Map</code> containing the indices of the longest common
+     *     subsequence between the 2 strings and the length of the longest common subsequence. The
+     *     resulting map contains two keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>. For example,
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the string <code>"abcd1234"</code> and <code>key2</code>
+     *     holds the string <code>"bcdef1234"</code> then the sample result would be
+     *     <pre>{@code
+     * new Object[] {
+     *      new Object[] {
+     *          new Long[] {4L, 7L},
+     *          new Long[] {5L, 8L},
+     *          4L},
+     *      new Object[] {
+     *          new Long[] {1L, 3L},
+     *          new Long[] {0L, 2L},
+     *          3L}
+     *      }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>"1234"</code> in <code>key1
+     *     </code> at index <code>4</code> to <code>7</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>8</code> and the last element in the array is the
+     *     length of the substring match which is <code>4</code>. And the second substring match is
+     *     <code>"bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code> and
+     *     the last element in the array is the length of the substring match which is <code>3</code>.
+     */
+    public T lcsIdxWithMatchLen(@NonNull String key1, @NonNull String key2) {
+        ArgsArray args = buildArgs(key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING);
+        protobufTransaction.addCommands(buildCommand(LCS, args));
+        return getThis();
+    }
+
+    /**
+     * Returns the indices and length of the longest common subsequence between strings stored at
+     * <code>key1</code> and <code>key2</code>.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/lcs/">valkey.io</a> for details.
+     * @param key1 The key that stores the first string.
+     * @param key2 The key that stores the second string.
+     * @param minMatchLen The minimum length of matches to include in the result.
+     * @return Command Response - A <code>Map</code> containing the indices of the longest common
+     *     subsequence between the 2 strings and the length of the longest common subsequence. The
+     *     resulting map contains two keys, "matches" and "len":
+     *     <ul>
+     *       <li>"len" is mapped to the length of the longest common subsequence between the 2 strings
+     *           stored as <code>Long</code>.
+     *       <li>"matches" is mapped to a three dimensional <code>Long</code> array that stores pairs
+     *           of indices that represent the location of the common subsequences in the strings held
+     *           by <code>key1</code> and <code>key2</code>.
+     *     </ul>
+     *
+     * @example If <code>key1</code> holds the string <code>"abcd1234"</code> and <code>key2</code>
+     *     holds the string <code>"bcdef1234"</code> then the sample result would be
+     *     <pre>{@code
+     * new Object[] {
+     *      new Object[] {
+     *          new Long[] {4L, 7L},
+     *          new Long[] {5L, 8L},
+     *          4L},
+     *      new Object[] {
+     *          new Long[] {1L, 3L},
+     *          new Long[] {0L, 2L},
+     *          3L}
+     *      }
+     * }</pre>
+     *     The result indicates that the first substring match is <code>"1234"</code> in <code>key1
+     *     </code> at index <code>4</code> to <code>7</code> which matches the substring in <code>key2
+     *     </code> at index <code>5</code> to <code>8</code> and the last element in the array is the
+     *     length of the substring match which is <code>4</code>. And the second substring match is
+     *     <code>"bcd"</code> in <code>key1</code> at index <code>1</code> to <code>3</code> which
+     *     matches the substring in <code>key2</code> at index <code>0</code> to <code>2</code> and
+     *     the last element in the array is the length of the substring match which is <code>3</code>.
+     */
+    public T lcsIdxWithMatchLen(@NonNull String key1, @NonNull String key2, long minMatchLen) {
+        ArgsArray args =
+                buildArgs(
+                        key1,
+                        key2,
+                        IDX_COMMAND_STRING,
+                        MINMATCHLEN_COMMAND_STRING,
+                        String.valueOf(minMatchLen),
+                        WITHMATCHLEN_COMMAND_STRING);
+        protobufTransaction.addCommands(buildCommand(LCS, args));
         return getThis();
     }
 

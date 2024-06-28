@@ -1,7 +1,8 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
@@ -10,6 +11,7 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -21,6 +23,9 @@ import static glide.api.models.commands.InfoOptions.Section.STATS;
 import static glide.api.models.commands.SortBaseOptions.Limit;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
+import static glide.api.models.commands.function.FunctionRestorePolicy.APPEND;
+import static glide.api.models.commands.function.FunctionRestorePolicy.FLUSH;
+import static glide.api.models.commands.function.FunctionRestorePolicy.REPLACE;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertAll;
@@ -34,6 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
+import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.exceptions.RequestException;
@@ -195,6 +201,36 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void move_binary() {
+        GlideString key1 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString key2 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString value1 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString value2 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString nonExistingKey = GlideString.gs(UUID.randomUUID().toString());
+        assertEquals(OK, regularClient.select(0).get());
+
+        assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
+        assertEquals(OK, regularClient.set(key1, value1).get());
+        assertEquals(OK, regularClient.set(key2, value2).get());
+        assertEquals(true, regularClient.move(key1, 1L).get());
+        assertNull(regularClient.get(key1).get());
+
+        assertEquals(OK, regularClient.select(1).get());
+        assertEquals(value1, regularClient.get(key1).get());
+
+        assertEquals(OK, regularClient.set(key2, value2).get());
+        // Move does not occur because key2 already exists in DB 0
+        assertEquals(false, regularClient.move(key2, 0).get());
+        assertEquals(value2, regularClient.get(key2).get());
+
+        // Incorrect argument - DB index must be non-negative
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> regularClient.move(key1, -1L).get());
+        assertTrue(e.getCause() instanceof RequestException);
+    }
+
+    @Test
+    @SneakyThrows
     public void clientId() {
         var id = regularClient.clientId().get();
         assertTrue(id > 0);
@@ -300,6 +336,17 @@ public class CommandTests {
         String message = "GLIDE";
         String response = regularClient.echo(message).get();
         assertEquals(message, response);
+        message = "";
+        response = regularClient.echo(message).get();
+        assertEquals(message, response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void echo_gs() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString response = regularClient.echo(gs(message)).get();
+        assertEquals(gs(message), response);
     }
 
     @Test
@@ -600,6 +647,7 @@ public class CommandTests {
 
                 // redis kills a function with 5 sec delay
                 assertEquals(OK, regularClient.functionKill().get());
+                Thread.sleep(404); // sometimes kill doesn't happen immediately
 
                 exception =
                         assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
@@ -725,6 +773,73 @@ public class CommandTests {
 
         response = regularClient.functionStats().get();
         checkFunctionStatsResponse(response, new String[0], 0, 0);
+    }
+
+    @Test
+    @SneakyThrows
+    public void function_dump_and_restore() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        // dumping an empty lib
+        byte[] emptyDump = regularClient.functionDump().get();
+        assertTrue(emptyDump.length > 0);
+
+        String name1 = "Foster";
+        String name2 = "Dogster";
+
+        // function $name1 returns first argument
+        // function $name2 returns argument array len
+        String code =
+                generateLuaLibCode(name1, Map.of(name1, "return args[1]", name2, "return #args"), false);
+        assertEquals(name1, regularClient.functionLoad(code, true).get());
+        var flist = regularClient.functionList(true).get();
+
+        final byte[] dump = regularClient.functionDump().get();
+
+        // restore without cleaning the lib and/or overwrite option causes an error
+        var executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.functionRestore(dump).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library " + name1 + " already exists"));
+
+        // APPEND policy also fails for the same reason (name collision)
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionRestore(dump, APPEND).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library " + name1 + " already exists"));
+
+        // REPLACE policy succeeds
+        assertEquals(OK, regularClient.functionRestore(dump, REPLACE).get());
+        // but nothing changed - all code overwritten
+        assertDeepEquals(flist, regularClient.functionList(true).get());
+
+        // create lib with another name, but with the same function names
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+        code = generateLuaLibCode(name2, Map.of(name1, "return args[1]", name2, "return #args"), false);
+        assertEquals(name2, regularClient.functionLoad(code, true).get());
+
+        // REPLACE policy now fails due to a name collision
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionRestore(dump, REPLACE).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        // redis checks names in random order and blames on first collision
+        assertTrue(
+                executionException.getMessage().contains("Function " + name1 + " already exists")
+                        || executionException.getMessage().contains("Function " + name2 + " already exists"));
+
+        // FLUSH policy succeeds, but deletes the second lib
+        assertEquals(OK, regularClient.functionRestore(dump, FLUSH).get());
+        assertDeepEquals(flist, regularClient.functionList(true).get());
+
+        // call restored functions
+        assertEquals(
+                "meow", regularClient.fcall(name1, new String[0], new String[] {"meow", "woem"}).get());
+        assertEquals(
+                2L, regularClient.fcall(name2, new String[0], new String[] {"meow", "woem"}).get());
     }
 
     @SneakyThrows

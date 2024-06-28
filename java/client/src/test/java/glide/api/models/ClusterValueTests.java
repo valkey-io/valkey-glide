@@ -1,6 +1,7 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.models.GlideString.gs;
 import static org.junit.jupiter.api.Assertions.assertAll;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -70,6 +71,24 @@ public class ClusterValueTests {
         assertAll(
                 () -> assertTrue(value.hasMultiData()),
                 () -> assertFalse(value.hasSingleData()),
-                () -> assertNotNull(value.getMultiValue()));
+                () -> assertNotNull(value.getMultiValue()),
+                () -> assertTrue(value.getMultiValue().containsKey("config1")),
+                () -> assertTrue(value.getMultiValue().containsKey("config2")));
+    }
+
+    @Test
+    public void multi_value_binary_ctor() {
+        var value =
+                ClusterValue.ofMultiValueBinary(
+                        Map.of(gs("config1"), gs("param1"), gs("config2"), gs("param2")));
+        assertAll(
+                () -> assertTrue(value.hasMultiData()),
+                () -> assertFalse(value.hasSingleData()),
+                () -> assertNotNull(value.getMultiValue()),
+                // ofMultiValueBinary converts the key to a String, but the values are not converted
+                () -> assertTrue(value.getMultiValue().containsKey("config1")),
+                () -> assertTrue(value.getMultiValue().get("config1").equals(gs("param1"))),
+                () -> assertTrue(value.getMultiValue().containsKey("config2")),
+                () -> assertTrue(value.getMultiValue().get("config2").equals(gs("param2"))));
     }
 }

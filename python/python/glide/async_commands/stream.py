@@ -1,8 +1,7 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from enum import Enum
 from typing import List, Optional, Union
 
 
@@ -232,3 +231,107 @@ class ExclusiveIdBound(StreamRangeBound):
 
     def to_arg(self) -> str:
         return self.stream_id
+
+
+class StreamReadOptions:
+    READ_COUNT_REDIS_API = "COUNT"
+    READ_BLOCK_REDIS_API = "BLOCK"
+
+    def __init__(self, block_ms: Optional[int] = None, count: Optional[int] = None):
+        """
+        Options for reading entries from streams. Can be used as an optional argument to `XREAD`.
+
+        Args:
+            block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
+                until the server has the required number of entries. Equivalent to `BLOCK` in the Redis API.
+            count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Redis API.
+        """
+        self.block_ms = block_ms
+        self.count = count
+
+    def to_args(self) -> List[str]:
+        """
+        Returns the options as a list of string arguments to be used in the `XREAD` command.
+
+        Returns:
+            List[str]: The options as a list of arguments for the `XREAD` command.
+        """
+        args = []
+        if self.block_ms is not None:
+            args.extend([self.READ_BLOCK_REDIS_API, str(self.block_ms)])
+
+        if self.count is not None:
+            args.extend([self.READ_COUNT_REDIS_API, str(self.count)])
+
+        return args
+
+
+class StreamGroupOptions:
+    MAKE_STREAM_REDIS_API = "MKSTREAM"
+    ENTRIES_READ_REDIS_API = "ENTRIESREAD"
+
+    def __init__(
+        self, make_stream: bool = False, entries_read_id: Optional[str] = None
+    ):
+        """
+        Options for creating stream consumer groups. Can be used as an optional argument to `XGROUP CREATE`.
+
+        Args:
+            make_stream (bool): If set to True and the stream doesn't exist, this creates a new stream with a
+                length of 0.
+            entries_read_id: (Optional[str]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
+                used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last
+                entry. This option can only be specified if you are using Redis version 7.0.0 or above.
+        """
+        self.make_stream = make_stream
+        self.entries_read_id = entries_read_id
+
+    def to_args(self) -> List[str]:
+        """
+        Returns the options as a list of string arguments to be used in the `XGROUP CREATE` command.
+
+        Returns:
+            List[str]: The options as a list of arguments for the `XGROUP CREATE` command.
+        """
+        args = []
+        if self.make_stream is True:
+            args.append(self.MAKE_STREAM_REDIS_API)
+
+        if self.entries_read_id is not None:
+            args.extend([self.ENTRIES_READ_REDIS_API, self.entries_read_id])
+
+        return args
+
+
+class StreamReadGroupOptions(StreamReadOptions):
+    READ_NOACK_REDIS_API = "NOACK"
+
+    def __init__(
+        self, no_ack=False, block_ms: Optional[int] = None, count: Optional[int] = None
+    ):
+        """
+        Options for reading entries from streams using a consumer group. Can be used as an optional argument to
+        `XREADGROUP`.
+
+        Args:
+            no_ack (bool): If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
+                acknowledging the message when it is read. Equivalent to `NOACK` in the Redis API.
+            block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
+                until the server has the required number of entries. Equivalent to `BLOCK` in the Redis API.
+            count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Redis API.
+        """
+        super().__init__(block_ms=block_ms, count=count)
+        self.no_ack = no_ack
+
+    def to_args(self) -> List[str]:
+        """
+        Returns the options as a list of string arguments to be used in the `XREADGROUP` command.
+
+        Returns:
+            List[str]: The options as a list of arguments for the `XREADGROUP` command.
+        """
+        args = super().to_args()
+        if self.no_ack:
+            args.append(self.READ_NOACK_REDIS_API)
+
+        return args

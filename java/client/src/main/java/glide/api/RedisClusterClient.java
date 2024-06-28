@@ -1,7 +1,8 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
@@ -24,10 +25,12 @@ import static redis_request.RedisRequestOuterClass.RequestType.FCallReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushAll;
 import static redis_request.RedisRequestOuterClass.RequestType.FlushDB;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionDelete;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionDump;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionFlush;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionKill;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionList;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionLoad;
+import static redis_request.RedisRequestOuterClass.RequestType.FunctionRestore;
 import static redis_request.RedisRequestOuterClass.RequestType.FunctionStats;
 import static redis_request.RedisRequestOuterClass.RequestType.Info;
 import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
@@ -46,9 +49,11 @@ import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -281,6 +286,12 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> echo(@NonNull GlideString message) {
+        return commandManager.submitNewCommand(
+                Echo, new GlideString[] {message}, this::handleGlideStringResponse);
+    }
+
+    @Override
     public CompletableFuture<ClusterValue<String>> echo(
             @NonNull String message, @NonNull Route route) {
         return commandManager.submitNewCommand(
@@ -291,6 +302,19 @@ public class RedisClusterClient extends BaseClient
                         route instanceof SingleNodeRoute
                                 ? ClusterValue.ofSingleValue(handleStringResponse(response))
                                 : ClusterValue.ofMultiValue(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<GlideString>> echo(
+            @NonNull GlideString message, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                Echo,
+                new GlideString[] {message},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleGlideStringResponse(response))
+                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
     }
 
     @Override
@@ -578,6 +602,55 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<String> functionDelete(@NonNull String libName, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionDelete, new String[] {libName}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<byte[]> functionDump() {
+        return commandManager.submitNewCommand(
+                FunctionDump, new GlideString[] {}, this::handleBytesOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<ClusterValue<byte[]>> functionDump(@NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionDump,
+                new GlideString[] {},
+                route,
+                response ->
+                        route instanceof SingleNodeRoute
+                                ? ClusterValue.ofSingleValue(handleBytesOrNullResponse(response))
+                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(byte @NonNull [] payload) {
+        return commandManager.submitNewCommand(
+                FunctionRestore, new GlideString[] {gs(payload)}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(
+            byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy) {
+        return commandManager.submitNewCommand(
+                FunctionRestore,
+                new GlideString[] {gs(payload), gs(policy.toString())},
+                this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(byte @NonNull [] payload, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionRestore, new GlideString[] {gs(payload)}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionRestore(
+            byte @NonNull [] payload, @NonNull FunctionRestorePolicy policy, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionRestore,
+                new GlideString[] {gs(payload), gs(policy.toString())},
+                route,
+                this::handleStringResponse);
     }
 
     @Override

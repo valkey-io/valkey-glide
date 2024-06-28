@@ -1,8 +1,9 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * Represents a returned value object from a Redis server with cluster-mode enabled. The response
@@ -65,6 +66,17 @@ public class ClusterValue<T> {
     public static <T> ClusterValue<T> ofMultiValue(Map<String, T> data) {
         var res = new ClusterValue<T>();
         res.multiValue = data;
+        return res;
+    }
+
+    /** A constructor for the value. */
+    public static <T> ClusterValue<T> ofMultiValueBinary(Map<GlideString, T> data) {
+        var res = new ClusterValue<T>();
+        // the map node address can be converted to a string
+        Map<String, T> multiValue =
+                data.entrySet().stream()
+                        .collect(Collectors.toMap(e -> e.getKey().getString(), Map.Entry::getValue));
+        res.multiValue = multiValue;
         return res;
     }
 
