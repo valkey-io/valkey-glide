@@ -39,6 +39,8 @@ from glide.async_commands.sorted_set import (
 )
 from glide.async_commands.stream import (
     IdBound,
+    MaxId,
+    MinId,
     StreamAddOptions,
     StreamGroupOptions,
     StreamReadGroupOptions,
@@ -517,8 +519,12 @@ async def transaction_test(
         {key11: ">"}, group_name1, consumer, StreamReadGroupOptions(count=5)
     )
     args.append({key11: {"0-2": [["foo", "bar"]]}})
+    transaction.xpending(key11, group_name1)
+    args.append([1, "0-2", "0-2", [[consumer, "1"]]])
     transaction.xack(key11, group_name1, ["0-2"])
     args.append(1)
+    transaction.xpending_range(key11, group_name1, MinId(), MaxId(), 1)
+    args.append([])
     transaction.xgroup_set_id(key11, group_name1, "0-2")
     args.append(OK)
     transaction.xgroup_del_consumer(key11, group_name1, consumer)

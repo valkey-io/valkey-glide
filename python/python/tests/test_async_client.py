@@ -62,6 +62,7 @@ from glide.async_commands.stream import (
     MinId,
     StreamAddOptions,
     StreamGroupOptions,
+    StreamPendingOptions,
     StreamReadGroupOptions,
     StreamReadOptions,
     TrimByMaxLen,
@@ -5562,6 +5563,340 @@ class TestCommands:
         assert await redis_client.set(string_key, "foo") == OK
         with pytest.raises(RequestError):
             await redis_client.xack(string_key, group_name, [stream_id1_0])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xpending(self, redis_client: TGlideClient):
+        key = get_random_string(10)
+        group_name = get_random_string(10)
+        consumer1 = get_random_string(10)
+        consumer2 = get_random_string(10)
+        stream_id0 = "0"
+        stream_id1_0 = "1-0"
+        stream_id1_1 = "1-1"
+        stream_id1_2 = "1-2"
+        stream_id1_3 = "1-3"
+        stream_id1_4 = "1-4"
+
+        # create group and consumer for group
+        assert (
+            await redis_client.xgroup_create(
+                key, group_name, stream_id0, StreamGroupOptions(make_stream=True)
+            )
+            == OK
+        )
+        assert (
+            await redis_client.xgroup_create_consumer(key, group_name, consumer1)
+            is True
+        )
+        assert (
+            await redis_client.xgroup_create_consumer(key, group_name, consumer2)
+            is True
+        )
+
+        # add two stream entries for consumer1
+        assert (
+            await redis_client.xadd(
+                key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
+            )
+            == stream_id1_0
+        )
+        assert (
+            await redis_client.xadd(
+                key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
+            )
+            == stream_id1_1
+        )
+
+        # read the entire stream with consumer1 and mark messages as pending
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer1) == {
+            key: {
+                stream_id1_0: [["f1_0", "v1_0"]],
+                stream_id1_1: [["f1_1", "v1_1"]],
+            }
+        }
+
+        # add three stream entries for consumer2
+        assert (
+            await redis_client.xadd(
+                key, [("f1_2", "v1_2")], StreamAddOptions(stream_id1_2)
+            )
+            == stream_id1_2
+        )
+        assert (
+            await redis_client.xadd(
+                key, [("f1_3", "v1_3")], StreamAddOptions(stream_id1_3)
+            )
+            == stream_id1_3
+        )
+        assert (
+            await redis_client.xadd(
+                key, [("f1_4", "v1_4")], StreamAddOptions(stream_id1_4)
+            )
+            == stream_id1_4
+        )
+
+        # read the entire stream with consumer2 and mark messages as pending
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer2) == {
+            key: {
+                stream_id1_2: [["f1_2", "v1_2"]],
+                stream_id1_3: [["f1_3", "v1_3"]],
+                stream_id1_4: [["f1_4", "v1_4"]],
+            }
+        }
+
+        # inner array order is non-deterministic, so we have to assert against it separately from the other info
+        result = await redis_client.xpending(key, group_name)
+        consumer_results = cast(List, result[3])
+        assert [consumer1, "2"] in consumer_results
+        assert [consumer2, "3"] in consumer_results
+
+        result.remove(consumer_results)
+        assert result == [5, stream_id1_0, stream_id1_4]
+
+        range_result = await redis_client.xpending_range(
+            key, group_name, MinId(), MaxId(), 10
+        )
+        # the inner lists of the result have format [stream_entry_id, consumer, idle_time, times_delivered]
+        # because the idle time return value is not deterministic, we have to assert against it separately
+        idle_time = cast(int, range_result[0][2])
+        assert idle_time > 0
+        range_result[0].remove(idle_time)
+        assert range_result[0] == [stream_id1_0, consumer1, 1]
+
+        idle_time = cast(int, range_result[1][2])
+        assert idle_time > 0
+        range_result[1].remove(idle_time)
+        assert range_result[1] == [stream_id1_1, consumer1, 1]
+
+        idle_time = cast(int, range_result[2][2])
+        assert idle_time > 0
+        range_result[2].remove(idle_time)
+        assert range_result[2] == [stream_id1_2, consumer2, 1]
+
+        idle_time = cast(int, range_result[3][2])
+        assert idle_time > 0
+        range_result[3].remove(idle_time)
+        assert range_result[3] == [stream_id1_3, consumer2, 1]
+
+        idle_time = cast(int, range_result[4][2])
+        assert idle_time > 0
+        range_result[4].remove(idle_time)
+        assert range_result[4] == [stream_id1_4, consumer2, 1]
+
+        # acknowledge streams 1-1 to 1-3 and remove them from the xpending results
+        assert (
+            await redis_client.xack(
+                key, group_name, [stream_id1_1, stream_id1_2, stream_id1_3]
+            )
+            == 3
+        )
+
+        range_result = await redis_client.xpending_range(
+            key, group_name, IdBound(stream_id1_4), MaxId(), 10
+        )
+        assert len(range_result) == 1
+        assert range_result[0][0] == stream_id1_4
+        assert range_result[0][1] == consumer2
+
+        range_result = await redis_client.xpending_range(
+            key, group_name, MinId(), IdBound(stream_id1_3), 10
+        )
+        assert len(range_result) == 1
+        assert range_result[0][0] == stream_id1_0
+        assert range_result[0][1] == consumer1
+
+        # passing an empty StreamPendingOptions object should have no effect
+        range_result = await redis_client.xpending_range(
+            key, group_name, MinId(), IdBound(stream_id1_3), 10, StreamPendingOptions()
+        )
+        assert len(range_result) == 1
+        assert range_result[0][0] == stream_id1_0
+        assert range_result[0][1] == consumer1
+
+        range_result = await redis_client.xpending_range(
+            key,
+            group_name,
+            MinId(),
+            MaxId(),
+            10,
+            StreamPendingOptions(min_idle_time_ms=1, consumer_name=consumer2),
+        )
+        assert len(range_result) == 1
+        assert range_result[0][0] == stream_id1_4
+        assert range_result[0][1] == consumer2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xpending_edge_cases_and_failures(self, redis_client: TGlideClient):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        string_key = get_random_string(10)
+        group_name = get_random_string(10)
+        consumer = get_random_string(10)
+        stream_id0 = "0"
+        stream_id1_0 = "1-0"
+        stream_id1_1 = "1-1"
+
+        # create group and consumer for the group
+        assert (
+            await redis_client.xgroup_create(
+                key, group_name, stream_id0, StreamGroupOptions(make_stream=True)
+            )
+            == OK
+        )
+        assert (
+            await redis_client.xgroup_create_consumer(key, group_name, consumer) is True
+        )
+
+        # add two stream entries for consumer
+        assert (
+            await redis_client.xadd(
+                key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
+            )
+            == stream_id1_0
+        )
+        assert (
+            await redis_client.xadd(
+                key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
+            )
+            == stream_id1_1
+        )
+
+        # no pending messages yet...
+        assert await redis_client.xpending(key, group_name) == [0, None, None, None]
+        assert (
+            await redis_client.xpending_range(key, group_name, MinId(), MaxId(), 10)
+            == []
+        )
+
+        # read the entire stream with consumer and mark messages as pending
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
+            key: {
+                stream_id1_0: [["f1_0", "v1_0"]],
+                stream_id1_1: [["f1_1", "v1_1"]],
+            }
+        }
+
+        # sanity check - expect some results
+        assert await redis_client.xpending(key, group_name) == [
+            2,
+            stream_id1_0,
+            stream_id1_1,
+            [[consumer, "2"]],
+        ]
+        result = await redis_client.xpending_range(
+            key, group_name, MinId(), MaxId(), 10
+        )
+        assert len(result[0]) > 0
+
+        # returns empty if + before -
+        assert (
+            await redis_client.xpending_range(key, group_name, MaxId(), MinId(), 10)
+            == []
+        )
+        assert (
+            await redis_client.xpending_range(
+                key,
+                group_name,
+                MaxId(),
+                MinId(),
+                10,
+                StreamPendingOptions(consumer_name=consumer),
+            )
+            == []
+        )
+
+        # min idle time of 100 seconds shouldn't produce any results
+        assert (
+            await redis_client.xpending_range(
+                key,
+                group_name,
+                MinId(),
+                MaxId(),
+                10,
+                StreamPendingOptions(min_idle_time_ms=100_000),
+            )
+            == []
+        )
+
+        # non-existing consumer: no results
+        assert (
+            await redis_client.xpending_range(
+                key,
+                group_name,
+                MinId(),
+                MaxId(),
+                10,
+                StreamPendingOptions(consumer_name="non_existing_consumer"),
+            )
+            == []
+        )
+
+        # xpending when range bound is not a valid ID raises a RequestError
+        with pytest.raises(RequestError):
+            await redis_client.xpending_range(
+                key, group_name, IdBound("invalid_stream_id_format"), MaxId(), 10
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xpending_range(
+                key, group_name, MinId(), IdBound("invalid_stream_id_format"), 10
+            )
+
+        # non-positive count returns no results
+        assert (
+            await redis_client.xpending_range(key, group_name, MinId(), MaxId(), -10)
+            == []
+        )
+        assert (
+            await redis_client.xpending_range(key, group_name, MinId(), MaxId(), 0)
+            == []
+        )
+
+        # non-positive min-idle-time values are allowed
+        result = await redis_client.xpending_range(
+            key,
+            group_name,
+            MinId(),
+            MaxId(),
+            10,
+            StreamPendingOptions(min_idle_time_ms=-100),
+        )
+        assert len(result[0]) > 0
+        result = await redis_client.xpending_range(
+            key,
+            group_name,
+            MinId(),
+            MaxId(),
+            10,
+            StreamPendingOptions(min_idle_time_ms=0),
+        )
+        assert len(result[0]) > 0
+
+        # non-existing group name raises a RequestError (NOGROUP)
+        with pytest.raises(RequestError):
+            await redis_client.xpending(key, "non_existing_group")
+        with pytest.raises(RequestError):
+            await redis_client.xpending_range(
+                key, "non_existing_group", MinId(), MaxId(), 10
+            )
+
+        # non-existing key raises a RequestError
+        with pytest.raises(RequestError):
+            await redis_client.xpending(non_existing_key, group_name)
+        with pytest.raises(RequestError):
+            await redis_client.xpending_range(
+                non_existing_key, group_name, MinId(), MaxId(), 10
+            )
+
+        # key exists but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xpending(string_key, group_name)
+        with pytest.raises(RequestError):
+            await redis_client.xpending_range(
+                string_key, group_name, MinId(), MaxId(), 10
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
