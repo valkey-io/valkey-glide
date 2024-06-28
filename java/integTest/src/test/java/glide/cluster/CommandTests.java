@@ -1742,9 +1742,8 @@ public class CommandTests {
         // no keys in database
         assertEquals(OK, clusterClient.flushall(SYNC).get());
 
-        // TODO: returns a ResponseError but expecting null
-        // uncomment when this is completed: https://github.com/amazon-contributing/redis-rs/pull/153
-        // assertNull(clusterClient.randomKey().get());
+        // no keys in database returns null
+        assertNull(clusterClient.randomKey().get());
     }
 
     @Test
