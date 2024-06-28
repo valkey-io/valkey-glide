@@ -132,6 +132,11 @@ public final class Logger {
         if (loggerLevel == null) {
             initLogger(Level.DEFAULT, null);
         }
+
+        if (level == Level.DISABLED) {
+            return;
+        }
+
         if (!(level.getLevel() <= loggerLevel.getLevel())) {
             return;
         }
