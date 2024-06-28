@@ -568,7 +568,6 @@ async def transaction_test(
     args.append(OK)
     transaction.flushdb()
     args.append(OK)
-
     transaction.set(key, "foo")
     args.append(OK)
     transaction.random_key()
