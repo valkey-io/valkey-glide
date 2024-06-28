@@ -135,8 +135,8 @@ class StreamAddOptions:
 
 class StreamRangeBound(ABC):
     """
-    Abstract Base Class used in the `XRANGE` and `XREVRANGE` commands to specify the starting and ending range bound for
-    the stream search by stream ID.
+    Abstract Base Class used in the `XPENDING`, `XRANGE`, and `XREVRANGE` commands to specify the starting and ending
+    range bound for the stream search by stream entry ID.
     """
 
     @abstractmethod
@@ -206,6 +206,8 @@ class ExclusiveIdBound(StreamRangeBound):
     Exclusive (open) stream ID boundary used to specify a range of IDs to search. Stream ID bounds can be complete with
     a timestamp and sequence number separated by a dash ("-"), for example "1526985054069-0". Stream ID bounds can also
     be incomplete, with just a timestamp.
+
+    Since: Redis version 6.2.0.
     """
 
     EXCLUSIVE_BOUND_REDIS_API = "("
@@ -335,3 +337,42 @@ class StreamReadGroupOptions(StreamReadOptions):
             args.append(self.READ_NOACK_REDIS_API)
 
         return args
+
+
+class StreamPendingOptions:
+    IDLE_TIME_REDIS_API = "IDLE"
+
+    def __init__(
+        self,
+        min_idle_time_ms: Optional[int] = None,
+        consumer_name: Optional[str] = None,
+    ):
+        """
+        Options for `XPENDING` that can be used to filter returned items by minimum idle time and consumer name.
+
+        Args:
+            min_idle_time_ms (Optional[int]): Filters pending entries by their minimum idle time in milliseconds. This
+                option can only be specified if you are using Redis version 6.2.0 or above.
+            consumer_name (Optional[str]): Filters pending entries by consumer name.
+        """
+        self.min_idle_time = min_idle_time_ms
+        self.consumer_name = consumer_name
+
+
+def _create_xpending_range_args(
+    key: str,
+    group_name: str,
+    start: StreamRangeBound,
+    end: StreamRangeBound,
+    count: int,
+    options: Optional[StreamPendingOptions],
+) -> List[str]:
+    args = [key, group_name]
+    if options is not None and options.min_idle_time is not None:
+        args.extend([options.IDLE_TIME_REDIS_API, str(options.min_idle_time)])
+
+    args.extend([start.to_arg(), end.to_arg(), str(count)])
+    if options is not None and options.consumer_name is not None:
+        args.append(options.consumer_name)
+
+    return args
