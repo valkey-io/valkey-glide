@@ -122,7 +122,24 @@ public class TransactionTests {
 
     @SneakyThrows
     @Test
-    public void test_transaction_large_values() {}
+    public void test_transaction_large_values() {
+        int length = 1 << 25; // 33mb
+        String key = "0".repeat(length);
+        String value = "0".repeat(length);
+
+        Transaction transaction = new Transaction();
+        transaction.set(key, value);
+        transaction.get(key);
+
+        Object[] expectedResult =
+                new Object[] {
+                    OK, // transaction.set(key, value);
+                    value, // transaction.get(key);
+                };
+
+        Object[] result = client.exec(transaction).get();
+        assertArrayEquals(expectedResult, result);
+    }
 
     @SneakyThrows
     @Test

@@ -16,7 +16,6 @@ import glide.api.models.commands.SortOptions;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 
 /**
  * Extends BaseTransaction class for Redis standalone commands. Transactions allow the execution of
@@ -53,9 +52,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @return Command Response - A simple <code>OK</code> response.
      */
     public Transaction select(long index) {
-        ArgsArray commandArgs = buildArgs(Long.toString(index));
-
-        protobufTransaction.addCommands(buildCommand(Select, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Select, Long.toString(index)));
         return this;
     }
 
@@ -71,8 +68,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      *     exist in the source database.
      */
     public Transaction move(String key, long dbIndex) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(dbIndex));
-        protobufTransaction.addCommands(buildCommand(Move, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Move, key, Long.toString(dbIndex)));
         return this;
     }
 
@@ -113,8 +109,7 @@ public class Transaction extends BaseTransaction<Transaction> {
         if (replace) {
             args = ArrayUtils.add(args, REPLACE_REDIS_API);
         }
-        ArgsArray commandArgs = buildArgs(args);
-        protobufTransaction.addCommands(buildCommand(Copy, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Copy, args));
         return this;
     }
 
@@ -129,8 +124,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public Transaction sort(@NonNull String key, @NonNull SortOptions sortOptions) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortOptions.toArgs(), key));
-        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(Sort, ArrayUtils.addFirst(sortOptions.toArgs(), key)));
         return this;
     }
 
@@ -145,8 +140,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public Transaction sortReadOnly(@NonNull String key, @NonNull SortOptions sortOptions) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(sortOptions.toArgs(), key));
-        protobufTransaction.addCommands(buildCommand(SortReadOnly, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(SortReadOnly, ArrayUtils.addFirst(sortOptions.toArgs(), key)));
         return this;
     }
 
@@ -166,9 +161,9 @@ public class Transaction extends BaseTransaction<Transaction> {
     public Transaction sortStore(
             @NonNull String key, @NonNull String destination, @NonNull SortOptions sortOptions) {
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
-        ArgsArray arguments =
-                buildArgs(concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments));
-        protobufTransaction.addCommands(buildCommand(Sort, arguments));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        Sort, concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments)));
         return this;
     }
 }
