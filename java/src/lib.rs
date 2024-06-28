@@ -149,15 +149,27 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedB
     _class: JClass<'local>,
     args: JObjectArray<'local>,
 ) -> jlong {
-    let num_elements = env.get_array_length(&args).unwrap();
-    let mut bytes_vec = Vec::with_capacity(num_elements as usize);
+    handle_panics(
+        move || {
+            fn create_leaked_bytes_vec<'a>(
+                env: &mut JNIEnv<'a>,
+                args: JObjectArray<'a>,
+            ) -> Result<jlong, FFIError> {
+                let num_elements = env.get_array_length(&args)?;
+                let mut bytes_vec = Vec::with_capacity(num_elements as usize);
 
-    for index in 0..num_elements {
-        let value = env.get_object_array_element(&args, index as jsize).unwrap();
-        let bytes = Bytes::from(env.convert_byte_array(JByteArray::from(value)).unwrap());
-        bytes_vec.push(bytes)
-    };
-    Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as jlong
+                for index in 0..num_elements {
+                    let value = env.get_object_array_element(&args, index as jsize)?;
+                    bytes_vec.push(Bytes::from(env.convert_byte_array(JByteArray::from(value))?))
+                };
+                Ok(Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as jlong)
+            }
+            let result = create_leaked_bytes_vec(&mut env, args);
+            handle_errors(&mut env, result)
+        },
+        "createLeakedBytesVec",
+    )
+    .unwrap_or(0)
 }
 
 #[no_mangle]
