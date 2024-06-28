@@ -7675,7 +7675,8 @@ public class SharedCommandTests {
                         "secondResultValues: {%s}, numberMembersSet: {%s}",
                         secondResultValues, numberMembersSet));
 
-        assertTrue(secondResultValues.containsAll(numberMembersSet));
+        assertTrue(secondResultValues.containsAll(numberMembersSet),
+            String.format("secondResultValues: {%s}, numberMembersSet: {%s}", secondResultValues, numberMembersSet));
 
         // Test match pattern
         result =
