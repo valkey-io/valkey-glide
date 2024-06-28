@@ -2174,6 +2174,8 @@ class BaseTransaction:
                 - `end_id`: The greatest ID among the pending messages.
                 - `[[consumer_name, num_consumer_messages]]`: A 2D list of every consumer in the consumer group with at
                 least one pending message, and the number of pending messages it has.
+
+                If there are no pending messages for the given consumer group, `[0, None, None, None]` will be returned.
         """
         return self.append_command(RequestType.XPending, [key, group_name])
 

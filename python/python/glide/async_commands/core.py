@@ -3068,6 +3068,8 @@ class CoreCommands(Protocol):
                 - `[[consumer_name, num_consumer_messages]]`: A 2D list of every consumer in the consumer group with at
                 least one pending message, and the number of pending messages it has.
 
+                If there are no pending messages for the given consumer group, `[0, None, None, None]` will be returned.
+
         Examples:
             >>> await client.xpending("my_stream", "my_group")
                 [4, "1-0", "1-3", [["my_consumer1", "3"], ["my_consumer2", "1"]]
