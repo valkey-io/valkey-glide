@@ -61,6 +61,7 @@
 * Python: Added XGROUP SETID command ([#1683](https://github.com/aws/glide-for-redis/pull/1683))
 * Python: Added FUNCTION LOAD command ([#1699](https://github.com/aws/glide-for-redis/pull/1699))
 * Python: Added XPENDING command ([#1704](https://github.com/aws/glide-for-redis/pull/1704))
+* Python: Added RANDOMKEY command ([#1701](https://github.com/aws/glide-for-redis/pull/1701))
 * Python: Added FUNCTION FLUSH command ([#1700](https://github.com/aws/glide-for-redis/pull/1700))
 
 ### Breaking Changes

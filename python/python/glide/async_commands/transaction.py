@@ -3880,6 +3880,17 @@ class BaseTransaction:
                 args.extend(str(var))
         return self.append_command(RequestType.Lolwut, args)
 
+    def random_key(self: TTransaction) -> TTransaction:
+        """
+        Returns a random existing key name.
+
+        See https://valkey.io/commands/randomkey for more details.
+
+        Command response:
+            Optional[str]: A random existing key name.
+        """
+        return self.append_command(RequestType.RandomKey, [])
+
 
 class Transaction(BaseTransaction):
     """

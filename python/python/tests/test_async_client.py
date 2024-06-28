@@ -7063,6 +7063,45 @@ class TestCommands:
             result = await redis_client.lolwut(2, [10, 20], RandomNode())
             assert "Redis ver. " in node_result
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_cluster_client_random_key(self, redis_client: GlideClusterClient):
+        key = get_random_string(10)
+
+        # setup: delete all keys
+        assert await redis_client.flushall(FlushMode.SYNC)
+
+        # no keys exists, so random_key returns None
+        assert await redis_client.random_key() is None
+
+        assert await redis_client.set(key, "foo") == OK
+        # `key` should be the only existing key, so random_key should return `key`
+        assert await redis_client.random_key() == key
+        assert await redis_client.random_key(AllPrimaries()) == key
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_standalone_client_random_key(self, redis_client: GlideClient):
+        key = get_random_string(10)
+
+        # setup: delete all keys in DB 0 and DB 1
+        assert await redis_client.select(0) == OK
+        assert await redis_client.flushdb(FlushMode.SYNC) == OK
+        assert await redis_client.select(1) == OK
+        assert await redis_client.flushdb(FlushMode.SYNC) == OK
+
+        # no keys exist so random_key returns None
+        assert await redis_client.random_key() is None
+        # set `key` in DB 1
+        assert await redis_client.set(key, "foo") == OK
+        # `key` should be the only key in the database
+        assert await redis_client.random_key() == key
+
+        # switch back to DB 0
+        assert await redis_client.select(0) == OK
+        # DB 0 should still have no keys, so random_key should still return None
+        assert await redis_client.random_key() is None
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])

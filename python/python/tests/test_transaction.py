@@ -574,6 +574,10 @@ async def transaction_test(
     args.append(OK)
     transaction.flushdb()
     args.append(OK)
+    transaction.set(key, "foo")
+    args.append(OK)
+    transaction.random_key()
+    args.append(key)
 
     min_version = "6.2.0"
     if not await check_if_server_version_lt(redis_client, min_version):
