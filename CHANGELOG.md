@@ -60,6 +60,7 @@
 * Python: Added FLUSHDB command ([#1680](https://github.com/aws/glide-for-redis/pull/1680))
 * Python: Added XGROUP SETID command ([#1683](https://github.com/aws/glide-for-redis/pull/1683))
 * Python: Added FUNCTION LOAD command ([#1699](https://github.com/aws/glide-for-redis/pull/1699))
+* Python: Added XPENDING command ([#1704](https://github.com/aws/glide-for-redis/pull/1704))
 * Python: Added FUNCTION FLUSH command ([#1700](https://github.com/aws/glide-for-redis/pull/1700))
 
 ### Breaking Changes

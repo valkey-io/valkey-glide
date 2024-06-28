@@ -45,10 +45,12 @@ from glide.async_commands.sorted_set import (
 from glide.async_commands.stream import (
     StreamAddOptions,
     StreamGroupOptions,
+    StreamPendingOptions,
     StreamRangeBound,
     StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
+    _create_xpending_range_args,
 )
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -2170,6 +2172,74 @@ class BaseTransaction:
             int: The number of messages that were successfully acknowledged.
         """
         return self.append_command(RequestType.XAck, [key, group_name] + ids)
+
+    def xpending(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+    ) -> TTransaction:
+        """
+        Returns stream message summary information for pending messages for the given consumer group.
+
+        See https://valkey.io/commands/xpending for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+
+        Command response:
+            List[Union[int, str, List[List[str]], None]]: A list that includes the summary of pending messages, with the
+                format `[num_group_messages, start_id, end_id, [[consumer_name, num_consumer_messages]]]`, where:
+                - `num_group_messages`: The total number of pending messages for this consumer group.
+                - `start_id`: The smallest ID among the pending messages.
+                - `end_id`: The greatest ID among the pending messages.
+                - `[[consumer_name, num_consumer_messages]]`: A 2D list of every consumer in the consumer group with at
+                least one pending message, and the number of pending messages it has.
+
+                If there are no pending messages for the given consumer group, `[0, None, None, None]` will be returned.
+        """
+        return self.append_command(RequestType.XPending, [key, group_name])
+
+    def xpending_range(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        start: StreamRangeBound,
+        end: StreamRangeBound,
+        count: int,
+        options: Optional[StreamPendingOptions] = None,
+    ) -> TTransaction:
+        """
+        Returns an extended form of stream message information for pending messages matching a given range of IDs.
+
+        See https://valkey.io/commands/xpending for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            count (int): Limits the number of messages returned.
+            options (Optional[StreamPendingOptions]): The stream pending options.
+
+        Command response:
+            List[List[Union[str, int]]]: A list of lists, where each inner list is a length 4 list containing extended
+                message information with the format `[[id, consumer_name, time_elapsed, num_delivered]]`, where:
+                - `id`: The ID of the message.
+                - `consumer_name`: The name of the consumer that fetched the message and has still to acknowledge it. We
+                call it the current owner of the message.
+                - `time_elapsed`: The number of milliseconds that elapsed since the last time this message was delivered
+                to this consumer.
+                - `num_delivered`: The number of times this message was delivered.
+        """
+        args = _create_xpending_range_args(key, group_name, start, end, count, options)
+        return self.append_command(RequestType.XPending, args)
 
     def geoadd(
         self: TTransaction,
