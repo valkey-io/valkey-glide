@@ -119,6 +119,10 @@ public class TransactionTests {
 
     @SneakyThrows
     @Test
+    public void test_transaction_large_values() {}
+
+    @SneakyThrows
+    @Test
     public void test_standalone_transaction() {
         String key = UUID.randomUUID().toString();
         String value = UUID.randomUUID().toString();
