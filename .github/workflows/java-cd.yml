@@ -149,7 +149,7 @@ jobs:
             - name: Bundle JAR
               working-directory: java
               run: |
-                  src_folder=~/.m2/repository/software/amazon/glide/glide-for-redis/0.4.3
+                  src_folder=~/.m2/repository/software/amazon/glide/glide-for-redis/${{ env.RELEASE_VERSION }}
                   cd $src_folder
                   jar -cvf bundle.jar *
                   ls -ltr
