@@ -11,7 +11,7 @@ on:
             - "v*.*"
 
 concurrency:
-    group: java-${{ github.head_ref || github.ref }}
+    group: java-cd-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
 permissions:
