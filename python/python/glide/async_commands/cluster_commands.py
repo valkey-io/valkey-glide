@@ -353,6 +353,37 @@ class ClusterCommands(CoreCommands):
             ),
         )
 
+    async def function_flush(
+        self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_flush(FlushMode.SYNC)
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionFlush,
+                [mode.value] if mode else [],
+                route,
+            ),
+        )
+
     async def time(self, route: Optional[Route] = None) -> TClusterResponse[List[str]]:
         """
         Returns the server time.

@@ -262,6 +262,32 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
+    async def function_flush(self, mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_flush(FlushMode.SYNC)
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionFlush,
+                [mode.value] if mode else [],
+            ),
+        )
+
     async def time(self) -> List[str]:
         """
         Returns the server time.
