@@ -17,13 +17,11 @@ import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.ffi.resolvers.RedisValueResolver;
-
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
 import redis_request.RedisRequestOuterClass.Command;
@@ -208,10 +206,7 @@ public class CommandManager {
 
         var builder =
                 RedisRequest.newBuilder()
-                        .setSingleCommand(
-                                commandBuilder
-                                        .setRequestType(requestType)
-                                        .build());
+                        .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
         return prepareRedisRequestRoute(builder, route);
     }
@@ -232,10 +227,7 @@ public class CommandManager {
 
         var builder =
                 RedisRequest.newBuilder()
-                        .setSingleCommand(
-                            commandBuilder
-                                        .setRequestType(requestType)
-                                        .build());
+                        .setSingleCommand(commandBuilder.setRequestType(requestType).build());
 
         return prepareRedisRequestRoute(builder, route);
     }
@@ -301,10 +293,7 @@ public class CommandManager {
         populateRequestWithArgs(arguments, commandBuilder);
 
         return RedisRequest.newBuilder()
-                .setSingleCommand(
-                        commandBuilder
-                                .setRequestType(requestType)
-                                .build());
+                .setSingleCommand(commandBuilder.setRequestType(requestType).build());
     }
 
     /**
@@ -321,10 +310,7 @@ public class CommandManager {
         populateRequestWithArgs(arguments, commandBuilder);
 
         return RedisRequest.newBuilder()
-                .setSingleCommand(
-                        commandBuilder
-                                .setRequestType(requestType)
-                                .build());
+                .setSingleCommand(commandBuilder.setRequestType(requestType).build());
     }
 
     private RedisRequest.Builder prepareRedisRequestRoute(RedisRequest.Builder builder, Route route) {
@@ -389,31 +375,35 @@ public class CommandManager {
     /**
      * Add the given set of arguments to the output Command.Builder.
      *
-     * @param arguments         The arguments to add to the builder.
-     * @param outputBuilder     The builder to populate with arguments.
+     * @param arguments The arguments to add to the builder.
+     * @param outputBuilder The builder to populate with arguments.
      */
     private static void populateRequestWithArgs(String[] arguments, Command.Builder outputBuilder) {
-        populateRequestWithArgs(Arrays.stream(arguments)
-            .map(value -> value.getBytes(StandardCharsets.UTF_8)).toList(), outputBuilder);
+        populateRequestWithArgs(
+                Arrays.stream(arguments).map(value -> value.getBytes(StandardCharsets.UTF_8)).toList(),
+                outputBuilder);
     }
 
     /**
      * Add the given set of arguments to the output Command.Builder.
      *
-     * @param arguments         The arguments to add to the builder.
-     * @param outputBuilder     The builder to populate with arguments.
+     * @param arguments The arguments to add to the builder.
+     * @param outputBuilder The builder to populate with arguments.
      */
-    private static void populateRequestWithArgs(GlideString[] arguments, Command.Builder outputBuilder) {
-        populateRequestWithArgs(Arrays.stream(arguments).map(GlideString::getBytes).toList(), outputBuilder);
+    private static void populateRequestWithArgs(
+            GlideString[] arguments, Command.Builder outputBuilder) {
+        populateRequestWithArgs(
+                Arrays.stream(arguments).map(GlideString::getBytes).toList(), outputBuilder);
     }
 
     /**
      * Add the given set of arguments to the output Command.Builder.
      *
-     * @param arguments         The arguments to add to the builder.
-     * @param outputBuilder     The builder to populate with arguments.
+     * @param arguments The arguments to add to the builder.
+     * @param outputBuilder The builder to populate with arguments.
      */
-    private static void populateRequestWithArgs(List<byte[]> arguments, Command.Builder outputBuilder) {
+    private static void populateRequestWithArgs(
+            List<byte[]> arguments, Command.Builder outputBuilder) {
         final long totalArgSize = arguments.stream().mapToLong(arg -> arg.length).sum();
         if (totalArgSize < RedisValueResolver.MAX_REQUEST_ARGS_LENGTH) {
             ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
@@ -421,7 +411,7 @@ public class CommandManager {
             outputBuilder.setArgsArray(commandArgs);
         } else {
             outputBuilder.setArgsVecPointer(
-                RedisValueResolver.createLeakedBytesVec(arguments.toArray(new byte[][] {})));
+                    RedisValueResolver.createLeakedBytesVec(arguments.toArray(new byte[][] {})));
         }
     }
 }
