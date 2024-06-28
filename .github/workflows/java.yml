@@ -1,43 +1,34 @@
-name: Java Prepare Deployment
+name: Java CI
 
 on:
-    pull_request:
+    push:
+        branches: ["main"]
         paths:
+            - glide-core/src/**
+            - submodules/**
+            - java/**
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/start-self-hosted-runner/action.yml
-    push:
-        tags:
-            - "v*.*"
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
+    pull_request:
+        paths:
+            - glide-core/src/**
+            - submodules/**
+            - java/**
+            - .github/workflows/java.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-redis/action.yml
+            - .github/workflows/test-benchmark/action.yml
+            - .github/workflows/lint-rust/action.yml
 
 concurrency:
     group: java-${{ github.head_ref || github.ref }}
     cancel-in-progress: true
 
-permissions:
-    id-token: write
-
 jobs:
-    start-self-hosted-runner:
-        if: github.repository_owner == 'aws'
-        runs-on: ubuntu-latest
-        environment: AWS_ACTIONS
-        steps:
-            - name: Checkout
-              uses: actions/checkout@v4
-              with:
-                  fetch-depth: 0
-
-            - name: Start self hosted EC2 runner
-              uses: ./.github/workflows/start-self-hosted-runner
-              with:
-                  role-to-assume: ${{ secrets.ROLE_TO_ASSUME }}
-                  aws-region: ${{ secrets.AWS_REGION }}
-                  ec2-instance-id: ${{ secrets.AWS_EC2_INSTANCE_ID }}
-
-    create-binaries-to-publish:
-        needs: start-self-hosted-runner
-        if: github.repository_owner == 'aws'
+    build-and-test-java-client:
         timeout-minutes: 35
         strategy:
             # Run all jobs
@@ -53,45 +44,20 @@ jobs:
                     - {
                         OS: ubuntu,
                         RUNNER: ubuntu-latest,
-                        TARGET: x86_64-unknown-linux-gnu,
-                        CLASSIFIER: linux-x86_64
-                    }
-                    - {
-                        OS: ubuntu,
-                        RUNNER: ["self-hosted", "Linux", "ARM64"],
-                        TARGET: aarch64-unknown-linux-gnu,
-                        CLASSIFIER: linux-aarch_64,
-                        CONTAINER: "2_28"
+                        TARGET: x86_64-unknown-linux-gnu
                     }
                     - {
                         OS: macos,
-                        RUNNER: macos-12,
-                        TARGET: x86_64-apple-darwin,
-                        CLASSIFIER: osx-x86_64
-                    }
-                    - {
-                        OS: macos,
-                        RUNNER: macos-13-xlarge,
-                        TARGET: aarch64-apple-darwin,
-                        CLASSIFIER: osx-aarch_64
+                        RUNNER: macos-latest,
+                        TARGET: aarch64-apple-darwin
                     }
 
         runs-on: ${{ matrix.host.RUNNER }}
 
         steps:
-            - name: Setup self-hosted runner access
-              if: ${{ contains(matrix.build.RUNNER, 'self-hosted') && matrix.build.TARGET != 'aarch64-unknown-linux-musl' }}
-              run: sudo chown -R $USER:$USER /home/ubuntu/actions-runner/_work/glide-for-redis
-
             - uses: actions/checkout@v4
               with:
                   submodules: recursive
-
-            - name: Set the release version
-              shell: bash
-              run: |
-                  export version=`if ${{ github.event_name == 'pull_request' }}; then echo '255.255.255'; else echo ${GITHUB_REF:11}; fi`
-                  echo "RELEASE_VERSION=${version}" >> $GITHUB_ENV
 
             - name: Set up JDK ${{ matrix.java }}
               uses: actions/setup-java@v4
@@ -112,68 +78,115 @@ jobs:
                   version: "26.1"
                   repo-token: ${{ secrets.GITHUB_TOKEN }}
 
-            - name: Create secret key ring file
-              working-directory: java/client
-              run: |
-                  echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
-                  ls -ltr
-              env:
-                  SECRING_GPG: ${{ secrets.SECRING_GPG }}
-
-            - name: Replace placeholders and version in build.gradle
-              shell: bash
-              working-directory: ./java/client
-              run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.host.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.host.CLASSIFIER }}/g' build.gradle
-                  sed -i $SED_FOR_MACOS "s/255.255.255/${{ env.RELEASE_VERSION }}/g" build.gradle
-
-            - name: Replace placeholders and version in build.gradle for examples
-              shell: bash
-              working-directory: ./java/examples
-              run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.host.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.host.CLASSIFIER }}/g' build.gradle
-                  sed -i $SED_FOR_MACOS "s/255.255.255/${{ env.RELEASE_VERSION }}/g" build.gradle
-
+            - name: Install redis
+                # TODO: make this step macos compatible: https://github.com/aws/glide-for-redis/issues/781
+              if: ${{ matrix.host.OS == 'ubuntu' }}
+              uses: ./.github/workflows/install-redis
+              with:
+                  redis-version: ${{ matrix.redis }}
 
             - name: Build java client
               working-directory: java
-              run: |
-                  ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+              run: ./gradlew --continue build :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
             - name: Ensure no skipped files by linter
               working-directory: java
               run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
 
-            - name: Bundle JAR
-              working-directory: java
-              run: |
-                  src_folder=~/.m2/repository/software/amazon/glide/glide-for-redis/0.4.3
-                  cd $src_folder
-                  jar -cvf bundle.jar *
-                  ls -ltr
-                  cd -
-                  cp $src_folder/bundle.jar .
+            - uses: ./.github/workflows/test-benchmark
+              with:
+                  language-flag: -java
 
             - name: Upload test reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: test-reports-java-${{ matrix.java }}-redis-${{ matrix.redis }}-${{ matrix.host.TARGET }}
+                  name: test-reports-java-${{ matrix.java }}-redis-${{ matrix.redis }}-${{ matrix.host.RUNNER }}
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**
                       utils/clusters/**
                       benchmarks/results/**
-                      java/bundle.jar
 
-            - name: Upload artifacts to publish
+    build-amazonlinux-latest:
+        if: github.repository_owner == 'aws'
+        strategy:
+            # Run all jobs
+            fail-fast: false
+            matrix:
+                java:
+                    - 11
+                    - 17
+        runs-on: ubuntu-latest
+        container: amazonlinux:latest
+        timeout-minutes: 15
+        steps:
+            - name: Install git
+              run: |
+                  yum -y remove git
+                  yum -y remove git-*
+                  yum -y install https://packages.endpointdev.com/rhel/7/os/x86_64/endpoint-repo.x86_64.rpm
+                  yum update
+                  yum install -y git
+                  git --version
+
+            - uses: actions/checkout@v4
+
+            - name: Checkout submodules
+              run: |
+                  git config --global --add safe.directory "$GITHUB_WORKSPACE"
+                  git submodule update --init --recursive
+
+            - name: Install shared software dependencies
+              uses: ./.github/workflows/install-shared-dependencies
+              with:
+                  os: "amazon-linux"
+                  target: "x86_64-unknown-linux-gnu"
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Install protoc (protobuf)
+              uses: arduino/setup-protoc@v3
+              with:
+                  version: "26.1"
+                  repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+            - name: Create a symbolic Link for redis6 binaries
+              run: |
+                  ln -s /usr/bin/redis6-server /usr/bin/redis-server
+                  ln -s /usr/bin/redis6-cli /usr/bin/redis-cli
+
+            - name: Install Java
+              run: |
+                  yum install -y java-${{ matrix.java }}
+
+            - name: Build rust part
+              working-directory: java
+              run: cargo build --release
+
+            - name: Build java part
+              working-directory: java
+              run: ./gradlew --continue build :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
+
+            - name: Upload test reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
-                  name: java-bundle-${{ matrix.java }}-redis-${{ matrix.redis }}-${{ matrix.host.TARGET }}
+                  name: test-reports-${{ matrix.java }}
                   path: |
-                      java/bundle.jar
+                      java/client/build/reports/**
+                      java/integTest/build/reports/**
+
+    lint-rust:
+        timeout-minutes: 15
+        runs-on: ubuntu-latest
+        steps:
+            - uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+
+            - uses: ./.github/workflows/lint-rust
+              with:
+                  cargo-toml-folder: ./java
+              name: lint java rust
