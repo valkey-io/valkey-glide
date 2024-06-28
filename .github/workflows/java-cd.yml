@@ -3,6 +3,7 @@ name: Java Prepare Deployment
 on:
     pull_request:
         paths:
+            - java/**
             - .github/workflows/java-cd.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
