@@ -5,7 +5,7 @@ use glide_core::start_socket_listener as start_socket_listener_core;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
 
 use bytes::Bytes;
-use jni::objects::{JClass, JObject, JObjectArray, JByteArray, JString};
+use jni::objects::{JByteArray, JClass, JObject, JObjectArray, JString};
 use jni::sys::{jlong, jsize};
 use jni::JNIEnv;
 use redis::Value;
@@ -141,10 +141,15 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
     .unwrap_or(JObject::null())
 }
 
+/// Creates a leaked vector of byte arrays representing the args and returns a handle to it.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `env`     - The JNI environment.
+/// * `_class`  - The class object. Not used.
+/// * `args`    - The arguments. This should be a byte[][] from Java.
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedBytesVec<
-    'local,
->(
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedBytesVec<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     args: JObjectArray<'local>,
@@ -160,8 +165,10 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedB
 
                 for index in 0..num_elements {
                     let value = env.get_object_array_element(&args, index as jsize)?;
-                    bytes_vec.push(Bytes::from(env.convert_byte_array(JByteArray::from(value))?))
-                };
+                    bytes_vec.push(Bytes::from(
+                        env.convert_byte_array(JByteArray::from(value))?,
+                    ))
+                }
                 Ok(Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as jlong)
             }
             let result = create_leaked_bytes_vec(&mut env, args);
@@ -172,6 +179,12 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedB
     .unwrap_or(0)
 }
 
+/// Returns the maximum total length of request arguments.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `_env`    - The JNI environment. Not used.
+/// * `_class`  - The class object. Not used.
 #[no_mangle]
 pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_getMaxRequestArgsLength<
     'local,
