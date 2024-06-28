@@ -285,7 +285,7 @@ impl StandaloneClient {
             Some(ResponsePolicy::OneSucceeded) => future::select_ok(requests.map(Box::pin))
                 .await
                 .map(|(result, _)| result),
-            Some(ResponsePolicy::OneSucceededNonEmpty) => {
+            Some(ResponsePolicy::FirstSucceededNonEmptyOrAllEmpty) => {
                 future::select_ok(requests.map(|request| {
                     Box::pin(async move {
                         let result = request.await?;

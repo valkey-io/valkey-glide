@@ -595,3 +595,21 @@ class StandaloneCommands(CoreCommands):
             str,
             await self._execute_command(RequestType.Lolwut, args),
         )
+
+    async def random_key(self) -> Optional[str]:
+        """
+        Returns a random existing key name from the currently selected database.
+
+        See https://valkey.io/commands/randomkey for more details.
+
+        Returns:
+            Optional[str]: A random existing key name from the currently selected database.
+
+        Examples:
+            >>> await client.random_key()
+            "random_key_name"  # "random_key_name" is a random existing key name from the currently selected database.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.RandomKey, []),
+        )

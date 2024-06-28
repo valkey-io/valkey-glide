@@ -658,3 +658,25 @@ class ClusterCommands(CoreCommands):
             TClusterResponse[str],
             await self._execute_command(RequestType.Lolwut, args, route),
         )
+
+    async def random_key(self, route: Optional[Route] = None) -> Optional[str]:
+        """
+        Returns a random existing key name.
+
+        See https://valkey.io/commands/randomkey for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            Optional[str]: A random existing key name.
+
+        Examples:
+            >>> await client.random_key()
+            "random_key_name"  # "random_key_name" is a random existing key name.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.RandomKey, [], route),
+        )
