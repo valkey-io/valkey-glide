@@ -7877,6 +7877,12 @@ public class SharedCommandTests {
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.zadd(key1, charMap).get());
+        // Sleep after zadd() for eventual consistency.
+        // TODO: Replace sleep with WAIT request to enforce strong consistency.
+        try {
+            Thread.sleep(1000);
+        } catch (InterruptedException ex) {
+        }
         result = client.zscan(key1, initialCursor).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertEquals(
