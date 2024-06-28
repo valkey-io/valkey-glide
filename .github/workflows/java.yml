@@ -1,8 +1,9 @@
-name: Java Prepare Deployment
+name: Java CI
 
 on:
     pull_request:
         paths:
+            - java/**
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
             - .github/workflows/start-self-hosted-runner/action.yml
