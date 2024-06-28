@@ -2168,7 +2168,7 @@ class BaseTransaction:
 
         Command response:
             List[Union[int, str, List[List[str]], None]]: A list that includes the summary of pending messages, with the
-                format `[num_group_messages, start_id, end_id, [[consumer_name, num_consumer_messages]]`, where:
+                format `[num_group_messages, start_id, end_id, [[consumer_name, num_consumer_messages]]]`, where:
                 - `num_group_messages`: The total number of pending messages for this consumer group.
                 - `start_id`: The smallest ID among the pending messages.
                 - `end_id`: The greatest ID among the pending messages.
