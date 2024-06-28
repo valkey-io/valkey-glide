@@ -7857,7 +7857,12 @@ public class SharedCommandTests {
                         "secondResultAllValues: {%s} numberMapValuesAsStrings: {%s}",
                         secondResultAllValues, numberMapValuesAsStrings));
 
-        assertTrue(secondResultAllKeys.containsAll(numberMap.keySet()));
+        assertTrue(
+                secondResultAllKeys.containsAll(numberMap.keySet()),
+                String.format(
+                        "secondResultAllKeys: {%s} numberMap.keySet: {%s}",
+                        secondResultAllKeys, numberMap.keySet()));
+
         final Set<String> numberMapValuesAsStrings =
                 numberMap.values().stream()
                         .map(d -> String.valueOf(d.intValue()))
