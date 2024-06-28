@@ -1801,6 +1801,27 @@ class BaseTransaction:
             ["REPLACE", library_code] if replace else [library_code],
         )
 
+    def function_flush(
+        self: TTransaction, mode: Optional[FlushMode] = None
+    ) -> TTransaction:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Commands response:
+            TOK: A simple `OK`.
+
+        Since: Redis 7.0.0.
+        """
+        return self.append_command(
+            RequestType.FunctionFlush,
+            [mode.value] if mode else [],
+        )
+
     def xadd(
         self: TTransaction,
         key: str,
