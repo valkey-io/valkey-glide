@@ -7858,11 +7858,16 @@ public class SharedCommandTests {
                         secondResultAllValues, numberMapValuesAsStrings));
 
         assertTrue(secondResultAllKeys.containsAll(numberMap.keySet()));
+        final Set<String> numberMapValuesAsStrings =
+                numberMap.values().stream()
+                        .map(d -> String.valueOf(d.intValue()))
+                        .collect(Collectors.toSet());
+
         assertTrue(
-                secondResultAllValues.containsAll(
-                        numberMap.values().stream()
-                                .map(d -> String.valueOf(d.intValue()))
-                                .collect(Collectors.toSet())));
+                secondResultAllValues.containsAll(numberMapValuesAsStrings),
+                String.format(
+                        "secondResultAllValues: {%s} numberMapValuesAsStrings: {%s}",
+                        secondResultAllValues, numberMapValuesAsStrings));
 
         // Test match pattern
         result =
