@@ -61,6 +61,7 @@
 * Python: Added XGROUP SETID command ([#1683](https://github.com/aws/glide-for-redis/pull/1683))
 * Python: Added FUNCTION LOAD command ([#1699](https://github.com/aws/glide-for-redis/pull/1699))
 * Python: Added XPENDING command ([#1704](https://github.com/aws/glide-for-redis/pull/1704))
+* Python: Added RANDOMKEY command ([#1701](https://github.com/aws/glide-for-redis/pull/1701))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
