@@ -167,7 +167,6 @@ jobs:
                       java/integTest/build/reports/**
                       utils/clusters/**
                       benchmarks/results/**
-                      java/bundle.jar
 
             - name: Upload artifacts to publish
               if: always()
