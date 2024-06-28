@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -77,6 +78,7 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -102,6 +104,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
@@ -7575,5 +7578,256 @@ public class SharedCommandTests {
                                                 new GeoSearchShape(100, GeoUnit.METERS))
                                         .get());
         assertInstanceOf(RequestException.class, requestException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sscan(BaseClient client) {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String initialCursor = "0";
+        long defaultCount = 10;
+        String[] numberMembers = new String[125];
+        for (int i = 0; i < numberMembers.length; i++) {
+            numberMembers[i] = String.valueOf(i);
+        }
+        Set<String> numberMembersSet = Set.of(numberMembers);
+        String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
+        Set<String> charMemberSet = Set.of(charMembers);
+        int resultCursorIndex = 0;
+        int resultCollectionIndex = 1;
+
+        // Empty set
+        Object[] result = client.sscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Negative cursor
+        result = client.sscan(key1, "-1").get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Result contains the whole set
+        assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
+        result = client.sscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertEquals(charMembers.length, ((Object[]) result[resultCollectionIndex]).length);
+        final Set<Object> resultMembers =
+                Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet());
+        assertTrue(
+                resultMembers.containsAll(charMemberSet),
+                String.format("resultMembers: {%s}, charMemberSet: {%s}", resultMembers, charMemberSet));
+
+        result =
+                client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern("a").build()).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {"a"}, result[resultCollectionIndex]);
+
+        // Result contains a subset of the key
+        assertEquals(numberMembers.length, client.sadd(key1, numberMembers).get());
+        String resultCursor = "0";
+        final Set<Object> secondResultValues = new HashSet<>();
+        do {
+            result = client.sscan(key1, resultCursor).get();
+            resultCursor = result[resultCursorIndex].toString();
+            secondResultValues.addAll(
+                    Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet()));
+
+            if (resultCursor.equals("0")) {
+                break;
+            }
+
+            // Scan with result cursor has a different set
+            Object[] secondResult = client.sscan(key1, resultCursor).get();
+            String newResultCursor = secondResult[resultCursorIndex].toString();
+            assertNotEquals(resultCursor, newResultCursor);
+            resultCursor = newResultCursor;
+            assertFalse(
+                    Arrays.deepEquals(
+                            ArrayUtils.toArray(result[resultCollectionIndex]),
+                            ArrayUtils.toArray(secondResult[resultCollectionIndex])));
+            secondResultValues.addAll(
+                    Arrays.stream((Object[]) secondResult[resultCollectionIndex])
+                            .collect(Collectors.toSet()));
+        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+
+        assertTrue(
+                secondResultValues.containsAll(numberMembersSet),
+                String.format(
+                        "secondResultValues: {%s}, numberMembersSet: {%s}",
+                        secondResultValues, numberMembersSet));
+
+        // Test match pattern
+        result =
+                client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern("*").build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) > 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
+
+        // Test count
+        result = client.sscan(key1, initialCursor, SScanOptions.builder().count(20L).build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) > 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
+
+        // Test count with match returns a non-empty list
+        result =
+                client
+                        .sscan(
+                                key1, initialCursor, SScanOptions.builder().matchPattern("1*").count(20L).build())
+                        .get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) > 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) > 0);
+
+        // Exceptions
+        // Non-set key
+        assertEquals(OK, client.set(key2, "test").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sscan(key2, initialCursor).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+                                        .sscan(
+                                                key2,
+                                                initialCursor,
+                                                SScanOptions.builder().matchPattern("test").count(1L).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Negative count
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.sscan(key1, "-1", SScanOptions.builder().count(-1L).build()).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }

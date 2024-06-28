@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.scan.SScanOptions;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -553,4 +554,59 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Set<String>> sunion(String[] keys);
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param cursor The cursor that points to the next iteration of results.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>0</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the set. The second element is always an <code>
+     *     Array</code> of the subset of the set held in <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 members
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *   result = client.sscan(key1, cursor).get();
+     *   cursor = result[0].toString();
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nSSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * } while (!cursor.equals("0"));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> sscan(String key, String cursor);
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param cursor The cursor that points to the next iteration of results.
+     * @param sScanOptions The {@link SScanOptions}.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>0</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the set. The second element is always an <code>
+     *     Array</code> of the subset of the set held in <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 members
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *   result = client.sscan(key1, cursor, SScanOptions.builder().matchPattern("*").count(20L).build()).get();
+     *   cursor = result[0].toString();
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nSSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * } while (!cursor.equals("0"));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> sscan(String key, String cursor, SScanOptions sScanOptions);
 }

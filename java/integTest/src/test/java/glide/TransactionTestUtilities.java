@@ -42,6 +42,7 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
@@ -526,6 +527,8 @@ public class TransactionTestUtilities {
         transaction
                 .sadd(setKey1, new String[] {"baz", "foo"})
                 .srem(setKey1, new String[] {"foo"})
+                .sscan(setKey1, "0")
+                .sscan(setKey1, "0", SScanOptions.builder().matchPattern("*").count(10L).build())
                 .scard(setKey1)
                 .sismember(setKey1, "baz")
                 .smembers(setKey1)
@@ -557,6 +560,8 @@ public class TransactionTestUtilities {
                 new Object[] {
                     2L, // sadd(setKey1, new String[] {"baz", "foo"});
                     1L, // srem(setKey1, new String[] {"foo"});
+                    new Object[] {"0", new String[] {"baz"}}, // sscan(setKey1, "0")
+                    new Object[] {"0", new String[] {"baz"}}, // sscan(key1, "0", match "*", count(10L))
                     1L, // scard(setKey1);
                     true, // sismember(setKey1, "baz")
                     Set.of("baz"), // smembers(setKey1);

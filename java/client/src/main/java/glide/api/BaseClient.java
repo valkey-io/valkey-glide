@@ -117,6 +117,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SScan;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -213,6 +214,7 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -2904,5 +2906,18 @@ public abstract class BaseClient
                         options.toArgs(),
                         resultOptions.toArgs());
         return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> sscan(@NonNull String key, @NonNull String cursor) {
+        String[] arguments = new String[] {key, cursor};
+        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> sscan(
+            @NonNull String key, @NonNull String cursor, @NonNull SScanOptions sScanOptions) {
+        String[] arguments = concatenateArrays(new String[] {key, cursor}, sScanOptions.toArgs());
+        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayResponse);
     }
 }
