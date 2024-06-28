@@ -7615,18 +7615,12 @@ public class SharedCommandTests {
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        result = client.sscan(key1, -1).get();
-        assertEquals(String.valueOf(initialCursor), result[resultCursorIndex]);
+        result = client.sscan(key1, "-1").get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
-        // Sleep after sadd() for eventual consistency.
-        // TODO: Replace sleep with WAIT request to enforce strong consistency.
-        try {
-            Thread.sleep(1000);
-        } catch (InterruptedException ex) {
-        }
         result = client.sscan(key1, initialCursor).get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertEquals(charMembers.length, ((Object[]) result[resultCollectionIndex]).length);
