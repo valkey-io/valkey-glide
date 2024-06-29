@@ -10,7 +10,6 @@ import glide.api.models.commands.SortClusterOptions;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
-import redis_request.RedisRequestOuterClass;
 
 /**
  * Extends BaseTransaction class for cluster mode commands. Transactions allow the execution of a
@@ -50,9 +49,8 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      */
     public ClusterTransaction sort(
             @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        RedisRequestOuterClass.Command.ArgsArray commandArgs =
-                buildArgs(ArrayUtils.addFirst(sortClusterOptions.toArgs(), key));
-        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(Sort, ArrayUtils.addFirst(sortClusterOptions.toArgs(), key)));
         return this;
     }
 
@@ -69,9 +67,8 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      */
     public ClusterTransaction sortReadOnly(
             @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        RedisRequestOuterClass.Command.ArgsArray commandArgs =
-                buildArgs(ArrayUtils.addFirst(sortClusterOptions.toArgs(), key));
-        protobufTransaction.addCommands(buildCommand(SortReadOnly, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(SortReadOnly, ArrayUtils.addFirst(sortClusterOptions.toArgs(), key)));
         return this;
     }
 
@@ -94,10 +91,10 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
             @NonNull String destination,
             @NonNull SortClusterOptions sortClusterOptions) {
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
-        RedisRequestOuterClass.Command.ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments));
-        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        Sort,
+                        concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments)));
         return this;
     }
 }

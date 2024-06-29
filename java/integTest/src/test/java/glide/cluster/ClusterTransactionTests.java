@@ -101,6 +101,27 @@ public class ClusterTransactionTests {
         assertDeepEquals(expectedResult, results);
     }
 
+    @SneakyThrows
+    @Test
+    public void test_transaction_large_values() {
+        int length = 1 << 25; // 33mb
+        String key = "0".repeat(length);
+        String value = "0".repeat(length);
+
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction.set(key, value);
+        transaction.get(key);
+
+        Object[] expectedResult =
+                new Object[] {
+                    OK, // transaction.set(key, value);
+                    value, // transaction.get(key);
+                };
+
+        Object[] result = clusterClient.exec(transaction).get();
+        assertArrayEquals(expectedResult, result);
+    }
+
     @Test
     @SneakyThrows
     public void lastsave() {

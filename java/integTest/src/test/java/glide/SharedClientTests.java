@@ -55,9 +55,9 @@ public class SharedClientTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void send_and_receive_large_values(BaseClient client) {
-        int length = 1 << 16;
-        String key = getRandomString(length);
-        String value = getRandomString(length);
+        int length = 1 << 25; // 33mb
+        String key = "0".repeat(length);
+        String value = "0".repeat(length);
 
         assertEquals(length, key.length());
         assertEquals(length, value.length());
