@@ -182,6 +182,7 @@ publishing {
             from components.java
             groupId = 'software.amazon.glide'
             artifactId = 'glide-for-redis'
+            // version is replaced during released workflow java-cd.yml
             version = "255.255.255"
             pom {
                 name = 'glide-for-valkey'
@@ -228,5 +229,6 @@ tasks.withType(Test) {
 
 jar {
     archiveBaseName = "glide-for-redis"
+    // placeholder will be renamed by platform+arch on the release workflow java-cd.yml
     archiveClassifier = "placeholder"
 }
