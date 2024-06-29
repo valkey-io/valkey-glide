@@ -5449,9 +5449,9 @@ class CoreCommands(Protocol):
         """
         args = [key, str(ttl), value]
         if replace is not None:
-            args.append(["REPLACE"])
+            args.append("REPLACE")
         if absttl is not None:
-            args.append(["ABSTTL"])
+            args.append("ABSTTL")
         if idletime is not None:
             args.extend(["IDLETIME", str(idletime)])
         if frequency is not None:
