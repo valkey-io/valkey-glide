@@ -40,8 +40,8 @@ import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_R
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
-import static glide.api.models.commands.scan.ScanOptions.COUNT_OPTION_STRING;
-import static glide.api.models.commands.scan.ScanOptions.MATCH_OPTION_STRING;
+import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
+import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;

@@ -10,4 +10,4 @@ import lombok.experimental.SuperBuilder;
  * @see <a href="https://valkey.io/commands/sscan/">valkey.io</a>
  */
 @SuperBuilder
-public class SScanOptions extends ScanOptions {}
+public class SScanOptions extends BaseScanOptions {}

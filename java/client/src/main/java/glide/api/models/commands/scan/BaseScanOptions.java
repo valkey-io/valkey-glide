@@ -11,7 +11,7 @@ import lombok.experimental.SuperBuilder;
  * and ZSCAN).
  */
 @SuperBuilder
-public abstract class ScanOptions {
+public abstract class BaseScanOptions {
     /** <code>MATCH</code> option string to include in the <code>SCAN</code> commands. */
     public static final String MATCH_OPTION_STRING = "MATCH";
 
