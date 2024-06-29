@@ -7557,25 +7557,21 @@ class TestClusterRoutes:
         assert await redis_client.sadd(key1, num_members) == len(num_members)
         result_cursor = "0"
         result_values = set()  # type: set[str]
+        result = await redis_client.sscan(key1, result_cursor)
+        result_cursor = str(result[result_cursor_index])
+        result_values.update(result[result_collection_index])
 
-        while True:
-            result = await redis_client.sscan(key1, result_cursor)
-            result_cursor = str(result[result_cursor_index])
-            result_values.update(result[result_collection_index])
+        # 0 is returned for the cursor of the last iteration.
+        while result_cursor != "0":
+            next_result = await redis_client.sscan(key1, result_cursor)
+            next_result_cursor = str(next_result[result_cursor_index])
+            assert next_result_cursor != result_cursor
 
-            # 0 is returned for the cursor of the last iteration.
-            if result_cursor == "0":
-                break
-
-            second_result = await redis_client.sscan(key1, result_cursor)
-            new_result_cursor = str(second_result[result_cursor_index])
-            assert new_result_cursor != result_cursor
-
-            result_cursor = new_result_cursor
             assert False == set(result[result_collection_index]).issubset(
-                set(second_result[result_collection_index])
+                set(next_result[result_collection_index])
             )
-            result_values.update(second_result[result_collection_index])
+            result_values.update(next_result[result_collection_index])
+            result_cursor = next_result_cursor
         assert set(num_members).issubset(result_values)
         assert set(char_members).issubset(result_values)
 

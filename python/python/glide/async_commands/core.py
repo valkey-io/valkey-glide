@@ -5411,17 +5411,42 @@ class CoreCommands(Protocol):
                 set held in `key`.
 
         Examples:
-            # Assume "key" contains a set with 200 members
-            >>> await client.sscan("key", "0", match="*")
-                ['176', ['63', '99', '67', '27', '6', '32', '52', '24', '82', '90', '53']]
-                # '176' is the cursor for the next iteration of the set.
-                # The second element holds the list of the set fetched by sscan.
-
-            # Assume multiple `sscan` commands are called and the latest call returned "71" as the cursor
-            >>> await client.sscan("key", "71", match="*")
-                ['0', ['123', '83', '77', '16', '47', '20']]
-                # '0' is the cursor returned since it is the last iteration.
-                # The second element holds the list of the set fetched by sscan.
+            # Assume "key" contains a set with 130 members
+            >>> result_cursor = "0"
+            >>> while True:
+            ...     result = await redis_client.sscan("key", "0", match="*")
+            ...     new_cursor = result [0]
+            ...     print("Cursor: ", new_cursor)
+            ...     print("Members: ", result[1])
+            ...     if new_cursor == "0":
+            ...         break
+            ...     result_cursor = new_cursor
+            Cursor:  48
+            Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+            Cursor:  24
+            Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+            Cursor:  44
+            Members:  ['68', '41', '22', '92', '79', '31', '35', '39', '63', '75']
+            Cursor:  42
+            Members:  ['81', '72', '69', '26', '117', '104', '48', '94', '78', '23']
+            Cursor:  230
+            Members:  ['37', 'c', '113', '82', '42', '2', '107', '98', 'd', '36', '29', 'b']
+            Cursor:  94
+            Members:  ['100', '33', '18', '124', '106', '58', '52', '32', '6', '9']
+            Cursor:  145
+            Members:  ['28', '102', '95', '85', '21', '7', '83', '4', '0', '49']
+            Cursor:  197
+            Members:  ['87', '62', '77', '19', '93', '97', '12', '50', '25', '84']
+            Cursor:  205
+            Members:  ['e', 'a', '88', '114', '112', '121', '70', '73', '108', '60']
+            Cursor:  19
+            Members:  ['90', '74', '116', '96', '103', '89', '91', '110', '44', '15']
+            Cursor:  187
+            Members:  ['65', '105', '101', '99', '64', '27', '123', '43', '66', '59', '54']
+            Cursor:  79
+            Members:  ['30', '67', '56', '51', '16', '8', '46', '5', '71', '115']
+            Cursor:  0
+            Members:  ['47', '122', '1', '53', '10', '14', '80']
         """
         args = [key, cursor]
         if match is not None:
