@@ -7520,6 +7520,94 @@ class TestClusterRoutes:
             assert await redis_client.flushdb(FlushMode.SYNC, AllPrimaries()) is OK
             assert await redis_client.dbsize() == 0
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_sscan(self, redis_client: GlideClusterClient):
+        key1 = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        initial_cursor = "0"
+        result_cursor_index = 0
+        result_collection_index = 1
+        default_count = 10
+        num_members = list(map(str, range(125)))
+        char_members = ["a", "b", "c", "d", "e"]
+
+        # Empty set
+        result = await redis_client.sscan(key1, initial_cursor)
+        assert result[result_cursor_index] == initial_cursor
+        assert result[result_collection_index] == []
+
+        # Negative cursor
+        result = await redis_client.sscan(key1, "-1")
+        assert result[result_cursor_index] == initial_cursor
+        assert result[result_collection_index] == []
+
+        # Result contains the whole set
+        assert await redis_client.sadd(key1, char_members) == len(char_members)
+        result = await redis_client.sscan(key1, initial_cursor)
+        assert result[result_cursor_index] == initial_cursor
+        assert len(result[result_collection_index]) == len(char_members)
+        assert set(result[result_collection_index]).issubset(set(char_members))
+
+        result = await redis_client.sscan(key1, initial_cursor, match="a")
+        assert result[result_cursor_index] == initial_cursor
+        assert set(result[result_collection_index]).issubset(set(["a"]))
+
+        # Result contains a subset of the key
+        assert await redis_client.sadd(key1, num_members) == len(num_members)
+        result_cursor = "0"
+        result_values = set()
+
+        while True:
+            result = await redis_client.sscan(key1, result_cursor)
+            print(result)
+            result_cursor = result[result_cursor_index]
+            result_values.update(result[result_collection_index])
+
+            if (
+                result_cursor == "0"
+            ):  # 0 is returned for the cursor of the last iteration.
+                break
+
+            second_result = await redis_client.sscan(key1, result_cursor)
+            new_result_cursor = second_result[result_cursor_index]
+            assert new_result_cursor != result_cursor
+
+            result_cursor = new_result_cursor
+            assert False == set(result[result_collection_index]).issubset(
+                set(second_result[result_collection_index])
+            )
+            result_values.update(second_result[result_collection_index])
+        assert set(num_members).issubset(result_values)
+        assert set(char_members).issubset(result_values)
+
+        # Test match pattern
+        result = await redis_client.sscan(key1, initial_cursor, match="*")
+        assert int(result[result_cursor_index]) > 0
+        assert len(result[result_collection_index]) >= default_count
+
+        # Test count
+        result = await redis_client.sscan(key1, initial_cursor, count=20)
+        assert int(result[result_cursor_index]) > 0
+        assert len(result[result_collection_index]) >= 20
+
+        # Test count with match returns a non-empty list
+        result = await redis_client.sscan(key1, initial_cursor, match="1*", count=20)
+        assert int(result[result_cursor_index]) > 0
+        assert len(result[result_collection_index]) >= 0
+
+        # Exceptions
+        # Non-set key
+        assert await redis_client.set(key2, "test") == OK
+        with pytest.raises(RequestError):
+            await redis_client.sscan(key2, initial_cursor)
+        with pytest.raises(RequestError):
+            await redis_client.sscan(key2, initial_cursor, match="test", count=20)
+
+        # Negative count
+        with pytest.raises(RequestError):
+            await redis_client.sscan(key2, initial_cursor, count=-1)
+
 
 @pytest.mark.asyncio
 class TestScripts:

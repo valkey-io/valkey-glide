@@ -5380,6 +5380,60 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GetEx, args),
         )
 
+    async def sscan(
+        self,
+        key: str,
+        cursor: str,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> List[Union[str, List[str]]]:
+        """
+        Iterates incrementally over a set.
+
+        See https://valkey.io/commands/sscan for more details.
+
+        Args:
+            key (str): The key of the set.
+            cursor (str): The cursor that points to the next iteration of results.
+            match (Optional[str]): The match filter is applied to the result of the command and will only include
+                strings that match the pattern specified. If the set is large enough for scan commands to return only a
+                subset of the set then there could be a case where the result is empty although there are items that
+                match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
+                only fetch and match `10` items from the list.
+            count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the set.
+                `COUNT` could be ignored until the set is large enough for the `SCAN` commands to represent the results
+                as compact single-allocation packed encoding.
+
+        Returns:
+            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the set held by `key`.
+                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+                returned on the last iteration of the set. The second element is always an `Array` of the subset of the
+                set held in `key`.
+
+        Examples:
+            # Assume "key" contains a set with 200 members
+            >>> await client.sscan("key", "0", match="*")
+                ['176', ['63', '99', '67', '27', '6', '32', '52', '24', '82', '90', '53']]
+                # '176' is the cursor for the next iteration of the set.
+                # The second element holds the list of the set fetched by sscan.
+
+            # Assume multiple `sscan` commands are called and the latest call returned "71" as the cursor
+            >>> await client.sscan("key", "71", match="*")
+                ['0', ['123', '83', '77', '16', '47', '20']]
+                # '0' is the cursor returned since it is the last iteration.
+                # The second element holds the list of the set fetched by sscan.
+        """
+        args = [key, cursor]
+        if match is not None:
+            args += ["MATCH", match]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return cast(
+            List[Union[str, List[str]]],
+            await self._execute_command(RequestType.SScan, args),
+        )
+
     @dataclass
     class PubSubMsg:
         """

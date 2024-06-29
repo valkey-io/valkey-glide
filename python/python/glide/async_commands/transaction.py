@@ -3910,6 +3910,44 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.RandomKey, [])
 
+    def sscan(
+        self: TTransaction,
+        key: str,
+        cursor: str,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Iterates incrementally over a set.
+
+        See https://valkey.io/commands/sscan for more details.
+
+        Args:
+            key (str): The key of the set.
+            cursor (str): The cursor that points to the next iteration of results.
+            match (Optional[str]): The match filter is applied to the result of the command and will only include
+                strings that match the pattern specified. If the set is large enough for scan commands to return only a
+                subset of the set then there could be a case where the result is empty although there are items that
+                match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
+                only fetch and match `10` items from the list.
+            count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the set.
+                `COUNT` could be ignored until the set is large enough for the `SCAN` commands to represent the results
+                as compact single-allocation packed encoding.
+
+        Command Response:
+            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the set held by `key`.
+                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+                returned on the last iteration of the set. The second element is always an `Array` of the subset of the
+                set held in `key`.
+        """
+        args = [key, cursor]
+        if match is not None:
+            args += ["MATCH", match]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return self.append_command(RequestType.SScan, args)
+
 
 class Transaction(BaseTransaction):
     """
