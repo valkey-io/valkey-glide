@@ -5617,7 +5617,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     key is at even indices and the value is at odd indices.
      */
     public T hscan(@NonNull String key, @NonNull String cursor, @NonNull HScanOptions hScanOptions) {
-        final ArgsArray commandArgs =
+        final String[] commandArgs =
                 buildArgs(concatenateArrays(new String[] {key, cursor}, hScanOptions.toArgs()));
         protobufTransaction.addCommands(buildCommand(HScan, commandArgs));
         return getThis();
