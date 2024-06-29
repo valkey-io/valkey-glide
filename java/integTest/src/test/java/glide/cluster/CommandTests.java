@@ -1846,4 +1846,21 @@ public class CommandTests {
                         .get());
         assertArrayEquals(key2DescendingListSubset, clusterClient.lrange(key3, 0, -1).get());
     }
+
+    @SneakyThrows
+    @Test
+    public void waitTest() {
+        // setup
+        String key = UUID.randomUUID().toString();
+        long numreplicas = 1L;
+        long timeout = 1000L;
+
+        assertEquals(OK, clusterClient.set(key, "value").get());
+        assertTrue(clusterClient.wait(numreplicas, timeout).get() >= 1);
+
+        // command should fail on a negative timeout value
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.wait(1L, -1L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
 }

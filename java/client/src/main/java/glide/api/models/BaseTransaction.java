@@ -159,6 +159,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
@@ -5620,6 +5621,22 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         final String[] commandArgs =
                 buildArgs(concatenateArrays(new String[] {key, cursor}, hScanOptions.toArgs()));
         protobufTransaction.addCommands(buildCommand(HScan, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Blocks the current client until all the previous write commands are successfully transferred
+     * and acknowledged by at least <code>numreplicas</code> of replicas. If <code>timeout</code> is
+     * reached, the command returns even if the specified number of replicas were not yet reached.
+     *
+     * @param numreplicas The number of replicas to reach.
+     * @param timeout The timeout value specified in milliseconds.
+     * @return Command Response - The number of replicas reached by all the writes performed in the
+     *     context of the current connection.
+     */
+    public T wait(long numreplicas, long timeout) {
+        ArgsArray args = buildArgs(Long.toString(numreplicas), Long.toString(timeout));
+        protobufTransaction.addCommands(buildCommand(Wait, args));
         return getThis();
     }
 

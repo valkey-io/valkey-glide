@@ -1032,4 +1032,21 @@ public class CommandTests {
                         .get());
         assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
     }
+
+    @SneakyThrows
+    @Test
+    public void waitTest() {
+        // setup
+        String key = UUID.randomUUID().toString();
+        long numreplicas = 1L;
+        long timeout = 1000L;
+
+        assertEquals(OK, regularClient.set(key, "value").get());
+        assertTrue(regularClient.wait(numreplicas, timeout).get() >= 0);
+
+        // command should fail on a negative timeout value
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.wait(1L, -1L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
 }
