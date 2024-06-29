@@ -3898,6 +3898,13 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Returns the longest common subsequence between strings stored at key1 and key2.
+
+        Note that this is different than the longest common string algorithm, since
+        matching characters in the string does not need to be contiguous.
+
+        For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
+        from left to right, the longest common set of characters is composed of the first "f" and then the "o".
+
         See https://valkey.io/commands/lcs for more details.
 
         Args:
@@ -3921,6 +3928,13 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Returns the length of the longest common subsequence between strings stored at key1 and key2.
+
+        Note that this is different than the longest common string algorithm, since
+        matching characters in the string does not need to be contiguous.
+
+        For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
+        from left to right, the longest common set of characters is composed of the first "f" and then the "o".
+
         See https://valkey.io/commands/lcs for more details.
 
         Args:
@@ -3945,6 +3959,13 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
+
+        Note that this is different than the longest common string algorithm, since
+        matching characters in the string does not need to be contiguous.
+
+        For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
+        from left to right, the longest common set of characters is composed of the first "f" and then the "o".
+
         See https://valkey.io/commands/lcs for more details.
 
         Args:
