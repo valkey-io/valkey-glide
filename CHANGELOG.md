@@ -31,8 +31,6 @@
 * Python: Added LMPOP and BLMPOP commands ([#1547](https://github.com/aws/glide-for-redis/pull/1547))
 * Python: Added HSTRLEN command ([#1564](https://github.com/aws/glide-for-redis/pull/1564))
 * Python: Added MSETNX command ([#1565](https://github.com/aws/glide-for-redis/pull/1565))
-* Python: Added FUNCTION LOAD command ([#1589](https://github.com/aws/glide-for-redis/pull/1589))
-* Python: Added FUNCTION DELETE command ([#1591](https://github.com/aws/glide-for-redis/pull/1591))
 * Python: Added MOVE command ([#1566](https://github.com/aws/glide-for-redis/pull/1566))
 * Python: Added EXPIRETIME, PEXPIRETIME commands ([#1587](https://github.com/aws/glide-for-redis/pull/1587))
 * Python: Added LSET command ([#1584](https://github.com/aws/glide-for-redis/pull/1584))
@@ -65,6 +63,7 @@
 * Python: Added XPENDING command ([#1704](https://github.com/aws/glide-for-redis/pull/1704))
 * Python: Added RANDOMKEY command ([#1701](https://github.com/aws/glide-for-redis/pull/1701))
 * Python: Added FUNCTION FLUSH command ([#1700](https://github.com/aws/glide-for-redis/pull/1700))
+* Python: Added FUNCTION DELETE command ([#1712](https://github.com/aws/glide-for-redis/pull/1712))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

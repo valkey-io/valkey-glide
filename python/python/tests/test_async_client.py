@@ -6637,160 +6637,6 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_load(self, redis_client: RedisClient):
-        # TODO: Test function with FCALL
-        # TODO: Test with FUNCTION LIST
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
-
-        lib_name = f"mylib1C{get_random_string(5)}"
-        func_name = f"myfunc1c{get_random_string(5)}"
-        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
-
-        assert await redis_client.function_load(code) == lib_name
-
-        # TODO: change when FCALL, FCALL_RO is implemented
-        assert (
-            await redis_client.custom_command(["FCALL", func_name, "0", "one", "two"])
-            == "one"
-        )
-        assert (
-            await redis_client.custom_command(
-                ["FCALL_RO", func_name, "0", "one", "two"]
-            )
-            == "one"
-        )
-
-        # TODO: add FUNCTION LIST once implemented
-
-        # re-load library without overwriting
-        with pytest.raises(RequestError) as e:
-            await redis_client.function_load(code)
-        assert "Library '" + lib_name + "' already exists" in str(e)
-
-        # re-load library with overwriting
-        assert await redis_client.function_load(code, True) == lib_name
-
-        func2_name = f"myfunc2c{get_random_string(5)}"
-        new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
-        new_code = generate_lua_lib_code(
-            lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
-        )
-
-        assert await redis_client.function_load(new_code, True) == lib_name
-
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("single_route", [True, False])
-    async def test_function_load_cluster_with_route(
-        self, redis_client: RedisClusterClient, single_route: bool
-    ):
-        # TODO: Test function with FCALL
-        # TODO: Test with FUNCTION LIST
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
-
-        lib_name = f"mylib1C{get_random_string(5)}"
-        func_name = f"myfunc1c{get_random_string(5)}"
-        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
-        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
-
-        assert await redis_client.function_load(code, False, route) == lib_name
-
-        # TODO: change when FCALL, FCALL_RO is implemented.
-        assert (
-            await redis_client.custom_command(
-                ["FCALL", func_name, "0", "one", "two"],
-                SlotKeyRoute(SlotType.PRIMARY, "1"),
-            )
-            == "one"
-        )
-        assert (
-            await redis_client.custom_command(
-                ["FCALL_RO", func_name, "0", "one", "two"],
-                SlotKeyRoute(SlotType.PRIMARY, "1"),
-            )
-            == "one"
-        )
-
-        # TODO: add FUNCTION LIST once implemented
-
-        # re-load library without overwriting
-        with pytest.raises(RequestError) as e:
-            await redis_client.function_load(code, False, route)
-        assert "Library '" + lib_name + "' already exists" in str(e)
-
-        # re-load library with overwriting
-        assert await redis_client.function_load(code, True, route) == lib_name
-
-        func2_name = f"myfunc2c{get_random_string(5)}"
-        new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
-        new_code = generate_lua_lib_code(
-            lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
-        )
-
-        assert await redis_client.function_load(new_code, True, route) == lib_name
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_delete(self, redis_client: TRedisClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
-            pytest.skip(f"Redis version required >= {min_version}")
-
-        lib_name = f"mylib1C{get_random_string(5)}"
-        func_name = f"myfunc1c{get_random_string(5)}"
-        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
-
-        # Load the function
-        assert await redis_client.function_load(code) == lib_name
-
-        # TODO: Ensure the library exists with FUNCTION LIST
-
-        # Delete the function
-        assert await redis_client.function_delete(lib_name) == OK
-
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
-
-        # deleting a non-existing library
-        with pytest.raises(RequestError) as e:
-            await redis_client.function_delete(lib_name)
-        assert "Library not found" in str(e)
-
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    @pytest.mark.parametrize("single_route", [True, False])
-    async def test_function_delete_with_routing(
-        self, redis_client: RedisClusterClient, single_route: bool
-    ):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
-            pytest.skip(f"Redis version required >= {min_version}")
-
-        lib_name = f"mylib1C{get_random_string(5)}"
-        func_name = f"myfunc1c{get_random_string(5)}"
-        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
-        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
-
-        # Load the function
-        assert await redis_client.function_load(code, False, route) == lib_name
-
-        # TODO: Ensure the library exists with FUNCTION LIST
-
-        # Delete the function
-        assert await redis_client.function_delete(lib_name, route) == OK
-
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
-
-        # deleting a non-existing library
-        with pytest.raises(RequestError) as e:
-            await redis_client.function_delete(lib_name)
-        assert "Library not found" in str(e)
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_load(self, redis_client: TGlideClient):
         # TODO: Test function with FCALL
         # TODO: Test with FUNCTION LIST
@@ -6827,6 +6673,7 @@ class TestCommands:
         assert await redis_client.function_load(code, True) == lib_name
 
         func2_name = f"myfunc2c{get_random_string(5)}"
+        new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
         new_code = generate_lua_lib_code(
             lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
         )
@@ -6879,6 +6726,7 @@ class TestCommands:
         assert await redis_client.function_load(code, True, route) == lib_name
 
         func2_name = f"myfunc2c{get_random_string(5)}"
+        new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
         new_code = generate_lua_lib_code(
             lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
         )
@@ -6944,6 +6792,62 @@ class TestCommands:
 
         # Clean up by flushing functions again
         assert await redis_client.function_flush(route=route) == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_delete(self, redis_client: TGlideClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            pytest.skip(f"Redis version required >= {min_version}")
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+
+        # Load the function
+        assert await redis_client.function_load(code) == lib_name
+
+        # TODO: Ensure the library exists with FUNCTION LIST
+
+        # Delete the function
+        assert await redis_client.function_delete(lib_name) == OK
+
+        # TODO: Ensure the function is no longer present with FUNCTION LIST
+
+        # deleting a non-existing library
+        with pytest.raises(RequestError) as e:
+            await redis_client.function_delete(lib_name)
+        assert "Library not found" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("single_route", [True, False])
+    async def test_function_delete_with_routing(
+        self, redis_client: GlideClusterClient, single_route: bool
+    ):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            pytest.skip(f"Redis version required >= {min_version}")
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        # Load the function
+        assert await redis_client.function_load(code, False, route) == lib_name
+
+        # TODO: Ensure the library exists with FUNCTION LIST
+
+        # Delete the function
+        assert await redis_client.function_delete(lib_name, route) == OK
+
+        # TODO: Ensure the function is no longer present with FUNCTION LIST
+
+        # deleting a non-existing library
+        with pytest.raises(RequestError) as e:
+            await redis_client.function_delete(lib_name)
+        assert "Library not found" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7640,6 +7544,4 @@ class TestScripts:
         )
         script = Script("return redis.call('GET', KEYS[1])")
         assert await redis_client.invoke_script(script, keys=[key1]) == "value1"
-        assert await redis_client.invoke_script(script, keys=[key2]) == "value2"
-
         assert await redis_client.invoke_script(script, keys=[key2]) == "value2"
