@@ -5167,7 +5167,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
         ArgsArray args =
-            buildArgs(concatenateArrays(new String[]{key}, searchFrom.toArgs(), searchBy.toArgs()));
+                buildArgs(concatenateArrays(new String[] {key}, searchFrom.toArgs(), searchBy.toArgs()));
         protobufTransaction.addCommands(buildCommand(GeoSearch, args));
         return getThis();
     }

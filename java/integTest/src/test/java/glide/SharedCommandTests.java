@@ -7709,15 +7709,15 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
-            assertThrows(
-                ExecutionException.class,
-                () ->
-                    client
-                        .sscan(
-                            key2,
-                            initialCursor,
-                            SScanOptions.builder().matchPattern("test").count(1L).build())
-                        .get());
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .sscan(
+                                                key2,
+                                                initialCursor,
+                                                SScanOptions.builder().matchPattern("test").count(1L).build())
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Negative count
