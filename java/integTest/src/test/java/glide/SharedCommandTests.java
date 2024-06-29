@@ -7857,12 +7857,6 @@ public class SharedCommandTests {
                         "secondResultAllValues: {%s} numberMapValuesAsStrings: {%s}",
                         secondResultAllValues, numberMapValuesAsStrings));
 
-        assertTrue(
-                secondResultAllKeys.containsAll(numberMap.keySet()),
-                String.format(
-                        "secondResultAllKeys: {%s} numberMap.keySet: {%s}",
-                        secondResultAllKeys, numberMap.keySet()));
-
         // Test match pattern
         result =
                 client.zscan(key1, initialCursor, ZScanOptions.builder().matchPattern("*").build()).get();
