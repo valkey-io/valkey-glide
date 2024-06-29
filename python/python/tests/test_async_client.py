@@ -7556,12 +7556,11 @@ class TestClusterRoutes:
         # Result contains a subset of the key
         assert await redis_client.sadd(key1, num_members) == len(num_members)
         result_cursor = "0"
-        result_values = set()
+        result_values = set() # type: set[str]
 
         while True:
             result = await redis_client.sscan(key1, result_cursor)
-            print(result)
-            result_cursor = result[result_cursor_index]
+            result_cursor = str(result[result_cursor_index])
             result_values.update(result[result_collection_index])
 
             # 0 is returned for the cursor of the last iteration.
@@ -7569,7 +7568,7 @@ class TestClusterRoutes:
                 break
 
             second_result = await redis_client.sscan(key1, result_cursor)
-            new_result_cursor = second_result[result_cursor_index]
+            new_result_cursor = str(second_result[result_cursor_index])
             assert new_result_cursor != result_cursor
 
             result_cursor = new_result_cursor
@@ -7582,17 +7581,17 @@ class TestClusterRoutes:
 
         # Test match pattern
         result = await redis_client.sscan(key1, initial_cursor, match="*")
-        assert int(result[result_cursor_index]) > 0
+        assert result[result_cursor_index] != "0"
         assert len(result[result_collection_index]) >= default_count
 
         # Test count
         result = await redis_client.sscan(key1, initial_cursor, count=20)
-        assert int(result[result_cursor_index]) > 0
+        assert result[result_cursor_index] != "0"
         assert len(result[result_collection_index]) >= 20
 
         # Test count with match returns a non-empty list
         result = await redis_client.sscan(key1, initial_cursor, match="1*", count=20)
-        assert int(result[result_cursor_index]) > 0
+        assert result[result_cursor_index] != "0"
         assert len(result[result_collection_index]) >= 0
 
         # Exceptions
