@@ -8060,8 +8060,9 @@ public class SharedCommandTests {
         // setup
         String key = UUID.randomUUID().toString();
         long numreplicas = 1L;
-        long timeout = 400L;
+        long timeout = 1000L;
 
+        // assert that wait returns 0 under standalone and 1 under cluster mode.
         assertEquals(OK, client.set(key, "value").get());
         assertTrue(client.wait(numreplicas, timeout).get() >= (client instanceof RedisClient ? 0 : 1));
 
@@ -8082,7 +8083,7 @@ public class SharedCommandTests {
                         : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
-            assertEquals((client instanceof RedisClient ? 0 : 1), testClient.wait(1L, 300L).get());
+            assertEquals((client instanceof RedisClient ? 0 : 1), testClient.wait(1L, 500L).get());
         }
     }
 }

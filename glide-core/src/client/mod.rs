@@ -204,7 +204,7 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
             .position(b"BLOCK")
             .map(|idx| get_timeout_from_cmd_arg(cmd, idx + 1, TimeUnit::Milliseconds))
             .unwrap_or(Ok(RequestTimeoutOption::ClientConfig)),
-        b"WAIT" => get_timeout_from_cmd_arg(cmd, 1, TimeUnit::Milliseconds),
+        b"WAIT" => get_timeout_from_cmd_arg(cmd, 2, TimeUnit::Milliseconds),
         _ => Ok(RequestTimeoutOption::ClientConfig),
     }?;
 
