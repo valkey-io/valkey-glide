@@ -42,6 +42,7 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -351,6 +352,10 @@ public class TransactionTestUtilities {
     private static Object[] hashCommands(BaseTransaction<?> transaction) {
         String hashKey1 = "{HashKey}-1-" + UUID.randomUUID();
 
+        // This extra key is for HScan testing. It is a key with only one field. HScan doesn't guarantee
+        // a return order but this test compares arrays so order is significant.
+        String hashKey2 = "{HashKey}-2-" + UUID.randomUUID();
+
         transaction
                 .hset(hashKey1, Map.of(field1, value1, field2, value2))
                 .hget(hashKey1, field1)
@@ -369,7 +374,10 @@ public class TransactionTestUtilities {
                 .hincrBy(hashKey1, field3, 5)
                 .hincrByFloat(hashKey1, field3, 5.5)
                 .hkeys(hashKey1)
-                .hstrlen(hashKey1, field2);
+                .hstrlen(hashKey1, field2)
+                .hset(hashKey2, Map.of(field1, value1))
+                .hscan(hashKey2, "0")
+                .hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
 
         return new Object[] {
             2L, // hset(hashKey1, Map.of(field1, value1, field2, value2))
@@ -392,6 +400,11 @@ public class TransactionTestUtilities {
             10.5, // hincrByFloat(hashKey1, field3, 5.5)
             new String[] {field2, field3}, // hkeys(hashKey1)
             (long) value2.length(), // hstrlen(hashKey1, field2)
+            1L, // hset(hashKey2, Map.of(field1, value1))
+            new Object[] {"0", new Object[] {field1, value1}}, // hscan(hashKey2, "0")
+            new Object[] {
+                "0", new Object[] {field1, value1}
+            }, // hscan(hashKey2, "0", HScanOptions.builder().count(20L).build());
         };
     }
 
