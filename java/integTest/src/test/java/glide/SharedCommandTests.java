@@ -5189,7 +5189,7 @@ public class SharedCommandTests {
         // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
         // actual behavior returns a quicklist.
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.0.0") ? "quicklist" : "listpack",
+                REDIS_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
                 client.objectEncoding(listListpackKey).get());
     }
 
