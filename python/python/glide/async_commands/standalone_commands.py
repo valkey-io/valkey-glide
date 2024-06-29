@@ -288,6 +288,32 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
+    async def function_delete(self, library_name: str) -> TOK:
+        """
+        Deletes a library and all its functions.
+
+        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+
+        Args:
+            library_code (str): The libary name to delete
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_delete("my_lib")
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionDelete,
+                [library_name],
+            ),
+        )
+
     async def time(self) -> List[str]:
         """
         Returns the server time.
