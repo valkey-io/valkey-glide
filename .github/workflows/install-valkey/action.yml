@@ -26,6 +26,8 @@ runs:
 
     steps:
         - name: Cache Valkey
+           # TODO: remove the musl ARM64 limitation when https://github.com/actions/runner/issues/801 is resolved
+          if: ${{ inputs.target != 'aarch64-unknown-linux-musl' }}
           uses: actions/cache@v4
           id: cache-valkey
           with:

@@ -9,6 +9,8 @@ on:
         - .github/workflows/build-node-wrapper/action.yml
         - .github/workflows/start-self-hosted-runner/action.yml
         - .github/workflows/install-rust-and-protoc/action.yml
+        - .github/workflows/install-shared-dependencies/action.yml
+        - .github/workflows/install-valkey/action.yml
     push:
         tags:
             - "v*.*"

@@ -9,9 +9,9 @@ on:
             - java/**
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-redis/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/workflows/install-valkey/action.yml
     pull_request:
         paths:
             - glide-core/src/**
@@ -19,9 +19,9 @@ on:
             - java/**
             - .github/workflows/java.yml
             - .github/workflows/install-shared-dependencies/action.yml
-            - .github/workflows/install-redis/action.yml
             - .github/workflows/test-benchmark/action.yml
             - .github/workflows/lint-rust/action.yml
+            - .github/workflows/install-valkey/action.yml
 
 concurrency:
     group: java-${{ github.head_ref || github.ref }}
@@ -76,7 +76,7 @@ jobs:
               with:
                   distribution: "temurin"
                   java-version: ${{ matrix.java }}
-            
+
             - name: Install shared software dependencies
               uses: ./.github/workflows/install-shared-dependencies
               with:
