@@ -57,7 +57,7 @@ runs:
               apk update
               wget -O - https://sh.rustup.rs | sh -s -- -y
               source "$HOME/.cargo/env"
-              apk add protobuf-dev musl-dev make gcc envsubst openssl
+              apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev
 
         - name: Install software dependencies for Amazon-Linux
           shell: bash
