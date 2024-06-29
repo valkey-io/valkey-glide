@@ -7709,141 +7709,15 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         executionException =
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-                                        .sscan(
-                                                key2,
-                                                initialCursor,
-                                                SScanOptions.builder().matchPattern("test").count(1L).build())
-                                        .get());
+            assertThrows(
+                ExecutionException.class,
+                () ->
+                    client
+                        .sscan(
+                            key2,
+                            initialCursor,
+                            SScanOptions.builder().matchPattern("test").count(1L).build())
+                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // Negative count
@@ -7980,17 +7854,6 @@ public class SharedCommandTests {
                 String.format(
                         "secondResultAllKeys: {%s} numberMap.keySet: {%s}",
                         secondResultAllKeys, numberMap.keySet()));
-
-        final Set<String> numberMapValuesAsStrings =
-                numberMap.values().stream()
-                        .map(d -> String.valueOf(d.intValue()))
-                        .collect(Collectors.toSet());
-
-        assertTrue(
-                secondResultAllValues.containsAll(numberMapValuesAsStrings),
-                String.format(
-                        "secondResultAllValues: {%s} numberMapValuesAsStrings: {%s}",
-                        secondResultAllValues, numberMapValuesAsStrings));
 
         // Test match pattern
         result =

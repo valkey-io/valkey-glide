@@ -1207,7 +1207,4 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> sortStore(String key, String destination);
-    CompletableFuture<Object[]> sscan(String key, long cursor);
-
-    CompletableFuture<Object[]> sscan(String key, long cursor, ScanOptions scanOptions);
 }
