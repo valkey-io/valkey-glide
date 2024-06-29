@@ -5176,10 +5176,10 @@ public class SharedCommandTests {
     public void objectEncoding_returns_list_listpack(BaseClient client) {
         String listListpackKey = UUID.randomUUID().toString();
         assertEquals(1, client.lpush(listListpackKey, new String[] {"1"}).get());
-        // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
+        // API documentation states that a ziplist should be returned for Redis versions < 7.2, but
         // actual behavior returns a quicklist.
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.0.0") ? "quicklist" : "listpack",
+                REDIS_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
                 client.objectEncoding(listListpackKey).get());
     }
 
@@ -5192,7 +5192,7 @@ public class SharedCommandTests {
         // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
         // actual behavior returns a quicklist.
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.0.0") ? "quicklist" : "listpack",
+                REDIS_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
                 client.objectEncoding(listListpackKey).get());
     }
 
