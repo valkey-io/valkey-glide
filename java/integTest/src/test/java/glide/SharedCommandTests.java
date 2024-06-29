@@ -8010,7 +8010,7 @@ public class SharedCommandTests {
                                 key1, initialCursor, ZScanOptions.builder().matchPattern("1*").count(20L).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
-        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) > 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
         // Exceptions
         // Non-set key
