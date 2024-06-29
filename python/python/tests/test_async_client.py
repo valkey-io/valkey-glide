@@ -5712,20 +5712,20 @@ class TestCommands:
             await redis_client.xadd(
                 key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
             )
-            == stream_id1_0
+            == stream_id1_0.encode()
         )
         assert (
             await redis_client.xadd(
                 key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
             )
-            == stream_id1_1
+            == stream_id1_1.encode()
         )
 
         # read the entire stream with consumer1 and mark messages as pending
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer1) == {
-            key: {
-                stream_id1_0: [["f1_0", "v1_0"]],
-                stream_id1_1: [["f1_1", "v1_1"]],
+            key.encode(): {
+                stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
+                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
             }
         }
 
@@ -5734,38 +5734,38 @@ class TestCommands:
             await redis_client.xadd(
                 key, [("f1_2", "v1_2")], StreamAddOptions(stream_id1_2)
             )
-            == stream_id1_2
+            == stream_id1_2.encode()
         )
         assert (
             await redis_client.xadd(
                 key, [("f1_3", "v1_3")], StreamAddOptions(stream_id1_3)
             )
-            == stream_id1_3
+            == stream_id1_3.encode()
         )
         assert (
             await redis_client.xadd(
                 key, [("f1_4", "v1_4")], StreamAddOptions(stream_id1_4)
             )
-            == stream_id1_4
+            == stream_id1_4.encode()
         )
 
         # read the entire stream with consumer2 and mark messages as pending
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer2) == {
-            key: {
-                stream_id1_2: [["f1_2", "v1_2"]],
-                stream_id1_3: [["f1_3", "v1_3"]],
-                stream_id1_4: [["f1_4", "v1_4"]],
+            key.encode(): {
+                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
+                stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
+                stream_id1_4.encode(): [[b"f1_4", b"v1_4"]],
             }
         }
 
         # inner array order is non-deterministic, so we have to assert against it separately from the other info
         result = await redis_client.xpending(key, group_name)
         consumer_results = cast(List, result[3])
-        assert [consumer1, "2"] in consumer_results
-        assert [consumer2, "3"] in consumer_results
+        assert [consumer1.encode(), b"2"] in consumer_results
+        assert [consumer2.encode(), b"3"] in consumer_results
 
         result.remove(consumer_results)
-        assert result == [5, stream_id1_0, stream_id1_4]
+        assert result == [5, stream_id1_0.encode(), stream_id1_4.encode()]
 
         # to ensure an idle_time > 0
         time.sleep(2)
@@ -5777,27 +5777,27 @@ class TestCommands:
         idle_time = cast(int, range_result[0][2])
         assert idle_time > 0
         range_result[0].remove(idle_time)
-        assert range_result[0] == [stream_id1_0, consumer1, 1]
+        assert range_result[0] == [stream_id1_0.encode(), consumer1.encode(), 1]
 
         idle_time = cast(int, range_result[1][2])
         assert idle_time > 0
         range_result[1].remove(idle_time)
-        assert range_result[1] == [stream_id1_1, consumer1, 1]
+        assert range_result[1] == [stream_id1_1.encode(), consumer1.encode(), 1]
 
         idle_time = cast(int, range_result[2][2])
         assert idle_time > 0
         range_result[2].remove(idle_time)
-        assert range_result[2] == [stream_id1_2, consumer2, 1]
+        assert range_result[2] == [stream_id1_2.encode(), consumer2.encode(), 1]
 
         idle_time = cast(int, range_result[3][2])
         assert idle_time > 0
         range_result[3].remove(idle_time)
-        assert range_result[3] == [stream_id1_3, consumer2, 1]
+        assert range_result[3] == [stream_id1_3.encode(), consumer2.encode(), 1]
 
         idle_time = cast(int, range_result[4][2])
         assert idle_time > 0
         range_result[4].remove(idle_time)
-        assert range_result[4] == [stream_id1_4, consumer2, 1]
+        assert range_result[4] == [stream_id1_4.encode(), consumer2.encode(), 1]
 
         # acknowledge streams 1-1 to 1-3 and remove them from the xpending results
         assert (
@@ -5811,23 +5811,23 @@ class TestCommands:
             key, group_name, IdBound(stream_id1_4), MaxId(), 10
         )
         assert len(range_result) == 1
-        assert range_result[0][0] == stream_id1_4
-        assert range_result[0][1] == consumer2
+        assert range_result[0][0] == stream_id1_4.encode()
+        assert range_result[0][1] == consumer2.encode()
 
         range_result = await redis_client.xpending_range(
             key, group_name, MinId(), IdBound(stream_id1_3), 10
         )
         assert len(range_result) == 1
-        assert range_result[0][0] == stream_id1_0
-        assert range_result[0][1] == consumer1
+        assert range_result[0][0] == stream_id1_0.encode()
+        assert range_result[0][1] == consumer1.encode()
 
         # passing an empty StreamPendingOptions object should have no effect
         range_result = await redis_client.xpending_range(
             key, group_name, MinId(), IdBound(stream_id1_3), 10, StreamPendingOptions()
         )
         assert len(range_result) == 1
-        assert range_result[0][0] == stream_id1_0
-        assert range_result[0][1] == consumer1
+        assert range_result[0][0] == stream_id1_0.encode()
+        assert range_result[0][1] == consumer1.encode()
 
         range_result = await redis_client.xpending_range(
             key,
@@ -5838,8 +5838,8 @@ class TestCommands:
             StreamPendingOptions(min_idle_time_ms=1, consumer_name=consumer2),
         )
         assert len(range_result) == 1
-        assert range_result[0][0] == stream_id1_4
-        assert range_result[0][1] == consumer2
+        assert range_result[0][0] == stream_id1_4.encode()
+        assert range_result[0][1] == consumer2.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -5869,13 +5869,13 @@ class TestCommands:
             await redis_client.xadd(
                 key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
             )
-            == stream_id1_0
+            == stream_id1_0.encode()
         )
         assert (
             await redis_client.xadd(
                 key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
             )
-            == stream_id1_1
+            == stream_id1_1.encode()
         )
 
         # no pending messages yet...
@@ -5887,18 +5887,18 @@ class TestCommands:
 
         # read the entire stream with consumer and mark messages as pending
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
-            key: {
-                stream_id1_0: [["f1_0", "v1_0"]],
-                stream_id1_1: [["f1_1", "v1_1"]],
+            key.encode(): {
+                stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
+                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
             }
         }
 
         # sanity check - expect some results
         assert await redis_client.xpending(key, group_name) == [
             2,
-            stream_id1_0,
-            stream_id1_1,
-            [[consumer, "2"]],
+            stream_id1_0.encode(),
+            stream_id1_1.encode(),
+            [[consumer.encode(), b"2"]],
         ]
         result = await redis_client.xpending_range(
             key, group_name, MinId(), MaxId(), 10
@@ -6032,22 +6032,22 @@ class TestCommands:
         # List
         assert (
             await redis_client.xadd(key, [("f0", "v0")], StreamAddOptions(stream_id1_0))
-            == stream_id1_0
+            == stream_id1_0.encode()
         )
         assert (
             await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_1))
-            == stream_id1_1
+            == stream_id1_1.encode()
         )
         assert (
             await redis_client.xadd(key, [("f2", "v2")], StreamAddOptions(stream_id1_2))
-            == stream_id1_2
+            == stream_id1_2.encode()
         )
         assert await redis_client.xgroup_create(key, group_name, stream_id0) == OK
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
-            key: {
-                stream_id1_0: [["f0", "v0"]],
-                stream_id1_1: [["f1", "v1"]],
-                stream_id1_2: [["f2", "v2"]],
+            key.encode(): {
+                stream_id1_0.encode(): [[b"f0", b"v0"]],
+                stream_id1_1.encode(): [[b"f1", b"v1"]],
+                stream_id1_2.encode(): [[b"f2", b"v2"]],
             }
         }
         # sanity check: xreadgroup should not return more entries since they're all already in the Pending Entries List
@@ -6076,8 +6076,8 @@ class TestCommands:
 
         # xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
-            key: {
-                stream_id1_2: [["f2", "v2"]],
+            key.encode(): {
+                stream_id1_2.encode(): [[b"f2", b"v2"]],
             }
         }
 
@@ -6793,18 +6793,18 @@ class TestCommands:
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
-        assert await redis_client.function_load(code) == lib_name
+        assert await redis_client.function_load(code) == lib_name.encode()
 
         # TODO: change when FCALL, FCALL_RO is implemented
         assert (
             await redis_client.custom_command(["FCALL", func_name, "0", "one", "two"])
-            == "one"
+            == b"one"
         )
         assert (
             await redis_client.custom_command(
                 ["FCALL_RO", func_name, "0", "one", "two"]
             )
-            == "one"
+            == b"one"
         )
 
         # TODO: add FUNCTION LIST once implemented
@@ -6815,7 +6815,7 @@ class TestCommands:
         assert "Library '" + lib_name + "' already exists" in str(e)
 
         # re-load library with replace
-        assert await redis_client.function_load(code, True) == lib_name
+        assert await redis_client.function_load(code, True) == lib_name.encode()
 
         func2_name = f"myfunc2c{get_random_string(5)}"
         new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
@@ -6823,7 +6823,7 @@ class TestCommands:
             lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
         )
 
-        assert await redis_client.function_load(new_code, True) == lib_name
+        assert await redis_client.function_load(new_code, True) == lib_name.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -6842,7 +6842,7 @@ class TestCommands:
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
-        assert await redis_client.function_load(code, False, route) == lib_name
+        assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
         # TODO: change when FCALL, FCALL_RO is implemented.
         assert (
@@ -6850,14 +6850,14 @@ class TestCommands:
                 ["FCALL", func_name, "0", "one", "two"],
                 SlotKeyRoute(SlotType.PRIMARY, "1"),
             )
-            == "one"
+            == b"one"
         )
         assert (
             await redis_client.custom_command(
                 ["FCALL_RO", func_name, "0", "one", "two"],
                 SlotKeyRoute(SlotType.PRIMARY, "1"),
             )
-            == "one"
+            == b"one"
         )
 
         # TODO: add FUNCTION LIST once implemented
@@ -6868,7 +6868,7 @@ class TestCommands:
         assert "Library '" + lib_name + "' already exists" in str(e)
 
         # re-load library with replace
-        assert await redis_client.function_load(code, True, route) == lib_name
+        assert await redis_client.function_load(code, True, route) == lib_name.encode()
 
         func2_name = f"myfunc2c{get_random_string(5)}"
         new_code = f"""{code}\n redis.register_function({func2_name}, function(keys, args) return #args end)"""
@@ -6876,7 +6876,7 @@ class TestCommands:
             lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
         )
 
-        assert await redis_client.function_load(new_code, True, route) == lib_name
+        assert await redis_client.function_load(new_code, True, route) == lib_name.encode()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -6890,7 +6890,7 @@ class TestCommands:
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
         # Load the function
-        assert await redis_client.function_load(code) == lib_name
+        assert await redis_client.function_load(code) == lib_name.encode()
 
         # TODO: Ensure the function exists with FUNCTION LIST
 
@@ -6901,7 +6901,7 @@ class TestCommands:
         # TODO: Ensure the function is no longer present with FUNCTION LIST
 
         # Attempt to re-load library without overwriting to ensure FLUSH was effective
-        assert await redis_client.function_load(code) == lib_name
+        assert await redis_client.function_load(code) == lib_name.encode()
 
         # Clean up by flushing functions again
         await redis_client.function_flush()
@@ -6922,7 +6922,7 @@ class TestCommands:
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
         # Load the function
-        assert await redis_client.function_load(code, False, route) == lib_name
+        assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
         # TODO: Ensure the function exists with FUNCTION LIST
 
@@ -6933,7 +6933,7 @@ class TestCommands:
         # TODO: Ensure the function is no longer present with FUNCTION LIST
 
         # Attempt to re-load library without overwriting to ensure FLUSH was effective
-        assert await redis_client.function_load(code, False, route) == lib_name
+        assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
         # Clean up by flushing functions again
         assert await redis_client.function_flush(route=route) == OK
@@ -7290,8 +7290,8 @@ class TestCommands:
 
         assert await redis_client.set(key, "foo") == OK
         # `key` should be the only existing key, so random_key should return `key`
-        assert await redis_client.random_key() == key
-        assert await redis_client.random_key(AllPrimaries()) == key
+        assert await redis_client.random_key() == key.encode()
+        assert await redis_client.random_key(AllPrimaries()) == key.encode()
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7309,7 +7309,7 @@ class TestCommands:
         # set `key` in DB 1
         assert await redis_client.set(key, "foo") == OK
         # `key` should be the only key in the database
-        assert await redis_client.random_key() == key
+        assert await redis_client.random_key() == key.encode()
 
         # switch back to DB 0
         assert await redis_client.select(0) == OK

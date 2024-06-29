@@ -105,9 +105,9 @@ async def transaction_test(
 
     if not await check_if_server_version_lt(redis_client, "7.0.0"):
         transaction.function_load(code)
-        args.append(lib_name)
+        args.append(lib_name.encode())
         transaction.function_load(code, True)
-        args.append(lib_name)
+        args.append(lib_name.encode())
         transaction.function_delete(lib_name)
         args.append(OK)
         transaction.function_flush()
@@ -596,7 +596,7 @@ async def transaction_test(
     transaction.set(key, "foo")
     args.append(OK)
     transaction.random_key()
-    args.append(key)
+    args.append(key.encode())
 
     min_version = "6.2.0"
     if not await check_if_server_version_lt(redis_client, min_version):
