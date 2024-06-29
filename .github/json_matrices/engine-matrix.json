@@ -10,5 +10,9 @@
   {
     "type": "valkey",
     "version": "redis-6.2.14"
+  },
+  {
+    "type": "valkey",
+    "version": "6.0"
   }
 ]
