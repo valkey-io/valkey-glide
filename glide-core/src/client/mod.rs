@@ -172,7 +172,7 @@ fn get_timeout_from_cmd_arg(
             format!("Received timeout = {:?}.", timeout_secs),
         )))
     } else if timeout_secs == 0.0 {
-        if (std::str::from_utf8(&cmd.command().unwrap_or_default()) == Ok("WAIT")) {
+        if std::str::from_utf8(&cmd.command().unwrap_or_default()) == Ok("WAIT") {
             Ok(RequestTimeoutOption::ClientConfig)
         } else {
             // `0` means we should set no timeout
