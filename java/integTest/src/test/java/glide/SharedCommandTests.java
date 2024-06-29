@@ -7589,7 +7589,7 @@ public class SharedCommandTests {
         String key2 = "{key}-2" + UUID.randomUUID();
         String initialCursor = "0";
         long defaultCount = 10;
-        String[] numberMembers = new String[125];
+        String[] numberMembers = new String[50000]; // Use large dataset to force an iterative cursor.
         for (int i = 0; i < numberMembers.length; i++) {
             numberMembers[i] = String.valueOf(i);
         }
@@ -7639,13 +7639,19 @@ public class SharedCommandTests {
         assertEquals(numberMembers.length, client.sadd(key1, numberMembers).get());
         String resultCursor = "0";
         final Set<Object> secondResultValues = new HashSet<>();
+        boolean isFirstLoop = true;
         do {
             result = client.sscan(key1, resultCursor).get();
             resultCursor = result[resultCursorIndex].toString();
             secondResultValues.addAll(
                     Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet()));
 
-            assertNotEquals("0", resultCursor);
+            if (isFirstLoop) {
+                assertNotEquals("0", resultCursor);
+                isFirstLoop = false;
+            } else if (resultCursor.equals("0")) {
+                break;
+            }
 
             // Scan with result cursor has a different set
             Object[] secondResult = client.sscan(key1, resultCursor).get();
@@ -7737,9 +7743,9 @@ public class SharedCommandTests {
         int resultCursorIndex = 0;
         int resultCollectionIndex = 1;
 
-        // Setup test data
+        // Setup test data - use a large number of entries to force an iterative cursor.
         Map<String, Double> numberMap = new HashMap<>();
-        for (Double i = 0.0; i < 125; i++) {
+        for (Double i = 0.0; i < 50000; i++) {
             numberMap.put(String.valueOf(i), i);
         }
         String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
@@ -7800,6 +7806,7 @@ public class SharedCommandTests {
         String resultCursor = "0";
         final Set<Object> secondResultAllKeys = new HashSet<>();
         final Set<Object> secondResultAllValues = new HashSet<>();
+        boolean isFirstLoop = true;
         do {
             result = client.zscan(key1, resultCursor).get();
             resultCursor = result[resultCursorIndex].toString();
@@ -7809,7 +7816,12 @@ public class SharedCommandTests {
                 secondResultAllValues.add(resultEntry[i + 1]);
             }
 
-            assertNotEquals("0", resultCursor);
+            if (isFirstLoop) {
+                assertNotEquals("0", resultCursor);
+                isFirstLoop = false;
+            } else if (resultCursor.equals("0")) {
+                break;
+            }
 
             // Scan with result cursor has a different set
             Object[] secondResult = client.zscan(key1, resultCursor).get();
