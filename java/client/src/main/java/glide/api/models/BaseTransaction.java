@@ -5509,8 +5509,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
      * @param key The key of the set.
-     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates the start of the
-     *               search.
+     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates
+     *     the start of the search.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
      *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
      *     the <code>cursor</code> returned on the last iteration of the set. The second element is
@@ -5526,8 +5526,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
      * @param key The key of the set.
-     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates the start of the
-     *               search.
+     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates
+     *     the start of the search.
      * @param sScanOptions The {@link SScanOptions}.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
      *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
@@ -5546,14 +5546,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
      * @param key The key of the sorted set.
-     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates the start of the
-     *               search.
+     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates
+     *     the start of the search.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
      *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
      *     the <code>cursor</code> returned on the last iteration of the set. The second element is
-     *     always an <code>Array</code> of the subset of the sorted set held in <code>key</code>. The array
-     *     in the second element is always a flattened series of String pairs, where the value is at
-     *     even indices and the score is at odd indices.
+     *     always an <code>Array</code> of the subset of the sorted set held in <code>key</code>. The
+     *     array in the second element is always a flattened series of String pairs, where the value
+     *     is at even indices and the score is at odd indices.
      */
     public T zscan(@NonNull String key, @NonNull String cursor) {
         protobufTransaction.addCommands(buildCommand(ZScan, buildArgs(key, cursor)));
@@ -5565,15 +5565,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
      * @param key The key of the sorted set.
-     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates the start of the
-     *               search.
+     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates
+     *     the start of the search.
      * @param zScanOptions The {@link ZScanOptions}.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
      *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
      *     the <code>cursor</code> returned on the last iteration of the set. The second element is
      *     always an <code>Array</code> of the subset of the set held in <code>key</code>. The array
-     *     in the second element is always a flattened series of <code>String</code> pairs, where the value is at
-     *     even indices and the score is at odd indices.
+     *     in the second element is always a flattened series of <code>String</code> pairs, where the
+     *     value is at even indices and the score is at odd indices.
      */
     public T zscan(@NonNull String key, @NonNull String cursor, @NonNull ZScanOptions zScanOptions) {
         ArgsArray commandArgs =
