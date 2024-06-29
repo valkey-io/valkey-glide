@@ -5416,7 +5416,7 @@ class CoreCommands(Protocol):
             >>> result_cursor = "0"
             >>> while True:
             ...     result = await redis_client.sscan("key", "0", match="*")
-            ...     new_cursor = result [0]
+            ...     new_cursor = str(result [0])
             ...     print("Cursor: ", new_cursor)
             ...     print("Members: ", result[1])
             ...     if new_cursor == "0":
