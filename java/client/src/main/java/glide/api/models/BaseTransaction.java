@@ -5167,23 +5167,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
         ArgsArray args =
-                buildArgs(concatenateArrays(new String[] {key}, searchFrom.toArgs(), searchBy.toArgs()));
+            buildArgs(concatenateArrays(new String[]{key}, searchFrom.toArgs(), searchBy.toArgs()));
         protobufTransaction.addCommands(buildCommand(GeoSearch, args));
-        return getThis();
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
-     * <br>
-     * The <code>sort</code> command can be used to sort elements based on different criteria and
-     * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String)}.<br>
-     *
-     * @param key The key of the list, set, or sorted set to be sorted.
-     * @return Command Response - An <code>Array</code> of sorted elements.
-     */
-    public T sort(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
         return getThis();
     }
 
@@ -5231,22 +5216,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
-     * <br>
-     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
-     * and apply transformations on sorted elements.
-     *
-     * @since Redis 7.0 and above.
-     * @param key The key of the list, set, or sorted set to be sorted.
-     * @return Command Response - An <code>Array</code> of sorted elements.
-     */
-    public T sortReadOnly(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(SortReadOnly, commandArgs));
-        return getThis();
-    }
-
-    /**
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
@@ -5290,25 +5259,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                         concatenateArrays(
                                 new String[] {key}, searchFrom.toArgs(), searchBy.toArgs(), options.toArgs()));
         protobufTransaction.addCommands(buildCommand(GeoSearch, args));
-        return getThis();
-    }
-
-    /**
-     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
-     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
-     * different criteria, apply transformations on sorted elements, and store the result in a new
-     * key.<br>
-     * To get the sort result without storing it into a key, see {@link #sort(String)} or {@link
-     * #sortReadOnly(String)}.
-     *
-     * @param key The key of the list, set, or sorted set to be sorted.
-     * @param destination The key where the sorted result will be stored.
-     * @return Command Response - The number of elements in the sorted key stored at <code>destination
-     *     </code>.
-     */
-    public T sortStore(@NonNull String key, @NonNull String destination) {
-        ArgsArray commandArgs = buildArgs(new String[] {key, STORE_COMMAND_STRING, destination});
-        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
         return getThis();
     }
 
@@ -5363,22 +5313,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 options.toArgs(),
                                 resultOptions.toArgs()));
         protobufTransaction.addCommands(buildCommand(GeoSearch, args));
-        return getThis();
-    }
-
-    /**
-     * Iterates incrementally over a set.
-     *
-     * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
-     * @param key The key of the set.
-     * @param cursor The cursor that points to the next iteration of results.
-     * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
-     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
-     *     the <code>cursor</code> returned on the last iteration of the set. The second element is
-     *     always an <code>Array</code> of the subset of the set held in <code>key</code>.
-     */
-    public T sscan(@NonNull String key, @NonNull String cursor) {
-        protobufTransaction.addCommands(buildCommand(SScan, buildArgs(key, cursor)));
         return getThis();
     }
 
