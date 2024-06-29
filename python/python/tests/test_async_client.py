@@ -7560,16 +7560,16 @@ class TestClusterRoutes:
         result_cursor = "0"
         result_values = set()  # type: set[str]
         result = await redis_client.sscan(key1, result_cursor)
-        result_cursor = str(result[result_cursor_index])
+        result_cursor = result[result_cursor_index]
         result_values.update(result[result_collection_index])
 
         # 0 is returned for the cursor of the last iteration.
         while result_cursor != "0":
             next_result = await redis_client.sscan(key1, result_cursor)
-            next_result_cursor = str(next_result[result_cursor_index])
+            next_result_cursor = next_result[result_cursor_index]
             assert next_result_cursor != result_cursor
 
-            assert False == set(result[result_collection_index]).issubset(
+            assert not set(result[result_collection_index]).issubset(
                 set(next_result[result_collection_index])
             )
             result_values.update(next_result[result_collection_index])
