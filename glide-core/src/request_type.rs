@@ -210,6 +210,7 @@ pub enum RequestType {
     XGroupSetId = 199,
     SScan = 200,
     ZScan = 201,
+    HScan = 202,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -423,6 +424,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::XGroupSetId => RequestType::XGroupSetId,
             ProtobufRequestType::SScan => RequestType::SScan,
             ProtobufRequestType::ZScan => RequestType::ZScan,
+            ProtobufRequestType::HScan => RequestType::HScan,
         }
     }
 }
@@ -634,6 +636,7 @@ impl RequestType {
             RequestType::XGroupSetId => Some(get_two_word_command("XGROUP", "SETID")),
             RequestType::SScan => Some(cmd("SSCAN")),
             RequestType::ZScan => Some(cmd("ZSCAN")),
+            RequestType::HScan => Some(cmd("HSCAN")),
         }
     }
 }
