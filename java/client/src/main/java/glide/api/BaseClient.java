@@ -360,6 +360,7 @@ public abstract class BaseClient
     /**
      * Returns a promise for a next pubsub message.
      *
+     * @apiNote <b>Not implemented!</b>
      * @throws ConfigurationError If client is not subscribed to any channel or if client configured
      *     with a callback.
      * @return A <code>Future</code> which resolved with the next incoming message.
@@ -375,11 +376,9 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        // TODO
-        throw new NotImplementedException("oh no");
+        throw new NotImplementedException(
+                "This feature will be supported in a future release of the GLIDE java client");
     }
-
-    // TODO return a message queue
 
     /**
      * Closes this resource, relinquishing any underlying resources. This method is invoked
