@@ -5,10 +5,6 @@
   },
   {
     "type": "valkey",
-    "version": "redis-7.2.4"
-  },
-  {
-    "type": "valkey",
     "version": "redis-7.0.15"
   },
   {
