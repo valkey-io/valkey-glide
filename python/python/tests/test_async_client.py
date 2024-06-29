@@ -7529,7 +7529,9 @@ class TestClusterRoutes:
         result_cursor_index = 0
         result_collection_index = 1
         default_count = 10
-        num_members = list(map(str, range(125)))
+        num_members = list(
+            map(str, range(50000))
+        )  # Use large dataset to force an iterative cursor.
         char_members = ["a", "b", "c", "d", "e"]
 
         # Empty set

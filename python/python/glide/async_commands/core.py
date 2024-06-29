@@ -5394,7 +5394,8 @@ class CoreCommands(Protocol):
 
         Args:
             key (str): The key of the set.
-            cursor (str): The cursor that points to the next iteration of results.
+            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+                the search.
             match (Optional[str]): The match filter is applied to the result of the command and will only include
                 strings that match the pattern specified. If the set is large enough for scan commands to return only a
                 subset of the set then there could be a case where the result is empty although there are items that
