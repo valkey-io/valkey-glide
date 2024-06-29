@@ -253,6 +253,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZScan;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
@@ -309,6 +310,7 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -9018,6 +9020,58 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Object[]> response =
                 service.sscan(key, cursor, SScanOptions.builder().matchPattern("*").count(1L).build());
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zscan_returns_success() {
+        // setup
+        String key = "testKey";
+        String cursor = "0";
+        String[] arguments = new String[] {key, cursor};
+        Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.zscan(key, cursor);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zscan_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String cursor = "0";
+        String[] arguments =
+                new String[] {key, cursor, MATCH_OPTION_STRING, "*", COUNT_OPTION_STRING, "1"};
+        Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.zscan(key, cursor, ZScanOptions.builder().matchPattern("*").count(1L).build());
         Object[] payload = response.get();
 
         // verify

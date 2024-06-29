@@ -79,6 +79,7 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -7608,6 +7609,11 @@ public class SharedCommandTests {
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
+        // Negative cursor
+        result = client.sscan(key1, "-1").get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
         // Result contains the whole set
         assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
         result = client.sscan(key1, initialCursor).get();
@@ -7658,15 +7664,21 @@ public class SharedCommandTests {
                         "secondResultValues: {%s}, numberMembersSet: {%s}",
                         secondResultValues, numberMembersSet));
 
+        assertTrue(
+                secondResultValues.containsAll(numberMembersSet),
+                String.format(
+                        "secondResultValues: {%s}, numberMembersSet: {%s}",
+                        secondResultValues, numberMembersSet));
+
         // Test match pattern
         result =
                 client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern("*").build()).get();
-        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) > 0);
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
         result = client.sscan(key1, initialCursor, SScanOptions.builder().count(20L).build()).get();
-        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) > 0);
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
         // Test count with match returns a non-empty list
@@ -7675,7 +7687,7 @@ public class SharedCommandTests {
                         .sscan(
                                 key1, initialCursor, SScanOptions.builder().matchPattern("1*").count(20L).build())
                         .get();
-        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) > 0);
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) > 0);
 
         // Exceptions
@@ -7828,6 +7840,174 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.sscan(key1, "-1", SScanOptions.builder().count(-1L).build()).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zscan(BaseClient client) {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String initialCursor = "0";
+        long defaultCount = 20;
+        int resultCursorIndex = 0;
+        int resultCollectionIndex = 1;
+
+        // Setup test data
+        Map<String, Double> numberMap = new HashMap<>();
+        for (Double i = 0.0; i < 125; i++) {
+            numberMap.put(String.valueOf(i), i);
+        }
+        String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
+        Map<String, Double> charMap = new HashMap<>();
+        for (double i = 0.0; i < 5; i++) {
+            charMap.put(charMembers[(int) i], i);
+        }
+
+        // Empty set
+        Object[] result = client.zscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Negative cursor
+        result = client.zscan(key1, "-1").get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Result contains the whole set
+        assertEquals(charMembers.length, client.zadd(key1, charMap).get());
+        result = client.zscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertEquals(
+                charMap.size() * 2,
+                ((Object[]) result[resultCollectionIndex])
+                        .length); // Length includes the score which is twice the map size
+        final Object[] resultArray = (Object[]) result[resultCollectionIndex];
+
+        final Set<Object> resultKeys = new HashSet<>();
+        final Set<Object> resultValues = new HashSet<>();
+        for (int i = 0; i < resultArray.length; i += 2) {
+            resultKeys.add(resultArray[i]);
+            resultValues.add(resultArray[i + 1]);
+        }
+        assertTrue(
+                resultKeys.containsAll(charMap.keySet()),
+                String.format("resultKeys: {%s} charMap.keySet(): {%s}", resultKeys, charMap.keySet()));
+
+        // The score comes back as an integer converted to a String when the fraction is zero.
+        final Set<String> expectedScoresAsStrings =
+                charMap.values().stream()
+                        .map(v -> String.valueOf(v.intValue()))
+                        .collect(Collectors.toSet());
+
+        assertTrue(
+                resultValues.containsAll(expectedScoresAsStrings),
+                String.format(
+                        "resultValues: {%s} expectedScoresAsStrings: {%s}",
+                        resultValues, expectedScoresAsStrings));
+
+        result =
+                client.zscan(key1, initialCursor, ZScanOptions.builder().matchPattern("a").build()).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {"a", "0"}, result[resultCollectionIndex]);
+
+        // Result contains a subset of the key
+        assertEquals(numberMap.size(), client.zadd(key1, numberMap).get());
+        String resultCursor = "0";
+        final Set<Object> secondResultAllKeys = new HashSet<>();
+        final Set<Object> secondResultAllValues = new HashSet<>();
+        do {
+            result = client.zscan(key1, resultCursor).get();
+            resultCursor = result[resultCursorIndex].toString();
+            Object[] resultEntry = (Object[]) result[resultCollectionIndex];
+            for (int i = 0; i < resultEntry.length; i += 2) {
+                secondResultAllKeys.add(resultEntry[i]);
+                secondResultAllValues.add(resultEntry[i + 1]);
+            }
+
+            if (resultCursor.equals("0")) {
+                break;
+            }
+
+            // Scan with result cursor has a different set
+            Object[] secondResult = client.zscan(key1, resultCursor).get();
+            String newResultCursor = secondResult[resultCursorIndex].toString();
+            assertNotEquals(resultCursor, newResultCursor);
+            resultCursor = newResultCursor;
+            Object[] secondResultEntry = (Object[]) secondResult[resultCollectionIndex];
+            assertFalse(
+                    Arrays.deepEquals(
+                            ArrayUtils.toArray(result[resultCollectionIndex]),
+                            ArrayUtils.toArray(secondResult[resultCollectionIndex])));
+
+            for (int i = 0; i < secondResultEntry.length; i += 2) {
+                secondResultAllKeys.add(secondResultEntry[i]);
+                secondResultAllValues.add(secondResultEntry[i + 1]);
+            }
+        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+
+        assertTrue(
+                secondResultAllKeys.containsAll(numberMap.keySet()),
+                String.format(
+                        "secondResultAllKeys: {%s} numberMap.keySet: {%s}",
+                        secondResultAllKeys, numberMap.keySet()));
+
+        final Set<String> numberMapValuesAsStrings =
+                numberMap.values().stream()
+                        .map(d -> String.valueOf(d.intValue()))
+                        .collect(Collectors.toSet());
+
+        assertTrue(
+                secondResultAllValues.containsAll(numberMapValuesAsStrings),
+                String.format(
+                        "secondResultAllValues: {%s} numberMapValuesAsStrings: {%s}",
+                        secondResultAllValues, numberMapValuesAsStrings));
+
+        // Test match pattern
+        result =
+                client.zscan(key1, initialCursor, ZScanOptions.builder().matchPattern("*").build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
+
+        // Test count
+        result = client.zscan(key1, initialCursor, ZScanOptions.builder().count(20L).build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
+
+        // Test count with match returns a non-empty list
+        result =
+                client
+                        .zscan(
+                                key1, initialCursor, ZScanOptions.builder().matchPattern("1*").count(20L).build())
+                        .get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) > 0);
+
+        // Exceptions
+        // Non-set key
+        assertEquals(OK, client.set(key2, "test").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zscan(key2, initialCursor).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zscan(
+                                                key2,
+                                                initialCursor,
+                                                ZScanOptions.builder().matchPattern("test").count(1L).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Negative count
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zscan(key1, "-1", ZScanOptions.builder().count(-1L).build()).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }

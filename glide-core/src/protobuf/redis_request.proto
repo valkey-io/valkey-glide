@@ -239,6 +239,7 @@ enum RequestType {
     XPending = 198;
     XGroupSetId = 199;
     SScan = 200;
+    ZScan = 201;
 }
 
 message Command {

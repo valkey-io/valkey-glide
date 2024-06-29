@@ -195,6 +195,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZScan;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
@@ -249,6 +250,7 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamGroupOptions;
@@ -5533,6 +5535,45 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs =
                 buildArgs(concatenateArrays(new String[] {key, cursor}, sScanOptions.toArgs()));
         protobufTransaction.addCommands(buildCommand(SScan, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Iterates incrementally over a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param cursor The cursor that points to the next iteration of results.
+     * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
+     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     the <code>cursor</code> returned on the last iteration of the set. The second element is
+     *     always an <code>Array</code> of the subset of the set held in <code>key</code>. The array
+     *     in the second element is always a flattened series of String pairs, where the value is at
+     *     even indices and the score is at odd indices.
+     */
+    public T zscan(@NonNull String key, @NonNull String cursor) {
+        protobufTransaction.addCommands(buildCommand(ZScan, buildArgs(key, cursor)));
+        return getThis();
+    }
+
+    /**
+     * Iterates incrementally over a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param cursor The cursor that points to the next iteration of results.
+     * @param zScanOptions The {@link ZScanOptions}.
+     * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
+     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     the <code>cursor</code> returned on the last iteration of the set. The second element is
+     *     always an <code>Array</code> of the subset of the set held in <code>key</code>. The array
+     *     in the second element is always a flattened series of String pairs, where the value is at
+     *     even indices and the score is at odd indices.
+     */
+    public T zscan(@NonNull String key, @NonNull String cursor, @NonNull ZScanOptions zScanOptions) {
+        ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {key, cursor}, zScanOptions.toArgs()));
+        protobufTransaction.addCommands(buildCommand(ZScan, commandArgs));
         return getThis();
     }
 
