@@ -41,6 +41,7 @@ runs:
           run: | 
             echo "Building valkey ${{ inputs.engine-version }}"
             cd ~
+            rm -rf valkey
             git clone https://github.com/valkey-io/valkey.git
             cd valkey
             git checkout ${{ inputs.engine-version }}
@@ -74,7 +75,7 @@ runs:
             # In Valkey releases, the engine is built with symlinks from valkey-server and valkey-cli
             # to redis-server and redis-cli. This step ensures that the engine is properly installed
             # with the expected version and that Valkey symlinks are correctly created.
-            
+
             IS_VALKEY=${{ steps.is_valkey_release.outputs.result }}
             EXPECTED_VERSION=`echo ${{ inputs.engine-version }} | sed -e "s/^redis-//"`
             REDIS_SERVER_VER=$(redis-server -v)
