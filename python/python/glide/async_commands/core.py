@@ -5380,6 +5380,66 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GetEx, args),
         )
 
+    async def sscan(
+        self,
+        key: str,
+        cursor: str,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> List[Union[str, List[str]]]:
+        """
+        Iterates incrementally over a set.
+
+        See https://valkey.io/commands/sscan for more details.
+
+        Args:
+            key (str): The key of the set.
+            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+                the search.
+            match (Optional[str]): The match filter is applied to the result of the command and will only include
+                strings that match the pattern specified. If the set is large enough for scan commands to return only a
+                subset of the set then there could be a case where the result is empty although there are items that
+                match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
+                only fetch and match `10` items from the list.
+            count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the set.
+                `COUNT` could be ignored until the set is large enough for the `SCAN` commands to represent the results
+                as compact single-allocation packed encoding.
+
+        Returns:
+            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the set held by `key`.
+                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+                returned on the last iteration of the set. The second element is always an `Array` of the subset of the
+                set held in `key`.
+
+        Examples:
+            # Assume "key" contains a set with 130 members
+            >>> result_cursor = "0"
+            >>> while True:
+            ...     result = await redis_client.sscan("key", "0", match="*")
+            ...     new_cursor = str(result [0])
+            ...     print("Cursor: ", new_cursor)
+            ...     print("Members: ", result[1])
+            ...     if new_cursor == "0":
+            ...         break
+            ...     result_cursor = new_cursor
+            Cursor:  48
+            Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+            Cursor:  24
+            Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+            Cursor:  0
+            Members:  ['47', '122', '1', '53', '10', '14', '80']
+        """
+        args = [key, cursor]
+        if match is not None:
+            args += ["MATCH", match]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return cast(
+            List[Union[str, List[str]]],
+            await self._execute_command(RequestType.SScan, args),
+        )
+
     @dataclass
     class PubSubMsg:
         """
