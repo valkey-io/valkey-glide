@@ -1,7 +1,9 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.function.FunctionRestorePolicy;
+import glide.api.models.configuration.ReadFrom;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -129,7 +131,56 @@ public interface ScriptingAndFunctionsCommands {
     CompletableFuture<String> functionDelete(String libName);
 
     /**
-     * Invokes a previously loaded function.
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-dump/">redis.io</a> for details.
+     * @return The serialized payload of all loaded libraries.
+     * @example
+     *     <pre>{@code
+     * byte[] data = client.functionDump().get();
+     * // now data could be saved to restore loaded functions on any Redis instance
+     * }</pre>
+     */
+    CompletableFuture<byte[]> functionDump();
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
+     *     details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionRestore(data).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionRestore(byte[] payload);
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}..
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
+     *     details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @param policy A policy for handling existing libraries.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionRestore(data, FLUSH).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy);
+
+    /**
+     * Invokes a previously loaded function.<br>
+     * This command is routed to primary nodes only.<br>
+     * To route to a replica please refer to {@link #fcallReadOnly}.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
@@ -142,6 +193,22 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<Object> fcall(String function);
+
+    /**
+     * Invokes a previously loaded read-only function.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * Object response = client.fcallReadOnly("Deep_Thought").get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcallReadOnly(String function);
 
     /**
      * Kills a function that is currently executing.<br>

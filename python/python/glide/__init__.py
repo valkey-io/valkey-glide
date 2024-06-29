@@ -1,17 +1,33 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
+from glide.async_commands.bitmap import (
+    BitEncoding,
+    BitFieldGet,
+    BitFieldIncrBy,
+    BitFieldOffset,
+    BitFieldOverflow,
+    BitFieldSet,
+    BitFieldSubCommands,
+    BitmapIndexType,
+    BitOffset,
+    BitOffsetMultiplier,
+    BitOverflowControl,
+    BitwiseOperation,
+    OffsetOptions,
+    SignedEncoding,
+    UnsignedEncoding,
+)
 from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,
+    ExpiryGetEx,
     ExpirySet,
     ExpiryType,
+    ExpiryTypeGetEx,
+    FlushMode,
     InfoSection,
     InsertPosition,
-    StreamAddOptions,
-    StreamTrimOptions,
-    TrimByMaxLen,
-    TrimByMinId,
     UpdateOptions,
 )
 from glide.async_commands.redis_modules import json
@@ -30,30 +46,47 @@ from glide.async_commands.sorted_set import (
     ScoreBoundary,
     ScoreFilter,
 )
+from glide.async_commands.stream import (
+    ExclusiveIdBound,
+    IdBound,
+    MaxId,
+    MinId,
+    StreamAddOptions,
+    StreamGroupOptions,
+    StreamPendingOptions,
+    StreamRangeBound,
+    StreamReadGroupOptions,
+    StreamReadOptions,
+    StreamTrimOptions,
+    TrimByMaxLen,
+    TrimByMinId,
+)
 from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
     BackoffStrategy,
     BaseClientConfiguration,
     ClusterClientConfiguration,
+    GlideClientConfiguration,
     NodeAddress,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
     ProtocolVersion,
     ReadFrom,
-    RedisClientConfiguration,
     RedisCredentials,
 )
 from glide.constants import OK
 from glide.exceptions import (
     ClosingError,
+    ConfigurationError,
+    ConnectionError,
     ExecAbortError,
     RedisError,
     RequestError,
     TimeoutError,
 )
+from glide.glide_client import GlideClient, GlideClusterClient
 from glide.logger import Level as LogLevel
 from glide.logger import Logger
-from glide.redis_client import RedisClient, RedisClusterClient
 from glide.routes import (
     AllNodes,
     AllPrimaries,
@@ -68,13 +101,13 @@ from .glide import Script
 
 __all__ = [
     # Client
-    "RedisClient",
-    "RedisClusterClient",
+    "GlideClient",
+    "GlideClusterClient",
     "Transaction",
     "ClusterTransaction",
     # Config
     "BaseClientConfiguration",
-    "RedisClientConfiguration",
+    "GlideClientConfiguration",
     "ClusterClientConfiguration",
     "BackoffStrategy",
     "ReadFrom",
@@ -86,12 +119,30 @@ __all__ = [
     # Response
     "OK",
     # Commands
+    "BitEncoding",
+    "BitFieldGet",
+    "BitFieldIncrBy",
+    "BitFieldOffset",
+    "BitFieldOverflow",
+    "BitFieldSet",
+    "BitFieldSubCommands",
+    "BitmapIndexType",
+    "BitOffset",
+    "BitOffsetMultiplier",
+    "BitOverflowControl",
+    "BitwiseOperation",
+    "OffsetOptions",
+    "SignedEncoding",
+    "UnsignedEncoding",
     "Script",
     "ScoreBoundary",
     "ConditionalChange",
     "ExpireOptions",
+    "ExpiryGetEx",
     "ExpirySet",
     "ExpiryType",
+    "ExpiryTypeGetEx",
+    "FlushMode",
     "GeoSearchByBox",
     "GeoSearchByRadius",
     "GeoSearchCount",
@@ -110,7 +161,16 @@ __all__ = [
     "RangeByScore",
     "ScoreFilter",
     "OrderBy",
+    "ExclusiveIdBound",
+    "IdBound",
+    "MaxId",
+    "MinId",
     "StreamAddOptions",
+    "StreamGroupOptions",
+    "StreamPendingOptions",
+    "StreamReadGroupOptions",
+    "StreamRangeBound",
+    "StreamReadOptions",
     "StreamTrimOptions",
     "TrimByMaxLen",
     "TrimByMinId",
@@ -128,6 +188,8 @@ __all__ = [
     "SlotIdRoute",
     # Exceptions
     "ClosingError",
+    "ConfigurationError",
+    "ConnectionError",
     "ExecAbortError",
     "RedisError",
     "RequestError",

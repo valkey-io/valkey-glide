@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 import {
@@ -14,9 +14,9 @@ import { v4 as uuidv4 } from "uuid";
 
 import {
     ClusterTransaction,
+    GlideClusterClient,
     InfoOptions,
     ProtocolVersion,
-    RedisClusterClient,
 } from "..";
 import { RedisCluster } from "../../utils/TestUtils.js";
 import { checkIfServerVersionLessThan, runBaseTests } from "./SharedTests";
@@ -24,20 +24,22 @@ import {
     flushAndCloseClient,
     getClientConfigurationOption,
     getFirstResult,
+    intoArray,
+    intoString,
     parseCommandLineArgs,
     parseEndpoints,
     transactionTest,
 } from "./TestUtilities";
 type Context = {
-    client: RedisClusterClient;
+    client: GlideClusterClient;
 };
 
 const TIMEOUT = 50000;
 
-describe("RedisClusterClient", () => {
+describe("GlideClusterClient", () => {
     let testsFailed = 0;
     let cluster: RedisCluster;
-    let client: RedisClusterClient;
+    let client: GlideClusterClient;
     beforeAll(async () => {
         const clusterAddresses = parseCommandLineArgs()["cluster-endpoints"];
         // Connect to cluster or create a new one based on the parsed addresses
@@ -67,7 +69,7 @@ describe("RedisClusterClient", () => {
             options.protocol = protocol;
             options.clientName = clientName;
             testsFailed += 1;
-            client = await RedisClusterClient.createClient(options);
+            client = await GlideClusterClient.createClient(options);
             return {
                 context: {
                     client,
@@ -86,30 +88,26 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `info with server and replication_%p`,
         async (protocol) => {
-            client = await RedisClusterClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const info_server = getFirstResult(
                 await client.info([InfoOptions.Server]),
             );
-            expect(info_server).toEqual(expect.stringContaining("# Server"));
+            expect(intoString(info_server)).toEqual(
+                expect.stringContaining("# Server"),
+            );
 
-            const result = (await client.info([
-                InfoOptions.Replication,
-            ])) as Record<string, string>;
-            const clusterNodes = await client.customCommand([
-                "CLUSTER",
-                "NODES",
-            ]);
-            expect(
-                (clusterNodes as string)?.split("master").length - 1,
-            ).toEqual(Object.keys(result).length);
-            Object.values(result).every((item) => {
-                expect(item).toEqual(expect.stringContaining("# Replication"));
-                expect(item).toEqual(
-                    expect.not.stringContaining("# Errorstats"),
-                );
-            });
+            const infoReplicationValues = Object.values(
+                await client.info([InfoOptions.Replication]),
+            );
+
+            const replicationInfo = intoArray(infoReplicationValues);
+
+            for (const item of replicationInfo) {
+                expect(item).toContain("role:master");
+                expect(item).toContain("# Replication");
+            }
         },
         TIMEOUT,
     );
@@ -117,16 +115,19 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `info with server and randomNode route_%p`,
         async (protocol) => {
-            client = await RedisClusterClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = await client.info(
                 [InfoOptions.Server],
                 "randomNode",
             );
-            expect(typeof result).toEqual("string");
-            expect(result).toEqual(expect.stringContaining("# Server"));
-            expect(result).toEqual(expect.not.stringContaining("# Errorstats"));
+            expect(intoString(result)).toEqual(
+                expect.stringContaining("# Server"),
+            );
+            expect(intoString(result)).toEqual(
+                expect.not.stringContaining("# Errorstats"),
+            );
         },
         TIMEOUT,
     );
@@ -144,14 +145,16 @@ describe("RedisClusterClient", () => {
                 );
             };
 
-            client = await RedisClusterClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const result = cleanResult(
-                (await client.customCommand(
-                    ["cluster", "nodes"],
-                    "randomNode",
-                )) as string,
+                intoString(
+                    await client.customCommand(
+                        ["cluster", "nodes"],
+                        "randomNode",
+                    ),
+                ),
             );
 
             // check that routing without explicit port works
@@ -162,10 +165,12 @@ describe("RedisClusterClient", () => {
             }
 
             const secondResult = cleanResult(
-                (await client.customCommand(["cluster", "nodes"], {
-                    type: "routeByAddress",
-                    host,
-                })) as string,
+                intoString(
+                    await client.customCommand(["cluster", "nodes"], {
+                        type: "routeByAddress",
+                        host,
+                    }),
+                ),
             );
 
             expect(result).toEqual(secondResult);
@@ -174,11 +179,13 @@ describe("RedisClusterClient", () => {
 
             // check that routing with explicit port works
             const thirdResult = cleanResult(
-                (await client.customCommand(["cluster", "nodes"], {
-                    type: "routeByAddress",
-                    host: host2,
-                    port: Number(port),
-                })) as string,
+                intoString(
+                    await client.customCommand(["cluster", "nodes"], {
+                        type: "routeByAddress",
+                        host: host2,
+                        port: Number(port),
+                    }),
+                ),
             );
 
             expect(result).toEqual(thirdResult);
@@ -189,7 +196,7 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `fail routing by address if no port is provided_%p`,
         async (protocol) => {
-            client = await RedisClusterClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             expect(() =>
@@ -205,14 +212,16 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `config get and config set transactions test_%p`,
         async (protocol) => {
-            client = await RedisClusterClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
             transaction.configSet({ timeout: "1000" });
             transaction.configGet(["timeout"]);
             const result = await client.exec(transaction);
-            expect(result).toEqual(["OK", { timeout: "1000" }]);
+            expect(intoString(result)).toEqual(
+                intoString(["OK", { timeout: "1000" }]),
+            );
         },
         TIMEOUT,
     );
@@ -220,13 +229,13 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can send transactions_%p`,
         async (protocol) => {
-            client = await RedisClusterClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
             const expectedRes = await transactionTest(transaction);
             const result = await client.exec(transaction);
-            expect(result).toEqual(expectedRes);
+            expect(intoString(result)).toEqual(intoString(expectedRes));
         },
         TIMEOUT,
     );
@@ -234,10 +243,10 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `can return null on WATCH transaction failures_%p`,
         async (protocol) => {
-            const client1 = await RedisClusterClient.createClient(
+            const client1 = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
-            const client2 = await RedisClusterClient.createClient(
+            const client2 = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const transaction = new ClusterTransaction();
@@ -260,15 +269,15 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `echo with all nodes routing_%p`,
         async (protocol) => {
-            client = await RedisClusterClient.createClient(
+            client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
             const message = uuidv4();
             const echoDict = await client.echo(message, "allNodes");
 
             expect(typeof echoDict).toBe("object");
-            expect(Object.values(echoDict)).toEqual(
-                expect.arrayContaining([message]),
+            expect(intoArray(echoDict)).toEqual(
+                expect.arrayContaining(intoArray([message])),
             );
         },
         TIMEOUT,
@@ -277,7 +286,7 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `check that multi key command returns a cross slot error`,
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
+            const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
@@ -318,7 +327,7 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         `check that multi key command routed to multiple nodes`,
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
+            const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
@@ -335,7 +344,7 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "object freq transaction test_%p",
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
+            const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
@@ -376,7 +385,7 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "object idletime transaction test_%p",
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
+            const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 
@@ -421,7 +430,7 @@ describe("RedisClusterClient", () => {
     it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
         "object refcount transaction test_%p",
         async (protocol) => {
-            const client = await RedisClusterClient.createClient(
+            const client = await GlideClusterClient.createClient(
                 getClientConfigurationOption(cluster.getAddresses(), protocol),
             );
 

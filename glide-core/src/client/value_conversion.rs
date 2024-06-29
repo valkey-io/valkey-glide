@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use redis::{
     cluster_routing::Routable, from_owned_redis_value, Cmd, ErrorKind, RedisResult, Value,
@@ -33,6 +33,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     KeyWithMemberAndScore,
     FunctionStatsReturnType,
     GeoSearchReturnType,
+    SimpleString,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -140,6 +141,9 @@ pub(crate) fn convert_to_expected_type(
         },
         ExpectedReturnType::BulkString => Ok(Value::BulkString(
             from_owned_redis_value::<String>(value)?.into(),
+        )),
+        ExpectedReturnType::SimpleString => Ok(Value::SimpleString(
+            from_owned_redis_value::<String>(value)?,
         )),
         ExpectedReturnType::JsonToggleReturnType => match value {
             Value::Array(array) => {
@@ -791,6 +795,7 @@ fn convert_to_array_of_pairs(
     value_expected_return_type: Option<ExpectedReturnType>,
 ) -> RedisResult<Value> {
     match response {
+        Value::Nil => Ok(response),
         Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Array(_)) => {
             // The server response is an empty array or a RESP3 array of pairs. In RESP3, the values in the pairs are
             // already of the correct type, so we do not need to convert them and `response` is in the correct format.
@@ -852,20 +857,35 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             key_type: &Some(ExpectedReturnType::BulkString),
             value_type: &Some(ExpectedReturnType::ArrayOfPairs),
         }),
-        b"XREAD" => Some(ExpectedReturnType::Map {
+        b"XREAD" | b"XREADGROUP" => Some(ExpectedReturnType::Map {
             key_type: &Some(ExpectedReturnType::BulkString),
             value_type: &Some(ExpectedReturnType::Map {
                 key_type: &Some(ExpectedReturnType::BulkString),
                 value_type: &Some(ExpectedReturnType::ArrayOfPairs),
             }),
         }),
+        b"LCS" => cmd.position(b"IDX").map(|_| ExpectedReturnType::Map {
+            key_type: &Some(ExpectedReturnType::SimpleString),
+            value_type: &None,
+        }),
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
-        b"HEXISTS" | b"HSETNX" | b"EXPIRE" | b"EXPIREAT" | b"PEXPIRE" | b"PEXPIREAT"
-        | b"SISMEMBER" | b"PERSIST" | b"SMOVE" | b"RENAMENX" | b"MOVE" | b"COPY" | b"MSETNX" => {
-            Some(ExpectedReturnType::Boolean)
-        }
+        b"HEXISTS"
+        | b"HSETNX"
+        | b"EXPIRE"
+        | b"EXPIREAT"
+        | b"PEXPIRE"
+        | b"PEXPIREAT"
+        | b"SISMEMBER"
+        | b"PERSIST"
+        | b"SMOVE"
+        | b"RENAMENX"
+        | b"MOVE"
+        | b"COPY"
+        | b"MSETNX"
+        | b"XGROUP DESTROY"
+        | b"XGROUP CREATECONSUMER" => Some(ExpectedReturnType::Boolean),
         b"SMISMEMBER" => Some(ExpectedReturnType::ArrayOfBools),
-        b"SMEMBERS" | b"SINTER" | b"SDIFF" => Some(ExpectedReturnType::Set),
+        b"SMEMBERS" | b"SINTER" | b"SDIFF" | b"SUNION" => Some(ExpectedReturnType::Set),
         b"ZSCORE" | b"GEODIST" => Some(ExpectedReturnType::DoubleOrNull),
         b"ZMSCORE" => Some(ExpectedReturnType::ArrayOfDoubleOrNull),
         b"ZPOPMIN" | b"ZPOPMAX" => Some(ExpectedReturnType::MapOfStringToDouble),
@@ -1184,6 +1204,28 @@ mod tests {
     fn convert_xread() {
         assert!(matches!(
             expected_type_for_cmd(redis::cmd("XREAD").arg("streams").arg("key").arg("id")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::BulkString),
+                value_type: &Some(ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::BulkString),
+                    value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+                }),
+            })
+        ));
+    }
+
+    #[test]
+    fn convert_xreadgroup() {
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("XREADGROUP")
+                    .arg("GROUP")
+                    .arg("group")
+                    .arg("consumer")
+                    .arg("streams")
+                    .arg("key")
+                    .arg("id")
+            ),
             Some(ExpectedReturnType::Map {
                 key_type: &Some(ExpectedReturnType::BulkString),
                 value_type: &Some(ExpectedReturnType::Map {
@@ -2340,5 +2382,15 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("key")).is_none());
+    }
+    #[test]
+    fn convert_lcs_idx() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("LCS").arg("key1").arg("key2").arg("IDX")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::SimpleString),
+                value_type: &None,
+            })
+        ));
     }
 }

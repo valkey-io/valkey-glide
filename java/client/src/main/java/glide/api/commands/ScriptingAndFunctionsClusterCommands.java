@@ -1,8 +1,10 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.ClusterValue;
 import glide.api.models.commands.FlushMode;
+import glide.api.models.commands.function.FunctionRestorePolicy;
+import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -257,6 +259,8 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
      * @param libName The library name to delete.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -267,8 +271,113 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<String> functionDelete(String libName, Route route);
 
     /**
-     * Invokes a previously loaded function.<br>
+     * Returns the serialized payload of all loaded libraries.<br>
      * The command will be routed to a random node.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-dump/">redis.io</a> for details.
+     * @return The serialized payload of all loaded libraries.
+     * @example
+     *     <pre>{@code
+     * byte[] data = client.functionDump().get();
+     * // data can be used to restore loaded functions on any Redis instance
+     * }</pre>
+     */
+    CompletableFuture<byte[]> functionDump();
+
+    /**
+     * Returns the serialized payload of all loaded libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-dump/">redis.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The serialized payload of all loaded libraries.
+     * @example
+     *     <pre>{@code
+     * byte[] data = client.functionDump(RANDOM).get().getSingleValue();
+     * // data can be used to restore loaded functions on any Redis instance
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<byte[]>> functionDump(Route route);
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
+     *     details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionRestore(data).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionRestore(byte[] payload);
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump()}.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
+     *     details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @param policy A policy for handling existing libraries.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionRestore(data, FLUSH).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionRestore(byte[] payload, FunctionRestorePolicy policy);
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump(Route)}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
+     *     details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionRestore(data, ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionRestore(byte[] payload, Route route);
+
+    /**
+     * Restores libraries from the serialized payload returned by {@link #functionDump(Route)}.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
+     *     details.
+     * @param payload The serialized data from {@link #functionDump()}.
+     * @param policy A policy for handling existing libraries.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionRestore(data, FLUSH, ALL_PRIMARIES).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionRestore(
+            byte[] payload, FunctionRestorePolicy policy, Route route);
+
+    /**
+     * Invokes a previously loaded function.<br>
+     * The command will be routed to a primary random node.<br>
+     * To route to a replica please refer to {@link #fcallReadOnly(String)}.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
@@ -303,12 +412,13 @@ public interface ScriptingAndFunctionsClusterCommands {
 
     /**
      * Invokes a previously loaded function.<br>
-     * The command will be routed to a random node.
+     * The command will be routed to a random primary node.<br>
+     * To route to a replica please refer to {@link #fcallReadOnly(String, String[])}.
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
      * @param function The function name.
-     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
      * @return The invoked function's return value.
      * @example
@@ -326,7 +436,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * @since Redis 7.0 and above.
      * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
      * @param function The function name.
-     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>Arguments
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -339,6 +449,81 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<Object>> fcall(String function, String[] arguments, Route route);
+
+    /**
+     * Invokes a previously loaded read-only function.<br>
+     * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * Object response = client.fcallReadOnly("Deep_Thought").get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcallReadOnly(String function);
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Object> response = client.fcallReadOnly("Deep_Thought", ALL_NODES).get();
+     * for (Object nodeResponse : response.getMultiValue().values()) {
+     *   assert nodeResponse == 42L;
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> fcallReadOnly(String function, Route route);
+
+    /**
+     * Invokes a previously loaded function.<br>
+     * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @return The invoked function's return value.
+     * @example
+     *     <pre>{@code
+     * String[] args = new String[] { "Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything" };
+     * Object response = client.fcallReadOnly("Deep_Thought", args).get();
+     * assert response == 42L;
+     * }</pre>
+     */
+    CompletableFuture<Object> fcallReadOnly(String function, String[] arguments);
+
+    /**
+     * Invokes a previously loaded read-only function.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @param function The function name.
+     * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
+     *     </code> should not represent names of keys.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The invoked function's return value wrapped by a {@link ClusterValue}.
+     * @example
+     *     <pre>{@code
+     * String[] args = new String[] { "Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything" };
+     * ClusterValue<Object> response = client.fcallReadOnly("Deep_Thought", args, RANDOM).get();
+     * assert response.getSingleValue() == 42L;
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Object>> fcallReadOnly(
+            String function, String[] arguments, Route route);
 
     /**
      * Kills a function that is currently executing.<br>

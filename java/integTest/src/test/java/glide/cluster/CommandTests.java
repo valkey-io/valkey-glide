@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.cluster;
 
 import static glide.TestConfiguration.REDIS_VERSION;
@@ -12,6 +12,7 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
@@ -24,6 +25,10 @@ import static glide.api.models.commands.InfoOptions.Section.REPLICATION;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
 import static glide.api.models.commands.ScoreFilter.MAX;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
+import static glide.api.models.commands.function.FunctionRestorePolicy.APPEND;
+import static glide.api.models.commands.function.FunctionRestorePolicy.FLUSH;
+import static glide.api.models.commands.function.FunctionRestorePolicy.REPLACE;
 import static glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_PRIMARIES;
@@ -43,12 +48,20 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
-import glide.api.models.commands.FlushMode;
+import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
+import glide.api.models.commands.SortBaseOptions;
+import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchResultOptions;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
+import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
@@ -555,6 +568,26 @@ public class CommandTests {
         multiPayload.forEach((key, value) -> assertEquals(message, value));
     }
 
+    @SneakyThrows
+    @Test
+    public void echo_gs() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString response = clusterClient.echo(gs(message)).get();
+        assertEquals(gs(message), response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void echo_gs_with_route() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString singlePayload = clusterClient.echo(gs(message), RANDOM).get().getSingleValue();
+        assertEquals(gs(message), singlePayload);
+
+        Map<String, GlideString> multiPayload =
+                clusterClient.echo(gs(message), ALL_NODES).get().getMultiValue();
+        multiPayload.forEach((key, value) -> assertEquals(gs(message), value));
+    }
+
     @Test
     @SneakyThrows
     public void time() {
@@ -642,7 +675,9 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void dbsize() {
+    public void dbsize_and_flushdb() {
+        boolean is62orHigher = REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0");
+
         assertEquals(OK, clusterClient.flushall().get());
         // dbsize should be 0 after flushall() because all keys have been deleted
         assertEquals(0L, clusterClient.dbsize().get());
@@ -655,11 +690,41 @@ public class CommandTests {
 
         // test dbsize with routing - flush the database first to ensure the set() call is directed to a
         // node with 0 keys.
-        assertEquals(OK, clusterClient.flushall().get());
+        assertEquals(OK, clusterClient.flushdb().get());
         assertEquals(0L, clusterClient.dbsize().get());
+
         String key = UUID.randomUUID().toString();
+        SingleNodeRoute route = new SlotKeyRoute(key, PRIMARY);
+
+        // add a key, measure DB size, flush DB and measure again - with all arg combinations
         assertEquals(OK, clusterClient.set(key, "foo").get());
-        assertEquals(1L, clusterClient.dbsize(new SlotKeyRoute(key, PRIMARY)).get());
+        assertEquals(1L, clusterClient.dbsize(route).get());
+        if (is62orHigher) {
+            assertEquals(OK, clusterClient.flushdb(SYNC).get());
+        } else {
+            assertEquals(OK, clusterClient.flushdb(ASYNC).get());
+        }
+        assertEquals(0L, clusterClient.dbsize().get());
+
+        assertEquals(OK, clusterClient.set(key, "foo").get());
+        assertEquals(1L, clusterClient.dbsize(route).get());
+        assertEquals(OK, clusterClient.flushdb(route).get());
+        assertEquals(0L, clusterClient.dbsize(route).get());
+
+        assertEquals(OK, clusterClient.set(key, "foo").get());
+        assertEquals(1L, clusterClient.dbsize(route).get());
+        if (is62orHigher) {
+            assertEquals(OK, clusterClient.flushdb(SYNC, route).get());
+        } else {
+            assertEquals(OK, clusterClient.flushdb(ASYNC, route).get());
+        }
+        assertEquals(0L, clusterClient.dbsize(route).get());
+
+        if (!is62orHigher) {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> clusterClient.flushdb(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+        }
     }
 
     @Test
@@ -685,10 +750,18 @@ public class CommandTests {
                 Arguments.of("renamenx", null, clusterClient.renamenx("abc", "zxy")),
                 Arguments.of(
                         "sinterstore", null, clusterClient.sinterstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "sinterstore_gs",
+                        null,
+                        clusterClient.sinterstore(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of("sdiff", null, clusterClient.sdiff(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
                         "sdiffstore", null, clusterClient.sdiffstore("abc", new String[] {"zxy", "lkn"})),
                 Arguments.of("sinter", null, clusterClient.sinter(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "sinter_gs",
+                        null,
+                        clusterClient.sinter(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
                 Arguments.of(
                         "sunionstore", null, clusterClient.sunionstore("abc", new String[] {"zxy", "lkn"})),
                 Arguments.of("zdiff", null, clusterClient.zdiff(new String[] {"abc", "zxy", "lkn"})),
@@ -746,17 +819,50 @@ public class CommandTests {
                         clusterClient.blmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT, 1)),
                 Arguments.of("sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"})),
                 Arguments.of(
+                        "sintercard_gs",
+                        "7.0.0",
+                        clusterClient.sintercard(new GlideString[] {gs("abc"), gs("def")})),
+                Arguments.of(
                         "sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"}, 1)),
+                Arguments.of(
+                        "sintercard_gs",
+                        "7.0.0",
+                        clusterClient.sintercard(new GlideString[] {gs("abc"), gs("def")}, 1)),
                 Arguments.of(
                         "fcall",
                         "7.0.0",
                         clusterClient.fcall("func", new String[] {"abc", "zxy", "lkn"}, new String[0])),
                 Arguments.of(
+                        "fcallReadOnly",
+                        "7.0.0",
+                        clusterClient.fcallReadOnly("func", new String[] {"abc", "zxy", "lkn"}, new String[0])),
+                Arguments.of(
                         "xread", null, clusterClient.xread(Map.of("abc", "stream1", "zxy", "stream2"))),
                 Arguments.of("copy", "6.2.0", clusterClient.copy("abc", "def", true)),
                 Arguments.of("msetnx", null, clusterClient.msetnx(Map.of("abc", "def", "ghi", "jkl"))),
                 Arguments.of("lcs", "7.0.0", clusterClient.lcs("abc", "def")),
-                Arguments.of("lcsLEN", "7.0.0", clusterClient.lcsLen("abc", "def")));
+                Arguments.of("lcsLEN", "7.0.0", clusterClient.lcsLen("abc", "def")),
+                Arguments.of("lcsIdx", "7.0.0", clusterClient.lcsIdx("abc", "def")),
+                Arguments.of("lcsIdx", "7.0.0", clusterClient.lcsIdx("abc", "def", 10)),
+                Arguments.of("lcsIdxWithMatchLen", "7.0.0", clusterClient.lcsIdxWithMatchLen("abc", "def")),
+                Arguments.of(
+                        "lcsIdxWithMatchLen", "7.0.0", clusterClient.lcsIdxWithMatchLen("abc", "def", 10)),
+                Arguments.of("sunion", "1.0.0", clusterClient.sunion(new String[] {"abc", "def", "ghi"})),
+                Arguments.of("sortStore", "1.0.0", clusterClient.sortStore("abc", "def")),
+                Arguments.of(
+                        "sortStore",
+                        "1.0.0",
+                        clusterClient.sortStore("abc", "def", SortClusterOptions.builder().alpha().build())),
+                Arguments.of(
+                        "geosearchstore",
+                        "6.2.0",
+                        clusterClient.geosearchstore(
+                                "dest",
+                                "source",
+                                new GeoSearchOrigin.MemberOrigin("abc"),
+                                new GeoSearchShape(1, GeoUnit.METERS),
+                                GeoSearchStoreOptions.builder().build(),
+                                new GeoSearchResultOptions(1, true))));
     }
 
     @SneakyThrows
@@ -779,7 +885,8 @@ public class CommandTests {
                 Arguments.of("del", clusterClient.del(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("mget", clusterClient.mget(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("mset", clusterClient.mset(Map.of("abc", "1", "zxy", "2", "lkn", "3"))),
-                Arguments.of("touch", clusterClient.touch(new String[] {"abc", "zxy", "lkn"})));
+                Arguments.of("touch", clusterClient.touch(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of("watch", clusterClient.watch(new String[] {"ghi", "zxy", "lkn"})));
     }
 
     @SneakyThrows
@@ -792,7 +899,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, clusterClient.flushall(FlushMode.SYNC).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, clusterClient.flushall(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> clusterClient.flushall(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, clusterClient.flushall(ASYNC).get());
+        }
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter =
@@ -826,13 +940,21 @@ public class CommandTests {
         String libName = "mylib1c_" + singleNodeRoute;
         String funcName = "myfunc1c_" + singleNodeRoute;
         // function $funcName returns first argument
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), false);
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return args[1]"), true);
         Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
 
         assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
 
         var fcallResult = clusterClient.fcall(funcName, new String[] {"one", "two"}, route).get();
+        if (route instanceof SingleNodeRoute) {
+            assertEquals("one", fcallResult.getSingleValue());
+        } else {
+            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+                assertEquals("one", nodeResponse);
+            }
+        }
+        fcallResult = clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}, route).get();
         if (route instanceof SingleNodeRoute) {
             assertEquals("one", fcallResult.getSingleValue());
         } else {
@@ -850,7 +972,7 @@ public class CommandTests {
         var expectedFlags =
                 new HashMap<String, Set<String>>() {
                     {
-                        put(funcName, Set.of());
+                        put(funcName, Set.of("no-writes"));
                     }
                 };
 
@@ -893,12 +1015,12 @@ public class CommandTests {
         // function $newFuncName returns argument array len
         String newCode =
                 generateLuaLibCode(
-                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), false);
+                        libName, Map.of(funcName, "return args[1]", newFuncName, "return #args"), true);
 
         assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
 
         expectedDescription.put(newFuncName, null);
-        expectedFlags.put(newFuncName, Set.of());
+        expectedFlags.put(newFuncName, Set.of("no-writes"));
 
         response = clusterClient.functionList(false, route).get();
         if (singleNodeRoute) {
@@ -945,6 +1067,15 @@ public class CommandTests {
                 assertEquals(2L, nodeResponse);
             }
         }
+        fcallResult =
+                clusterClient.fcallReadOnly(newFuncName, new String[] {"one", "two"}, route).get();
+        if (route instanceof SingleNodeRoute) {
+            assertEquals(2L, fcallResult.getSingleValue());
+        } else {
+            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+                assertEquals(2L, nodeResponse);
+            }
+        }
 
         assertEquals(OK, clusterClient.functionFlush(route).get());
     }
@@ -966,6 +1097,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
         assertEquals("one", clusterClient.fcall(funcName, new String[] {"one", "two"}).get());
+        assertEquals("one", clusterClient.fcallReadOnly(funcName, new String[] {"one", "two"}).get());
 
         var flist = clusterClient.functionList(false).get();
         var expectedDescription =
@@ -1026,6 +1158,7 @@ public class CommandTests {
                 flist, libName, expectedDescription, expectedFlags, Optional.of(newCode));
 
         assertEquals(2L, clusterClient.fcall(newFuncName, new String[] {"one", "two"}).get());
+        assertEquals(2L, clusterClient.fcallReadOnly(newFuncName, new String[] {"one", "two"}).get());
 
         assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
     }
@@ -1041,7 +1174,7 @@ public class CommandTests {
         String libName = "mylib_with_keys";
         String funcName = "myfunc_with_keys";
         // function $funcName returns array with first two arguments
-        String code = generateLuaLibCode(libName, Map.of(funcName, "return {keys[1], keys[2]}"), false);
+        String code = generateLuaLibCode(libName, Map.of(funcName, "return {keys[1], keys[2]}"), true);
 
         // loading function to the node where key is stored
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
@@ -1050,15 +1183,23 @@ public class CommandTests {
         var functionResult =
                 clusterClient.fcall(funcName, new String[] {key + 1, key + 2}, new String[0]).get();
         assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
+        functionResult =
+                clusterClient.fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]).get();
+        assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
 
         var transaction =
-                new ClusterTransaction().fcall(funcName, new String[] {key + 1, key + 2}, new String[0]);
+                new ClusterTransaction()
+                        .fcall(funcName, new String[] {key + 1, key + 2}, new String[0])
+                        .fcallReadOnly(funcName, new String[] {key + 1, key + 2}, new String[0]);
 
         // check response from a routed transaction request
         assertDeepEquals(
-                new Object[][] {{key + 1, key + 2}}, clusterClient.exec(transaction, route).get());
+                new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
+                clusterClient.exec(transaction, route).get());
         // if no route given, GLIDE should detect it automatically
-        assertDeepEquals(new Object[][] {{key + 1, key + 2}}, clusterClient.exec(transaction).get());
+        assertDeepEquals(
+                new Object[][] {{key + 1, key + 2}, {key + 1, key + 2}},
+                clusterClient.exec(transaction).get());
 
         assertEquals(OK, clusterClient.functionDelete(libName, route).get());
     }
@@ -1070,7 +1211,8 @@ public class CommandTests {
 
         String libName = "fcall_readonly_function";
         // intentionally using a REPLICA route
-        Route route = new SlotKeyRoute(libName, REPLICA);
+        Route replicaRoute = new SlotKeyRoute(libName, REPLICA);
+        Route primaryRoute = new SlotKeyRoute(libName, PRIMARY);
         String funcName = "fcall_readonly_function";
 
         // function $funcName returns a magic number
@@ -1080,10 +1222,31 @@ public class CommandTests {
 
         // fcall on a replica node should fail, because a function isn't guaranteed to be RO
         var executionException =
-                assertThrows(ExecutionException.class, () -> clusterClient.fcall(funcName, route).get());
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.fcall(funcName, replicaRoute).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
         assertTrue(
                 executionException.getMessage().contains("You can't write against a read only replica."));
+
+        // fcall_ro also fails
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.fcallReadOnly(funcName, replicaRoute).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("You can't write against a read only replica."));
+
+        // fcall_ro also fails to run it even on primary - another error
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.fcallReadOnly(funcName, primaryRoute).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException
+                        .getMessage()
+                        .contains("Can not execute a script with write flag using *_ro command."));
 
         // create the same function, but with RO flag
         code = generateLuaLibCode(libName, Map.of(funcName, "return 42"), true);
@@ -1091,7 +1254,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, true).get());
 
         // fcall should succeed now
-        assertEquals(42L, clusterClient.fcall(funcName, route).get().getSingleValue());
+        assertEquals(42L, clusterClient.fcall(funcName, replicaRoute).get().getSingleValue());
 
         assertEquals(OK, clusterClient.functionDelete(libName).get());
     }
@@ -1149,6 +1312,7 @@ public class CommandTests {
                 }
 
                 assertEquals(OK, clusterClient.functionKill().get());
+                Thread.sleep(404); // sometimes kill doesn't happen immediately
 
                 exception =
                         assertThrows(ExecutionException.class, () -> clusterClient.functionKill().get());
@@ -1235,7 +1399,7 @@ public class CommandTests {
 
                 // redis kills a function with 5 sec delay
                 assertEquals(OK, clusterClient.functionKill(route).get());
-                Thread.sleep(404);
+                Thread.sleep(404); // sometimes kill doesn't happen immediately
 
                 exception =
                         assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
@@ -1306,6 +1470,7 @@ public class CommandTests {
 
                 // redis kills a function with 5 sec delay
                 assertEquals(OK, clusterClient.functionKill(route).get());
+                Thread.sleep(404); // sometimes kill doesn't happen immediately
 
                 exception =
                         assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());
@@ -1490,5 +1655,195 @@ public class CommandTests {
                 checkFunctionStatsResponse(nodeResponse, new String[0], 0, 0);
             }
         }
+    }
+
+    @Test
+    @SneakyThrows
+    public void function_dump_and_restore() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC).get());
+
+        // dumping an empty lib
+        byte[] emptyDump = clusterClient.functionDump().get();
+        assertTrue(emptyDump.length > 0);
+
+        String name1 = "Foster";
+        String libname1 = "FosterLib";
+        String name2 = "Dogster";
+        String libname2 = "DogsterLib";
+
+        // function $name1 returns first argument
+        // function $name2 returns argument array len
+        String code =
+                generateLuaLibCode(libname1, Map.of(name1, "return args[1]", name2, "return #args"), true);
+        assertEquals(libname1, clusterClient.functionLoad(code, true).get());
+        Map<String, Object>[] flist = clusterClient.functionList(true).get();
+
+        final byte[] dump = clusterClient.functionDump().get();
+
+        // restore without cleaning the lib and/or overwrite option causes an error
+        var executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionRestore(dump).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library " + libname1 + " already exists"));
+
+        // APPEND policy also fails for the same reason (name collision)
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionRestore(dump, APPEND).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library " + libname1 + " already exists"));
+
+        // REPLACE policy succeeds
+        assertEquals(OK, clusterClient.functionRestore(dump, REPLACE).get());
+        // but nothing changed - all code overwritten
+        var restoredFunctionList = clusterClient.functionList(true).get();
+        assertEquals(1, restoredFunctionList.length);
+        assertEquals(libname1, restoredFunctionList[0].get("library_name"));
+        // Note that function ordering may differ across nodes so we can't do a deep equals
+        assertEquals(2, ((Object[]) restoredFunctionList[0].get("functions")).length);
+
+        // create lib with another name, but with the same function names
+        assertEquals(OK, clusterClient.functionFlush(SYNC).get());
+        code =
+                generateLuaLibCode(libname2, Map.of(name1, "return args[1]", name2, "return #args"), true);
+        assertEquals(libname2, clusterClient.functionLoad(code, true).get());
+        restoredFunctionList = clusterClient.functionList(true).get();
+        assertEquals(1, restoredFunctionList.length);
+        assertEquals(libname2, restoredFunctionList[0].get("library_name"));
+
+        // REPLACE policy now fails due to a name collision
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionRestore(dump, REPLACE).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        // redis checks names in random order and blames on first collision
+        assertTrue(
+                executionException.getMessage().contains("Function " + name1 + " already exists")
+                        || executionException.getMessage().contains("Function " + name2 + " already exists"));
+
+        // FLUSH policy succeeds, but deletes the second lib
+        assertEquals(OK, clusterClient.functionRestore(dump, FLUSH).get());
+        restoredFunctionList = clusterClient.functionList(true).get();
+        assertEquals(1, restoredFunctionList.length);
+        assertEquals(libname1, restoredFunctionList[0].get("library_name"));
+        // Note that function ordering may differ across nodes
+        assertEquals(2, ((Object[]) restoredFunctionList[0].get("functions")).length);
+
+        // call restored functions
+        assertEquals(
+                "meow",
+                clusterClient.fcallReadOnly(name1, new String[0], new String[] {"meow", "woem"}).get());
+        assertEquals(
+                2L, clusterClient.fcallReadOnly(name2, new String[0], new String[] {"meow", "woem"}).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void randomKey() {
+        String key1 = "{key}" + UUID.randomUUID();
+        String key2 = "{key}" + UUID.randomUUID();
+
+        assertEquals(OK, clusterClient.set(key1, "a").get());
+        assertEquals(OK, clusterClient.set(key2, "b").get());
+
+        String randomKey = clusterClient.randomKey().get();
+        assertEquals(1L, clusterClient.exists(new String[] {randomKey}).get());
+
+        String randomKeyPrimaries = clusterClient.randomKey(ALL_PRIMARIES).get();
+        assertEquals(1L, clusterClient.exists(new String[] {randomKeyPrimaries}).get());
+
+        // no keys in database
+        assertEquals(OK, clusterClient.flushall(SYNC).get());
+
+        // no keys in database returns null
+        assertNull(clusterClient.randomKey().get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void sort() {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String[] key1LpushArgs = {"2", "1", "4", "3"};
+        String[] key1AscendingList = {"1", "2", "3", "4"};
+        String[] key1DescendingList = {"4", "3", "2", "1"};
+        String[] key2LpushArgs = {"2", "1", "a", "x", "c", "4", "3"};
+        String[] key2DescendingList = {"x", "c", "a", "4", "3", "2", "1"};
+        String[] key2DescendingListSubset = Arrays.copyOfRange(key2DescendingList, 0, 4);
+
+        assertArrayEquals(new String[0], clusterClient.sort(key3).get());
+        assertEquals(4, clusterClient.lpush(key1, key1LpushArgs).get());
+        assertArrayEquals(
+                new String[0],
+                clusterClient
+                        .sort(
+                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
+                        .get());
+        assertArrayEquals(
+                key1DescendingList,
+                clusterClient.sort(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
+        assertArrayEquals(
+                Arrays.copyOfRange(key1AscendingList, 0, 2),
+                clusterClient
+                        .sort(
+                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                        .get());
+        assertEquals(7, clusterClient.lpush(key2, key2LpushArgs).get());
+        assertArrayEquals(
+                key2DescendingListSubset,
+                clusterClient
+                        .sort(
+                                key2,
+                                SortClusterOptions.builder()
+                                        .alpha()
+                                        .orderBy(DESC)
+                                        .limit(new SortBaseOptions.Limit(0L, 4L))
+                                        .build())
+                        .get());
+
+        // SORT_R0
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(
+                    key1DescendingList,
+                    clusterClient
+                            .sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build())
+                            .get());
+            assertArrayEquals(
+                    Arrays.copyOfRange(key1AscendingList, 0, 2),
+                    clusterClient
+                            .sortReadOnly(
+                                    key1,
+                                    SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                            .get());
+            assertArrayEquals(
+                    key2DescendingListSubset,
+                    clusterClient
+                            .sortReadOnly(
+                                    key2,
+                                    SortClusterOptions.builder()
+                                            .alpha()
+                                            .orderBy(DESC)
+                                            .limit(new SortBaseOptions.Limit(0L, 4L))
+                                            .build())
+                            .get());
+        }
+
+        // SORT with STORE
+        assertEquals(
+                4,
+                clusterClient
+                        .sortStore(
+                                key2,
+                                key3,
+                                SortClusterOptions.builder()
+                                        .alpha()
+                                        .orderBy(DESC)
+                                        .limit(new SortBaseOptions.Limit(0L, 4L))
+                                        .build())
+                        .get());
+        assertArrayEquals(key2DescendingListSubset, clusterClient.lrange(key3, 0, -1).get());
     }
 }

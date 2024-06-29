@@ -1,6 +1,7 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.commands.LInsertOptions.InsertPosition;
 import glide.api.models.commands.LPosOptions;
 import glide.api.models.commands.ListDirection;
@@ -38,6 +39,27 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> lpush(String key, String[] elements);
+
+    /**
+     * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
+     * elements</code> are inserted one after the other to the head of the list, from the leftmost
+     * element to the rightmost element. If <code>key</code> does not exist, it is created as an empty
+     * list before performing the push operation.
+     *
+     * @see <a href="https://redis.io/commands/lpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long pushCount1 = client.lpush(gs("my_list"), new GlideString[] {gs("value1"), gs("value2")}).get();
+     * assert pushCount1 == 2L;
+     *
+     * Long pushCount2 = client.lpush(gs("nonexistent_list"), new GlideString[] {gs("new_value")}).get();
+     * assert pushCount2 == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lpush(GlideString key, GlideString[] elements);
 
     /**
      * Removes and returns the first elements of the list stored at <code>key</code>. The command pops
@@ -256,6 +278,32 @@ public interface ListBaseCommands {
     CompletableFuture<String> ltrim(String key, long start, long end);
 
     /**
+     * Trims an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on.<br>
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Always <code>OK</code>.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
+     *     element of the list.<br>
+     *     If <code>key</code> does not exist, OK will be returned without changes to the database.
+     * @example
+     *     <pre>{@code
+     * String payload = client.ltrim(gs("my_list"), 0, 1).get();
+     * assert payload.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> ltrim(GlideString key, long start, long end);
+
+    /**
      * Returns the length of the list stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/llen/">redis.io</a> for details.
@@ -270,6 +318,22 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> llen(String key);
+
+    /**
+     * Returns the length of the list stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/llen/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @return The length of the list at <code>key</code>.<br>
+     *     If <code>key</code> does not exist, it is interpreted as an empty list and <code>0</code>
+     *     is returned.
+     * @example
+     *     <pre>{@code
+     * Long lenList = client.llen(gs("my_list")).get();
+     * assert lenList == 3L //Indicates that there are 3 elements in the list.;
+     * }</pre>
+     */
+    CompletableFuture<Long> llen(GlideString key);
 
     /**
      * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
@@ -296,6 +360,30 @@ public interface ListBaseCommands {
     CompletableFuture<Long> lrem(String key, long count, String element);
 
     /**
+     * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
+     * the list stored at <code>key</code>.<br>
+     * If <code>count</code> is positive: Removes elements equal to <code>element</code> moving from
+     * head to tail.<br>
+     * If <code>count</code> is negative: Removes elements equal to <code>element</code> moving from
+     * tail to head.<br>
+     * If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of elements
+     * equal to <code>element</code>, it removes all elements equal to <code>element</code>.
+     *
+     * @see <a href="https://redis.io/commands/lrem/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
+     * @param element The element to remove from the list.
+     * @return The number of the removed elements.<br>
+     *     If <code>key</code> does not exist, <code>0</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Long num = client.rem(gs("my_list"), 2, gs("value")).get();
+     * assert num == 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lrem(GlideString key, long count, GlideString element);
+
+    /**
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
      * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
@@ -315,6 +403,27 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> rpush(String key, String[] elements);
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
+     * <code>elements</code> are inserted one after the other to the tail of the list, from the
+     * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
+     * an empty list before performing the push operation.
+     *
+     * @see <a href="https://redis.io/commands/rpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long pushCount1 = client.rpush(gs("my_list"), new GlideString[] {gs("value1"), gs("value2")}).get();
+     * assert pushCount1 == 2L;
+     *
+     * Long pushCount2 = client.rpush(gs("nonexistent_list"), new GlideString[] {gs("new_value")}).get();
+     * assert pushCount2 == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> rpush(GlideString key, GlideString[] elements);
 
     /**
      * Removes and returns the last elements of the list stored at <code>key</code>.<br>
@@ -455,6 +564,23 @@ public interface ListBaseCommands {
     CompletableFuture<Long> rpushx(String key, String[] elements);
 
     /**
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long listLength = client.rpushx(gs("my_list"), new GlideString[] {gs("value1"), gs("value2")}).get();
+     * assert listLength >= 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> rpushx(GlideString key, GlideString[] elements);
+
+    /**
      * Inserts all the specified values at the head of the list stored at <code>key</code>, only if
      * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
      * operation.
@@ -470,6 +596,23 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> lpushx(String key, String[] elements);
+
+    /**
+     * Inserts all the specified values at the head of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long listLength = client.lpushx(gs("my_list"), new GlideString[] {gs("value1"), gs("value2")}).get();
+     * assert listLength >= 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lpushx(GlideString key, GlideString[] elements);
 
     /**
      * Pops one or more elements from the first non-empty list from the provided <code>keys
@@ -599,6 +742,25 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> lset(String key, long index, String element);
+
+    /**
+     * Sets the list element at <code>index</code> to <code>element</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to be set.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.lset(gs("testKey"), 1, gs("two")).get();
+     * assertEquals(response, "OK");
+     * }</pre>
+     */
+    CompletableFuture<String> lset(GlideString key, long index, GlideString element);
 
     /**
      * Atomically pops and removes the left/right-most element to the list stored at <code>source
