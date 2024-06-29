@@ -189,7 +189,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedB
 pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_getMaxRequestArgsLength<
     'local,
 >(
-    mut _env: JNIEnv<'local>,
+    _env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jlong {
     MAX_REQUEST_ARGS_LENGTH as jlong
