@@ -1618,7 +1618,7 @@ public interface SortedSetBaseCommands {
      * Iterates incrementally over a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
-     * @param key The key of the set.
+     * @param key The key of the sorted set.
      * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates
      *     the start of the search.
      * @param zScanOptions The {@link ZScanOptions}.
