@@ -2801,9 +2801,15 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Long> publish(@NonNull String channel, @NonNull String message) {
+    public CompletableFuture<String> publish(@NonNull String channel, @NonNull String message) {
         return commandManager.submitNewCommand(
-                Publish, new String[] {channel, message}, this::handleLongResponse);
+                Publish,
+                new String[] {channel, message},
+                response -> {
+                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                    handleLongResponse(response);
+                    return OK;
+                });
     }
 
     @Override

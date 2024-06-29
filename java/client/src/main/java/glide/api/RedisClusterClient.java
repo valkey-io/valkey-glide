@@ -778,9 +778,15 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<Long> spublish(@NonNull String channel, @NonNull String message) {
+    public CompletableFuture<String> spublish(@NonNull String channel, @NonNull String message) {
         return commandManager.submitNewCommand(
-                SPublish, new String[] {channel, message}, this::handleLongResponse);
+                SPublish,
+                new String[] {channel, message},
+                response -> {
+                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                    handleLongResponse(response);
+                    return OK;
+                });
     }
 
     @Override

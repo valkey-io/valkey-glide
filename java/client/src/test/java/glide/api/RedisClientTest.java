@@ -8739,22 +8739,21 @@ public class RedisClientTest {
         String channel = "channel";
         String message = "message";
         String[] arguments = new String[] {channel, message};
-        Long value = 3L;
 
-        CompletableFuture<Long> testResponse = new CompletableFuture<>();
-        testResponse.complete(value);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
 
         // match on protobuf request
-        when(commandManager.<Long>submitNewCommand(eq(Publish), eq(arguments), any()))
+        when(commandManager.<String>submitNewCommand(eq(Publish), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Long> response = service.publish(channel, message);
-        Long payload = response.get();
+        CompletableFuture<String> response = service.publish(channel, message);
+        String payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
-        assertEquals(value, payload);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows

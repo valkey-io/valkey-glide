@@ -213,7 +213,7 @@ public class PubSubTests {
         var sender = createClient(standalone);
         clients.addAll(List.of(listener, sender));
 
-        assertEquals(1L, sender.publish(channel, message).get());
+        sender.publish(channel, message).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the message
 
         verifyReceivedPubsubMessages(
@@ -246,8 +246,7 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : messages) {
-            assertEquals(
-                    1L, sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get());
+            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -274,7 +273,7 @@ public class PubSubTests {
         var sender = (RedisClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
-        assertEquals(1L, sender.spublish(channel, pubsubMessage).get());
+        sender.spublish(channel, pubsubMessage).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the message
 
         verifyReceivedPubsubMessages(
@@ -309,11 +308,9 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : pubsubMessages) {
-            assertEquals(
-                    1L, sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get());
+            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
         }
-        assertEquals(
-                0L, sender.spublish(UUID.randomUUID().toString(), UUID.randomUUID().toString()).get());
+        sender.spublish(UUID.randomUUID().toString(), UUID.randomUUID().toString()).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
@@ -348,7 +345,7 @@ public class PubSubTests {
         for (var entry : message2channels.entrySet()) {
             sender.publish(entry.getKey(), entry.getValue()).get();
         }
-        assertEquals(0L, sender.publish("channel", UUID.randomUUID().toString()).get());
+        sender.publish("channel", UUID.randomUUID().toString()).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
         var expected =
@@ -390,7 +387,7 @@ public class PubSubTests {
         for (var pubsubMessage : messages) {
             sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
         }
-        assertEquals(0L, sender.publish("channel", UUID.randomUUID().toString()).get());
+        sender.publish("channel", UUID.randomUUID().toString()).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
         verifyReceivedPubsubMessages(
@@ -566,8 +563,7 @@ public class PubSubTests {
             sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
         }
         for (var pubsubMessage : shardedMessages) {
-            assertEquals(
-                    1L, sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get());
+            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -644,8 +640,7 @@ public class PubSubTests {
             sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
         }
         for (var pubsubMessage : shardedMessages) {
-            assertEquals(
-                    1L, sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get());
+            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -717,9 +712,9 @@ public class PubSubTests {
                 (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsSharded);
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded));
 
-        assertEquals(2L, listenerPattern.publish(channel, exactMessage.getMessage()).get());
-        assertEquals(2L, listenerSharded.publish(channel, patternMessage.getMessage()).get());
-        assertEquals(1L, listenerExact.spublish(channel, shardedMessage.getMessage()).get());
+        listenerPattern.publish(channel, exactMessage.getMessage()).get();
+        listenerSharded.publish(channel, patternMessage.getMessage()).get();
+        listenerExact.spublish(channel, shardedMessage.getMessage()).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
@@ -779,9 +774,9 @@ public class PubSubTests {
 
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded));
 
-        assertEquals(2L, listenerPattern.publish(channel, exactMessage.getMessage()).get());
-        assertEquals(2L, listenerSharded.publish(channel, patternMessage.getMessage()).get());
-        assertEquals(1L, listenerExact.spublish(channel, shardedMessage.getMessage()).get());
+        listenerPattern.publish(channel, exactMessage.getMessage()).get();
+        listenerSharded.publish(channel, patternMessage.getMessage()).get();
+        listenerExact.spublish(channel, shardedMessage.getMessage()).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
