@@ -3,7 +3,6 @@ package glide.api;
 
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
@@ -183,7 +182,7 @@ import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
 import glide.api.models.GlideString;
-import glide.api.models.Message;
+import glide.api.models.PubsubMessage;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
@@ -216,8 +215,8 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
 import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.RedisException;
-import glide.api.models.exceptions.WrongConfigurationException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.handlers.MessageHandler;
@@ -270,7 +269,7 @@ public abstract class BaseClient
     // All made protected to simplify testing.
     protected CommandManager commandManager;
     protected ConnectionManager connectionManager;
-    protected ConcurrentLinkedDeque<Message> messageQueue;
+    protected ConcurrentLinkedDeque<PubsubMessage> messageQueue;
     protected Optional<BaseSubscriptionConfiguration> subscriptionConfiguration = Optional.empty();
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
@@ -340,18 +339,18 @@ public abstract class BaseClient
     /**
      * Tries to return a next pubsub message.
      *
-     * @throws WrongConfigurationException If client is not subscribed to any channel or if client
-     *     configured with a callback.
+     * @throws ConfigurationError If client is not subscribed to any channel or if client configured
+     *     with a callback.
      * @return A message if any or <code>null</code> if there are no unread messages.
      */
-    public Message tryGetPubSubMessage() {
+    public PubsubMessage tryGetPubSubMessage() {
         if (subscriptionConfiguration.isEmpty()) {
-            throw new WrongConfigurationException(
+            throw new ConfigurationError(
                     "The operation will never complete since there was no pubsub subscriptions applied to the"
                             + " client.");
         }
         if (subscriptionConfiguration.get().getCallback().isPresent()) {
-            throw new WrongConfigurationException(
+            throw new ConfigurationError(
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
@@ -361,18 +360,18 @@ public abstract class BaseClient
     /**
      * Returns a promise for a next pubsub message.
      *
-     * @throws WrongConfigurationException If client is not subscribed to any channel or if client
-     *     configured with a callback.
+     * @throws ConfigurationError If client is not subscribed to any channel or if client configured
+     *     with a callback.
      * @return A <code>Future</code> which resolved with the next incoming message.
      */
-    public CompletableFuture<Message> getPubSubMessage() {
+    public CompletableFuture<PubsubMessage> getPubSubMessage() {
         if (subscriptionConfiguration.isEmpty()) {
-            throw new WrongConfigurationException(
+            throw new ConfigurationError(
                     "The operation will never complete since there was no pubsub subscriptions applied to the"
                             + " client.");
         }
         if (subscriptionConfiguration.get().getCallback().isPresent()) {
-            throw new WrongConfigurationException(
+            throw new ConfigurationError(
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }

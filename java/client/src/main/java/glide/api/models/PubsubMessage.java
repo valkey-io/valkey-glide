@@ -6,7 +6,7 @@ import lombok.Getter;
 
 /** PubSub message received by the client. */
 @Getter
-public class Message {
+public class PubsubMessage {
     /** An incoming message received. */
     private final String message;
 
@@ -16,15 +16,13 @@ public class Message {
     /** A pattern matched to the channel name. */
     private final Optional<String> pattern;
 
-    // TODO store an error ?
-
-    public Message(String message, String channel, String pattern) {
+    public PubsubMessage(String message, String channel, String pattern) {
         this.message = message;
         this.channel = channel;
         this.pattern = Optional.ofNullable(pattern);
     }
 
-    public Message(String message, String channel) {
+    public PubsubMessage(String message, String channel) {
         this.message = message;
         this.channel = channel;
         this.pattern = Optional.empty();
