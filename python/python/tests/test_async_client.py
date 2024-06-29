@@ -6547,7 +6547,7 @@ class TestCommands:
         assert await redis_client.object_encoding(string_key) == "embstr"
 
         assert await redis_client.lpush(list_key, ["1"]) == 1
-        if await check_if_server_version_lt(redis_client, "7.0.0"):
+        if await check_if_server_version_lt(redis_client, "7.2.0"):
             assert await redis_client.object_encoding(list_key) == "quicklist"
         else:
             assert await redis_client.object_encoding(list_key) == "listpack"
