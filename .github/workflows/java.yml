@@ -92,7 +92,7 @@ jobs:
                   ls -ltr
               env:
                   SECRING_GPG: ${{ secrets.SECRING_GPG }}
-
+                  
             - name: Build java client
               working-directory: java
               run: ./gradlew --continue build :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
