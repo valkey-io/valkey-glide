@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use redis::{cmd, Cmd};
 
@@ -173,6 +173,7 @@ pub enum RequestType {
     FunctionKill = 161,
     FunctionStats = 162,
     FCallReadOnly = 163,
+    FlushDB = 164,
     LSet = 165,
     XDel = 166,
     XRange = 167,
@@ -194,6 +195,22 @@ pub enum RequestType {
     UnWatch = 184,
     GeoSearchStore = 185,
     SUnion = 186,
+    Publish = 187,
+    SPublish = 188,
+    XGroupCreateConsumer = 189,
+    XGroupDelConsumer = 190,
+    RandomKey = 191,
+    GetEx = 192,
+    Dump = 193,
+    Restore = 194,
+    SortReadOnly = 195,
+    FunctionDump = 196,
+    FunctionRestore = 197,
+    XPending = 198,
+    XGroupSetId = 199,
+    SScan = 200,
+    ZScan = 201,
+    HScan = 202,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -369,6 +386,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::FunctionKill => RequestType::FunctionKill,
             ProtobufRequestType::FunctionStats => RequestType::FunctionStats,
             ProtobufRequestType::FCallReadOnly => RequestType::FCallReadOnly,
+            ProtobufRequestType::FlushDB => RequestType::FlushDB,
             ProtobufRequestType::LSet => RequestType::LSet,
             ProtobufRequestType::XDel => RequestType::XDel,
             ProtobufRequestType::XRange => RequestType::XRange,
@@ -391,6 +409,22 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::Watch => RequestType::Watch,
             ProtobufRequestType::UnWatch => RequestType::UnWatch,
             ProtobufRequestType::GeoSearchStore => RequestType::GeoSearchStore,
+            ProtobufRequestType::Publish => RequestType::Publish,
+            ProtobufRequestType::SPublish => RequestType::SPublish,
+            ProtobufRequestType::XGroupCreateConsumer => RequestType::XGroupCreateConsumer,
+            ProtobufRequestType::XGroupDelConsumer => RequestType::XGroupDelConsumer,
+            ProtobufRequestType::RandomKey => RequestType::RandomKey,
+            ProtobufRequestType::GetEx => RequestType::GetEx,
+            ProtobufRequestType::Dump => RequestType::Dump,
+            ProtobufRequestType::Restore => RequestType::Restore,
+            ProtobufRequestType::SortReadOnly => RequestType::SortReadOnly,
+            ProtobufRequestType::FunctionDump => RequestType::FunctionDump,
+            ProtobufRequestType::FunctionRestore => RequestType::FunctionRestore,
+            ProtobufRequestType::XPending => RequestType::XPending,
+            ProtobufRequestType::XGroupSetId => RequestType::XGroupSetId,
+            ProtobufRequestType::SScan => RequestType::SScan,
+            ProtobufRequestType::ZScan => RequestType::ZScan,
+            ProtobufRequestType::HScan => RequestType::HScan,
         }
     }
 }
@@ -562,6 +596,7 @@ impl RequestType {
             RequestType::FunctionKill => Some(get_two_word_command("FUNCTION", "KILL")),
             RequestType::FunctionStats => Some(get_two_word_command("FUNCTION", "STATS")),
             RequestType::FCallReadOnly => Some(cmd("FCALL_RO")),
+            RequestType::FlushDB => Some(cmd("FLUSHDB")),
             RequestType::LSet => Some(cmd("LSET")),
             RequestType::XDel => Some(cmd("XDEL")),
             RequestType::XRange => Some(cmd("XRANGE")),
@@ -584,6 +619,24 @@ impl RequestType {
             RequestType::Watch => Some(cmd("WATCH")),
             RequestType::UnWatch => Some(cmd("UNWATCH")),
             RequestType::GeoSearchStore => Some(cmd("GEOSEARCHSTORE")),
+            RequestType::Publish => Some(cmd("PUBLISH")),
+            RequestType::SPublish => Some(cmd("SPUBLISH")),
+            RequestType::XGroupCreateConsumer => {
+                Some(get_two_word_command("XGROUP", "CREATECONSUMER"))
+            }
+            RequestType::XGroupDelConsumer => Some(get_two_word_command("XGROUP", "DELCONSUMER")),
+            RequestType::RandomKey => Some(cmd("RANDOMKEY")),
+            RequestType::GetEx => Some(cmd("GETEX")),
+            RequestType::Dump => Some(cmd("DUMP")),
+            RequestType::Restore => Some(cmd("RESTORE")),
+            RequestType::SortReadOnly => Some(cmd("SORT_RO")),
+            RequestType::FunctionDump => Some(get_two_word_command("FUNCTION", "DUMP")),
+            RequestType::FunctionRestore => Some(get_two_word_command("FUNCTION", "RESTORE")),
+            RequestType::XPending => Some(cmd("XPENDING")),
+            RequestType::XGroupSetId => Some(get_two_word_command("XGROUP", "SETID")),
+            RequestType::SScan => Some(cmd("SSCAN")),
+            RequestType::ZScan => Some(cmd("ZSCAN")),
+            RequestType::HScan => Some(cmd("HSCAN")),
         }
     }
 }

@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.commands.FlushMode;
@@ -179,6 +179,34 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> flushall(FlushMode mode);
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.flushdb().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushdb();
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.flushdb(ASYNC).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushdb(FlushMode mode);
 
     /**
      * Displays a piece of generative computer art and the Redis version.

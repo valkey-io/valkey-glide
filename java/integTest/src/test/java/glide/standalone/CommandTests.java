@@ -1,7 +1,8 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
+import static glide.TestUtilities.assertDeepEquals;
 import static glide.TestUtilities.checkFunctionListResponse;
 import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
@@ -10,6 +11,7 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -18,9 +20,16 @@ import static glide.api.models.commands.InfoOptions.Section.EVERYTHING;
 import static glide.api.models.commands.InfoOptions.Section.MEMORY;
 import static glide.api.models.commands.InfoOptions.Section.SERVER;
 import static glide.api.models.commands.InfoOptions.Section.STATS;
+import static glide.api.models.commands.SortBaseOptions.Limit;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.ASC;
+import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
+import static glide.api.models.commands.function.FunctionRestorePolicy.APPEND;
+import static glide.api.models.commands.function.FunctionRestorePolicy.FLUSH;
+import static glide.api.models.commands.function.FunctionRestorePolicy.REPLACE;
 import static glide.cluster.CommandTests.DEFAULT_INFO_SECTIONS;
 import static glide.cluster.CommandTests.EVERYTHING_INFO_SECTIONS;
 import static org.junit.jupiter.api.Assertions.assertAll;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -30,11 +39,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import glide.api.RedisClient;
+import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
+import glide.api.models.commands.SortOptions;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -189,6 +201,36 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void move_binary() {
+        GlideString key1 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString key2 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString value1 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString value2 = GlideString.gs(UUID.randomUUID().toString());
+        GlideString nonExistingKey = GlideString.gs(UUID.randomUUID().toString());
+        assertEquals(OK, regularClient.select(0).get());
+
+        assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
+        assertEquals(OK, regularClient.set(key1, value1).get());
+        assertEquals(OK, regularClient.set(key2, value2).get());
+        assertEquals(true, regularClient.move(key1, 1L).get());
+        assertNull(regularClient.get(key1).get());
+
+        assertEquals(OK, regularClient.select(1).get());
+        assertEquals(value1, regularClient.get(key1).get());
+
+        assertEquals(OK, regularClient.set(key2, value2).get());
+        // Move does not occur because key2 already exists in DB 0
+        assertEquals(false, regularClient.move(key2, 0).get());
+        assertEquals(value2, regularClient.get(key2).get());
+
+        // Incorrect argument - DB index must be non-negative
+        ExecutionException e =
+                assertThrows(ExecutionException.class, () -> regularClient.move(key1, -1L).get());
+        assertTrue(e.getCause() instanceof RequestException);
+    }
+
+    @Test
+    @SneakyThrows
     public void clientId() {
         var id = regularClient.clientId().get();
         assertTrue(id > 0);
@@ -294,6 +336,17 @@ public class CommandTests {
         String message = "GLIDE";
         String response = regularClient.echo(message).get();
         assertEquals(message, response);
+        message = "";
+        response = regularClient.echo(message).get();
+        assertEquals(message, response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void echo_gs() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString response = regularClient.echo(gs(message)).get();
+        assertEquals(gs(message), response);
     }
 
     @Test
@@ -343,17 +396,40 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
-    public void dbsize() {
+    public void dbsize_and_flushdb() {
         assertEquals(OK, regularClient.flushall().get());
         assertEquals(OK, regularClient.select(0).get());
 
+        // fill DB and check size
         int numKeys = 10;
         for (int i = 0; i < numKeys; i++) {
             assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
         }
         assertEquals(10L, regularClient.dbsize().get());
 
+        // check another empty DB
         assertEquals(OK, regularClient.select(1).get());
+        assertEquals(0L, regularClient.dbsize().get());
+
+        // check non-empty
+        assertEquals(OK, regularClient.set(UUID.randomUUID().toString(), "foo").get());
+        assertEquals(1L, regularClient.dbsize().get());
+
+        // flush and check again
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, regularClient.flushdb(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.flushdb(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, regularClient.flushdb(ASYNC).get());
+        }
+        assertEquals(0L, regularClient.dbsize().get());
+
+        // switch to DB 0 and flush and check
+        assertEquals(OK, regularClient.select(0).get());
+        assertEquals(10L, regularClient.dbsize().get());
+        assertEquals(OK, regularClient.flushdb().get());
         assertEquals(0L, regularClient.dbsize().get());
     }
 
@@ -376,7 +452,14 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void flushall() {
-        assertEquals(OK, regularClient.flushall(SYNC).get());
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("6.2.0")) {
+            assertEquals(OK, regularClient.flushall(SYNC).get());
+        } else {
+            var executionException =
+                    assertThrows(ExecutionException.class, () -> regularClient.flushall(SYNC).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, regularClient.flushall(ASYNC).get());
+        }
 
         // TODO replace with KEYS command when implemented
         Object[] keysAfter = (Object[]) regularClient.customCommand(new String[] {"keys", "*"}).get();
@@ -521,7 +604,7 @@ public class CommandTests {
         }
     }
 
-    // @Test
+    @Test
     @SneakyThrows
     public void functionStats_and_functionKill() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
@@ -564,6 +647,7 @@ public class CommandTests {
 
                 // redis kills a function with 5 sec delay
                 assertEquals(OK, regularClient.functionKill().get());
+                Thread.sleep(404); // sometimes kill doesn't happen immediately
 
                 exception =
                         assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
@@ -689,5 +773,263 @@ public class CommandTests {
 
         response = regularClient.functionStats().get();
         checkFunctionStatsResponse(response, new String[0], 0, 0);
+    }
+
+    @Test
+    @SneakyThrows
+    public void function_dump_and_restore() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        // dumping an empty lib
+        byte[] emptyDump = regularClient.functionDump().get();
+        assertTrue(emptyDump.length > 0);
+
+        String name1 = "Foster";
+        String name2 = "Dogster";
+
+        // function $name1 returns first argument
+        // function $name2 returns argument array len
+        String code =
+                generateLuaLibCode(name1, Map.of(name1, "return args[1]", name2, "return #args"), false);
+        assertEquals(name1, regularClient.functionLoad(code, true).get());
+        var flist = regularClient.functionList(true).get();
+
+        final byte[] dump = regularClient.functionDump().get();
+
+        // restore without cleaning the lib and/or overwrite option causes an error
+        var executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.functionRestore(dump).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library " + name1 + " already exists"));
+
+        // APPEND policy also fails for the same reason (name collision)
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionRestore(dump, APPEND).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library " + name1 + " already exists"));
+
+        // REPLACE policy succeeds
+        assertEquals(OK, regularClient.functionRestore(dump, REPLACE).get());
+        // but nothing changed - all code overwritten
+        assertDeepEquals(flist, regularClient.functionList(true).get());
+
+        // create lib with another name, but with the same function names
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+        code = generateLuaLibCode(name2, Map.of(name1, "return args[1]", name2, "return #args"), false);
+        assertEquals(name2, regularClient.functionLoad(code, true).get());
+
+        // REPLACE policy now fails due to a name collision
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionRestore(dump, REPLACE).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        // redis checks names in random order and blames on first collision
+        assertTrue(
+                executionException.getMessage().contains("Function " + name1 + " already exists")
+                        || executionException.getMessage().contains("Function " + name2 + " already exists"));
+
+        // FLUSH policy succeeds, but deletes the second lib
+        assertEquals(OK, regularClient.functionRestore(dump, FLUSH).get());
+        assertDeepEquals(flist, regularClient.functionList(true).get());
+
+        // call restored functions
+        assertEquals(
+                "meow", regularClient.fcall(name1, new String[0], new String[] {"meow", "woem"}).get());
+        assertEquals(
+                2L, regularClient.fcall(name2, new String[0], new String[] {"meow", "woem"}).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void randomkey() {
+        String key1 = "{key}" + UUID.randomUUID();
+        String key2 = "{key}" + UUID.randomUUID();
+
+        assertEquals(OK, regularClient.set(key1, "a").get());
+        assertEquals(OK, regularClient.set(key2, "b").get());
+
+        String randomKey = regularClient.randomKey().get();
+        assertEquals(1L, regularClient.exists(new String[] {randomKey}).get());
+
+        // no keys in database
+        assertEquals(OK, regularClient.flushall().get());
+        assertNull(regularClient.randomKey().get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void sort() {
+        String setKey1 = "setKey1";
+        String setKey2 = "setKey2";
+        String setKey3 = "setKey3";
+        String setKey4 = "setKey4";
+        String setKey5 = "setKey5";
+        String[] setKeys = new String[] {setKey1, setKey2, setKey3, setKey4, setKey5};
+        String listKey = "listKey";
+        String storeKey = "storeKey";
+        String nameField = "name";
+        String ageField = "age";
+        String[] names = new String[] {"Alice", "Bob", "Charlie", "Dave", "Eve"};
+        String[] namesSortedByAge = new String[] {"Dave", "Bob", "Alice", "Charlie", "Eve"};
+        String[] ages = new String[] {"30", "25", "35", "20", "40"};
+        String[] userIDs = new String[] {"3", "1", "5", "4", "2"};
+        String namePattern = "setKey*->name";
+        String agePattern = "setKey*->age";
+        String missingListKey = "100000";
+
+        for (int i = 0; i < setKeys.length; i++) {
+            assertEquals(
+                    2, regularClient.hset(setKeys[i], Map.of(nameField, names[i], ageField, ages[i])).get());
+        }
+
+        assertEquals(5, regularClient.rpush(listKey, userIDs).get());
+        assertArrayEquals(
+                new String[] {"Alice", "Bob"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
+                        .get());
+        assertArrayEquals(
+                new String[] {"Eve", "Dave"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder()
+                                        .limit(new Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(
+                new String[] {"Eve", "40", "Charlie", "35"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder()
+                                        .limit(new Limit(0L, 2L))
+                                        .orderBy(DESC)
+                                        .byPattern(agePattern)
+                                        .getPatterns(List.of(namePattern, agePattern))
+                                        .build())
+                        .get());
+
+        // Non-existent key in the BY pattern will result in skipping the sorting operation
+        assertArrayEquals(
+                userIDs,
+                regularClient.sort(listKey, SortOptions.builder().byPattern("noSort").build()).get());
+
+        // Non-existent key in the GET pattern results in nulls
+        assertArrayEquals(
+                new String[] {null, null, null, null, null},
+                regularClient
+                        .sort(listKey, SortOptions.builder().alpha().getPattern("missing").build())
+                        .get());
+
+        // Missing key in the set
+        assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
+        assertArrayEquals(
+                new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
+                regularClient
+                        .sort(
+                                listKey,
+                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertEquals(missingListKey, regularClient.lpop(listKey).get());
+
+        // SORT_RO
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(
+                    new String[] {"Alice", "Bob"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
+                            .get());
+            assertArrayEquals(
+                    new String[] {"Eve", "Dave"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder()
+                                            .limit(new Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .getPattern(namePattern)
+                                            .build())
+                            .get());
+            assertArrayEquals(
+                    new String[] {"Eve", "40", "Charlie", "35"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder()
+                                            .limit(new Limit(0L, 2L))
+                                            .orderBy(DESC)
+                                            .byPattern(agePattern)
+                                            .getPatterns(List.of(namePattern, agePattern))
+                                            .build())
+                            .get());
+
+            // Non-existent key in the BY pattern will result in skipping the sorting operation
+            assertArrayEquals(
+                    userIDs,
+                    regularClient
+                            .sortReadOnly(listKey, SortOptions.builder().byPattern("noSort").build())
+                            .get());
+
+            // Non-existent key in the GET pattern results in nulls
+            assertArrayEquals(
+                    new String[] {null, null, null, null, null},
+                    regularClient
+                            .sortReadOnly(listKey, SortOptions.builder().alpha().getPattern("missing").build())
+                            .get());
+
+            assertArrayEquals(
+                    namesSortedByAge,
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+
+            // Missing key in the set
+            assertEquals(6, regularClient.lpush(listKey, new String[] {missingListKey}).get());
+            assertArrayEquals(
+                    new String[] {null, "Dave", "Bob", "Alice", "Charlie", "Eve"},
+                    regularClient
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                            .get());
+            assertEquals(missingListKey, regularClient.lpop(listKey).get());
+        }
+
+        // SORT with STORE
+        assertEquals(
+                5,
+                regularClient
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptions.builder()
+                                        .limit(new Limit(0L, -1L))
+                                        .orderBy(ASC)
+                                        .byPattern(agePattern)
+                                        .getPattern(namePattern)
+                                        .build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
+        assertEquals(
+                5,
+                regularClient
+                        .sortStore(
+                                listKey,
+                                storeKey,
+                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                        .get());
+        assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey, 0, -1).get());
     }
 }

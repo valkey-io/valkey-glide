@@ -203,6 +203,7 @@ enum RequestType {
     FunctionKill = 161;
     FunctionStats = 162;
     FCallReadOnly = 163;
+    FlushDB = 164;
     LSet = 165;
     XDel = 166;
     XRange = 167;
@@ -224,6 +225,22 @@ enum RequestType {
     UnWatch = 184;
     GeoSearchStore = 185;
     SUnion = 186;
+    Publish = 187;
+    SPublish = 188;
+    XGroupCreateConsumer = 189;
+    XGroupDelConsumer = 190;
+    RandomKey = 191;
+    GetEx = 192;
+    Dump = 193;
+    Restore = 194;
+    SortReadOnly = 195;
+    FunctionDump = 196;
+    FunctionRestore = 197;
+    XPending = 198;
+    XGroupSetId = 199;
+    SScan = 200;
+    ZScan = 201;
+    HScan = 202;
 }
 
 message Command {

@@ -1,13 +1,18 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from __future__ import annotations
 
 from typing import Dict, List, Mapping, Optional, cast
 
 from glide.async_commands.command_args import Limit, OrderBy
-from glide.async_commands.core import CoreCommands, InfoSection, _build_sort_args
+from glide.async_commands.core import (
+    CoreCommands,
+    FlushMode,
+    InfoSection,
+    _build_sort_args,
+)
 from glide.async_commands.transaction import BaseTransaction, Transaction
-from glide.constants import TOK, TResult
+from glide.constants import OK, TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 
 
@@ -228,6 +233,87 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(str, await self._execute_command(RequestType.Echo, [message]))
 
+    async def function_load(self, library_code: str, replace: bool = False) -> str:
+        """
+        Loads a library to Redis.
+
+        See https://valkey.io/docs/latest/commands/function-load/ for more details.
+
+        Args:
+            library_code (str): The source code that implements the library.
+            replace (bool): Whether the given library should overwrite a library with the same name if
+                it already exists.
+
+        Returns:
+            str: The library name that was loaded.
+
+        Examples:
+            >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+            >>> await client.function_load(code, True)
+                "mylib"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            str,
+            await self._execute_command(
+                RequestType.FunctionLoad,
+                ["REPLACE", library_code] if replace else [library_code],
+            ),
+        )
+
+    async def function_flush(self, mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_flush(FlushMode.SYNC)
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionFlush,
+                [mode.value] if mode else [],
+            ),
+        )
+
+    async def function_delete(self, library_name: str) -> TOK:
+        """
+        Deletes a library and all its functions.
+
+        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+
+        Args:
+            library_code (str): The libary name to delete
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_delete("my_lib")
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionDelete,
+                [library_name],
+            ),
+        )
+
     async def time(self) -> List[str]:
         """
         Returns the server time.
@@ -410,3 +496,172 @@ class StandaloneCommands(CoreCommands):
         )
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
+
+    async def publish(self, message: str, channel: str) -> TOK:
+        """
+        Publish a message on pubsub channel.
+        See https://valkey.io/commands/publish for more details.
+
+        Args:
+            message (str): Message to publish
+            channel (str): Channel to publish the message on.
+
+        Returns:
+            TOK: a simple `OK` response.
+
+        Examples:
+            >>> await client.publish("Hi all!", "global-channel")
+                "OK"
+        """
+        await self._execute_command(RequestType.Publish, [channel, message])
+        return cast(TOK, OK)
+
+    async def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Deletes all the keys of all the existing databases. This command never fails.
+
+        See https://valkey.io/commands/flushall for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: OK.
+
+        Examples:
+             >>> await client.flushall(FlushMode.ASYNC)
+                 OK  # This command never fails.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.FlushAll, args),
+        )
+
+    async def flushdb(self, flush_mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Deletes all the keys of the currently selected database. This command never fails.
+
+        See https://valkey.io/commands/flushdb for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: OK.
+
+        Examples:
+             >>> await client.flushdb()
+                 OK  # The keys of the currently selected database were deleted.
+             >>> await client.flushdb(FlushMode.ASYNC)
+                 OK  # The keys of the currently selected database were deleted asynchronously.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.FlushDB, args),
+        )
+
+    async def copy(
+        self,
+        source: str,
+        destination: str,
+        destinationDB: Optional[int] = None,
+        replace: Optional[bool] = None,
+    ) -> bool:
+        """
+        Copies the value stored at the `source` to the `destination` key. If `destinationDB`
+        is specified, the value will be copied to the database specified by `destinationDB`,
+        otherwise the current database will be used. When `replace` is True, removes the
+        `destination` key first if it already exists, otherwise performs no action.
+
+        See https://valkey.io/commands/copy for more details.
+
+        Args:
+            source (str): The key to the source value.
+            destination (str): The key where the value should be copied to.
+            destinationDB (Optional[int]): The alternative logical database index for the destination key.
+            replace (Optional[bool]): If the destination key should be removed before copying the value to it.
+
+        Returns:
+            bool: True if the source was copied. Otherwise, return False.
+
+        Examples:
+            >>> await client.set("source", "sheep")
+            >>> await client.copy("source", "destination", 1, False)
+                True # Source was copied
+            >>> await client.select(1)
+            >>> await client.get("destination")
+                "sheep"
+
+        Since: Redis version 6.2.0.
+        """
+        args = [source, destination]
+        if destinationDB is not None:
+            args.extend(["DB", str(destinationDB)])
+        if replace is True:
+            args.append("REPLACE")
+        return cast(
+            bool,
+            await self._execute_command(RequestType.Copy, args),
+        )
+
+    async def lolwut(
+        self,
+        version: Optional[int] = None,
+        parameters: Optional[List[int]] = None,
+    ) -> str:
+        """
+        Displays a piece of generative computer art and the Redis version.
+
+        See https://valkey.io/commands/lolwut for more details.
+
+        Args:
+            version (Optional[int]): Version of computer art to generate.
+            parameters (Optional[List[int]]): Additional set of arguments in order to change the output:
+                For version `5`, those are length of the line, number of squares per row, and number of squares per column.
+                For version `6`, those are number of columns and number of lines.
+
+        Returns:
+            str: A piece of generative computer art along with the current Redis version.
+
+        Examples:
+            >>> await client.lolwut(6, [40, 20]);
+            "Redis ver. 7.2.3" # Indicates the current Redis version
+            >>> await client.lolwut(5, [30, 5, 5]);
+            "Redis ver. 7.2.3" # Indicates the current Redis version
+        """
+        args = []
+        if version is not None:
+            args.extend(["VERSION", str(version)])
+        if parameters:
+            for var in parameters:
+                args.extend(str(var))
+        return cast(
+            str,
+            await self._execute_command(RequestType.Lolwut, args),
+        )
+
+    async def random_key(self) -> Optional[str]:
+        """
+        Returns a random existing key name from the currently selected database.
+
+        See https://valkey.io/commands/randomkey for more details.
+
+        Returns:
+            Optional[str]: A random existing key name from the currently selected database.
+
+        Examples:
+            >>> await client.random_key()
+            "random_key_name"  # "random_key_name" is a random existing key name from the currently selected database.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.RandomKey, []),
+        )

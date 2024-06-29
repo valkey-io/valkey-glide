@@ -225,6 +225,8 @@ tasks.withType(Test) {
         events "started", "skipped", "passed", "failed"
         showStandardStreams true
     }
+    // This is needed for the FFI tests
+    jvmArgs "-Djava.library.path=${projectDir}/../target/debug"
 }
 
 jar {
