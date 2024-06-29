@@ -85,14 +85,6 @@ jobs:
               with:
                   redis-version: ${{ matrix.redis }}
 
-            - name: Create secret key ring file
-              working-directory: java/client
-              run: |
-                  echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
-                  ls -ltr
-              env:
-                  SECRING_GPG: ${{ secrets.SECRING_GPG }}
-
             - name: Build java client
               working-directory: java
               run: ./gradlew --continue build
@@ -171,14 +163,6 @@ jobs:
             - name: Build rust part
               working-directory: java
               run: cargo build --release
-
-            - name: Create secret key ring file
-              working-directory: java/client
-              run: |
-                  echo "$SECRING_GPG" | base64 --decode > ./secring.gpg
-                  ls -ltr
-              env:
-                  SECRING_GPG: ${{ secrets.SECRING_GPG }}
 
             - name: Build java part
               working-directory: java
