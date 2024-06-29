@@ -5498,7 +5498,7 @@ class CoreCommands(Protocol):
         Returns the longest common subsequence between strings stored at key1 and key2.
 
         Note that this is different than the longest common string algorithm, since
-        matching characters in the string does not need to be contiguous.
+        matching characters in the two strings do not need to be contiguous.
 
         For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
         from left to right, the longest common set of characters is composed of the first "f" and then the "o".
@@ -5537,7 +5537,7 @@ class CoreCommands(Protocol):
         Returns the length of the longest common subsequence between strings stored at key1 and key2.
 
         Note that this is different than the longest common string algorithm, since
-        matching characters in the string does not need to be contiguous.
+        matching characters in the two strings do not need to be contiguous.
 
         For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
         from left to right, the longest common set of characters is composed of the first "f" and then the "o".
@@ -5555,7 +5555,7 @@ class CoreCommands(Protocol):
             >>> await client.mset({"testKey1" : "abcd", "testKey2": "axcd"})
                 'OK'
             >>> await client.lcs_len("testKey1", "testKey2")
-                3  # the length of the longest common subsequence between these 2 strings is 3.
+                3  # the length of the longest common subsequence between these 2 strings ("acd") is 3.
 
         Since: Redis version 7.0.0.
         """
@@ -5577,7 +5577,7 @@ class CoreCommands(Protocol):
         Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
 
         Note that this is different than the longest common string algorithm, since
-        matching characters in the string does not need to be contiguous.
+        matching characters in the two strings do not need to be contiguous.
 
         For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
         from left to right, the longest common set of characters is composed of the first "f" and then the "o".

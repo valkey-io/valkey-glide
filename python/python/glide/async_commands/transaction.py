@@ -3958,7 +3958,7 @@ class BaseTransaction:
         Returns the longest common subsequence between strings stored at key1 and key2.
 
         Note that this is different than the longest common string algorithm, since
-        matching characters in the string does not need to be contiguous.
+        matching characters in the two strings do not need to be contiguous.
 
         For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
         from left to right, the longest common set of characters is composed of the first "f" and then the "o".
@@ -3988,7 +3988,7 @@ class BaseTransaction:
         Returns the length of the longest common subsequence between strings stored at key1 and key2.
 
         Note that this is different than the longest common string algorithm, since
-        matching characters in the string does not need to be contiguous.
+        matching characters in the two strings do not need to be contiguous.
 
         For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
         from left to right, the longest common set of characters is composed of the first "f" and then the "o".
@@ -4019,7 +4019,7 @@ class BaseTransaction:
         Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
 
         Note that this is different than the longest common string algorithm, since
-        matching characters in the string does not need to be contiguous.
+        matching characters in the two strings do not need to be contiguous.
 
         For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
         from left to right, the longest common set of characters is composed of the first "f" and then the "o".
@@ -4052,6 +4052,7 @@ class BaseTransaction:
             args.append("WITHMATCHLEN")
 
         return self.append_command(RequestType.LCS, args)
+
 
 class Transaction(BaseTransaction):
     """
