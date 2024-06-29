@@ -165,6 +165,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SScan;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -215,6 +216,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZScan;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
@@ -258,6 +260,8 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -1335,6 +1339,36 @@ public class TransactionTests {
                                 "1",
                                 "ANY",
                                 "ASC")));
+
+        transaction.sscan("key1", "0");
+        results.add(Pair.of(SScan, buildArgs("key1", "0")));
+
+        transaction.sscan("key1", "0", SScanOptions.builder().matchPattern("*").count(10L).build());
+        results.add(
+                Pair.of(
+                        SScan,
+                        buildArgs(
+                                "key1",
+                                "0",
+                                SScanOptions.MATCH_OPTION_STRING,
+                                "*",
+                                SScanOptions.COUNT_OPTION_STRING,
+                                "10")));
+
+        transaction.zscan("key1", "0");
+        results.add(Pair.of(ZScan, buildArgs("key1", "0")));
+
+        transaction.zscan("key1", "0", ZScanOptions.builder().matchPattern("*").count(10L).build());
+        results.add(
+                Pair.of(
+                        ZScan,
+                        buildArgs(
+                                "key1",
+                                "0",
+                                ZScanOptions.MATCH_OPTION_STRING,
+                                "*",
+                                ZScanOptions.COUNT_OPTION_STRING,
+                                "10")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

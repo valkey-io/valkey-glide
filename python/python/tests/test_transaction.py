@@ -104,6 +104,8 @@ async def transaction_test(
         args.append(lib_name)
         transaction.function_load(code, True)
         args.append(lib_name)
+        transaction.function_delete(lib_name)
+        args.append(OK)
         transaction.function_flush()
         args.append(OK)
         transaction.function_flush(FlushMode.ASYNC)
