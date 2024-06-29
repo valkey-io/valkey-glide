@@ -527,7 +527,6 @@ public class TransactionTestUtilities {
 
         transaction
                 .sadd(setKey1, new String[] {"baz", "foo"})
-
                 .srem(setKey1, new String[] {"foo"})
                 .sscan(setKey1, "0")
                 .sscan(setKey1, "0", SScanOptions.builder().matchPattern("*").count(10L).build())
