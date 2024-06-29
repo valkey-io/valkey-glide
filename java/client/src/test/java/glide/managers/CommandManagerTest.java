@@ -98,7 +98,9 @@ public class CommandManagerTest {
                 service.submitNewCommand(
                         CustomCommand,
                         new String[0],
-                        new BaseResponseResolver((p) -> new RuntimeException("")));
+                        new BaseResponseResolver(
+                                (p) ->
+                                        new RuntimeException("Testing: something went wrong if you see this error")));
         Object respPointer = result.get();
 
         // verify

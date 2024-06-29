@@ -14,14 +14,14 @@ public interface PubSubClusterCommands {
      * Publishes message on pubsub channel in sharded mode.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/spublish/">redis.io</a> for details.
-     * @param channel The Channel to publish the message on.
+     * @see <a href="https://valkey.io/commands/spublish/">redis.io</a> for details.
+     * @param channel The channel to publish the message on.
      * @param message The message to publish.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * Long receivers = client.spublish("announcements", "The cat said 'meow'!").get();
-     * assert receivers > 0L;
+     * String response = client.spublish("announcements", "The cat said 'meow'!").get();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> spublish(String channel, String message);

@@ -279,7 +279,8 @@ public abstract class BaseClient
     public static final String OK = ConstantResponse.OK.toString();
 
     // Members below are effectively-final, but since we use a static async method as a constructor,
-    // we can't set them in a standard constructor. They all set in `buildClient` method below.
+    // we can't set them in a standard constructor. They all are set in the `buildClient` method
+    // below.
     // All made protected to simplify testing.
     protected CommandManager commandManager;
     protected ConnectionManager connectionManager;

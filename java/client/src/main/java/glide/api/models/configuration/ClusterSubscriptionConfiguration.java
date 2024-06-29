@@ -71,7 +71,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
     }
 
     /** Builder for {@link ClusterSubscriptionConfiguration}. */
-    public static class ClusterSubscriptionConfigurationBuilder
+    public static final class ClusterSubscriptionConfigurationBuilder
             extends BaseSubscriptionConfigurationBuilder<
                     ClusterSubscriptionConfigurationBuilder, ClusterSubscriptionConfiguration> {
 

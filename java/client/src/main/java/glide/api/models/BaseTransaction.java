@@ -4878,8 +4878,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /**
      * Publishes message on pubsub channel.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/publish/">redis.io</a> for details.
-     * @param channel The Channel to publish the message on.
+     * @see <a href="https://valkey.io/commands/publish/">redis.io</a> for details.
+     * @param channel The channel to publish the message on.
      * @param message The message to publish.
      * @return Command response - The number of clients that received the message.
      */

@@ -13,14 +13,14 @@ public interface PubSubBaseCommands {
     /**
      * Publishes message on pubsub channel.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/publish/">redis.io</a> for details.
-     * @param channel The Channel to publish the message on.
+     * @see <a href="https://valkey.io/commands/publish/">redis.io</a> for details.
+     * @param channel The channel to publish the message on.
      * @param message The message to publish.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * Long receivers = client.publish("announcements", "The cat said 'meow'!").get();
-     * assert receivers > 0L;
+     * String response = client.publish("announcements", "The cat said 'meow'!").get();
+     * assert response.equals("OK");
      * }</pre>
      */
     CompletableFuture<String> publish(String channel, String message);

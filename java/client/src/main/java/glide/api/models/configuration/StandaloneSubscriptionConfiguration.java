@@ -64,7 +64,7 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
     }
 
     /** Builder for {@link StandaloneSubscriptionConfiguration}. */
-    public static class StandaloneSubscriptionConfigurationBuilder
+    public static final class StandaloneSubscriptionConfigurationBuilder
             extends BaseSubscriptionConfigurationBuilder<
                     StandaloneSubscriptionConfigurationBuilder, StandaloneSubscriptionConfiguration> {
 

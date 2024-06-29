@@ -3,8 +3,10 @@ package glide.api.models.configuration;
 
 import glide.api.BaseClient;
 import glide.api.models.PubSubMessage;
+import glide.api.models.configuration.ClusterSubscriptionConfiguration.ClusterSubscriptionConfigurationBuilder;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode;
+import glide.api.models.configuration.StandaloneSubscriptionConfiguration.StandaloneSubscriptionConfigurationBuilder;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -28,7 +30,7 @@ public abstract class BaseSubscriptionConfiguration {
     public interface ChannelMode {}
 
     /**
-     * Callback is called for every incoming message. It should be a fast, non-blocking operation to
+     * Callback called for every incoming message. It should be a fast, non-blocking operation to
      * avoid issues. A next call could happen even before then the previous call complete.<br>
      * The callback arguments are:
      *
@@ -55,6 +57,10 @@ public abstract class BaseSubscriptionConfiguration {
 
     // All code below is a custom implementation of `SuperBuilder`, because we provide
     // custom user-friendly API `callback` and `subscription`.
+    /**
+     * Superclass for {@link ClusterSubscriptionConfigurationBuilder} and for {@link
+     * StandaloneSubscriptionConfigurationBuilder}.
+     */
     public abstract static class BaseSubscriptionConfigurationBuilder<
             B extends BaseSubscriptionConfigurationBuilder<B, C>,
             C extends BaseSubscriptionConfiguration> {

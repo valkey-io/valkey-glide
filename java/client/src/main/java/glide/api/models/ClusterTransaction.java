@@ -40,8 +40,8 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * Publishes message on pubsub channel in sharded mode.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/publish/">redis.io</a> for details.
-     * @param channel The Channel to publish the message on.
+     * @see <a href="https://valkey.io/commands/publish/">redis.io</a> for details.
+     * @param channel The channel to publish the message on.
      * @param message The message to publish.
      * @return Command response - The number of clients that received the message.
      */
