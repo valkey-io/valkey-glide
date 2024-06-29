@@ -396,7 +396,8 @@ public class CommandManager {
     private static void populateCommandWithArgs(
             GlideString[] arguments, Command.Builder outputBuilder) {
         populateCommandWithArgs(
-                Arrays.stream(arguments).map(GlideString::getBytes).toList(), outputBuilder);
+                Arrays.stream(arguments).map(GlideString::getBytes).collect(Collectors.toList()),
+                outputBuilder);
     }
 
     /**
