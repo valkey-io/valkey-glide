@@ -21,5 +21,5 @@ public enum GeoUnit {
     /** Represents distance in feet. */
     FEET("ft");
 
-    private final String redisApi;
+    private final String valkeyAPI;
 }

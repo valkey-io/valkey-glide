@@ -38,8 +38,8 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.SET_COMMAND_STRIN
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
-import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_REDIS_API;
-import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_REDIS_API;
+import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
+import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
@@ -6975,7 +6975,7 @@ public class RedisClientTest {
         String member1 = "Catania";
         String member2 = "Palermo";
         GeoUnit geoUnit = GeoUnit.KILOMETERS;
-        String[] arguments = new String[] {key, member1, member2, GeoUnit.KILOMETERS.getRedisApi()};
+        String[] arguments = new String[] {key, member1, member2, GeoUnit.KILOMETERS.getValkeyAPI()};
         Double value = 166.2742;
 
         CompletableFuture<Double> testResponse = new CompletableFuture<>();
@@ -7003,7 +7003,7 @@ public class RedisClientTest {
         GlideString member2 = gs("Palermo");
         GeoUnit geoUnit = GeoUnit.KILOMETERS;
         GlideString[] arguments =
-                new GlideString[] {key, member1, member2, gs(GeoUnit.KILOMETERS.getRedisApi())};
+                new GlideString[] {key, member1, member2, gs(GeoUnit.KILOMETERS.getValkeyAPI())};
         Double value = 166.2742;
 
         CompletableFuture<Double> testResponse = new CompletableFuture<>();
@@ -8977,7 +8977,7 @@ public class RedisClientTest {
                         new GeoSearchShape(1L, GeoUnit.KILOMETERS),
                         null,
                         new String[] {
-                            "GeoSearchTestKey", FROMMEMBER_REDIS_API, "member", "BYRADIUS", "1.0", "km"
+                            "GeoSearchTestKey", FROMMEMBER_VALKEY_API, "member", "BYRADIUS", "1.0", "km"
                         },
                         new String[] {"place1", "place2"}),
                 Arguments.of(
@@ -8986,7 +8986,14 @@ public class RedisClientTest {
                         new GeoSearchShape(1L, 1L, GeoUnit.KILOMETERS),
                         new GeoSearchResultOptions(SortOrder.ASC),
                         new String[] {
-                            "GeoSearchTestKey", FROMMEMBER_REDIS_API, "member", "BYBOX", "1.0", "1.0", "km", "ASC"
+                            "GeoSearchTestKey",
+                            FROMMEMBER_VALKEY_API,
+                            "member",
+                            "BYBOX",
+                            "1.0",
+                            "1.0",
+                            "km",
+                            "ASC"
                         },
                         new String[] {"place2", "place1"}),
                 Arguments.of(
@@ -8996,7 +9003,7 @@ public class RedisClientTest {
                         new GeoSearchResultOptions(2),
                         new String[] {
                             "GeoSearchTestKey",
-                            FROMLONLAT_REDIS_API,
+                            FROMLONLAT_VALKEY_API,
                             "1.0",
                             "1.0",
                             "BYRADIUS",
@@ -9013,7 +9020,7 @@ public class RedisClientTest {
                         new GeoSearchResultOptions(SortOrder.DESC, 2, true),
                         new String[] {
                             "GeoSearchTestKey",
-                            FROMLONLAT_REDIS_API,
+                            FROMLONLAT_VALKEY_API,
                             "1.0",
                             "1.0",
                             "BYBOX",
@@ -9068,7 +9075,7 @@ public class RedisClientTest {
                         null,
                         new String[] {
                             "GeoSearchTestKey",
-                            FROMMEMBER_REDIS_API,
+                            FROMMEMBER_VALKEY_API,
                             "member",
                             "BYRADIUS",
                             "1.0",
@@ -9099,7 +9106,7 @@ public class RedisClientTest {
                         new GeoSearchResultOptions(SortOrder.ASC, 2, true),
                         new String[] {
                             "GeoSearchTestKey",
-                            FROMMEMBER_REDIS_API,
+                            FROMMEMBER_VALKEY_API,
                             "member",
                             "BYBOX",
                             "1.0",
@@ -9164,7 +9171,7 @@ public class RedisClientTest {
                         new String[] {
                             "testDestination",
                             "testSource",
-                            FROMMEMBER_REDIS_API,
+                            FROMMEMBER_VALKEY_API,
                             "member",
                             "BYRADIUS",
                             "1.0",
@@ -9179,7 +9186,7 @@ public class RedisClientTest {
                         new String[] {
                             "testDestination",
                             "testSource",
-                            FROMMEMBER_REDIS_API,
+                            FROMMEMBER_VALKEY_API,
                             "member",
                             "BYBOX",
                             "1.0",
@@ -9196,7 +9203,7 @@ public class RedisClientTest {
                         new String[] {
                             "testDestination",
                             "testSource",
-                            FROMLONLAT_REDIS_API,
+                            FROMLONLAT_VALKEY_API,
                             "1.0",
                             "1.0",
                             "BYRADIUS",
@@ -9214,7 +9221,7 @@ public class RedisClientTest {
                         new String[] {
                             "testDestination",
                             "testSource",
-                            FROMLONLAT_REDIS_API,
+                            FROMLONLAT_VALKEY_API,
                             "1.0",
                             "1.0",
                             "BYBOX",
@@ -9270,7 +9277,7 @@ public class RedisClientTest {
                         new String[] {
                             "testDestination",
                             "testSource",
-                            FROMMEMBER_REDIS_API,
+                            FROMMEMBER_VALKEY_API,
                             "member",
                             "BYRADIUS",
                             "1.0",
@@ -9286,7 +9293,7 @@ public class RedisClientTest {
                         new String[] {
                             "testDestination",
                             "testSource",
-                            FROMMEMBER_REDIS_API,
+                            FROMMEMBER_VALKEY_API,
                             "member",
                             "BYBOX",
                             "1.0",

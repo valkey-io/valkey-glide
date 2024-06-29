@@ -3,7 +3,6 @@ package glide.api;
 
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
@@ -2225,7 +2224,7 @@ public abstract class BaseClient
             @NonNull String member1,
             @NonNull String member2,
             @NonNull GeoUnit geoUnit) {
-        String[] arguments = new String[] {key, member1, member2, geoUnit.getRedisApi()};
+        String[] arguments = new String[] {key, member1, member2, geoUnit.getValkeyAPI()};
         return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
     }
 
@@ -2235,7 +2234,7 @@ public abstract class BaseClient
             @NonNull GlideString member1,
             @NonNull GlideString member2,
             @NonNull GeoUnit geoUnit) {
-        GlideString[] arguments = new GlideString[] {key, member1, member2, gs(geoUnit.getRedisApi())};
+        GlideString[] arguments = new GlideString[] {key, member1, member2, gs(geoUnit.getValkeyAPI())};
         return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
     }
 

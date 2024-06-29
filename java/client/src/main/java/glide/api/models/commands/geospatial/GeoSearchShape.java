@@ -7,15 +7,15 @@ import lombok.Getter;
 /**
  * The query's shape for {@link GeospatialIndicesBaseCommands} command.
  *
- * @see <a href="https://redis.io/commands/geosearch/">redis.io</a>
+ * @see <a href="https://redis.io/commands/geosearch/">valkey.io</a>
  */
 @Getter
 public final class GeoSearchShape {
-    /** Redis API keyword used to perform geosearch by radius. */
-    public static final String BYRADIUS_REDIS_API = "BYRADIUS";
+    /** Valkey API keyword used to perform geosearch by radius. */
+    public static final String BYRADIUS_VALKEY_API = "BYRADIUS";
 
-    /** Redis API keyword used to perform geosearch by box. */
-    public static final String BYBOX_REDIS_API = "BYBOX";
+    /** Valkey API keyword used to perform geosearch by box. */
+    public static final String BYBOX_VALKEY_API = "BYBOX";
 
     /**
      * The geosearch query's shape:
@@ -86,10 +86,10 @@ public final class GeoSearchShape {
     public String[] toArgs() {
         switch (shape) {
             case BYRADIUS:
-                return new String[] {shape.toString(), Double.toString(radius), unit.getRedisApi()};
+                return new String[] {shape.toString(), Double.toString(radius), unit.getValkeyAPI()};
             case BYBOX:
                 return new String[] {
-                    shape.toString(), Double.toString(width), Double.toString(height), unit.getRedisApi()
+                    shape.toString(), Double.toString(width), Double.toString(height), unit.getValkeyAPI()
                 };
             default:
                 return new String[] {};

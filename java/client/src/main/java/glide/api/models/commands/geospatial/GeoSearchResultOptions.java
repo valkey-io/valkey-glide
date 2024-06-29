@@ -24,16 +24,17 @@ import java.util.List;
  *       not be the ones closest to the origin.
  * </ul>
  *
- * @see <a href="https://redis.io/commands/geosearch/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a>
  */
 public class GeoSearchResultOptions {
-    /** Redis API keyword used to perform geosearch with count. */
-    public static final String COUNT_REDIS_API = "COUNT";
+    /** Valkey API keyword used to perform geosearch with count. */
+    public static final String COUNT_VALKEY_API = "COUNT";
 
     /**
-     * Redis API keyword used to change search behavior to return as soon as enough matches are found.
+     * Valkey API keyword used to change search behavior to return as soon as enough matches are
+     * found.
      */
-    public static final String ANY_REDIS_API = "ANY";
+    public static final String ANY_VALKEY_API = "ANY";
 
     /** Indicates the order the result should be sorted in. See {@link SortOrder} for detail. */
     private final SortOrder sortOrder;
@@ -88,11 +89,11 @@ public class GeoSearchResultOptions {
         List<String> arguments = new ArrayList<>();
 
         if (count > 0) {
-            arguments.add(COUNT_REDIS_API);
+            arguments.add(COUNT_VALKEY_API);
             arguments.add(Long.toString(count));
 
             if (isAny) {
-                arguments.add(ANY_REDIS_API);
+                arguments.add(ANY_VALKEY_API);
             }
         }
 

@@ -8,14 +8,14 @@ import org.apache.commons.lang3.ArrayUtils;
 /**
  * The query's starting point for {@link GeospatialIndicesBaseCommands} command.
  *
- * @see <a href="https://redis.io/commands/geosearch/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a>
  */
 public final class GeoSearchOrigin {
-    /** Redis API keyword used to perform search from the position of a given member. */
-    public static final String FROMMEMBER_REDIS_API = "FROMMEMBER";
+    /** Valkey API keyword used to perform search from the position of a given member. */
+    public static final String FROMMEMBER_VALKEY_API = "FROMMEMBER";
 
-    /** Redis API keyword used to perform search from the given longtitude & latitue position. */
-    public static final String FROMLONLAT_REDIS_API = "FROMLONLAT";
+    /** Valkey API keyword used to perform search from the given longtitude & latitue position. */
+    public static final String FROMLONLAT_VALKEY_API = "FROMLONLAT";
 
     /**
      * Basic interface. Please use one of the following implementations:
@@ -26,7 +26,7 @@ public final class GeoSearchOrigin {
      * </ul>
      */
     public interface SearchOrigin {
-        /** Convert to command arguments according to the Redis API. */
+        /** Convert to command arguments according to the Valkey API. */
         String[] toArgs();
     }
 
@@ -42,7 +42,7 @@ public final class GeoSearchOrigin {
          *     query.
          */
         public String[] toArgs() {
-            return ArrayUtils.addAll(new String[] {FROMLONLAT_REDIS_API}, position.toArgs());
+            return ArrayUtils.addAll(new String[] {FROMLONLAT_VALKEY_API}, position.toArgs());
         }
     }
 
@@ -58,7 +58,7 @@ public final class GeoSearchOrigin {
          *     query.
          */
         public String[] toArgs() {
-            return new String[] {FROMMEMBER_REDIS_API, member};
+            return new String[] {FROMMEMBER_VALKEY_API, member};
         }
     }
 }

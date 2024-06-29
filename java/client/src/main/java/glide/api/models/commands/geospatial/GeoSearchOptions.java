@@ -18,18 +18,18 @@ import lombok.Builder;
  *   <li>WITHHASH: Also return the geohash of the returned items. for the general user.
  * </ul>
  *
- * @see <a href="https://redis.io/commands/geosearch/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a>
  */
 @Builder
 public final class GeoSearchOptions {
-    /** Redis API keyword used to perform geosearch with coordinates. */
-    public static final String WITHCOORD_REDIS_API = "WITHCOORD";
+    /** Valkey API keyword used to perform geosearch with coordinates. */
+    public static final String WITHCOORD_VALKEY_API = "WITHCOORD";
 
-    /** Redis API keyword used to perform geosearch with distance. */
-    public static final String WITHDIST_REDIS_API = "WITHDIST";
+    /** Valkey API keyword used to perform geosearch with distance. */
+    public static final String WITHDIST_VALKEY_API = "WITHDIST";
 
-    /** Redis API keyword used to perform geosearch with hash value. */
-    public static final String WITHHASH_REDIS_API = "WITHHASH";
+    /** Valkey API keyword used to perform geosearch with hash value. */
+    public static final String WITHHASH_VALKEY_API = "WITHHASH";
 
     /**
      * Indicates if the 'WITHCOORD' keyword should be included. Can be included in builder
@@ -58,15 +58,15 @@ public final class GeoSearchOptions {
         List<String> arguments = new ArrayList<>();
 
         if (withDist) {
-            arguments.add(WITHDIST_REDIS_API);
+            arguments.add(WITHDIST_VALKEY_API);
         }
 
         if (withCoord) {
-            arguments.add(WITHCOORD_REDIS_API);
+            arguments.add(WITHCOORD_VALKEY_API);
         }
 
         if (withHash) {
-            arguments.add(WITHHASH_REDIS_API);
+            arguments.add(WITHHASH_VALKEY_API);
         }
 
         return arguments.toArray(new String[0]);
