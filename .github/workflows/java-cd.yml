@@ -142,10 +142,6 @@ jobs:
               run: |
                   ./gradlew :client:publishToMavenLocal -Psigning.secretKeyRingFile=secring.gpg -Psigning.password="${{ secrets.GPG_PASSWORD }}" -Psigning.keyId=${{ secrets.GPG_KEY_ID }}
 
-            - name: Ensure no skipped files by linter
-              working-directory: java
-              run: ./gradlew spotlessDiagnose | grep 'All formatters are well behaved for all files'
-
             - name: Bundle JAR
               working-directory: java
               run: |
@@ -155,18 +151,6 @@ jobs:
                   ls -ltr
                   cd -
                   cp $src_folder/bundle.jar .
-
-            - name: Upload test reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: test-reports-java-${{ matrix.java }}-redis-${{ matrix.redis }}-${{ matrix.host.TARGET }}
-                  path: |
-                      java/client/build/reports/**
-                      java/integTest/build/reports/**
-                      utils/clusters/**
-                      benchmarks/results/**
 
             - name: Upload artifacts to publish
               if: always()
