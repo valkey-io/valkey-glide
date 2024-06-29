@@ -7556,7 +7556,7 @@ class TestClusterRoutes:
         # Result contains a subset of the key
         assert await redis_client.sadd(key1, num_members) == len(num_members)
         result_cursor = "0"
-        result_values = set() # type: set[str]
+        result_values = set()  # type: set[str]
 
         while True:
             result = await redis_client.sscan(key1, result_cursor)
