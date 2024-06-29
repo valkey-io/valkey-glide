@@ -1584,7 +1584,8 @@ public interface SortedSetBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
      * @param key The key of the set.
-     * @param cursor The cursor that points to the next iteration of results.
+     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates the start of the
+     *               search.
      * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
      *     cursor</code> for the next iteration of results. <code>0</code> will be the <code>cursor
      *     </code> returned on the last iteration of the set. The second element is always an <code>
@@ -1618,7 +1619,8 @@ public interface SortedSetBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
      * @param key The key of the set.
-     * @param cursor The cursor that points to the next iteration of results.
+     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates the start of the
+     *               search.
      * @param zScanOptions The {@link ZScanOptions}.
      * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
      *     cursor</code> for the next iteration of results. <code>0</code> will be the <code>cursor
