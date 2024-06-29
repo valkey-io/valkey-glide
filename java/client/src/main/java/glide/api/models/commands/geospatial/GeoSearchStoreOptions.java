@@ -8,21 +8,21 @@ import lombok.Builder;
  * Optional arguments for {@link GeospatialIndicesBaseCommands#geosearchstore(String, String,
  * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchStoreOptions)} command.
  *
- * @see <a href="https://redis.io/commands/geosearch/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/geosearch/">valkey.io</a>
  */
 @Builder
 public final class GeoSearchStoreOptions {
     /**
-     * Redis API keyword used to perform geosearchstore and optionally sort the results with their
+     * Valkey API keyword used to perform geosearchstore and optionally sort the results with their
      * distance from the center.
      */
-    public static final String GEOSEARCHSTORE_REDIS_API = "STOREDIST";
+    public static final String GEOSEARCHSTORE_VALKEY_API = "STOREDIST";
 
     /**
      * boolean value indicating if the STOREDIST option should be included. Can be included in builder
      * construction by using {@link GeoSearchStoreOptionsBuilder#storedist()}.
      */
-    private boolean storeDist;
+    private final boolean storeDist;
 
     /**
      * Converts GeoSearchStoreOptions into a String[].
@@ -31,7 +31,7 @@ public final class GeoSearchStoreOptions {
      */
     public String[] toArgs() {
         if (storeDist) {
-            return new String[] {GEOSEARCHSTORE_REDIS_API};
+            return new String[] {GEOSEARCHSTORE_VALKEY_API};
         }
 
         return new String[] {};
