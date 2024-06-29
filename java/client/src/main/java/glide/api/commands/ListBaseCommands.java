@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.GlideString;
@@ -276,6 +276,32 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> ltrim(String key, long start, long end);
+
+    /**
+     * Trims an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on.<br>
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Always <code>OK</code>.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
+     *     element of the list.<br>
+     *     If <code>key</code> does not exist, OK will be returned without changes to the database.
+     * @example
+     *     <pre>{@code
+     * String payload = client.ltrim(gs("my_list"), 0, 1).get();
+     * assert payload.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> ltrim(GlideString key, long start, long end);
 
     /**
      * Returns the length of the list stored at <code>key</code>.
@@ -716,6 +742,25 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> lset(String key, long index, String element);
+
+    /**
+     * Sets the list element at <code>index</code> to <code>element</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to be set.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.lset(gs("testKey"), 1, gs("two")).get();
+     * assertEquals(response, "OK");
+     * }</pre>
+     */
+    CompletableFuture<String> lset(GlideString key, long index, GlideString element);
 
     /**
      * Atomically pops and removes the left/right-most element to the list stored at <code>source

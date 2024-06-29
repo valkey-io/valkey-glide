@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
 import static glide.api.models.GlideString.gs;
@@ -166,6 +166,12 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> echo(@NonNull GlideString message) {
+        return commandManager.submitNewCommand(
+                Echo, new GlideString[] {message}, this::handleGlideStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String[]> time() {
         return commandManager.submitNewCommand(
                 Time, new String[0], response -> castArray(handleArrayResponse(response), String.class));
@@ -246,6 +252,12 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> move(@NonNull GlideString key, long dbIndex) {
+        return commandManager.submitNewCommand(
+                Move, new GlideString[] {key, gs(Long.toString(dbIndex))}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Map<String, Object>[]> functionList(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
@@ -323,11 +335,33 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source, @NonNull GlideString destination, long destinationDB) {
+        GlideString[] arguments =
+                new GlideString[] {source, destination, gs(DB_REDIS_API), gs(Long.toString(destinationDB))};
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
             @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
         String[] arguments =
                 new String[] {source, destination, DB_REDIS_API, Long.toString(destinationDB)};
         if (replace) {
             arguments = ArrayUtils.add(arguments, REPLACE_REDIS_API);
+        }
+        return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
+    }
+
+    @Override
+    public CompletableFuture<Boolean> copy(
+            @NonNull GlideString source,
+            @NonNull GlideString destination,
+            long destinationDB,
+            boolean replace) {
+        GlideString[] arguments =
+                new GlideString[] {source, destination, gs(DB_REDIS_API), gs(Long.toString(destinationDB))};
+        if (replace) {
+            arguments = ArrayUtils.add(arguments, gs(REPLACE_REDIS_API));
         }
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
