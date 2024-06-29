@@ -163,7 +163,7 @@ jobs:
               run: |
                   git config --global --add safe.directory "$GITHUB_WORKSPACE"
                   git submodule update --init --recursive
-   
+
             - name: Install NodeJS
               run: |
                   yum install -y nodejs

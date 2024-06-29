@@ -64,12 +64,17 @@ runs:
           id: is_valkey_release
           uses: ./.github/workflows/compare-versions
           with:
+              # Checks if the current tested version is a Valkey release (>= 7.2.5)
               version1: ${{ inputs.engine-version }}
               version2: ${{ env.VALKEY_MIN_VERSION }}
 
         - name: Verify Valkey installation and symlinks
           shell: bash
           run: | 
+            # In Valkey releases, the engine is built with symlinks from valkey-server and valkey-cli
+            # to redis-server and redis-cli. This step ensures that the engine is properly installed
+            # with the expected version and that Valkey symlinks are correctly created.
+            
             IS_VALKEY=${{ steps.is_valkey_release.outputs.result }}
             EXPECTED_VERSION=`echo ${{ inputs.engine-version }} | sed -e "s/^redis-//"`
             REDIS_SERVER_VER=$(redis-server -v)
