@@ -1372,17 +1372,20 @@ public class TransactionTests {
                                 ZScanOptions.COUNT_OPTION_STRING,
                                 "10")));
 
-        transaction.zscan("key1", "0");
-        results.add(Pair.of(ZScan, buildArgs("key1", "0")));
-
-        transaction.zscan("key1", "0", ZScanOptions.builder().matchPattern("*").count(10L).build());
-        results.add(Pair.of(ZScan, buildArgs("key1", "0", "MATCH", "*", "COUNT", "10")));
-
         transaction.hscan("key1", "0");
         results.add(Pair.of(HScan, buildArgs("key1", "0")));
 
         transaction.hscan("key1", "0", HScanOptions.builder().matchPattern("*").count(10L).build());
-        results.add(Pair.of(HScan, buildArgs("key1", "0", "MATCH", "*", "COUNT", "10")));
+        results.add(
+                Pair.of(
+                        HScan,
+                        buildArgs(
+                                "key1",
+                                "0",
+                                HScanOptions.MATCH_OPTION_STRING,
+                                "*",
+                                HScanOptions.COUNT_OPTION_STRING,
+                                "10")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
