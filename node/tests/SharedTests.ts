@@ -3158,7 +3158,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.lpush(list_key, ["1"])).toEqual(1);
 
-                if (versionLessThan7) {
+                if (versionLessThan72) {
                     checkSimple(await client.objectEncoding(list_key)).toEqual(
                         "quicklist",
                     );
