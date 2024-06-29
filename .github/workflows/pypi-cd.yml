@@ -8,6 +8,8 @@ on:
         - .github/workflows/pypi-cd.yml
         - .github/workflows/build-python-wrapper/action.yml
         - .github/workflows/start-self-hosted-runner/action.yml
+        - .github/workflows/install-shared-dependencies/action.yml
+        - .github/workflows/install-valkey/action.yml
     push:
         tags:
             - "v*.*"

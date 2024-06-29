@@ -9,6 +9,8 @@ on:
             - submodules/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-valkey/action.yml
     pull_request:
         paths:
             - logger_core/**
@@ -16,6 +18,8 @@ on:
             - submodules/**
             - utils/cluster_manager.py
             - .github/workflows/rust.yml
+            - .github/workflows/install-shared-dependencies/action.yml
+            - .github/workflows/install-valkey/action.yml
 
 concurrency:
     group: rust-${{ github.head_ref || github.ref }}
