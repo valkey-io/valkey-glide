@@ -4153,7 +4153,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull String member1,
             @NonNull String member2,
             @NonNull GeoUnit geoUnit) {
-        ArgsArray commandArgs = buildArgs(key, member1, member2, geoUnit.getRedisApi());
+        ArgsArray commandArgs = buildArgs(key, member1, member2, geoUnit.getValkeyAPI());
         protobufTransaction.addCommands(buildCommand(GeoDist, commandArgs));
         return getThis();
     }
@@ -5137,7 +5137,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -5172,7 +5172,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -5215,7 +5215,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -5262,7 +5262,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Returns the members of a sorted set populated with geospatial information using {@link
      * #geoadd(String, Map)}, which are within the borders of the area specified by a given shape.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param searchFrom The query's center point options, could be one of:
@@ -5319,7 +5319,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * created. To get the result directly, see `{@link #geosearch(String,
      * GeoSearchOrigin.SearchOrigin, GeoSearchShape)}.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param source The key of the source sorted set.
@@ -5361,7 +5361,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * created. To get the result directly, see `{@link #geosearch(String,
      * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchResultOptions)}.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param source The key of the source sorted set.
@@ -5409,7 +5409,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * created. To get the result directly, see `{@link #geosearch(String,
      * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchOptions)}.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param source The key of the source sorted set.
@@ -5456,7 +5456,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * created. To get the result directly, see `{@link #geosearch(String,
      * GeoSearchOrigin.SearchOrigin, GeoSearchShape, GeoSearchOptions, GeoSearchResultOptions)}.
      *
-     * @since Redis 6.2.0 and above.
+     * @since Valkey 6.2.0 and above.
      * @see <a href="https://valkey.io/commands/geosearch">valkey.io</a> for more details.
      * @param destination The key of the destination sorted set.
      * @param source The key of the source sorted set.
