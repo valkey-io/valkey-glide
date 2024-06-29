@@ -439,13 +439,14 @@ public interface HashBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
      * @param key The key of the hash.
-     * @param cursor The cursor that points to the next iteration of results.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
-     *     cursor</code> for the next iteration of results. <code>0</code> will be the <code>cursor
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
      *     </code> returned on the last iteration of the result. The second element is always an
      *     <code>Array</code> of the subset of the hash held in <code>key</code>. The array in the
-     *     second element is always a flattened series of String pairs, where the key is at even
-     *     indices and the value is at odd indices.
+     *     second element is always a flattened series of <code>String</code> pairs, where the key is
+     *     at even indices and the value is at odd indices.
      * @example
      *     <pre>{@code
      * // Assume key contains a set with 200 member-score pairs
@@ -473,14 +474,15 @@ public interface HashBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
      * @param key The key of the hash.
-     * @param cursor The cursor that points to the next iteration of results.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @param hScanOptions The {@link HScanOptions}.
      * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
-     *     cursor</code> for the next iteration of results. <code>0</code> will be the <code>cursor
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
      *     </code> returned on the last iteration of the result. The second element is always an
      *     <code>Array</code> of the subset of the hash held in <code>key</code>. The array in the
-     *     second element is always a flattened series of String pairs, where the key is at even
-     *     indices and the value is at odd indices.
+     *     second element is always a flattened series of <code>String</code> pairs, where the key is
+     *     at even indices and the value is at odd indices.
      * @example
      *     <pre>{@code
      * // Assume key contains a set with 200 member-score pairs

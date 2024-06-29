@@ -5511,10 +5511,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
      * @param key The key of the set.
-     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates
-     *     the start of the search.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
-     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the set. The second element is
      *     always an <code>Array</code> of the subset of the set held in <code>key</code>.
      */
@@ -5528,11 +5528,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
      * @param key The key of the set.
-     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates
-     *     the start of the search.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @param sScanOptions The {@link SScanOptions}.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
-     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the set. The second element is
      *     always an <code>Array</code> of the subset of the set held in <code>key</code>.
      */
@@ -5548,10 +5548,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
      * @param key The key of the sorted set.
-     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates
-     *     the start of the search.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
-     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the sorted set. The second
      *     element is always an <code>Array</code> of the subset of the sorted set held in <code>key
      *     </code>. The array in the second element is always a flattened series of <code>String
@@ -5567,11 +5567,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
      * @param key The key of the sorted set.
-     * @param cursor The cursor that points to the next iteration of results. A value of 0 indicates
-     *     the start of the search.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @param zScanOptions The {@link ZScanOptions}.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
-     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the sorted set. The second
      *     element is always an <code>Array</code> of the subset of the sorted set held in <code>key
      *     </code>. The array in the second element is always a flattened series of <code>String
@@ -5589,13 +5589,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
      * @param key The key of the hash.
-     * @param cursor The cursor that points to the next iteration of results.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
-     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the result. The second element is
      *     always an <code>Array</code> of the subset of the hash held in <code>key</code>. The array
-     *     in the second element is always a flattened series of String pairs, where the key is at
-     *     even indices and the value is at odd indices.
+     *     in the second element is always a flattened series of <code>String</code> pairs, where the
+     *     key is at even indices and the value is at odd indices.
      */
     public T hscan(@NonNull String key, @NonNull String cursor) {
         protobufTransaction.addCommands(buildCommand(HScan, buildArgs(key, cursor)));
@@ -5607,14 +5608,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
      * @param key The key of the hash.
-     * @param cursor The cursor that points to the next iteration of results.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @param hScanOptions The {@link HScanOptions}.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
-     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
      *     the <code>cursor</code> returned on the last iteration of the result. The second element is
      *     always an <code>Array</code> of the subset of the hash held in <code>key</code>. The array
-     *     in the second element is always a flattened series of String pairs, where the key is at
-     *     even indices and the value is at odd indices.
+     *     in the second element is always a flattened series of <code>String</code> pairs, where the
+     *     key is at even indices and the value is at odd indices.
      */
     public T hscan(@NonNull String key, @NonNull String cursor, @NonNull HScanOptions hScanOptions) {
         final ArgsArray commandArgs =
