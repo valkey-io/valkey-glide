@@ -7263,6 +7263,15 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_wait(self, redis_client: TGlideClient):
+        key = f"{{key}}-1{get_random_string(5)}"
+        value = get_random_string(5)
+
+        await redis_client.set(key, value)
+        assert await redis_client.wait(1, 1000) >= 0
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut(self, redis_client: TGlideClient):
         result = await redis_client.lolwut()
         assert b"Redis ver. " in result
