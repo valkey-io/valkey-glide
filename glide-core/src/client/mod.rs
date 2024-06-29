@@ -739,8 +739,8 @@ mod tests {
         );
 
         let mut cmd = Cmd::new();
-        cmd.arg("WAIT").arg("500");
-        let result = get_request_timeout(&cmd, Duration::from_millis(100));
+        cmd.arg("WAIT").arg(1).arg("500");
+        let result = get_request_timeout(&cmd, Duration::from_millis(500));
         assert!(result.is_ok());
         assert_eq!(
             result.unwrap(),
