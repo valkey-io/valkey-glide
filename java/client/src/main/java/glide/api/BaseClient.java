@@ -186,7 +186,7 @@ import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
 import glide.api.models.GlideString;
-import glide.api.models.PubsubMessage;
+import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
@@ -279,7 +279,7 @@ public abstract class BaseClient
     // All made protected to simplify testing.
     protected CommandManager commandManager;
     protected ConnectionManager connectionManager;
-    protected ConcurrentLinkedDeque<PubsubMessage> messageQueue;
+    protected ConcurrentLinkedDeque<PubSubMessage> messageQueue;
     protected Optional<BaseSubscriptionConfiguration> subscriptionConfiguration = Optional.empty();
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
@@ -353,7 +353,7 @@ public abstract class BaseClient
      *     with a callback.
      * @return A message if any or <code>null</code> if there are no unread messages.
      */
-    public PubsubMessage tryGetPubSubMessage() {
+    public PubSubMessage tryGetPubSubMessage() {
         if (subscriptionConfiguration.isEmpty()) {
             throw new ConfigurationError(
                     "The operation will never complete since there was no pubsub subscriptions applied to the"
@@ -375,7 +375,7 @@ public abstract class BaseClient
      *     with a callback.
      * @return A <code>Future</code> which resolved with the next incoming message.
      */
-    public CompletableFuture<PubsubMessage> getPubSubMessage() {
+    public CompletableFuture<PubSubMessage> getPubSubMessage() {
         if (subscriptionConfiguration.isEmpty()) {
             throw new ConfigurationError(
                     "The operation will never complete since there was no pubsub subscriptions applied to the"

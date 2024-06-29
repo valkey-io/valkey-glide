@@ -2,7 +2,7 @@
 package glide.api.models.configuration;
 
 import glide.api.BaseClient;
-import glide.api.models.PubsubMessage;
+import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode;
 import java.util.HashSet;
@@ -33,11 +33,11 @@ public abstract class BaseSubscriptionConfiguration {
      * The callback arguments are:
      *
      * <ol>
-     *   <li>A received {@link PubsubMessage}.
+     *   <li>A received {@link PubSubMessage}.
      *   <li>A user-defined {@link #context} or <code>null</code> if not configured.
      * </ol>
      */
-    public interface MessageCallback extends BiConsumer<PubsubMessage, Object> {}
+    public interface MessageCallback extends BiConsumer<PubSubMessage, Object> {}
 
     /**
      * Optional callback to accept the incoming messages. See {@link MessageCallback}.<br>

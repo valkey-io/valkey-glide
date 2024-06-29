@@ -1,7 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.handlers;
 
-import glide.api.models.PubsubMessage;
+import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.exceptions.RedisException;
 import glide.managers.BaseResponseResolver;
@@ -33,7 +33,7 @@ public class MessageHandler {
     private final BaseResponseResolver responseResolver;
 
     /** A message queue wrapper. */
-    private final ConcurrentLinkedDeque<PubsubMessage> queue = new ConcurrentLinkedDeque<>();
+    private final ConcurrentLinkedDeque<PubSubMessage> queue = new ConcurrentLinkedDeque<>();
 
     /** Process a push (PUBSUB) message received as a part of {@link Response} from GLIDE. */
     public void handle(Response response) {
@@ -57,11 +57,11 @@ public class MessageHandler {
                 //    "Transport disconnected, messages might be lost",
                 break;
             case PMessage:
-                handle(new PubsubMessage((String) values[2], (String) values[1], (String) values[0]));
+                handle(new PubSubMessage((String) values[2], (String) values[1], (String) values[0]));
                 return;
             case Message:
             case SMessage:
-                handle(new PubsubMessage((String) values[1], (String) values[0]));
+                handle(new PubSubMessage((String) values[1], (String) values[0]));
                 return;
             case Subscribe:
             case PSubscribe:
@@ -88,8 +88,8 @@ public class MessageHandler {
         }
     }
 
-    /** Process a {@link PubsubMessage} received. */
-    private void handle(PubsubMessage message) {
+    /** Process a {@link PubSubMessage} received. */
+    private void handle(PubSubMessage message) {
         if (callback.isPresent()) {
             callback.get().accept(message, context.orElse(null));
         } else {
