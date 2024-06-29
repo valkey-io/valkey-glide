@@ -5550,10 +5550,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the start of the search.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
      *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
-     *     the <code>cursor</code> returned on the last iteration of the set. The second element is
-     *     always an <code>Array</code> of the subset of the sorted set held in <code>key</code>. The
-     *     array in the second element is always a flattened series of String pairs, where the value
-     *     is at even indices and the score is at odd indices.
+     *     the <code>cursor</code> returned on the last iteration of the sorted set. The second
+     *     element is always an <code>Array</code> of the subset of the sorted set held in <code>key
+     *     </code>. The array in the second element is always a flattened series of <code>String
+     *     </code> pairs, where the value is at even indices and the score is at odd indices.
      */
     public T zscan(@NonNull String key, @NonNull String cursor) {
         protobufTransaction.addCommands(buildCommand(ZScan, buildArgs(key, cursor)));
@@ -5570,10 +5570,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param zScanOptions The {@link ZScanOptions}.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
      *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
-     *     the <code>cursor</code> returned on the last iteration of the set. The second element is
-     *     always an <code>Array</code> of the subset of the set held in <code>key</code>. The array
-     *     in the second element is always a flattened series of <code>String</code> pairs, where the
-     *     value is at even indices and the score is at odd indices.
+     *     the <code>cursor</code> returned on the last iteration of the sorted set. The second
+     *     element is always an <code>Array</code> of the subset of the sorted set held in <code>key
+     *     </code>. The array in the second element is always a flattened series of <code>String
+     *     </code> pairs, where the value is at even indices and the score is at odd indices.
      */
     public T zscan(@NonNull String key, @NonNull String cursor, @NonNull ZScanOptions zScanOptions) {
         ArgsArray commandArgs =
