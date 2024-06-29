@@ -1,15 +1,18 @@
+use bytes::Bytes;
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener;
+use glide_core::MAX_REQUEST_ARGS_LENGTH;
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyFloat, PyList, PySet};
+use pyo3::types::{PyBool, PyBytes, PyDict, PyFloat, PyList, PySet};
 use pyo3::Python;
 
 use redis::Value;
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
+pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
 
 #[pyclass]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
@@ -60,6 +63,7 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
         "DEFAULT_TIMEOUT_IN_MILLISECONDS",
         DEFAULT_TIMEOUT_IN_MILLISECONDS,
     )?;
+    m.add("MAX_REQUEST_ARGS_LEN", MAX_REQUEST_ARGS_LEN)?;
 
     #[pyfn(m)]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
@@ -167,6 +171,19 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
     pub fn create_leaked_value(message: String) -> usize {
         let value = Value::SimpleString(message);
         Box::leak(Box::new(value)) as *mut Value as usize
+    }
+
+    #[pyfn(m)]
+    pub fn create_leaked_bytes_vec(args_vec: Vec<&PyBytes>) -> usize {
+        // Convert the bytes vec -> Bytes vector
+        let bytes_vec: Vec<Bytes> = args_vec
+            .iter()
+            .map(|v| {
+                let bytes = v.as_bytes();
+                Bytes::from(bytes.to_vec())
+            })
+            .collect();
+        Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as usize
     }
     Ok(())
 }

@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -319,6 +319,71 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.Echo, [message], route),
         )
 
+    async def function_load(
+        self, library_code: str, replace: bool = False, route: Optional[Route] = None
+    ) -> str:
+        """
+        Loads a library to Redis.
+
+        See https://valkey.io/docs/latest/commands/function-load/ for more details.
+
+        Args:
+            library_code (str): The source code that implements the library.
+            replace (bool): Whether the given library should overwrite a library with the same name if
+                it already exists.
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            str: The library name that was loaded.
+
+        Examples:
+            >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+            >>> await client.function_load(code, True, RandomNode())
+                "mylib"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            str,
+            await self._execute_command(
+                RequestType.FunctionLoad,
+                ["REPLACE", library_code] if replace else [library_code],
+                route,
+            ),
+        )
+
+    async def function_flush(
+        self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_flush(FlushMode.SYNC)
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionFlush,
+                [mode.value] if mode else [],
+                route,
+            ),
+        )
+
     async def time(self, route: Optional[Route] = None) -> TClusterResponse[List[str]]:
         """
         Returns the server time.
@@ -515,6 +580,39 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.FlushAll, args, route),
         )
 
+    async def flushdb(
+        self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TClusterResponse[TOK]:
+        """
+        Deletes all the keys of the currently selected database. This command never fails.
+
+        See https://valkey.io/commands/flushdb for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: OK.
+
+        Examples:
+             >>> await client.flushdb()
+                 OK  # The keys of the currently selected database were deleted.
+             >>> await client.flushdb(FlushMode.ASYNC)
+                 OK  # The keys of the currently selected database were deleted asynchronously.
+             >>> await client.flushdb(FlushMode.ASYNC, AllNodes())
+                 OK  # The keys of the currently selected database were deleted asynchronously on all nodes.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+
+        return cast(
+            TClusterResponse[TOK],
+            await self._execute_command(RequestType.FlushDB, args, route),
+        )
+
     async def copy(
         self,
         source: str,
@@ -590,4 +688,26 @@ class ClusterCommands(CoreCommands):
         return cast(
             TClusterResponse[str],
             await self._execute_command(RequestType.Lolwut, args, route),
+        )
+
+    async def random_key(self, route: Optional[Route] = None) -> Optional[str]:
+        """
+        Returns a random existing key name.
+
+        See https://valkey.io/commands/randomkey for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            Optional[str]: A random existing key name.
+
+        Examples:
+            >>> await client.random_key()
+            "random_key_name"  # "random_key_name" is a random existing key name.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.RandomKey, [], route),
         )

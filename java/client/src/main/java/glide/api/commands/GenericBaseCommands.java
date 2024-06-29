@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.GlideString;
@@ -83,11 +83,30 @@ public interface GenericBaseCommands {
      * @return The number of <code>keys</code> that were unlinked.
      * @example
      *     <pre>{@code
-     * Long result = client.unlink("my_key").get();
+     * Long result = client.unlink(new String[] {"my_key"}).get();
      * assert result == 1L;
      * }</pre>
      */
     CompletableFuture<Long> unlink(String[] keys);
+
+    /**
+     * Unlink (delete) multiple <code>keys</code> from the database. A key is ignored if it does not
+     * exist. This command, similar to <a href="https://redis.io/commands/del/">DEL</a>, removes
+     * specified keys and ignores non-existent ones. However, this command does not block the server,
+     * while <a href="https://redis.io/commands/del/">DEL</a> does.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
+     * @see <a href="https://redis.io/commands/unlink/">redis.io</a> for details.
+     * @param keys The list of keys to unlink.
+     * @return The number of <code>keys</code> that were unlinked.
+     * @example
+     *     <pre>{@code
+     * Long result = client.unlink(new GlideString[] {gs("my_key")}).get();
+     * assert result == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> unlink(GlideString[] keys);
 
     /**
      * Sets a timeout on <code>key</code> in seconds. After the timeout has expired, the <code>key
@@ -721,6 +740,24 @@ public interface GenericBaseCommands {
     CompletableFuture<String> type(String key);
 
     /**
+     * Returns the string representation of the type of the value stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/type/">redis.io</a> for details.
+     * @param key The <code>key</code> to check its data type.
+     * @return If the <code>key</code> exists, the type of the stored value is returned. Otherwise, a
+     *     "none" string is returned.
+     * @example
+     *     <pre>{@code
+     * String type = client.type(gs("StringKey")).get();
+     * assert type.equals("string");
+     *
+     * type = client.type(gs("ListKey")).get();
+     * assert type.equals("list");
+     * }</pre>
+     */
+    CompletableFuture<String> type(GlideString key);
+
+    /**
      * Returns the internal encoding for the Redis object stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/object-encoding/">redis.io</a> for details.
@@ -983,6 +1020,28 @@ public interface GenericBaseCommands {
     CompletableFuture<Boolean> copy(String source, String destination);
 
     /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
+     * <code>destination</code> key does not yet exist.
+     *
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("test1"), gs("one")).get();
+     * client.set(gs("test2"), gs("two")).get();
+     * assert !client.copy(gs("test1", gs("test2")).get();
+     * assert client.copy(gs("test1"), gs("test2")).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(GlideString source, GlideString destination);
+
+    /**
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key. When
      * <code>replace</code> is true, removes the <code>destination</code> key first if it already
      * exists, otherwise performs no action.
@@ -1005,6 +1064,30 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> copy(String source, String destination, boolean replace);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key. When
+     * <code>replace</code> is true, removes the <code>destination</code> key first if it already
+     * exists, otherwise performs no action.
+     *
+     * @apiNote When in cluster mode, both <code>source</code> and <code>destination</code> must map
+     *     to the same hash slot.
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("test1"), gs("one")).get();
+     * client.set(gs("test2"), gs("two")).get();
+     * assert !client.copy(gs("test1", gs("test2"), false).get();
+     * assert client.copy(gs("test1", gs("test2"), true).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(GlideString source, GlideString destination, boolean replace);
 
     /**
      * Serialize the value stored at <code>key</code> in a Valkey-specific format and return it to the

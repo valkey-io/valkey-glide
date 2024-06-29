@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.standalone;
 
 import static glide.TestConfiguration.REDIS_VERSION;
@@ -11,6 +11,7 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -335,6 +336,17 @@ public class CommandTests {
         String message = "GLIDE";
         String response = regularClient.echo(message).get();
         assertEquals(message, response);
+        message = "";
+        response = regularClient.echo(message).get();
+        assertEquals(message, response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void echo_gs() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString response = regularClient.echo(gs(message)).get();
+        assertEquals(gs(message), response);
     }
 
     @Test

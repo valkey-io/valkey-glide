@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from __future__ import annotations
 
@@ -233,6 +233,61 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(str, await self._execute_command(RequestType.Echo, [message]))
 
+    async def function_load(self, library_code: str, replace: bool = False) -> str:
+        """
+        Loads a library to Redis.
+
+        See https://valkey.io/docs/latest/commands/function-load/ for more details.
+
+        Args:
+            library_code (str): The source code that implements the library.
+            replace (bool): Whether the given library should overwrite a library with the same name if
+                it already exists.
+
+        Returns:
+            str: The library name that was loaded.
+
+        Examples:
+            >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+            >>> await client.function_load(code, True)
+                "mylib"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            str,
+            await self._execute_command(
+                RequestType.FunctionLoad,
+                ["REPLACE", library_code] if replace else [library_code],
+            ),
+        )
+
+    async def function_flush(self, mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_flush(FlushMode.SYNC)
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionFlush,
+                [mode.value] if mode else [],
+            ),
+        )
+
     async def time(self) -> List[str]:
         """
         Returns the server time.
@@ -460,6 +515,33 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(RequestType.FlushAll, args),
         )
 
+    async def flushdb(self, flush_mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Deletes all the keys of the currently selected database. This command never fails.
+
+        See https://valkey.io/commands/flushdb for more details.
+
+        Args:
+            flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: OK.
+
+        Examples:
+             >>> await client.flushdb()
+                 OK  # The keys of the currently selected database were deleted.
+             >>> await client.flushdb(FlushMode.ASYNC)
+                 OK  # The keys of the currently selected database were deleted asynchronously.
+        """
+        args = []
+        if flush_mode is not None:
+            args.append(flush_mode.value)
+
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.FlushDB, args),
+        )
+
     async def copy(
         self,
         source: str,
@@ -538,4 +620,22 @@ class StandaloneCommands(CoreCommands):
         return cast(
             str,
             await self._execute_command(RequestType.Lolwut, args),
+        )
+
+    async def random_key(self) -> Optional[str]:
+        """
+        Returns a random existing key name from the currently selected database.
+
+        See https://valkey.io/commands/randomkey for more details.
+
+        Returns:
+            Optional[str]: A random existing key name from the currently selected database.
+
+        Examples:
+            >>> await client.random_key()
+            "random_key_name"  # "random_key_name" is a random existing key name from the currently selected database.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.RandomKey, []),
         )

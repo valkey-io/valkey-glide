@@ -55,9 +55,19 @@
 * Python: Added XGROUP CREATE and XGROUP DESTROY commands ([#1646](https://github.com/aws/glide-for-redis/pull/1646))
 * Python: Added XGROUP CREATECONSUMER and XGROUP DELCONSUMER commands ([#1658](https://github.com/aws/glide-for-redis/pull/1658))
 * Python: Added LOLWUT command ([#1657](https://github.com/aws/glide-for-redis/pull/1657))
+* Python: Added XREADGROUP command ([#1679](https://github.com/aws/glide-for-redis/pull/1679))
+* Python: Added XACK command ([#1681](https://github.com/aws/glide-for-redis/pull/1681))
+* Python: Added FLUSHDB command ([#1680](https://github.com/aws/glide-for-redis/pull/1680))
+* Python: Added XGROUP SETID command ([#1683](https://github.com/aws/glide-for-redis/pull/1683))
+* Python: Added FUNCTION LOAD command ([#1699](https://github.com/aws/glide-for-redis/pull/1699))
+* Python: Added XPENDING command ([#1704](https://github.com/aws/glide-for-redis/pull/1704))
+* Python: Added RANDOMKEY command ([#1701](https://github.com/aws/glide-for-redis/pull/1701))
+* Python: Added FUNCTION FLUSH command ([#1700](https://github.com/aws/glide-for-redis/pull/1700))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
+* Node: Rename RedisClient to GlideClient and RedisClusterClient to GlideClusterClient ([#1670](https://github.com/aws/glide-for-redis/pull/1670))
+* Python: Rename RedisClient to GlideClient, RedisClusterClient to GlideClusterClient and BaseRedisClient to BaseClient([#1669](https://github.com/aws/glide-for-redis/pull/1669))
 
 ## 0.4.1 (2024-02-06)
 

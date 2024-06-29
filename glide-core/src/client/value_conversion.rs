@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use redis::{
     cluster_routing::Routable, from_owned_redis_value, Cmd, ErrorKind, RedisResult, Value,
@@ -33,6 +33,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     KeyWithMemberAndScore,
     FunctionStatsReturnType,
     GeoSearchReturnType,
+    SimpleString,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -140,6 +141,9 @@ pub(crate) fn convert_to_expected_type(
         },
         ExpectedReturnType::BulkString => Ok(Value::BulkString(
             from_owned_redis_value::<String>(value)?.into(),
+        )),
+        ExpectedReturnType::SimpleString => Ok(Value::SimpleString(
+            from_owned_redis_value::<String>(value)?,
         )),
         ExpectedReturnType::JsonToggleReturnType => match value {
             Value::Array(array) => {
@@ -859,6 +863,10 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 key_type: &Some(ExpectedReturnType::BulkString),
                 value_type: &Some(ExpectedReturnType::ArrayOfPairs),
             }),
+        }),
+        b"LCS" => cmd.position(b"IDX").map(|_| ExpectedReturnType::Map {
+            key_type: &Some(ExpectedReturnType::SimpleString),
+            value_type: &None,
         }),
         b"INCRBYFLOAT" | b"HINCRBYFLOAT" | b"ZINCRBY" => Some(ExpectedReturnType::Double),
         b"HEXISTS"
@@ -2374,5 +2382,15 @@ mod tests {
         ));
 
         assert!(expected_type_for_cmd(redis::cmd("GEOSEARCH").arg("key")).is_none());
+    }
+    #[test]
+    fn convert_lcs_idx() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("LCS").arg("key1").arg("key2").arg("IDX")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::SimpleString),
+                value_type: &None,
+            })
+        ));
     }
 }
