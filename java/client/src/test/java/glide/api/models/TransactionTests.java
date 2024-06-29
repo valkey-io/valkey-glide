@@ -1370,6 +1370,12 @@ public class TransactionTests {
                                 ZScanOptions.COUNT_OPTION_STRING,
                                 "10")));
 
+        transaction.zscan("key1", "0");
+        results.add(Pair.of(ZScan, buildArgs("key1", "0")));
+
+        transaction.zscan("key1", "0", ZScanOptions.builder().matchPattern("*").count(10L).build());
+        results.add(Pair.of(ZScan, buildArgs("key1", "0", "MATCH", "*", "COUNT", "10")));
+
         var protobufTransaction = transaction.getProtobufTransaction().build();
 
         for (int idx = 0; idx < protobufTransaction.getCommandsCount(); idx++) {
