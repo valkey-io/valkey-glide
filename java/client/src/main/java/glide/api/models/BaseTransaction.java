@@ -5561,7 +5561,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * Iterates incrementally over a sorted set.
      *
      * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
-     * @param key The key of the set.
+     * @param key The key of the sorted set.
      * @param cursor The cursor that points to the next iteration of results.
      * @param zScanOptions The {@link ZScanOptions}.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
