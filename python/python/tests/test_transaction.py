@@ -88,6 +88,8 @@ async def transaction_test(
     key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
     key20 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
     key22 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # getex
+    key23 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # string
+    key24 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # string
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
@@ -603,6 +605,19 @@ async def transaction_test(
         args.append([key16, {"d": 4.0}])
         transaction.bzmpop([key16], ScoreFilter.MIN, 0.1, 2)
         args.append([key16, {"a": 1.0, "b": 2.0}])
+
+        transaction.mset({key23: "abcd1234", key24: "bcdef1234"})
+        args.append(OK)
+        transaction.lcs(key23, key24)
+        args.append("bcd1234")
+        transaction.lcs_len(key23, key24)
+        args.append(7)
+        transaction.lcs_idx(key23, key24)
+        args.append({"matches": [[[4, 7], [5, 8]], [[1, 3], [0, 2]]], "len": 7})
+        transaction.lcs_idx(key23, key24, min_match_len=4)
+        args.append({"matches": [[[4, 7], [5, 8]]], "len": 7})
+        transaction.lcs_idx(key23, key24, with_match_len=True)
+        args.append({"matches": [[[4, 7], [5, 8], 4], [[1, 3], [0, 2], 3]], "len": 7})
 
     return args
 

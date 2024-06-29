@@ -3891,6 +3891,89 @@ class BaseTransaction:
         """
         return self.append_command(RequestType.RandomKey, [])
 
+    def lcs(
+        self: TTransaction,
+        key1: str,
+        key2: str,
+    ) -> TTransaction:
+        """
+        Returns the longest common subsequence between strings stored at key1 and key2.
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+
+        Command Response:
+            A String containing the longest common subsequence between the 2 strings.
+            An empty String is returned if the keys do not exist or have no common subsequences.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2]
+
+        return self.append_command(RequestType.LCS, args)
+
+    def lcs_len(
+        self: TTransaction,
+        key1: str,
+        key2: str,
+    ) -> TTransaction:
+        """
+        Returns the length of the longest common subsequence between strings stored at key1 and key2.
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+
+        Command Response:
+            The length of the longest common subsequence between the 2 strings.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2, "LEN"]
+
+        return self.append_command(RequestType.LCS, args)
+
+    def lcs_idx(
+        self: TTransaction,
+        key1: str,
+        key2: str,
+        min_match_len: Optional[int] = None,
+        with_match_len: Optional[bool] = False,
+    ) -> TTransaction:
+        """
+        Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+            min_match_len (Optional[int]): The minimum length of matches to include in the result.
+            with_match_len (Optional[bool]): If True, include the length of the substring matched for each substring.
+
+        Command Response:
+            A Map containing the indices of the longest common subsequence between the
+            2 strings and the length of the longest common subsequence. The resulting map contains two
+            keys, "matches" and "len":
+                - "len" is mapped to the length of the longest common subsequence between the 2 strings.
+                - "matches" is mapped to a three dimensional int array that stores pairs of indices that
+                  represent the location of the common subsequences in the strings held by key1 and key2,
+                  with the length of the match after each matches, if with_match_len is enabled.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2, "IDX"]
+
+        if min_match_len is not None:
+            args.extend(["MINMATCHLEN", str(min_match_len)])
+
+        if with_match_len:
+            args.append("WITHMATCHLEN")
+
+        return self.append_command(RequestType.LCS, args)
+
 
 class Transaction(BaseTransaction):
     """

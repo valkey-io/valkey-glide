@@ -5428,3 +5428,152 @@ class CoreCommands(Protocol):
             >>> pubsub_msg = listening_client.try_get_pubsub_message()
         """
         ...
+
+    async def lcs(
+        self,
+        key1: str,
+        key2: str,
+    ) -> str:
+        """
+        Returns the longest common subsequence between strings stored at key1 and key2.
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+
+        Returns:
+            A String containing the longest common subsequence between the 2 strings.
+            An empty String is returned if the keys do not exist or have no common subsequences.
+
+        Examples:
+            >>> await client.mset({"testKey1" : "abcd", "testKey2": "axcd"})
+                'OK'
+            >>> await client.lcs("testKey1", "testKey2")
+                'acd'
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2]
+
+        return cast(
+            str,
+            await self._execute_command(RequestType.LCS, args),
+        )
+
+    async def lcs_len(
+        self,
+        key1: str,
+        key2: str,
+    ) -> int:
+        """
+        Returns the length of the longest common subsequence between strings stored at key1 and key2.
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+
+        Returns:
+            The length of the longest common subsequence between the 2 strings.
+
+        Examples:
+            >>> await client.mset({"testKey1" : "abcd", "testKey2": "axcd"})
+                'OK'
+            >>> await client.lcs_len("testKey1", "testKey2")
+                3  # the length of the longest common subsequence between these 2 strings is 3.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2, "LEN"]
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.LCS, args),
+        )
+
+    async def lcs_idx(
+        self,
+        key1: str,
+        key2: str,
+        min_match_len: Optional[int] = None,
+        with_match_len: Optional[bool] = False,
+    ) -> Mapping[str, Union[list[list[Union[list[int], int]]], int]]:
+        """
+        Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+            min_match_len (Optional[int]): The minimum length of matches to include in the result.
+            with_match_len (Optional[bool]): If True, include the length of the substring matched for each substring.
+
+        Returns:
+            A Mapping containing the indices of the longest common subsequence between the
+            2 strings and the length of the longest common subsequence. The resulting map contains two
+            keys, "matches" and "len":
+                - "len" is mapped to the length of the longest common subsequence between the 2 strings.
+                - "matches" is mapped to a three dimensional int array that stores pairs of indices that
+                  represent the location of the common subsequences in the strings held by key1 and key2,
+                  with the length of the match after each matches, if with_match_len is enabled.
+
+        Examples:
+            >>> await client.mset({"testKey1" : "abcd1234", "testKey2": "bcdef1234"})
+                'OK'
+            >>> await client.lcs_idx("testKey1", "testKey2")
+                {
+                    'matches': [
+                        [
+                            [4, 7],  # starting and ending indices of the subsequence "1234" in "abcd1234" (testKey1)
+                            [5, 8],  # starting and ending indices of the subsequence "1234" in "bcdef1234" (testKey2)
+                        ],
+                        [
+                            [1, 3],  # starting and ending indices of the subsequence "bcd" in "abcd1234" (testKey1)
+                            [0, 2],  # starting and ending indices of the subsequence "bcd" in "bcdef1234" (testKey2)
+                        ],
+                    ],
+                    'len': 7  # length of the entire longest common subsequence
+                }
+            >>> await client.lcs_idx("testKey1", "testKey2", min_match_len=4)
+                {
+                    'matches': [
+                        [
+                            [4, 7],
+                            [5, 8],
+                        ],
+                        # the other match with a length of 3 is excluded
+                    ],
+                    'len': 7
+                }
+            >>> await client.lcs_idx("testKey1", "testKey2", with_match_len=True)
+                {
+                    'matches': [
+                        [
+                            [4, 7],
+                            [5, 8],
+                            4,  # length of this match ("1234")
+                        ],
+                        [
+                            [1, 3],
+                            [0, 2],
+                            3,  # length of this match ("bcd")
+                        ],
+                    ],
+                    'len': 7
+                }
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2, "IDX"]
+
+        if min_match_len is not None:
+            args.extend(["MINMATCHLEN", str(min_match_len)])
+
+        if with_match_len:
+            args.append("WITHMATCHLEN")
+
+        return cast(
+            Mapping[str, Union[list[list[Union[list[int], int]]], int]],
+            await self._execute_command(RequestType.LCS, args),
+        )
