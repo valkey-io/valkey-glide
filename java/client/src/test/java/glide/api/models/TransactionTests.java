@@ -29,8 +29,8 @@ import static glide.api.models.commands.ZAddOptions.UpdateOptions.SCORE_LESS_THA
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
-import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_REDIS_API;
-import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_REDIS_API;
+import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
+import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
@@ -1185,7 +1185,7 @@ public class TransactionTests {
                 new GeoSearchShape(1, GeoUnit.KILOMETERS));
         results.add(
                 Pair.of(
-                        GeoSearch, buildArgs("key", FROMMEMBER_REDIS_API, "member", "BYRADIUS", "1.0", "km")));
+                        GeoSearch, buildArgs("key", FROMMEMBER_VALKEY_API, "member", "BYRADIUS", "1.0", "km")));
 
         transaction.geosearch(
                 "key",
@@ -1197,7 +1197,7 @@ public class TransactionTests {
                         GeoSearch,
                         buildArgs(
                                 "key",
-                                FROMLONLAT_REDIS_API,
+                                FROMLONLAT_VALKEY_API,
                                 "1.0",
                                 "1.0",
                                 "BYBOX",
@@ -1219,7 +1219,7 @@ public class TransactionTests {
                         GeoSearch,
                         buildArgs(
                                 "key",
-                                FROMMEMBER_REDIS_API,
+                                FROMMEMBER_VALKEY_API,
                                 "member",
                                 "BYRADIUS",
                                 "1.0",
@@ -1242,7 +1242,7 @@ public class TransactionTests {
                         GeoSearch,
                         buildArgs(
                                 "key",
-                                FROMLONLAT_REDIS_API,
+                                FROMLONLAT_VALKEY_API,
                                 "1.0",
                                 "1.0",
                                 "BYBOX",
@@ -1262,7 +1262,13 @@ public class TransactionTests {
                 Pair.of(
                         GeoSearchStore,
                         buildArgs(
-                                "destination", "source", FROMMEMBER_REDIS_API, "member", "BYRADIUS", "1.0", "km")));
+                                "destination",
+                                "source",
+                                FROMMEMBER_VALKEY_API,
+                                "member",
+                                "BYRADIUS",
+                                "1.0",
+                                "km")));
 
         transaction.geosearchstore(
                 "destination",
@@ -1276,7 +1282,7 @@ public class TransactionTests {
                         buildArgs(
                                 "destination",
                                 "source",
-                                FROMLONLAT_REDIS_API,
+                                FROMLONLAT_VALKEY_API,
                                 "1.0",
                                 "1.0",
                                 "BYBOX",
@@ -1299,7 +1305,7 @@ public class TransactionTests {
                         buildArgs(
                                 "destination",
                                 "source",
-                                FROMMEMBER_REDIS_API,
+                                FROMMEMBER_VALKEY_API,
                                 "member",
                                 "BYRADIUS",
                                 "1.0",
@@ -1319,7 +1325,7 @@ public class TransactionTests {
                         buildArgs(
                                 "destination",
                                 "source",
-                                FROMMEMBER_REDIS_API,
+                                FROMMEMBER_VALKEY_API,
                                 "member",
                                 "BYRADIUS",
                                 "1.0",
