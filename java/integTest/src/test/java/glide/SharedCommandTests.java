@@ -6938,7 +6938,7 @@ public class SharedCommandTests {
         assertEquals(7, client.lpush(key2, key2LpushArgs).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sort(key2).get());
-        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertInstanceOf(RequestException.class, executionException.getCause());;
     }
 
     @SneakyThrows
