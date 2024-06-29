@@ -22,6 +22,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
 import redis_request.RedisRequestOuterClass.Command;
@@ -380,7 +381,9 @@ public class CommandManager {
      */
     public static void populateCommandWithArgs(String[] arguments, Command.Builder outputBuilder) {
         populateCommandWithArgs(
-                Arrays.stream(arguments).map(value -> value.getBytes(StandardCharsets.UTF_8)).toList(),
+                Arrays.stream(arguments)
+                        .map(value -> value.getBytes(StandardCharsets.UTF_8))
+                        .collect(Collectors.toList()),
                 outputBuilder);
     }
 
