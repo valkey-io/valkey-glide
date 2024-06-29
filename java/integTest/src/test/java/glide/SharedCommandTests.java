@@ -7610,16 +7610,6 @@ public class SharedCommandTests {
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
 
-        // Negative cursor
-        result = client.sscan(key1, "-1").get();
-        assertEquals(initialCursor, result[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
-
-        // Negative cursor
-        result = client.sscan(key1, "-1").get();
-        assertEquals(initialCursor, result[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
-
         // Result contains the whole set
         assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
         result = client.sscan(key1, initialCursor).get();
@@ -7667,12 +7657,6 @@ public class SharedCommandTests {
                     Arrays.stream((Object[]) secondResult[resultCollectionIndex])
                             .collect(Collectors.toSet()));
         } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
-
-        assertTrue(
-                secondResultValues.containsAll(numberMembersSet),
-                String.format(
-                        "secondResultValues: {%s}, numberMembersSet: {%s}",
-                        secondResultValues, numberMembersSet));
 
         assertTrue(
                 secondResultValues.containsAll(numberMembersSet),
@@ -7921,7 +7905,7 @@ public class SharedCommandTests {
         // This is an unusually large dataset because the server can ignore the COUNT option
         // if the dataset is small enough that it is more efficient to transfer its entire contents
         // at once.
-        for (int i = 0; i < 100000; i++) {
+        for (int i = 0; i < 50000; i++) {
             numberMap.put(String.valueOf(i), "num" + i);
         }
         String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
@@ -7976,6 +7960,7 @@ public class SharedCommandTests {
         String resultCursor = "0";
         final Set<Object> secondResultAllKeys = new HashSet<>();
         final Set<Object> secondResultAllValues = new HashSet<>();
+        boolean isFirstLoop = true;
         do {
             result = client.hscan(key1, resultCursor).get();
             resultCursor = result[resultCursorIndex].toString();
@@ -7985,7 +7970,10 @@ public class SharedCommandTests {
                 secondResultAllValues.add(resultEntry[i + 1]);
             }
 
-            if (resultCursor.equals("0")) {
+            if (isFirstLoop) {
+                assertNotEquals("0", resultCursor);
+                isFirstLoop = false;
+            } else if (resultCursor.equals("0")) {
                 break;
             }
 
