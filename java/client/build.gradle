@@ -157,7 +157,7 @@ tasks.register('copyNativeLib', Copy) {
 
 jar.dependsOn('copyNativeLib')
 copyNativeLib.dependsOn('buildRustRelease')
-//compileTestJava.dependsOn('publishToMavenLocal')
+compileTestJava.dependsOn('publishToMavenLocal')
 test.dependsOn('buildRust')
 testFfi.dependsOn('buildRust')
 
