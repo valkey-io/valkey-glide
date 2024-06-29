@@ -84,6 +84,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
+import static redis_request.RedisRequestOuterClass.RequestType.HScan;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
@@ -249,6 +250,7 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -5579,6 +5581,45 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
         ArgsArray commandArgs =
                 buildArgs(concatenateArrays(new String[] {key, cursor}, zScanOptions.toArgs()));
         protobufTransaction.addCommands(buildCommand(ZScan, commandArgs));
+        return getThis();
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param cursor The cursor that points to the next iteration of results.
+     * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
+     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     the <code>cursor</code> returned on the last iteration of the result. The second element is
+     *     always an <code>Array</code> of the subset of the hash held in <code>key</code>. The array
+     *     in the second element is always a flattened series of String pairs, where the key is at
+     *     even indices and the value is at odd indices.
+     */
+    public T hscan(@NonNull String key, @NonNull String cursor) {
+        protobufTransaction.addCommands(buildCommand(HScan, buildArgs(key, cursor)));
+        return getThis();
+    }
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param cursor The cursor that points to the next iteration of results.
+     * @param hScanOptions The {@link HScanOptions}.
+     * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
+     *     always the <code>cursor</code> for the next iteration of results. <code>0</code> will be
+     *     the <code>cursor</code> returned on the last iteration of the result. The second element is
+     *     always an <code>Array</code> of the subset of the hash held in <code>key</code>. The array
+     *     in the second element is always a flattened series of String pairs, where the key is at
+     *     even indices and the value is at odd indices.
+     */
+    public T hscan(@NonNull String key, @NonNull String cursor, @NonNull HScanOptions hScanOptions) {
+        final ArgsArray commandArgs =
+                buildArgs(concatenateArrays(new String[] {key, cursor}, hScanOptions.toArgs()));
+        protobufTransaction.addCommands(buildCommand(HScan, commandArgs));
         return getThis();
     }
 

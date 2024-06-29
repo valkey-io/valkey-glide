@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.scan.HScanOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -432,4 +433,73 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<String[][]> hrandfieldWithCountWithValues(String key, long count);
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param cursor The cursor that points to the next iteration of results.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>0</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the result. The second element is always an
+     *     <code>Array</code> of the subset of the hash held in <code>key</code>. The array in the
+     *     second element is always a flattened series of String pairs, where the key is at even
+     *     indices and the value is at odd indices.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 member-score pairs
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *   result = client.hscan(key1, cursor).get();
+     *   cursor = result[0].toString();
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nHSCAN iteration:");
+     *   for (int i = 0; i < stringResults.length; i += 2) {
+     *     System.out.printf("{%s=%s}", stringResults[i], stringResults[i + 1]);
+     *     if (i + 2 < stringResults.length) {
+     *       System.out.print(", ");
+     *     }
+     *   }
+     * } while (!cursor.equals("0"));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> hscan(String key, String cursor);
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param cursor The cursor that points to the next iteration of results.
+     * @param hScanOptions The {@link HScanOptions}.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>0</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the result. The second element is always an
+     *     <code>Array</code> of the subset of the hash held in <code>key</code>. The array in the
+     *     second element is always a flattened series of String pairs, where the key is at even
+     *     indices and the value is at odd indices.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 member-score pairs
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *   result = client.hscan(key1, cursor, HScanOptions.builder().matchPattern("*").count(20L).build()).get();
+     *   cursor = result[0].toString();
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nHSCAN iteration:");
+     *   for (int i = 0; i < stringResults.length; i += 2) {
+     *     System.out.printf("{%s=%s}", stringResults[i], stringResults[i + 1]);
+     *     if (i + 2 < stringResults.length) {
+     *       System.out.print(", ");
+     *     }
+     *   }
+     * } while (!cursor.equals("0"));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> hscan(String key, String cursor, HScanOptions hScanOptions);
 }

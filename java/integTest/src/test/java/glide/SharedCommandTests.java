@@ -78,6 +78,7 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -7901,6 +7902,166 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.zscan(key1, "-1", ZScanOptions.builder().count(-1L).build()).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hscan(BaseClient client) {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String initialCursor = "0";
+        long defaultCount = 20;
+        int resultCursorIndex = 0;
+        int resultCollectionIndex = 1;
+
+        // Setup test data
+        Map<String, String> numberMap = new HashMap<>();
+        // This is an unusually large dataset because the server can ignore the COUNT option
+        // if the dataset is small enough that it is more efficient to transfer its entire contents
+        // at once.
+        for (int i = 0; i < 100000; i++) {
+            numberMap.put(String.valueOf(i), "num" + i);
+        }
+        String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
+        Map<String, String> charMap = new HashMap<>();
+        for (int i = 0; i < 5; i++) {
+            charMap.put(charMembers[i], String.valueOf(i));
+        }
+
+        // Empty set
+        Object[] result = client.hscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Negative cursor
+        result = client.hscan(key1, "-1").get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Result contains the whole set
+        assertEquals(charMembers.length, client.hset(key1, charMap).get());
+        result = client.hscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertEquals(
+                charMap.size() * 2,
+                ((Object[]) result[resultCollectionIndex])
+                        .length); // Length includes the score which is twice the map size
+        final Object[] resultArray = (Object[]) result[resultCollectionIndex];
+
+        final Set<Object> resultKeys = new HashSet<>();
+        final Set<Object> resultValues = new HashSet<>();
+        for (int i = 0; i < resultArray.length; i += 2) {
+            resultKeys.add(resultArray[i]);
+            resultValues.add(resultArray[i + 1]);
+        }
+        assertTrue(
+                resultKeys.containsAll(charMap.keySet()),
+                String.format("resultKeys: {%s} charMap.keySet(): {%s}", resultKeys, charMap.keySet()));
+
+        assertTrue(
+                resultValues.containsAll(charMap.values()),
+                String.format("resultValues: {%s} charMap.values(): {%s}", resultValues, charMap.values()));
+
+        result =
+                client.hscan(key1, initialCursor, HScanOptions.builder().matchPattern("a").build()).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {"a", "0"}, result[resultCollectionIndex]);
+
+        // Result contains a subset of the key
+        final HashMap<String, String> combinedMap = new HashMap<>(numberMap);
+        combinedMap.putAll(charMap);
+        assertEquals(numberMap.size(), client.hset(key1, combinedMap).get());
+        String resultCursor = "0";
+        final Set<Object> secondResultAllKeys = new HashSet<>();
+        final Set<Object> secondResultAllValues = new HashSet<>();
+        do {
+            result = client.hscan(key1, resultCursor).get();
+            resultCursor = result[resultCursorIndex].toString();
+            Object[] resultEntry = (Object[]) result[resultCollectionIndex];
+            for (int i = 0; i < resultEntry.length; i += 2) {
+                secondResultAllKeys.add(resultEntry[i]);
+                secondResultAllValues.add(resultEntry[i + 1]);
+            }
+
+            if (resultCursor.equals("0")) {
+                break;
+            }
+
+            // Scan with result cursor has a different set
+            Object[] secondResult = client.hscan(key1, resultCursor).get();
+            String newResultCursor = secondResult[resultCursorIndex].toString();
+            assertNotEquals(resultCursor, newResultCursor);
+            resultCursor = newResultCursor;
+            Object[] secondResultEntry = (Object[]) secondResult[resultCollectionIndex];
+            assertFalse(
+                    Arrays.deepEquals(
+                            ArrayUtils.toArray(result[resultCollectionIndex]),
+                            ArrayUtils.toArray(secondResult[resultCollectionIndex])));
+
+            for (int i = 0; i < secondResultEntry.length; i += 2) {
+                secondResultAllKeys.add(secondResultEntry[i]);
+                secondResultAllValues.add(secondResultEntry[i + 1]);
+            }
+        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+
+        assertTrue(
+                secondResultAllKeys.containsAll(numberMap.keySet()),
+                String.format(
+                        "secondResultAllKeys: {%s} numberMap.keySet: {%s}",
+                        secondResultAllKeys, numberMap.keySet()));
+
+        assertTrue(
+                secondResultAllValues.containsAll(numberMap.values()),
+                String.format(
+                        "secondResultAllValues: {%s} numberMap.values(): {%s}",
+                        secondResultAllValues, numberMap.values()));
+
+        // Test match pattern
+        result =
+                client.hscan(key1, initialCursor, HScanOptions.builder().matchPattern("*").build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
+
+        // Test count
+        result = client.hscan(key1, initialCursor, HScanOptions.builder().count(20L).build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
+
+        // Test count with match returns a non-empty list
+        result =
+                client
+                        .hscan(
+                                key1, initialCursor, HScanOptions.builder().matchPattern("1*").count(20L).build())
+                        .get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) > 0);
+
+        // Exceptions
+        // Non-hash key
+        assertEquals(OK, client.set(key2, "test").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hscan(key2, initialCursor).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .hscan(
+                                                key2,
+                                                initialCursor,
+                                                HScanOptions.builder().matchPattern("test").count(1L).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Negative count
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.hscan(key1, "-1", HScanOptions.builder().count(-1L).build()).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 }
