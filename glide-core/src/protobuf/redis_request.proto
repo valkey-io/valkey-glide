@@ -240,6 +240,7 @@ enum RequestType {
     XGroupSetId = 199;
     SScan = 200;
     ZScan = 201;
+    HScan = 202;
 }
 
 message Command {

@@ -61,6 +61,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
+import static redis_request.RedisRequestOuterClass.RequestType.HScan;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
@@ -215,6 +216,7 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -2934,5 +2936,18 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String cursor, @NonNull ZScanOptions zScanOptions) {
         String[] arguments = concatenateArrays(new String[] {key, cursor}, zScanOptions.toArgs());
         return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> hscan(@NonNull String key, @NonNull String cursor) {
+        String[] arguments = new String[] {key, cursor};
+        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> hscan(
+            @NonNull String key, @NonNull String cursor, @NonNull HScanOptions hScanOptions) {
+        String[] arguments = concatenateArrays(new String[] {key, cursor}, hScanOptions.toArgs());
+        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayResponse);
     }
 }

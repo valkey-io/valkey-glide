@@ -105,6 +105,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
+import static redis_request.RedisRequestOuterClass.RequestType.HScan;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
@@ -260,6 +261,7 @@ import glide.api.models.commands.geospatial.GeoSearchShape;
 import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
@@ -1368,6 +1370,21 @@ public class TransactionTests {
                                 ZScanOptions.MATCH_OPTION_STRING,
                                 "*",
                                 ZScanOptions.COUNT_OPTION_STRING,
+                                "10")));
+
+        transaction.hscan("key1", "0");
+        results.add(Pair.of(HScan, buildArgs("key1", "0")));
+
+        transaction.hscan("key1", "0", HScanOptions.builder().matchPattern("*").count(10L).build());
+        results.add(
+                Pair.of(
+                        HScan,
+                        buildArgs(
+                                "key1",
+                                "0",
+                                HScanOptions.MATCH_OPTION_STRING,
+                                "*",
+                                HScanOptions.COUNT_OPTION_STRING,
                                 "10")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
