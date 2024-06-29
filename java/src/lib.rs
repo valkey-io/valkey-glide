@@ -2,7 +2,7 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener as start_socket_listener_core;
-use glide_core::MAX_REQUEST_ARGS_LENGTH;
+use glide_core::MAX_REQUEST_ARGS_LENGTH as MAX_REQUEST_ARGS_LENGTH_IN_BYTES;
 
 use bytes::Bytes;
 use jni::objects::{JByteArray, JClass, JObject, JObjectArray, JString};
@@ -179,20 +179,21 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedB
     .unwrap_or(0)
 }
 
-/// Returns the maximum total length of request arguments.
+/// Returns the maximum total length in bytes of request arguments.
 ///
-/// This function is meant to be invoked by Java using JNI.
+/// This function is meant to be invoked by Java using JNI. This is used to ensure
+/// that this constant is consistent with the Rust client.
 ///
 /// * `_env`    - The JNI environment. Not used.
 /// * `_class`  - The class object. Not used.
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_getMaxRequestArgsLength<
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_getMaxRequestArgsLengthInBytes<
     'local,
 >(
     _env: JNIEnv<'local>,
     _class: JClass<'local>,
 ) -> jlong {
-    MAX_REQUEST_ARGS_LENGTH as jlong
+    MAX_REQUEST_ARGS_LENGTH_IN_BYTES as jlong
 }
 
 #[no_mangle]

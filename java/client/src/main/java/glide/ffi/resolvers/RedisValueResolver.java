@@ -4,12 +4,15 @@ package glide.ffi.resolvers;
 import response.ResponseOuterClass.Response;
 
 public class RedisValueResolver {
-    public static final long MAX_REQUEST_ARGS_LENGTH;
+    public static final long MAX_REQUEST_ARGS_LENGTH_IN_BYTES;
 
     // TODO: consider lazy loading the glide_rs library
     static {
         NativeUtils.loadGlideLib();
-        MAX_REQUEST_ARGS_LENGTH = getMaxRequestArgsLength();
+
+        // Note: This is derived from a native call instead of hard-coded to ensure consistency
+        // between Java and native clients.
+        MAX_REQUEST_ARGS_LENGTH_IN_BYTES = getMaxRequestArgsLengthInBytes();
     }
 
     /**
@@ -39,9 +42,9 @@ public class RedisValueResolver {
     public static native long createLeakedBytesVec(byte[][] args);
 
     /**
-     * Get the maximum length in bytes of request arguments.
+     * Get the maximum length in bytes of all request arguments.
      *
-     * @return The maximum length in bytes of request arguments.
+     * @return The maximum length in bytes of all request arguments.
      */
-    private static native long getMaxRequestArgsLength();
+    private static native long getMaxRequestArgsLengthInBytes();
 }

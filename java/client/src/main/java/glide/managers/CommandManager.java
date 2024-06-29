@@ -403,13 +403,19 @@ public class CommandManager {
     /**
      * Add the given set of arguments to the output Command.Builder.
      *
+     * <p>Implementation note: When the length in bytes of all arguments supplied to the given command
+     * exceed {@link RedisValueResolver#MAX_REQUEST_ARGS_LENGTH_IN_BYTES}, the Command will hold a
+     * handle to leaked vector of byte arrays in the native layer in the <code>ArgsVecPointer</code>
+     * field. In the normal case where the command arguments are small, they'll be serialized as to an
+     * {@link ArgsArray} message.
+     *
      * @param arguments The arguments to add to the builder.
      * @param outputBuilder The builder to populate with arguments.
      */
     private static void populateCommandWithArgs(
             List<byte[]> arguments, Command.Builder outputBuilder) {
         final long totalArgSize = arguments.stream().mapToLong(arg -> arg.length).sum();
-        if (totalArgSize < RedisValueResolver.MAX_REQUEST_ARGS_LENGTH) {
+        if (totalArgSize < RedisValueResolver.MAX_REQUEST_ARGS_LENGTH_IN_BYTES) {
             ArgsArray.Builder commandArgs = ArgsArray.newBuilder();
             arguments.forEach(arg -> commandArgs.addArgs(ByteString.copyFrom(arg)));
             outputBuilder.setArgsArray(commandArgs);
