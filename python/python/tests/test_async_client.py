@@ -7564,9 +7564,8 @@ class TestClusterRoutes:
             result_cursor = result[result_cursor_index]
             result_values.update(result[result_collection_index])
 
-            if (
-                result_cursor == "0"
-            ):  # 0 is returned for the cursor of the last iteration.
+            # 0 is returned for the cursor of the last iteration.
+            if result_cursor == "0":
                 break
 
             second_result = await redis_client.sscan(key1, result_cursor)
