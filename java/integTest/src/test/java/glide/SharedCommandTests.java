@@ -7645,9 +7645,7 @@ public class SharedCommandTests {
             secondResultValues.addAll(
                     Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet()));
 
-            if (resultCursor.equals("0")) {
-                break;
-            }
+            assertNotEquals("0", resultCursor);
 
             // Scan with result cursor has a different set
             Object[] secondResult = client.sscan(key1, resultCursor).get();
@@ -7811,9 +7809,7 @@ public class SharedCommandTests {
                 secondResultAllValues.add(resultEntry[i + 1]);
             }
 
-            if (resultCursor.equals("0")) {
-                break;
-            }
+            assertNotEquals("0", resultCursor);
 
             // Scan with result cursor has a different set
             Object[] secondResult = client.zscan(key1, resultCursor).get();
