@@ -1,7 +1,7 @@
 import json
 import random
 import string
-from typing import Any, cast, Dict, List, Mapping, Optional, TypeVar, Union
+from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union, cast
 
 from glide.async_commands.core import InfoSection
 from glide.async_commands.utils.utils import convert_bytes_to_string_dict

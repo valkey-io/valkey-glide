@@ -77,6 +77,7 @@ async def create_two_clients(
     )
     return client, client2
 
+
 def decode_pubsub_msg(msg: Optional[CoreCommands.PubSubMsg]) -> CoreCommands.PubSubMsg:
     if not msg:
         return CoreCommands.PubSubMsg("", "", None)
@@ -85,6 +86,7 @@ def decode_pubsub_msg(msg: Optional[CoreCommands.PubSubMsg]) -> CoreCommands.Pub
     string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
     decoded_msg = CoreCommands.PubSubMsg(string_msg, string_channel, string_pattern)
     return decoded_msg
+
 
 async def get_message_by_method(
     method: MethodTesting,

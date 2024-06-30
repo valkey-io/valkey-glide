@@ -57,9 +57,9 @@ from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
+    convert_bytes_to_string_dict,
     generate_lua_lib_code,
     get_random_string,
-    convert_bytes_to_string_dict,
 )
 
 

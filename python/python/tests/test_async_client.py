@@ -678,7 +678,9 @@ class TestCommands:
         assert isinstance(previous_timeout_decoded, dict)
         assert isinstance(previous_timeout_decoded["timeout"], str)
         assert (
-            await redis_client.config_set({"timeout": previous_timeout_decoded["timeout"]})
+            await redis_client.config_set(
+                {"timeout": previous_timeout_decoded["timeout"]}
+            )
             == OK
         )
 
@@ -5356,7 +5358,10 @@ class TestCommands:
 
         # now xreadgroup yields one empty stream entry and one non-empty stream entry
         assert await redis_client.xreadgroup({key: "0"}, group_name, consumer_name) == {
-            key.encode(): {stream_id1_0.encode(): None, stream_id1_1.encode(): [[b"f1_1", b"v1_1"]]}
+            key.encode(): {
+                stream_id1_0.encode(): None,
+                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
+            }
         }
 
         assert (
@@ -6876,7 +6881,9 @@ class TestCommands:
             lib_name, {func_name: "return args[1]", func2_name: "return #args"}, True
         )
 
-        assert await redis_client.function_load(new_code, True, route) == lib_name.encode()
+        assert (
+            await redis_client.function_load(new_code, True, route) == lib_name.encode()
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
