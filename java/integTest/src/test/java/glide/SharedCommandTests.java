@@ -8076,6 +8076,7 @@ public class SharedCommandTests {
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
     public void wait_timeout_check(BaseClient client) {
+        String key = UUID.randomUUID().toString();
         // create new client with default request timeout (250 millis)
         try (var testClient =
                 client instanceof RedisClient
@@ -8083,13 +8084,15 @@ public class SharedCommandTests {
                         : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
 
             // ensure that commands doesn't time out even if timeout > request timeout
+            assertEquals(OK, testClient.set(key, "value").get());
             assertEquals((client instanceof RedisClient ? 0 : 1), testClient.wait(1L, 1000L).get());
 
-            // with 0 timeout (no timeout) wait should block forever,
+            // with 0 timeout (no timeout) wait should block indefinitely,
             // but we wrap the test with timeout to avoid test failing or being stuck forever
+            assertEquals(OK, testClient.set(key, "value2").get());
             assertThrows(
                     TimeoutException.class, // <- future timeout, not command timeout
-                    () -> testClient.wait(1L, 0L).get(1, TimeUnit.SECONDS));
+                    () -> testClient.wait(100L, 0L).get(1000, TimeUnit.MILLISECONDS));
         }
     }
 }
