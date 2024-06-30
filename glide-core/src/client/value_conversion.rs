@@ -648,10 +648,13 @@ pub(crate) fn convert_to_expected_type(
                 }
 
                 // Only the element at index 1 needs conversion.
-                result.push(convert_to_expected_type(array.remove(1), Some(ExpectedReturnType::Map {
-                    key_type: &Some(ExpectedReturnType::BulkString),
-                    value_type: &Some(ExpectedReturnType::ArrayOfPairs),
-                }))?);
+                result.push(convert_to_expected_type(
+                    array.remove(1),
+                    Some(ExpectedReturnType::Map {
+                        key_type: &Some(ExpectedReturnType::BulkString),
+                        value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+                    })
+                )?);
 
                 if let Some(value) = stale_entry_ids {
                     result.push(value);
