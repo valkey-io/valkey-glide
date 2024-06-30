@@ -403,6 +403,8 @@ class BaseClient(CoreCommands):
             or message_kind == "Subscribe"
             or message_kind == "SSubscribe"
             or message_kind == "Unsubscribe"
+            or message_kind == "PUnsubscribe"
+            or message_kind == "SUnsubscribe"
         ):
             pass
         else:
