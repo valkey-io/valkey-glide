@@ -112,6 +112,12 @@ async def transaction_test(
         args.append(OK)
         transaction.function_flush(FlushMode.SYNC)
         args.append(OK)
+        transaction.function_load(code, True)
+        args.append(lib_name)
+        transaction.fcall_ro(func_name, [], arguments=["one", "two"])
+        args.append("one")
+        transaction.fcall_ro(func_name, [key], arguments=["one", "two"])
+        args.append("one")
 
     transaction.dbsize()
     args.append(0)
