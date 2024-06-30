@@ -546,6 +546,28 @@ async def transaction_test(
     args.append({key11.encode(): {b"0-2": [[b"foo", b"bar"]]}})
     transaction.xpending(key11, group_name1)
     args.append([1, b"0-2", b"0-2", [[consumer.encode(), b"1"]]])
+
+    min_version = "6.2.0"
+    if not await check_if_server_version_lt(redis_client, min_version):
+        transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
+        transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
+        # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # Entries List because they no longer exist in the stream
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            args.append(
+                ["0-0", {"0-2": [["foo", "bar"]]}]
+            )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
+            args.append(
+                ["0-0", ["0-2"]]
+            )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
+        else:
+            args.append(
+                ["0-0", {"0-2": [["foo", "bar"]]}, []]
+            )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
+            args.append(
+                ["0-0", ["0-2"], []]
+            )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
+
     transaction.xack(key11, group_name1, ["0-2"])
     args.append(1)
     transaction.xpending_range(key11, group_name1, MinId(), MaxId(), 1)
