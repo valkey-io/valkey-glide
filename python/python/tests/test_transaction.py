@@ -57,7 +57,7 @@ from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_if_server_version_lt,
-    convert_bytes_to_string_dict,
+    convert_bytes_to_string_object,
     generate_lua_lib_code,
     get_random_string,
 )
@@ -871,7 +871,7 @@ class TestTransaction:
         string_key = get_random_string(10)
         maxmemory_policy_key = "maxmemory-policy"
         config = await redis_client.config_get([maxmemory_policy_key])
-        config_decoded = convert_bytes_to_string_dict(config)
+        config_decoded = cast(dict, convert_bytes_to_string_object(config))
         assert config_decoded is not None
         maxmemory_policy = cast(str, config_decoded.get(maxmemory_policy_key))
 

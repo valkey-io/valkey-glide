@@ -1,7 +1,7 @@
 import json
 import random
 import string
-from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 from glide.async_commands.core import InfoSection
 from glide.constants import TResult
@@ -126,23 +126,31 @@ def compare_maps(
         return True
     if map1 is None or map2 is None:
         return False
-    return json.dumps(convert_bytes_to_string_dict(map1)) == json.dumps(
-        convert_bytes_to_string_dict(map2)
+    return json.dumps(convert_bytes_to_string_object(map1)) == json.dumps(
+        convert_bytes_to_string_object(map2)
     )
 
 
-def convert_bytes_to_string_dict(
+def convert_bytes_to_string_object(
     # TODO: remove the str options
     byte_string_dict: Optional[
         Union[
+            List[Any],
+            Set[bytes],
             Mapping[bytes, Any],
             Dict[bytes, Any],
-            list[bytes, Any],
             Mapping[str, Any],
             Dict[str, Any],
         ]
     ]
-) -> Optional[Dict[str, Any]]:
+) -> Optional[
+    Union[
+        List[Any],
+        Set[str],
+        Mapping[str, Any],
+        Dict[str, Any],
+    ]
+]:
     """
     Recursively convert data structure from byte strings to regular strings,
     handling nested data structures of any depth.
@@ -165,18 +173,24 @@ def convert_bytes_to_string_dict(
     return convert(byte_string_dict)
 
 
-def convert_string_to_bytes_dict(
+def convert_string_to_bytes_object(
     # TODO: remove the bytes options
     string_structure: Optional[
         Union[
-            Mapping[bytes, Any],
-            Dict[bytes, Any],
-            list[str, Any],
+            List[Any],
+            Set[str],
             Mapping[str, Any],
             Dict[str, Any],
         ]
     ]
-) -> Optional[Dict[bytes, Any]]:
+) -> Optional[
+    Union[
+        List[Any],
+        Set[bytes],
+        Mapping[bytes, Any],
+        Dict[bytes, Any],
+    ]
+]:
     """
     Recursively convert the data structure from strings to bytes,
     handling nested data structures of any depth.

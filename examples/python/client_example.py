@@ -13,6 +13,7 @@ from glide import (
     NodeAddress,
 )
 
+
 def set_console_logger(level: LogLevel = LogLevel.WARN):
     Logger.set_logger_config(level)
 
