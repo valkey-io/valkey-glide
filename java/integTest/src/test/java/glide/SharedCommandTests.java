@@ -8083,7 +8083,7 @@ public class SharedCommandTests {
                         ? RedisClient.CreateClient(commonClientConfig().build()).get()
                         : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
 
-            // ensure that commands doesn't time out even if timeout > request timeout
+            // ensure that commands do not time out, even if timeout > request timeout
             assertEquals(OK, testClient.set(key, "value").get());
             assertEquals((client instanceof RedisClient ? 0 : 1), testClient.wait(1L, 1000L).get());
 

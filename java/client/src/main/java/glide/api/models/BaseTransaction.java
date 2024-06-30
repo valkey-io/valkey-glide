@@ -5625,13 +5625,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Blocks the current client until all the previous write commands are successfully transferred
-     * and acknowledged by at least <code>numreplicas</code> of replicas. If <code>timeout</code> is
-     * reached, the command returns even if the specified number of replicas were not yet reached.
+     * Returns the number of replicas that acknowledged the write commands sent by the current client
+     * before this command, both in the case where the specified number of replicas are reached, or
+     * when the timeout is reached.
      *
      * @param numreplicas The number of replicas to reach.
-     * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will
-     *     block indefinitely.
+     * @param timeout The timeout value specified in milliseconds.
      * @return Command Response - The number of replicas reached by all the writes performed in the
      *     context of the current connection.
      */
