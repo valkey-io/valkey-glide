@@ -774,3 +774,26 @@ class ClusterCommands(CoreCommands):
             int,
             await self._execute_command(RequestType.Wait, args, route),
         )
+
+    async def unwatch(self, route: Optional[Route] = None) -> TOK:
+        """
+        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        automatically flush all previously watched keys.
+
+        See https://valkey.io/commands/unwatch for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.unwatch()
+                'OK'
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.UnWatch, [], route),
+        )

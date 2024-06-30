@@ -99,6 +99,8 @@ from tests.utils.utils import (
     parse_info_response,
 )
 
+from glide.async_commands.transaction import Transaction
+
 
 @pytest.mark.asyncio
 class TestGlideClients:
@@ -7072,18 +7074,18 @@ class TestCommands:
 
         await redis_client.set(key, value)
         assert await redis_client.dbsize() > 0
-        assert await redis_client.flushall() is OK
-        assert await redis_client.flushall(FlushMode.ASYNC) is OK
+        assert await redis_client.flushall() == OK
+        assert await redis_client.flushall(FlushMode.ASYNC) == OK
         if not await check_if_server_version_lt(redis_client, min_version):
-            assert await redis_client.flushall(FlushMode.SYNC) is OK
+            assert await redis_client.flushall(FlushMode.SYNC) == OK
         assert await redis_client.dbsize() == 0
 
         if isinstance(redis_client, GlideClusterClient):
             await redis_client.set(key, value)
-            assert await redis_client.flushall(route=AllPrimaries()) is OK
-            assert await redis_client.flushall(FlushMode.ASYNC, AllPrimaries()) is OK
+            assert await redis_client.flushall(route=AllPrimaries()) == OK
+            assert await redis_client.flushall(FlushMode.ASYNC, AllPrimaries()) == OK
             if not await check_if_server_version_lt(redis_client, min_version):
-                assert await redis_client.flushall(FlushMode.SYNC, AllPrimaries()) is OK
+                assert await redis_client.flushall(FlushMode.SYNC, AllPrimaries()) == OK
             assert await redis_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [False])
@@ -7095,30 +7097,30 @@ class TestCommands:
         value = get_random_string(5)
 
         # fill DB 0 and check size non-empty
-        assert await redis_client.select(0) is OK
+        assert await redis_client.select(0) == OK
         await redis_client.set(key1, value)
         assert await redis_client.dbsize() > 0
 
         # fill DB 1 and check size non-empty
-        assert await redis_client.select(1) is OK
+        assert await redis_client.select(1) == OK
         await redis_client.set(key2, value)
         assert await redis_client.dbsize() > 0
 
         # flush DB 1 and check again
-        assert await redis_client.flushdb() is OK
+        assert await redis_client.flushdb() == OK
         assert await redis_client.dbsize() == 0
 
         # swith to DB 0, flush, and check
-        assert await redis_client.select(0) is OK
+        assert await redis_client.select(0) == OK
         assert await redis_client.dbsize() > 0
-        assert await redis_client.flushdb(FlushMode.ASYNC) is OK
+        assert await redis_client.flushdb(FlushMode.ASYNC) == OK
         assert await redis_client.dbsize() == 0
 
         # verify flush SYNC
         if not await check_if_server_version_lt(redis_client, min_version):
             await redis_client.set(key2, value)
             assert await redis_client.dbsize() > 0
-            assert await redis_client.flushdb(FlushMode.SYNC) is OK
+            assert await redis_client.flushdb(FlushMode.SYNC) == OK
             assert await redis_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -7503,6 +7505,55 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.lcs_idx(key1, lcs_non_string_key)
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_watch(self, redis_client: GlideClient):
+        # watched key didn't change outside of transaction before transaction execution, transaction will execute
+        assert await redis_client.set("key1", "original_value") == OK
+        assert await redis_client.watch(["key1"]) == OK
+        transaction = Transaction()
+        transaction.set("key1", "transaction_value")
+        transaction.get("key1")
+        assert await redis_client.exec(transaction) is not None
+
+        # watched key changed outside of transaction before transaction execution, transaction will not execute
+        assert await redis_client.set("key1", "original_value") == OK
+        assert await redis_client.watch(["key1"]) == OK
+        transaction = Transaction()
+        transaction.set("key1", "transaction_value")
+        assert await redis_client.set("key1", "standalone_value") == OK
+        transaction.get("key1")
+        assert await redis_client.exec(transaction) is None
+
+        # empty list not supported
+        with pytest.raises(RequestError):
+            await redis_client.watch([])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_unwatch(self, redis_client: GlideClient):
+
+        # watched key unwatched before transaction execution even if changed
+        # outside of transaction, transaction will still execute
+        assert await redis_client.set("key1", "original_value") == OK
+        assert await redis_client.watch(["key1"]) == OK
+        transaction = Transaction()
+        transaction.set("key1", "transaction_value")
+        assert await redis_client.set("key1", "standalone_value") == OK
+        transaction.get("key1")
+        assert await redis_client.unwatch() == OK
+        result = await redis_client.exec(transaction)
+        assert result is not None
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0] == "OK"
+        assert result[1] == b"transaction_value"
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_unwatch_with_route(self, redis_client: GlideClient):
+        assert await redis_client.unwatch(RandomNode()) == OK
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -7867,18 +7918,18 @@ class TestClusterRoutes:
 
         await redis_client.set(key, value)
         assert await redis_client.dbsize() > 0
-        assert await redis_client.flushdb(route=AllPrimaries()) is OK
+        assert await redis_client.flushdb(route=AllPrimaries()) == OK
         assert await redis_client.dbsize() == 0
 
         await redis_client.set(key, value)
         assert await redis_client.dbsize() > 0
-        assert await redis_client.flushdb(FlushMode.ASYNC, AllPrimaries()) is OK
+        assert await redis_client.flushdb(FlushMode.ASYNC, AllPrimaries()) == OK
         assert await redis_client.dbsize() == 0
 
         if not await check_if_server_version_lt(redis_client, min_version):
             await redis_client.set(key, value)
             assert await redis_client.dbsize() > 0
-            assert await redis_client.flushdb(FlushMode.SYNC, AllPrimaries()) is OK
+            assert await redis_client.flushdb(FlushMode.SYNC, AllPrimaries()) == OK
             assert await redis_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
