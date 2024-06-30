@@ -4053,6 +4053,28 @@ class BaseTransaction:
 
         return self.append_command(RequestType.LCS, args)
 
+    def wait(
+        self: TTransaction,
+        numreplicas: int,
+        timeout: int,
+    ) -> TTransaction:
+        """
+        Returns the number of replicas that acknowledged the write commands sent by the current client
+        before this command, both in the case where the specified number of replicas are reached, or
+        when the timeout is reached.
+
+        See https://valkey.io/commands/wait for more details.
+
+        Args:
+            numreplicas (int): The number of replicas to reach.
+            timeout (int): The timeout value specified in milliseconds.
+
+        Command Response:
+            str: The number of replicas reached by all the writes performed in the context of the current connection.
+        """
+        args = [str(numreplicas), str(timeout)]
+        return self.append_command(RequestType.Wait, args)
+
 
 class Transaction(BaseTransaction):
     """
