@@ -1,3 +1,4 @@
+use bytes::BytesMut;
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
@@ -6,9 +7,9 @@ use once_cell::sync::Lazy;
 use sha1_smol::Sha1;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use bytes::BytesMut;
 
-static CONTAINER: Lazy<Mutex<HashMap<String, Arc<BytesMut>>>> = Lazy::new(|| Mutex::new(HashMap::new()));
+static CONTAINER: Lazy<Mutex<HashMap<String, Arc<BytesMut>>>> =
+    Lazy::new(|| Mutex::new(HashMap::new()));
 
 pub fn add_script(script: &[u8]) -> String {
     let mut hash = Sha1::new();
