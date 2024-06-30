@@ -277,6 +277,22 @@ public interface SetBaseCommands {
     CompletableFuture<Set<String>> sdiff(String[] keys);
 
     /**
+     * Computes the difference between the first set and all the successive sets in <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
+     * @param keys The keys of the sets to diff.
+     * @return A <code>Set</code> of elements representing the difference between the sets.<br>
+     *     If the a <code>key</code> does not exist, it is treated as an empty set.
+     * @example
+     *     <pre>{@code
+     * Set<GlideString> values = client.sdiff(new GlideString[] {gs("set1"), gs("set2")}).get();
+     * assert values.contains(gs("element")); // Indicates that "element" is present in "set1", but missing in "set2"
+     * }</pre>
+     */
+    CompletableFuture<Set<GlideString>> sdiff(GlideString[] keys);
+
+    /**
      * Stores the difference between the first set and all the successive sets in <code>keys</code>
      * into a new set at <code>destination</code>.
      *
@@ -293,6 +309,24 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> sdiffstore(String destination, String[] keys);
+
+    /**
+     * Stores the difference between the first set and all the successive sets in <code>keys</code>
+     * into a new set at <code>destination</code>.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same hash slot.
+     * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys of the sets to diff.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sdiffstore(gs("mySet"), new GlideString[] { gs("set1"), gs("set2") }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sdiffstore(GlideString destination, GlideString[] keys);
 
     /**
      * Gets the intersection of all the given sets.

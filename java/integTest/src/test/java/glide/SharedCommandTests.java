@@ -1755,6 +1755,35 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void sdiff_gs(BaseClient client) {
+        GlideString key1 = gs("{key}-1-" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2-" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3-" + UUID.randomUUID());
+
+        assertEquals(3, client.sadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertEquals(3, client.sadd(key2, new GlideString[] {gs("c"), gs("d"), gs("e")}).get());
+
+        assertEquals(Set.of(gs("a"), gs("b")), client.sdiff(new GlideString[] {key1, key2}).get());
+        assertEquals(Set.of(gs("d"), gs("e")), client.sdiff(new GlideString[] {key2, key1}).get());
+
+        // second set is empty
+        assertEquals(
+                Set.of(gs("a"), gs("b"), gs("c")), client.sdiff(new GlideString[] {key1, key3}).get());
+
+        // first set is empty
+        assertEquals(Set.of(), client.sdiff(new GlideString[] {key3, key1}).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key3, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.sdiff(new GlideString[] {key1, key3}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void smismember(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
@@ -1849,6 +1878,59 @@ public class SharedCommandTests {
         // wrong arguments
         executionException =
                 assertThrows(ExecutionException.class, () -> client.sdiffstore(key5, new String[0]).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sdiffstore_gs(BaseClient client) {
+        GlideString key1 = gs("{key}-1-" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2-" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3-" + UUID.randomUUID());
+        GlideString key4 = gs("{key}-4-" + UUID.randomUUID());
+        GlideString key5 = gs("{key}-5-" + UUID.randomUUID());
+
+        assertEquals(3, client.sadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertEquals(3, client.sadd(key2, new GlideString[] {gs("c"), gs("d"), gs("e")}).get());
+        assertEquals(3, client.sadd(key4, new GlideString[] {gs("e"), gs("f"), gs("g")}).get());
+
+        // create new
+        assertEquals(2, client.sdiffstore(key3, new GlideString[] {key1, key2}).get());
+        assertEquals(Set.of(gs("a"), gs("b")), client.smembers(key3).get());
+
+        // overwrite existing set
+        assertEquals(2, client.sdiffstore(key2, new GlideString[] {key3, key2}).get());
+        assertEquals(Set.of(gs("a"), gs("b")), client.smembers(key2).get());
+
+        // overwrite source
+        assertEquals(3, client.sdiffstore(key1, new GlideString[] {key1, key4}).get());
+        assertEquals(Set.of(gs("a"), gs("b"), gs("c")), client.smembers(key1).get());
+
+        // diff with empty set
+        assertEquals(3, client.sdiffstore(key1, new GlideString[] {key1, key5}).get());
+        assertEquals(Set.of(gs("a"), gs("b"), gs("c")), client.smembers(key1).get());
+
+        // diff empty with non-empty set
+        assertEquals(0, client.sdiffstore(key3, new GlideString[] {key5, key1}).get());
+        assertEquals(Set.of(), client.smembers(key3).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key5, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.sdiffstore(key1, new GlideString[] {key5}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // overwrite destination - not a set
+        assertEquals(1, client.sdiffstore(key5, new GlideString[] {key1, key2}).get());
+        assertEquals(Set.of(gs("c")), client.smembers(key5).get());
+
+        // wrong arguments
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.sdiffstore(key5, new GlideString[0]).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
