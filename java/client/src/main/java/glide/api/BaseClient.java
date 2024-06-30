@@ -141,6 +141,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -1973,18 +1974,18 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xgroupCreate(
-            @NonNull String key, @NonNull String groupname, @NonNull String id) {
+            @NonNull String key, @NonNull String groupName, @NonNull String id) {
         return commandManager.submitNewCommand(
-                XGroupCreate, new String[] {key, groupname, id}, this::handleStringResponse);
+                XGroupCreate, new String[] {key, groupName, id}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> xgroupCreate(
             @NonNull String key,
-            @NonNull String groupname,
+            @NonNull String groupName,
             @NonNull String id,
             @NonNull StreamGroupOptions options) {
-        String[] arguments = concatenateArrays(new String[] {key, groupname, id}, options.toArgs());
+        String[] arguments = concatenateArrays(new String[] {key, groupName, id}, options.toArgs());
         return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
     }
 
@@ -2006,6 +2007,23 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String group, @NonNull String consumer) {
         return commandManager.submitNewCommand(
                 XGroupDelConsumer, new String[] {key, group, consumer}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
+            @NonNull String key, @NonNull String groupName, @NonNull String id) {
+        return commandManager.submitNewCommand(
+                XGroupSetId, new String[] {key, groupName, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
+            @NonNull String key,
+            @NonNull String groupName,
+            @NonNull String id,
+            @NonNull String entriesReadId) {
+        String[] arguments = new String[] {key, groupName, id, "ENTRIESREAD", entriesReadId};
+        return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
     }
 
     @Override

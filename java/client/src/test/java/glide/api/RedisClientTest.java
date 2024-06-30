@@ -43,8 +43,8 @@ import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VA
 import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
 import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
 import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
@@ -225,6 +225,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -5785,7 +5786,9 @@ public class RedisClientTest {
         StreamGroupOptions options =
                 StreamGroupOptions.builder().makeStream().entriesRead(testEntry).build();
         String[] arguments =
-                new String[] {key, groupName, id, MAKE_STREAM_REDIS_API, ENTRIES_READ_REDIS_API, testEntry};
+                new String[] {
+                    key, groupName, id, MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, testEntry
+                };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -5877,6 +5880,57 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupSetid() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String id = "testId";
+        String[] arguments = new String[] {key, groupName, id};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupSetId), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupSetId(key, groupName, id);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupSetidWithEntriesRead() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String id = "testId";
+        String entriesRead = "1-1";
+        String[] arguments = new String[] {key, groupName, id, "ENTRIESREAD", entriesRead};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupSetId), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupSetId(key, groupName, id, entriesRead);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
