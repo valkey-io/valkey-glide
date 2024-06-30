@@ -1,8 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.utils;
 
-import static glide.api.models.GlideString.gs;
-
 import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
