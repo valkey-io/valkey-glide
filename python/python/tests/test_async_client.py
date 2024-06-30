@@ -7109,8 +7109,7 @@ class TestCommands:
         value = get_random_string(5)
 
         await redis_client.set(key, value)
-        # TODO: test function with DUMP and RESTORE
-        # assert await redis_client.custom_command(["DUMP", key]) == value
+        # TODO: add DUMP and RESTORE once support bytes
         # assert await redis_client.dump(key) == value
 
 
