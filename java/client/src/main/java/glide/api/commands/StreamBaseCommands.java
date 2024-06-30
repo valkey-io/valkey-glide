@@ -378,7 +378,7 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param groupname The newly created consumer group name.
+     * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
@@ -391,7 +391,7 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> xgroupCreate(
-            String key, String groupname, String id, StreamGroupOptions options);
+            String key, String groupName, String id, StreamGroupOptions options);
 
     /**
      * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.
@@ -442,6 +442,46 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xgroupDelConsumer(String key, String group, String consumer);
+
+    /**
+     * Set the last delivered ID for a consumer group.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Create the consumer group "mygroup", and the stream if it does not exist, after the last ID
+     * assert client.xgroupSetId("mystream", "mygroup", "$").get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupSetId(String key, String groupName, String id);
+
+    /**
+     * Set the last delivered ID for a consumer group.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @param entriesRead An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>"0-0"</code>))
+     *     used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last entry.
+     *     This argument can only be specified if you are using Redis version 7.0.0 or above.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Create the consumer group "mygroup", and the stream if it does not exist, after the last ID
+     * assert client.xgroupSetId("mystream", "mygroup", "$", "$").get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupSetId(
+            String key, String groupName, String id, String entriesRead);
 
     /**
      * Reads entries from the given streams owned by a consumer group.

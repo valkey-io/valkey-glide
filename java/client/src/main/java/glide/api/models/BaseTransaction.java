@@ -167,6 +167,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -3024,14 +3025,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param groupname The newly created consumer group name.
+     * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
      * @return Command Response - <code>OK</code>.
      */
-    public T xgroupCreate(@NonNull String key, @NonNull String groupname, @NonNull String id) {
-        protobufTransaction.addCommands(buildCommand(XGroupCreate, buildArgs(key, groupname, id)));
+    public T xgroupCreate(@NonNull String key, @NonNull String groupName, @NonNull String id) {
+        protobufTransaction.addCommands(buildCommand(XGroupCreate, buildArgs(key, groupName, id)));
         return getThis();
     }
 
@@ -3041,7 +3042,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param groupname The newly created consumer group name.
+     * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
@@ -3050,11 +3051,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T xgroupCreate(
             @NonNull String key,
-            @NonNull String groupname,
+            @NonNull String groupName,
             @NonNull String id,
             @NonNull StreamGroupOptions options) {
         String[] commandArgs =
-                buildArgs(concatenateArrays(new String[] {key, groupname, id}, options.toArgs()));
+                buildArgs(concatenateArrays(new String[] {key, groupName, id}, options.toArgs()));
         protobufTransaction.addCommands(buildCommand(XGroupCreate, commandArgs));
         return getThis();
     }
@@ -3104,6 +3105,46 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     public T xgroupDelConsumer(@NonNull String key, @NonNull String group, @NonNull String consumer) {
         protobufTransaction.addCommands(
                 buildCommand(XGroupDelConsumer, buildArgs(key, group, consumer)));
+        return getThis();
+    }
+
+    /**
+     * Set the last delivered ID for a consumer group.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T xgroupSetId(@NonNull String key, @NonNull String groupName, @NonNull String id) {
+        protobufTransaction.addCommands(buildCommand(XGroupCreate, buildArgs(key, groupName, id)));
+        return getThis();
+    }
+
+    /**
+     * Set the last delivered ID for a consumer group.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @param entriesRead An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>"0-0"</code>))
+     *     used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last entry.
+     *     This argument can only be specified if you are using Redis version 7.0.0 or above.
+     * @return Command Response - <code>OK</code>.
+     */
+    public T xgroupSetId(
+            @NonNull String key,
+            @NonNull String groupName,
+            @NonNull String id,
+            @NonNull String entriesRead) {
+        String[] commandArgs = buildArgs(key, groupName, id, "ENTRIESREAD", entriesRead);
+        protobufTransaction.addCommands(buildCommand(XGroupSetId, commandArgs));
         return getThis();
     }
 

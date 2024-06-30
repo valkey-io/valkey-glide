@@ -4222,7 +4222,8 @@ public class SharedCommandTests {
         assertEquals(false, client.xgroupDestroy(key, groupName).get());
 
         // ENTRIESREAD option was added in redis 7.0.0
-        StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead("10").build();
+        StreamGroupOptions entriesReadOption =
+                StreamGroupOptions.builder().entriesRead("10").build();
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(OK, client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
         } else {
@@ -4269,7 +4270,10 @@ public class SharedCommandTests {
                 OK,
                 client
                         .xgroupCreate(
-                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                                key,
+                                groupName,
+                                zeroStreamId,
+                                StreamGroupOptions.builder().makeStream().build())
                         .get());
         assertTrue(client.xgroupCreateConsumer(key, groupName, consumerName).get());
 
@@ -4374,7 +4378,10 @@ public class SharedCommandTests {
                 OK,
                 client
                         .xgroupCreate(
-                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                                key,
+                                groupName,
+                                zeroStreamId,
+                                StreamGroupOptions.builder().makeStream().build())
                         .get());
         assertTrue(client.xgroupCreateConsumer(key, groupName, consumerName).get());
 
@@ -4502,7 +4509,10 @@ public class SharedCommandTests {
                 OK,
                 client
                         .xgroupCreate(
-                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                                key,
+                                groupName,
+                                zeroStreamId,
+                                StreamGroupOptions.builder().makeStream().build())
                         .get());
         assertTrue(client.xgroupCreateConsumer(key, groupName, consumerName).get());
 
@@ -4537,7 +4547,10 @@ public class SharedCommandTests {
                 OK,
                 client
                         .xgroupCreate(
-                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                                key,
+                                groupName,
+                                zeroStreamId,
+                                StreamGroupOptions.builder().makeStream().build())
                         .get());
         assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
         assertTrue(client.xgroupCreateConsumer(key, groupName, consumer2).get());
@@ -4666,7 +4679,10 @@ public class SharedCommandTests {
                 OK,
                 client
                         .xgroupCreate(
-                                key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                                key,
+                                groupName,
+                                zeroStreamId,
+                                StreamGroupOptions.builder().makeStream().build())
                         .get());
         assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
 

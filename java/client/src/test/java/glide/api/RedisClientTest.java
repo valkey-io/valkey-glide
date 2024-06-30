@@ -43,8 +43,8 @@ import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VA
 import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
 import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
 import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
@@ -5785,7 +5785,9 @@ public class RedisClientTest {
         StreamGroupOptions options =
                 StreamGroupOptions.builder().makeStream().entriesRead(testEntry).build();
         String[] arguments =
-                new String[] {key, groupName, id, MAKE_STREAM_REDIS_API, ENTRIES_READ_REDIS_API, testEntry};
+                new String[] {
+                    key, groupName, id, MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, testEntry
+                };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
