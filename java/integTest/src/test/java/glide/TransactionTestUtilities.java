@@ -813,6 +813,8 @@ public class TransactionTestUtilities {
         final String groupName1 = "{groupName}-1-" + UUID.randomUUID();
         final String groupName2 = "{groupName}-2-" + UUID.randomUUID();
         final String consumer1 = "{consumer}-1-" + UUID.randomUUID();
+        final String streamKey2 = "{streamKey}-2-" + UUID.randomUUID();
+        final String groupName3 = "{groupName}-2-" + UUID.randomUUID();
 
         transaction
                 .xadd(streamKey1, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
@@ -850,7 +852,14 @@ public class TransactionTestUtilities {
                 .xgroupDestroy(streamKey1, groupName2)
                 .xdel(streamKey1, new String[] {"0-3", "0-5"});
 
-        return new Object[] {
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .xadd(streamKey2, Map.of("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
+                    .xgroupCreate(streamKey2, groupName3, "0")
+                    .xgroupSetId(streamKey2, groupName3, "1-0", "0");
+        }
+
+        Object[] result = {
             "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
             "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
             "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
@@ -893,6 +902,20 @@ public class TransactionTestUtilities {
             true, // xgroupDestroy(streamKey1, groupName2)
             1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"});
         };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                "1-0", // xadd(streamKey2, Map.of("f0", "v0"),
+                                // StreamAddOptions.builder().id("1-0").build())
+                                OK, // xgroupCreate(streamKey2, groupName3, "0")
+                                OK, // xgroupSetId(streamKey2, groupName3, "1-0", "0");
+                            });
+        }
+
+        return result;
     }
 
     private static Object[] geospatialCommands(BaseTransaction<?> transaction) {
