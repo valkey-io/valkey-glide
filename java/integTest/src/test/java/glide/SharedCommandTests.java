@@ -5083,6 +5083,23 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void pfadd_binary(BaseClient client) {
+        GlideString key = gs(UUID.randomUUID().toString());
+        assertEquals(1, client.pfadd(key, new GlideString[0]).get());
+        assertEquals(1, client.pfadd(key, new GlideString[] {gs("one"), gs("two")}).get());
+        assertEquals(0, client.pfadd(key, new GlideString[] {gs("two")}).get());
+        assertEquals(0, client.pfadd(key, new GlideString[0]).get());
+
+        // Key exists, but it is not a HyperLogLog
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.pfadd(gs("foo"), new GlideString[0]).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void pfcount(BaseClient client) {
         String key1 = "{test}-hll1-" + UUID.randomUUID();
         String key2 = "{test}-hll2-" + UUID.randomUUID();
@@ -5101,6 +5118,30 @@ public class SharedCommandTests {
         assertEquals(OK, client.set("foo", "bar").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.pfcount(new String[] {"foo"}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void pfcount_binary(BaseClient client) {
+        GlideString key1 = gs("{test}-hll1-" + UUID.randomUUID());
+        GlideString key2 = gs("{test}-hll2-" + UUID.randomUUID());
+        GlideString key3 = gs("{test}-hll3-" + UUID.randomUUID());
+        assertEquals(1, client.pfadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertEquals(1, client.pfadd(key2, new GlideString[] {gs("b"), gs("c"), gs("d")}).get());
+        assertEquals(3, client.pfcount(new GlideString[] {key1}).get());
+        assertEquals(3, client.pfcount(new GlideString[] {key2}).get());
+        assertEquals(4, client.pfcount(new GlideString[] {key1, key2}).get());
+        assertEquals(4, client.pfcount(new GlideString[] {key1, key2, key3}).get());
+        // empty HyperLogLog data set
+        assertEquals(1, client.pfadd(key3, new GlideString[0]).get());
+        assertEquals(0, client.pfcount(new GlideString[] {key3}).get());
+
+        // Key exists, but it is not a HyperLogLog
+        assertEquals(OK, client.set("foo", "bar").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.pfcount(new GlideString[] {gs("foo")}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -5131,6 +5172,36 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.pfmerge(key1, new String[] {"foo"}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void pfmerge_binary(BaseClient client) {
+        GlideString key1 = gs("{test}-hll1-" + UUID.randomUUID());
+        GlideString key2 = gs("{test}-hll2-" + UUID.randomUUID());
+        GlideString key3 = gs("{test}-hll3-" + UUID.randomUUID());
+        assertEquals(1, client.pfadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertEquals(1, client.pfadd(key2, new GlideString[] {gs("b"), gs("c"), gs("d")}).get());
+        // new HyperLogLog data set
+        assertEquals(OK, client.pfmerge(key3, new GlideString[] {key1, key2}).get());
+        assertEquals(
+                client.pfcount(new GlideString[] {key1, key2}).get(), client.pfcount(new GlideString[] {key3}).get());
+        // existing HyperLogLog data set
+        assertEquals(OK, client.pfmerge(key1, new GlideString[] {key2}).get());
+        assertEquals(
+                client.pfcount(new GlideString[] {key1, key2}).get(), client.pfcount(new GlideString[] {key1}).get());
+
+        // Key exists, but it is not a HyperLogLog
+        assertEquals(OK, client.set(gs("foo"), gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.pfmerge(gs("foo"), new GlideString[] {key1}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.pfmerge(key1, new GlideString[] {gs("foo")}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 

@@ -518,6 +518,25 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void del_returns_long_success_binary() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("testKey1"), gs("testKey2")};
+        Long numberDeleted = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(numberDeleted);
+        when(commandManager.<Long>submitNewCommand(eq(Del), eq(keys), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.del(keys);
+        Long result = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(numberDeleted, result);
+    }
+
+    @SneakyThrows
+    @Test
     public void unlink_returns_long_success() {
         // setup
         String[] keys = new String[] {"testKey1", "testKey2"};
@@ -6565,6 +6584,30 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(value, payload);
     }
+    @SneakyThrows
+    @Test
+    public void pfadd_returns_success_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] elements = new  GlideString[]  {gs("a"), gs("b"), gs("c")};
+        GlideString[] arguments = new GlideString[] {key, gs("a"), gs("b"), gs("c")};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(PfAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.pfadd(key, elements);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
 
     @SneakyThrows
     @Test
@@ -6592,11 +6635,57 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void pfcount_returns_success_binary() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("a"), gs("b"), gs("c")};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(PfCount), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.pfcount(keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+        assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
     public void pfmerge_returns_success() {
         // setup
         String destKey = "testKey";
         String[] sourceKeys = new String[] {"a", "b", "c"};
         String[] arguments = new String[] {destKey, "a", "b", "c"};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(PfMerge), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.pfmerge(destKey, sourceKeys);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
+    }
+    @SneakyThrows
+    @Test
+    public void pfmerge_returns_success_binary() {
+        // setup
+        GlideString destKey = gs("testKey");
+        GlideString[] sourceKeys = new GlideString[] {gs("a"), gs("b"), gs("c")};
+        GlideString[] arguments = new  GlideString[] {destKey, gs("a"), gs("b"), gs("c")};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);

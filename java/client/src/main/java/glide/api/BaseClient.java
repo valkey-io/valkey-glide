@@ -2204,7 +2204,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(PfMerge, arguments, this::handleStringResponse);
     }
 
-    //    @Override // Doesn't work with override for some reason!
+    @Override
     public CompletableFuture<String> pfmerge(
             @NonNull GlideString destination, @NonNull GlideString[] sourceKeys) {
         GlideString[] arguments = ArrayUtils.addFirst(sourceKeys, destination);
