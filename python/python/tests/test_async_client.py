@@ -6950,7 +6950,7 @@ class TestCommands:
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
         # Load the function
-        assert await redis_client.function_load(code) == lib_name
+        assert await redis_client.function_load(code) == lib_name.encode()
 
         # TODO: Ensure the library exists with FUNCTION LIST
 
@@ -6980,7 +6980,7 @@ class TestCommands:
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
         # Load the function
-        assert await redis_client.function_load(code, False, route) == lib_name
+        assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
         # TODO: Ensure the library exists with FUNCTION LIST
 
@@ -7333,10 +7333,10 @@ class TestCommands:
         expected_subsequence = "acd"
         expected_subsequence_with_nonexistent_key = ""
         assert await redis_client.mset({key1: value1, key2: value2}) == OK
-        assert await redis_client.lcs(key1, key2) == expected_subsequence
+        assert await redis_client.lcs(key1, key2) == expected_subsequence.encode()
         assert (
             await redis_client.lcs(key1, nonexistent_key)
-            == expected_subsequence_with_nonexistent_key
+            == expected_subsequence_with_nonexistent_key.encode()
         )
         lcs_non_string_key = "lcs_non_string_key"
         assert await redis_client.sadd(lcs_non_string_key, ["Hello", "world"]) == 2
@@ -7379,7 +7379,7 @@ class TestCommands:
         value2 = "bcdef1234"
         nonexistent_key = "nonexistent_key"
         expected_response_no_min_match_len_no_with_match_len = {
-            "matches": [
+            b"matches": [
                 [
                     [4, 7],
                     [5, 8],
@@ -7389,19 +7389,19 @@ class TestCommands:
                     [0, 2],
                 ],
             ],
-            "len": 7,
+            b"len": 7,
         }
         expected_response_with_min_match_len_equals_four_no_with_match_len = {
-            "matches": [
+            b"matches": [
                 [
                     [4, 7],
                     [5, 8],
                 ],
             ],
-            "len": 7,
+            b"len": 7,
         }
         expected_response_no_min_match_len_with_match_len = {
-            "matches": [
+            b"matches": [
                 [
                     [4, 7],
                     [5, 8],
@@ -7413,21 +7413,21 @@ class TestCommands:
                     3,
                 ],
             ],
-            "len": 7,
+            b"len": 7,
         }
         expected_response_with_min_match_len_equals_four_and_with_match_len = {
-            "matches": [
+            b"matches": [
                 [
                     [4, 7],
                     [5, 8],
                     4,
                 ],
             ],
-            "len": 7,
+            b"len": 7,
         }
         expected_response_with_nonexistent_key = {
-            "matches": [],
-            "len": 0,
+            b"matches": [],
+            b"len": 0,
         }
         assert await redis_client.mset({key1: value1, key2: value2}) == OK
         assert (
