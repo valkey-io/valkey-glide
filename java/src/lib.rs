@@ -2,9 +2,11 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener as start_socket_listener_core;
+use glide_core::MAX_REQUEST_ARGS_LENGTH as MAX_REQUEST_ARGS_LENGTH_IN_BYTES;
 
-use jni::objects::{JClass, JObject, JObjectArray, JString};
-use jni::sys::jlong;
+use bytes::Bytes;
+use jni::objects::{JByteArray, JClass, JObject, JObjectArray, JString};
+use jni::sys::{jlong, jsize};
 use jni::JNIEnv;
 use redis::Value;
 use std::sync::mpsc;
@@ -176,6 +178,61 @@ pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_valueFromPoin
         "valueFromPointerBinary",
     )
     .unwrap_or(JObject::null())
+}
+
+/// Creates a leaked vector of byte arrays representing the args and returns a handle to it.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `env`     - The JNI environment.
+/// * `_class`  - The class object. Not used.
+/// * `args`    - The arguments. This should be a byte[][] from Java.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_createLeakedBytesVec<'local>(
+    mut env: JNIEnv<'local>,
+    _class: JClass<'local>,
+    args: JObjectArray<'local>,
+) -> jlong {
+    handle_panics(
+        move || {
+            fn create_leaked_bytes_vec<'a>(
+                env: &mut JNIEnv<'a>,
+                args: JObjectArray<'a>,
+            ) -> Result<jlong, FFIError> {
+                let num_elements = env.get_array_length(&args)?;
+                let mut bytes_vec = Vec::with_capacity(num_elements as usize);
+
+                for index in 0..num_elements {
+                    let value = env.get_object_array_element(&args, index as jsize)?;
+                    bytes_vec.push(Bytes::from(
+                        env.convert_byte_array(JByteArray::from(value))?,
+                    ))
+                }
+                Ok(Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as jlong)
+            }
+            let result = create_leaked_bytes_vec(&mut env, args);
+            handle_errors(&mut env, result)
+        },
+        "createLeakedBytesVec",
+    )
+    .unwrap_or(0)
+}
+
+/// Returns the maximum total length in bytes of request arguments.
+///
+/// This function is meant to be invoked by Java using JNI. This is used to ensure
+/// that this constant is consistent with the Rust client.
+///
+/// * `_env`    - The JNI environment. Not used.
+/// * `_class`  - The class object. Not used.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_RedisValueResolver_getMaxRequestArgsLengthInBytes<
+    'local,
+>(
+    _env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> jlong {
+    MAX_REQUEST_ARGS_LENGTH_IN_BYTES as jlong
 }
 
 #[no_mangle]

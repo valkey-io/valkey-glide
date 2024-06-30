@@ -10,7 +10,6 @@ import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import glide.api.models.commands.SortClusterOptions;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
-import redis_request.RedisRequestOuterClass;
 
 /**
  * Extends BaseTransaction class for cluster mode commands. Transactions allow the execution of a
@@ -46,7 +45,7 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @return Command response - The number of clients that received the message.
      */
     public ClusterTransaction spublish(@NonNull String channel, @NonNull String message) {
-        protobufTransaction.addCommands(buildCommand(SPublish, buildArgs(channel, message)));
+        protobufTransaction.addCommands(buildCommand(SPublish, channel, message));
         return getThis();
     }
 
@@ -63,9 +62,8 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      */
     public ClusterTransaction sort(
             @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        RedisRequestOuterClass.Command.ArgsArray commandArgs =
-                buildArgs(ArrayUtils.addFirst(sortClusterOptions.toArgs(), key));
-        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(Sort, ArrayUtils.addFirst(sortClusterOptions.toArgs(), key)));
         return this;
     }
 
@@ -82,9 +80,8 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      */
     public ClusterTransaction sortReadOnly(
             @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        RedisRequestOuterClass.Command.ArgsArray commandArgs =
-                buildArgs(ArrayUtils.addFirst(sortClusterOptions.toArgs(), key));
-        protobufTransaction.addCommands(buildCommand(SortReadOnly, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(SortReadOnly, ArrayUtils.addFirst(sortClusterOptions.toArgs(), key)));
         return this;
     }
 
@@ -107,10 +104,10 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
             @NonNull String destination,
             @NonNull SortClusterOptions sortClusterOptions) {
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
-        RedisRequestOuterClass.Command.ArgsArray commandArgs =
-                buildArgs(
-                        concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments));
-        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        Sort,
+                        concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments)));
         return this;
     }
 }

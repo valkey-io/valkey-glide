@@ -1822,6 +1822,25 @@ class BaseTransaction:
             [mode.value] if mode else [],
         )
 
+    def function_delete(self: TTransaction, library_name: str) -> TTransaction:
+        """
+        Deletes a library and all its functions.
+
+        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+
+        Args:
+            library_code (str): The libary name to delete
+
+        Commands response:
+            TOK: A simple `OK`.
+
+        Since: Redis 7.0.0.
+        """
+        return self.append_command(
+            RequestType.FunctionDelete,
+            [library_name],
+        )
+
     def xadd(
         self: TTransaction,
         key: str,
@@ -3890,6 +3909,149 @@ class BaseTransaction:
             Optional[str]: A random existing key name.
         """
         return self.append_command(RequestType.RandomKey, [])
+
+    def sscan(
+        self: TTransaction,
+        key: str,
+        cursor: str,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Iterates incrementally over a set.
+
+        See https://valkey.io/commands/sscan for more details.
+
+        Args:
+            key (str): The key of the set.
+            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+                the search.
+            match (Optional[str]): The match filter is applied to the result of the command and will only include
+                strings that match the pattern specified. If the set is large enough for scan commands to return only a
+                subset of the set then there could be a case where the result is empty although there are items that
+                match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
+                only fetch and match `10` items from the list.
+            count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the set.
+                `COUNT` could be ignored until the set is large enough for the `SCAN` commands to represent the results
+                as compact single-allocation packed encoding.
+
+        Command Response:
+            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the set held by `key`.
+                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+                returned on the last iteration of the set. The second element is always an `Array` of the subset of the
+                set held in `key`.
+        """
+        args = [key, cursor]
+        if match is not None:
+            args += ["MATCH", match]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return self.append_command(RequestType.SScan, args)
+
+    def lcs(
+        self: TTransaction,
+        key1: str,
+        key2: str,
+    ) -> TTransaction:
+        """
+        Returns the longest common subsequence between strings stored at key1 and key2.
+
+        Note that this is different than the longest common string algorithm, since
+        matching characters in the two strings do not need to be contiguous.
+
+        For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
+        from left to right, the longest common set of characters is composed of the first "f" and then the "o".
+
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+
+        Command Response:
+            A String containing the longest common subsequence between the 2 strings.
+            An empty String is returned if the keys do not exist or have no common subsequences.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2]
+
+        return self.append_command(RequestType.LCS, args)
+
+    def lcs_len(
+        self: TTransaction,
+        key1: str,
+        key2: str,
+    ) -> TTransaction:
+        """
+        Returns the length of the longest common subsequence between strings stored at key1 and key2.
+
+        Note that this is different than the longest common string algorithm, since
+        matching characters in the two strings do not need to be contiguous.
+
+        For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
+        from left to right, the longest common set of characters is composed of the first "f" and then the "o".
+
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+
+        Command Response:
+            The length of the longest common subsequence between the 2 strings.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2, "LEN"]
+
+        return self.append_command(RequestType.LCS, args)
+
+    def lcs_idx(
+        self: TTransaction,
+        key1: str,
+        key2: str,
+        min_match_len: Optional[int] = None,
+        with_match_len: Optional[bool] = False,
+    ) -> TTransaction:
+        """
+        Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
+
+        Note that this is different than the longest common string algorithm, since
+        matching characters in the two strings do not need to be contiguous.
+
+        For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
+        from left to right, the longest common set of characters is composed of the first "f" and then the "o".
+
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+            min_match_len (Optional[int]): The minimum length of matches to include in the result.
+            with_match_len (Optional[bool]): If True, include the length of the substring matched for each substring.
+
+        Command Response:
+            A Map containing the indices of the longest common subsequence between the
+            2 strings and the length of the longest common subsequence. The resulting map contains two
+            keys, "matches" and "len":
+                - "len" is mapped to the length of the longest common subsequence between the 2 strings.
+                - "matches" is mapped to a three dimensional int array that stores pairs of indices that
+                  represent the location of the common subsequences in the strings held by key1 and key2,
+                  with the length of the match after each matches, if with_match_len is enabled.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2, "IDX"]
+
+        if min_match_len is not None:
+            args.extend(["MINMATCHLEN", str(min_match_len)])
+
+        if with_match_len:
+            args.append("WITHMATCHLEN")
+
+        return self.append_command(RequestType.LCS, args)
 
 
 class Transaction(BaseTransaction):

@@ -63,6 +63,9 @@
 * Python: Added XPENDING command ([#1704](https://github.com/aws/glide-for-redis/pull/1704))
 * Python: Added RANDOMKEY command ([#1701](https://github.com/aws/glide-for-redis/pull/1701))
 * Python: Added FUNCTION FLUSH command ([#1700](https://github.com/aws/glide-for-redis/pull/1700))
+* Python: Added FUNCTION DELETE command ([#1714](https://github.com/aws/glide-for-redis/pull/1714))
+* Python: Added SSCAN command ([#1709](https://github.com/aws/glide-for-redis/pull/1709))
+* Python: Added LCS command ([#1716](https://github.com/aws/glide-for-redis/pull/1716))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
