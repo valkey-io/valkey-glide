@@ -5654,6 +5654,8 @@ class TestCommands:
         result.remove(consumer_results)
         assert result == [5, stream_id1_0, stream_id1_4]
 
+        # to ensure an idle_time > 0
+        time.sleep(2)
         range_result = await redis_client.xpending_range(
             key, group_name, MinId(), MaxId(), 10
         )
