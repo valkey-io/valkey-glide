@@ -4,7 +4,6 @@
 mod types;
 
 use crate::scripts_container::get_script;
-use bytes::BytesMut;
 use futures::FutureExt;
 use logger_core::log_info;
 use redis::aio::ConnectionLike;
@@ -14,7 +13,6 @@ use redis::{Cmd, ErrorKind, PushInfo, Value};
 use redis::{RedisError, RedisResult};
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::ops::Deref;
 use std::time::Duration;
 pub use types::*;
 
