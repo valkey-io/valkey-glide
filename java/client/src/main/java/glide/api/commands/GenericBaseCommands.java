@@ -1207,4 +1207,22 @@ public interface GenericBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> sortStore(String key, String destination);
+
+    /**
+     * Blocks the current client until all the previous write commands are successfully transferred
+     * and acknowledged by at least <code>numreplicas</code> of replicas. If <code>timeout</code> is
+     * reached, the command returns even if the specified number of replicas were not yet reached.
+     *
+     * @param numreplicas The number of replicas to reach.
+     * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will
+     *     block indefinitely.
+     * @return The number of replicas reached by all the writes performed in the context of the
+     *     current connection.
+     * @example
+     *     <pre>{@code
+     * client.set("key", "value).get();
+     * assert client.wait(1L, 1000L).get() == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> wait(long numreplicas, long timeout);
 }
