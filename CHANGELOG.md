@@ -66,7 +66,7 @@
 * Python: Added FUNCTION DELETE command ([#1714](https://github.com/aws/glide-for-redis/pull/1714))
 * Python: Added SSCAN command ([#1709](https://github.com/aws/glide-for-redis/pull/1709))
 * Python: Added LCS command ([#1716](https://github.com/aws/glide-for-redis/pull/1716))
-* Python: Added WAIT command ([1710](https://github.com/aws/glide-for-redis/pull/1710))
+* Python: Added WAIT command ([#1710](https://github.com/aws/glide-for-redis/pull/1710))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

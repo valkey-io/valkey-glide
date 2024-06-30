@@ -759,7 +759,8 @@ class ClusterCommands(CoreCommands):
         Args:
             numreplicas (int): The number of replicas to reach.
             timeout (int): The timeout value specified in milliseconds. A value of 0 will block indefinitely.
-
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+            in which case the client will route the command to the nodes defined by `route`.
         Returns:
             int: The number of replicas reached by all the writes performed in the context of the current connection.
 
