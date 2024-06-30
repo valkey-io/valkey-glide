@@ -56,6 +56,11 @@ import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchResultOptions;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
+import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -751,7 +756,15 @@ public class CommandTests {
                         clusterClient.sinterstore(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of("sdiff", null, clusterClient.sdiff(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
+                        "sdiff_gs",
+                        null,
+                        clusterClient.sdiff(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
+                Arguments.of(
                         "sdiffstore", null, clusterClient.sdiffstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "sdiffstore_gs",
+                        null,
+                        clusterClient.sdiffstore(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of("sinter", null, clusterClient.sinter(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
                         "sinter_gs",
@@ -847,7 +860,17 @@ public class CommandTests {
                 Arguments.of(
                         "sortStore",
                         "1.0.0",
-                        clusterClient.sortStore("abc", "def", SortClusterOptions.builder().alpha().build())));
+                        clusterClient.sortStore("abc", "def", SortClusterOptions.builder().alpha().build())),
+                Arguments.of(
+                        "geosearchstore",
+                        "6.2.0",
+                        clusterClient.geosearchstore(
+                                "dest",
+                                "source",
+                                new GeoSearchOrigin.MemberOrigin("abc"),
+                                new GeoSearchShape(1, GeoUnit.METERS),
+                                GeoSearchStoreOptions.builder().build(),
+                                new GeoSearchResultOptions(1, true))));
     }
 
     @SneakyThrows
@@ -1742,9 +1765,8 @@ public class CommandTests {
         // no keys in database
         assertEquals(OK, clusterClient.flushall(SYNC).get());
 
-        // TODO: returns a ResponseError but expecting null
-        // uncomment when this is completed: https://github.com/amazon-contributing/redis-rs/pull/153
-        // assertNull(clusterClient.randomKey().get());
+        // no keys in database returns null
+        assertNull(clusterClient.randomKey().get());
     }
 
     @Test
