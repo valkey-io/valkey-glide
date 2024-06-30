@@ -593,22 +593,23 @@ class ClusterCommands(CoreCommands):
         """
         Publish a message on pubsub channel.
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
-        The mode is selected using the 'sharded' parameter
+        The mode is selected using the 'sharded' parameter.
+        For both sharded and non-sharded mode, request is routed using hashed channel as key.
         See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
 
         Args:
             message (str): Message to publish
             channel (str): Channel to publish the message on.
-            sharded (bool): Use sharded pubsub mode.
+            sharded (bool): Use sharded pubsub mode. Available since Redis version 7.0.
 
         Returns:
-            int: Number of subscriptions in that shard that received the message.
+            int: Number of subscriptions in that node that received the message.
 
         Examples:
             >>> await client.publish("Hi all!", "global-channel", False)
-                1  # Publishes "Hi all!" message on global-channel channel using non-sharded mode
+                1  # Published 1 instance of "Hi all!" message on global-channel channel using non-sharded mode
             >>> await client.publish("Hi to sharded channel1!", "channel1, True)
-                2  # Publishes "Hi to sharded channel1!" message on channel1 using sharded mode
+                2  # Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
         """
         result = await self._execute_command(
             RequestType.SPublish if sharded else RequestType.Publish, [channel, message]
