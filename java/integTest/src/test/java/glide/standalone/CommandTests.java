@@ -869,7 +869,6 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void sort() {
-        assertEquals(OK, regularClient.flushall().get());
         String setKey1 = "setKey1";
         String setKey2 = "setKey2";
         String setKey3 = "setKey3";
