@@ -607,6 +607,8 @@ async def transaction_test(
     args.append(b"one")
     transaction.srandmember_count(key7, 1)
     args.append([b"one"])
+    transaction.wait(1, 1000)
+    args.append(0)
     transaction.flushall(FlushMode.ASYNC)
     args.append(OK)
     transaction.flushall()

@@ -7502,6 +7502,27 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_wait(self, redis_client: TGlideClient):
+        key = f"{{key}}-1{get_random_string(5)}"
+        value = get_random_string(5)
+        value2 = get_random_string(5)
+
+        assert await redis_client.set(key, value) == OK
+        if isinstance(redis_client, GlideClusterClient):
+            assert await redis_client.wait(1, 1000) >= 1
+        else:
+            assert await redis_client.wait(1, 1000) >= 0
+
+        # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+        assert await redis_client.set(key, value2) == OK
+        assert await redis_client.wait(100, 500) >= 0
+
+        # command should fail on a negative timeout value
+        with pytest.raises(RequestError):
+            await redis_client.wait(1, -1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut(self, redis_client: TGlideClient):
         result = await redis_client.lolwut()
         assert b"Redis ver. " in result
