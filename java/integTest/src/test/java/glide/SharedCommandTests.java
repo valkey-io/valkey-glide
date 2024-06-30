@@ -5093,7 +5093,8 @@ public class SharedCommandTests {
         // Key exists, but it is not a HyperLogLog
         assertEquals(OK, client.set("foo", "bar").get());
         ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.pfadd(gs("foo"), new GlideString[0]).get());
+                assertThrows(
+                        ExecutionException.class, () -> client.pfadd(gs("foo"), new GlideString[0]).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -5141,7 +5142,8 @@ public class SharedCommandTests {
         // Key exists, but it is not a HyperLogLog
         assertEquals(OK, client.set("foo", "bar").get());
         ExecutionException executionException =
-                assertThrows(ExecutionException.class, () -> client.pfcount(new GlideString[] {gs("foo")}).get());
+                assertThrows(
+                        ExecutionException.class, () -> client.pfcount(new GlideString[] {gs("foo")}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 
@@ -5187,21 +5189,25 @@ public class SharedCommandTests {
         // new HyperLogLog data set
         assertEquals(OK, client.pfmerge(key3, new GlideString[] {key1, key2}).get());
         assertEquals(
-                client.pfcount(new GlideString[] {key1, key2}).get(), client.pfcount(new GlideString[] {key3}).get());
+                client.pfcount(new GlideString[] {key1, key2}).get(),
+                client.pfcount(new GlideString[] {key3}).get());
         // existing HyperLogLog data set
         assertEquals(OK, client.pfmerge(key1, new GlideString[] {key2}).get());
         assertEquals(
-                client.pfcount(new GlideString[] {key1, key2}).get(), client.pfcount(new GlideString[] {key1}).get());
+                client.pfcount(new GlideString[] {key1, key2}).get(),
+                client.pfcount(new GlideString[] {key1}).get());
 
         // Key exists, but it is not a HyperLogLog
         assertEquals(OK, client.set(gs("foo"), gs("bar")).get());
         ExecutionException executionException =
                 assertThrows(
-                        ExecutionException.class, () -> client.pfmerge(gs("foo"), new GlideString[] {key1}).get());
+                        ExecutionException.class,
+                        () -> client.pfmerge(gs("foo"), new GlideString[] {key1}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
         executionException =
                 assertThrows(
-                        ExecutionException.class, () -> client.pfmerge(key1, new GlideString[] {gs("foo")}).get());
+                        ExecutionException.class,
+                        () -> client.pfmerge(key1, new GlideString[] {gs("foo")}).get());
         assertTrue(executionException.getCause() instanceof RequestException);
     }
 

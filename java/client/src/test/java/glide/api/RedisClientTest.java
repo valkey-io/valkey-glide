@@ -6584,12 +6584,13 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(value, payload);
     }
+
     @SneakyThrows
     @Test
     public void pfadd_returns_success_binary() {
         // setup
         GlideString key = gs("testKey");
-        GlideString[] elements = new  GlideString[]  {gs("a"), gs("b"), gs("c")};
+        GlideString[] elements = new GlideString[] {gs("a"), gs("b"), gs("c")};
         GlideString[] arguments = new GlideString[] {key, gs("a"), gs("b"), gs("c")};
         Long value = 1L;
 
@@ -6679,13 +6680,14 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(OK, response.get());
     }
+
     @SneakyThrows
     @Test
     public void pfmerge_returns_success_binary() {
         // setup
         GlideString destKey = gs("testKey");
         GlideString[] sourceKeys = new GlideString[] {gs("a"), gs("b"), gs("c")};
-        GlideString[] arguments = new  GlideString[] {destKey, gs("a"), gs("b"), gs("c")};
+        GlideString[] arguments = new GlideString[] {destKey, gs("a"), gs("b"), gs("c")};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
