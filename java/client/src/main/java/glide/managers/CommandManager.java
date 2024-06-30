@@ -142,8 +142,8 @@ public class CommandManager {
      */
     public <T> CompletableFuture<T> submitScript(
             Script script,
-            List<String> keys,
-            List<String> args,
+            List<GlideString> keys,
+            List<GlideString> args,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
         RedisRequest.Builder command = prepareRedisRequest(script, keys, args);
@@ -254,13 +254,21 @@ public class CommandManager {
      *     adding a callback id.
      */
     protected RedisRequest.Builder prepareRedisRequest(
-            Script script, List<String> keys, List<String> args) {
+            Script script, List<GlideString> keys, List<GlideString> args) {
         return RedisRequest.newBuilder()
                 .setScriptInvocation(
                         ScriptInvocation.newBuilder()
                                 .setHash(script.getHash())
-                                .addAllKeys(keys)
-                                .addAllArgs(args)
+                                .addAllKeys(
+                                        keys.stream()
+                                                .map(GlideString::getBytes)
+                                                .map(ByteString::copyFrom)
+                                                .collect(Collectors.toList()))
+                                .addAllArgs(
+                                        args.stream()
+                                                .map(GlideString::getBytes)
+                                                .map(ByteString::copyFrom)
+                                                .collect(Collectors.toList()))
                                 .build());
     }
 
