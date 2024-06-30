@@ -4456,6 +4456,21 @@ class Transaction(BaseTransaction):
 
         return self.append_command(RequestType.Copy, args)
 
+    def publish(self: TTransaction, message: str, channel: str) -> TTransaction:
+        """
+        Publish a message on pubsub channel.
+        See https://valkey.io/commands/publish for more details.
+
+        Args:
+            message (str): Message to publish
+            channel (str): Channel to publish the message on.
+
+        Returns:
+            TOK: a simple `OK` response.
+
+        """
+        return self.append_command(RequestType.Publish, [channel, message])
+
 
 class ClusterTransaction(BaseTransaction):
     """
@@ -4550,5 +4565,26 @@ class ClusterTransaction(BaseTransaction):
             args.append("REPLACE")
 
         return self.append_command(RequestType.Copy, args)
+
+    def publish(
+        self: TTransaction, message: str, channel: str, sharded: bool = False
+    ) -> TTransaction:
+        """
+        Publish a message on pubsub channel.
+        This command aggregates PUBLISH and SPUBLISH commands functionalities.
+        The mode is selected using the 'sharded' parameter
+        See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
+
+        Args:
+            message (str): Message to publish
+            channel (str): Channel to publish the message on.
+            sharded (bool): Use sharded pubsub mode. Available since Redis version 7.0.
+
+        Returns:
+            int: Number of subscriptions in that shard that received the message.
+        """
+        return self.append_command(
+            RequestType.SPublish if sharded else RequestType.Publish, [channel, message]
+        )
 
     # TODO: add all CLUSTER commands
