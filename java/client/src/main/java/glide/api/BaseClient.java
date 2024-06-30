@@ -16,7 +16,6 @@ import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
-import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArrayBinary;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
@@ -1941,7 +1940,7 @@ public abstract class BaseClient
                 Arrays.stream(toArgsString).map(GlideString::gs).toArray(GlideString[]::new);
         GlideString[] arguments =
                 ArrayUtils.addAll(
-                        ArrayUtils.addFirst(toArgs, key), convertMapToKeyValueStringArrayBinary(values));
+                        ArrayUtils.addFirst(toArgs, key), convertMapToKeyValueGlideStringArray(values));
         return commandManager.submitNewCommand(XAdd, arguments, this::handleGlideStringOrNullResponse);
     }
 

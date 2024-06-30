@@ -62,7 +62,7 @@ import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDI
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_NOT_EXACT_REDIS_API;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
-import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArrayBinary;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -5375,7 +5375,7 @@ public class RedisClientTest {
         Map<GlideString, GlideString> fieldValues = new LinkedHashMap<>();
         fieldValues.put(gs("testField1"), gs("testValue1"));
         fieldValues.put(gs("testField2"), gs("testValue2"));
-        GlideString[] fieldValuesArgs = convertMapToKeyValueStringArrayBinary(fieldValues);
+        GlideString[] fieldValuesArgs = convertMapToKeyValueGlideStringArray(fieldValues);
         GlideString[] arguments = new GlideString[] {key, gs("*")};
         arguments = ArrayUtils.addAll(arguments, fieldValuesArgs);
         GlideString returnId = gs("testId");
@@ -5532,7 +5532,7 @@ public class RedisClientTest {
                     gs(Long.toString(5L)),
                     gs("id")
                 };
-        arguments = ArrayUtils.addAll(arguments, convertMapToKeyValueStringArrayBinary(fieldValues));
+        arguments = ArrayUtils.addAll(arguments, convertMapToKeyValueGlideStringArray(fieldValues));
 
         GlideString returnId = gs("testId");
         CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
