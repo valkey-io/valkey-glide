@@ -1,7 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.utils;
-import glide.api.models.GlideString;
+
 import glide.api.commands.GeospatialIndicesBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
@@ -33,7 +34,8 @@ public class ArrayTransformUtils {
      * @param args Map of glide string keys to values of gs type to convert.
      * @return Array of GlideStrings [key1, value1, key2, value2, ...].
      */
-    public static GlideString[] convertMapToKeyValueGlideStringArray(Map<GlideString, GlideString> args) {
+    public static GlideString[] convertMapToKeyValueGlideStringArray(
+            Map<GlideString, GlideString> args) {
         return args.entrySet().stream()
                 .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue()))
                 .toArray(GlideString[]::new);

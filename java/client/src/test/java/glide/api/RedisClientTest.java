@@ -1565,6 +1565,7 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
+
     @SneakyThrows
     @Test
     public void mset_withIllegalArgument_throws_exception() {

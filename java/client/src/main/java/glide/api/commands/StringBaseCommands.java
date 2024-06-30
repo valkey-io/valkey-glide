@@ -255,9 +255,9 @@ public interface StringBaseCommands {
      * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>
      *     keyValueMap</code> map to different hash slots.
      * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
-     * @param keyValueMap A key-value map consisting of keys and their respective values to set. 
-     * Note you can only pass Keys and Values of types String and GlideString. 
-     * Key and Value must be of same type.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set. Note
+     *     you can only pass Keys and Values of types String and GlideString. Key and Value must be of
+     *     same type.
      * @return Always <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -265,7 +265,7 @@ public interface StringBaseCommands {
      * assert result.equals("OK"));
      * }</pre>
      */
-    <ArgType> CompletableFuture<String> mset(Map<ArgType , ArgType> keyValueMap);
+    <ArgType> CompletableFuture<String> mset(Map<ArgType, ArgType> keyValueMap);
 
     /**
      * Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
@@ -274,9 +274,9 @@ public interface StringBaseCommands {
      * @apiNote When in cluster mode, all keys in <code>keyValueMap</code> must map to the same hash
      *     slot.
      * @see <a href="https://redis.io/commands/msetnx/">redis.io</a> for details.
-     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
-     * Note you can only pass Keys and Values of types String and GlideString. 
-     * Key and Value must be of same type.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set. Note
+     *     you can only pass Keys and Values of types String and GlideString. Key and Value must be of
+     *     same type.
      * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
      * @example
      *     <pre>{@code
@@ -284,7 +284,7 @@ public interface StringBaseCommands {
      * assert result;
      * }</pre>
      */
-    ArgType> CompletableFuture<Boolean> msetnx(Map<ArgType, ArgType> keyValueMap);
+    <ArgType> CompletableFuture<Boolean> msetnx(Map<ArgType, ArgType> keyValueMap);
 
     /**
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
