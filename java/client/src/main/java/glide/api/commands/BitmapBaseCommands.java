@@ -544,7 +544,7 @@ public interface BitmapBaseCommands {
      *
      * @example
      *     <pre>{@code
-     * client.set(gs("sampleKey"), gs("A")); // gs("A") has binary value 01000001
+     * client.set(gs("sampleKey"), gs("A")); // string "A" has binary value 01000001
      * BitFieldSubCommands[] subcommands = new BitFieldSubCommands[] {
      *      new BitFieldSet(new UnsignedEncoding(2), new Offset(1), 3), // Sets the new binary value to 01100001
      *      new BitFieldGet(new UnsignedEncoding(2), new Offset(1)) // Gets value from 0(11)00001
@@ -593,7 +593,7 @@ public interface BitmapBaseCommands {
      * @return An array of results from the <code>GET</code> subcommands.
      * @example
      *     <pre>{@code
-     * client.set(gs("sampleKey"), gs("A")); // gs("A") has binary value 01000001
+     * client.set(gs("sampleKey"), gs("A")); //string "A" has binary value 01000001
      * Long[] payload =
      *      client.
      *          bitfieldReadOnly(
