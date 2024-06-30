@@ -4375,6 +4375,8 @@ public class SharedCommandTests {
         };
         assertDeepEquals(expectedResult, pending_results);
 
+        // ensure idle_time > 0
+        Thread.sleep(2000);
         Object[][] pending_results_extended =
                 client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L).get();
 
