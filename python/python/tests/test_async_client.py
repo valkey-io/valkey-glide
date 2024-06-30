@@ -8240,25 +8240,25 @@ class TestClusterRoutes:
 
         # Empty set
         result = await redis_client.zscan(key1, initial_cursor)
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Negative cursor
         result = await redis_client.zscan(key1, "-1")
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Result contains the whole set
         assert await redis_client.zadd(key1, char_map) == len(char_map)
         result = await redis_client.zscan(key1, initial_cursor)
         result_collection = result[result_collection_index]
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result_collection) == len(char_map) * 2
         assert convert_list_to_dict(result_collection) == char_map_with_str_scores
 
         result = await redis_client.zscan(key1, initial_cursor, match="a")
         result_collection = result[result_collection_index]
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert convert_list_to_dict(result_collection) == {"a": "0"}
 
         # Result contains a subset of the key
@@ -8273,7 +8273,7 @@ class TestClusterRoutes:
         full_result_map.update(result_iteration_collection)
 
         # 0 is returned for the cursor of the last iteration.
-        while result_cursor != "0":
+        while result_cursor != b"0":
             next_result = await redis_client.zscan(key1, result_cursor)
             next_result_cursor = str(next_result[result_cursor_index])
             assert next_result_cursor != result_cursor
@@ -8290,17 +8290,17 @@ class TestClusterRoutes:
 
         # Test match pattern
         result = await redis_client.zscan(key1, initial_cursor, match="*")
-        assert result[result_cursor_index] != "0"
+        assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= default_count
 
         # Test count
         result = await redis_client.zscan(key1, initial_cursor, count=20)
-        assert result[result_cursor_index] != "0"
+        assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 20
 
         # Test count with match returns a non-empty list
         result = await redis_client.zscan(key1, initial_cursor, match="1*", count=20)
-        assert result[result_cursor_index] != "0"
+        assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 0
 
         # Exceptions
@@ -8341,25 +8341,25 @@ class TestClusterRoutes:
 
         # Empty set
         result = await redis_client.hscan(key1, initial_cursor)
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Negative cursor
         result = await redis_client.hscan(key1, "-1")
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Result contains the whole set
         assert await redis_client.hset(key1, char_map) == len(char_map)
         result = await redis_client.hscan(key1, initial_cursor)
         result_collection = result[result_collection_index]
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result_collection) == len(char_map) * 2
         assert convert_list_to_dict(result_collection) == char_map
 
         result = await redis_client.hscan(key1, initial_cursor, match="field a")
         result_collection = result[result_collection_index]
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert convert_list_to_dict(result_collection) == {"field a": "value a"}
 
         # Result contains a subset of the key
@@ -8374,7 +8374,7 @@ class TestClusterRoutes:
         full_result_map.update(result_iteration_collection)
 
         # 0 is returned for the cursor of the last iteration.
-        while result_cursor != "0":
+        while result_cursor != b"0":
             next_result = await redis_client.hscan(key1, result_cursor)
             next_result_cursor = str(next_result[result_cursor_index])
             assert next_result_cursor != result_cursor
@@ -8391,17 +8391,17 @@ class TestClusterRoutes:
 
         # Test match pattern
         result = await redis_client.hscan(key1, initial_cursor, match="*")
-        assert result[result_cursor_index] != "0"
+        assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= default_count
 
         # Test count
         result = await redis_client.hscan(key1, initial_cursor, count=20)
-        assert result[result_cursor_index] != "0"
+        assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 20
 
         # Test count with match returns a non-empty list
         result = await redis_client.hscan(key1, initial_cursor, match="1*", count=20)
-        assert result[result_cursor_index] != "0"
+        assert result[result_cursor_index] != b"0"
         assert len(result[result_collection_index]) >= 0
 
         # Exceptions
