@@ -2,6 +2,7 @@
 package glide.api.commands;
 
 import glide.api.models.GlideString;
+import glide.api.models.commands.scan.SScanOptions;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -162,6 +163,22 @@ public interface SetBaseCommands {
     CompletableFuture<Boolean[]> smismember(String key, String[] members);
 
     /**
+     * Checks whether each member is contained in the members of the set stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/smismember/">redis.io</a> for details.
+     * @param key The key of the set to check.
+     * @param members A list of members to check for existence in the set.
+     * @return An <code>array</code> of <code>Boolean</code> values, each indicating if the respective
+     *     member exists in the set.
+     * @example
+     *     <pre>{@code
+     * Boolean[] areMembers = client.smismembmer(gs("my_set"), new GlideString[] { gs("a"), gs("b"), gs("c") }).get();
+     * assert areMembers[0] && areMembers[1] && !areMembers[2]; // Only first two elements are present in "my_set"
+     * }</pre>
+     */
+    CompletableFuture<Boolean[]> smismember(GlideString key, GlideString[] members);
+
+    /**
      * Moves <code>member</code> from the set at <code>source</code> to the set at <code>destination
      * </code>, removing it from the source set. Creates a new destination set if needed. The
      * operation is atomic.
@@ -260,6 +277,22 @@ public interface SetBaseCommands {
     CompletableFuture<Set<String>> sdiff(String[] keys);
 
     /**
+     * Computes the difference between the first set and all the successive sets in <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://redis.io/commands/sdiff/">redis.io</a> for details.
+     * @param keys The keys of the sets to diff.
+     * @return A <code>Set</code> of elements representing the difference between the sets.<br>
+     *     If the a <code>key</code> does not exist, it is treated as an empty set.
+     * @example
+     *     <pre>{@code
+     * Set<GlideString> values = client.sdiff(new GlideString[] {gs("set1"), gs("set2")}).get();
+     * assert values.contains(gs("element")); // Indicates that "element" is present in "set1", but missing in "set2"
+     * }</pre>
+     */
+    CompletableFuture<Set<GlideString>> sdiff(GlideString[] keys);
+
+    /**
      * Stores the difference between the first set and all the successive sets in <code>keys</code>
      * into a new set at <code>destination</code>.
      *
@@ -276,6 +309,24 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> sdiffstore(String destination, String[] keys);
+
+    /**
+     * Stores the difference between the first set and all the successive sets in <code>keys</code>
+     * into a new set at <code>destination</code>.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same hash slot.
+     * @see <a href="https://redis.io/commands/sdiffstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys of the sets to diff.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sdiffstore(gs("mySet"), new GlideString[] { gs("set1"), gs("set2") }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sdiffstore(GlideString destination, GlideString[] keys);
 
     /**
      * Gets the intersection of all the given sets.
@@ -295,6 +346,25 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Set<String>> sinter(String[] keys);
+
+    /**
+     * Gets the intersection of all the given sets.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://redis.io/commands/sinter/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @return A <code>Set</code> of members which are present in all given sets.<br>
+     *     If one or more sets do not exist, an empty set will be returned.
+     * @example
+     *     <pre>{@code
+     * Set<GlideString> values = client.sinter(new GlideString[] {gs("set1"), gs("set2")}).get();
+     * assert values.contains(gs("element")); // Indicates that these sets have a common element
+     *
+     * Set<GlideString> values = client.sinter(new GlideString[] {gs("set1"), gs("nonExistingSet")}).get();
+     * assert values.size() == 0;
+     * }</pre>
+     */
+    CompletableFuture<Set<GlideString>> sinter(GlideString[] keys);
 
     /**
      * Gets the cardinality of the intersection of all the given sets.
@@ -323,6 +393,26 @@ public interface SetBaseCommands {
      * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
      * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
      * @param keys The keys of the sets.
+     * @return The cardinality of the intersection result. If one or more sets do not exist, <code>0
+     *     </code> is returned.
+     * @example
+     *     <pre>{@code
+     * Long response = client.sintercard(new GlideString[] {gs("set1"), gs("set2")}).get();
+     * assertEquals(2L, response);
+     *
+     * Long emptyResponse = client.sintercard(new GlideString[] {gs("set1"), gs("nonExistingSet")}).get();
+     * assertEquals(emptyResponse, 0L);
+     * }</pre>
+     */
+    CompletableFuture<Long> sintercard(GlideString[] keys);
+
+    /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
      * @param limit The limit for the intersection cardinality value.
      * @return The cardinality of the intersection result. If one or more sets do not exist, <code>0
      *     </code> is returned. If the intersection cardinality reaches <code>limit</code> partway
@@ -343,6 +433,32 @@ public interface SetBaseCommands {
     CompletableFuture<Long> sintercard(String[] keys, long limit);
 
     /**
+     * Gets the cardinality of the intersection of all the given sets.
+     *
+     * @since Redis 7.0 and above.
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @see <a href="https://redis.io/commands/sintercard/">redis.io</a> for details.
+     * @param keys The keys of the sets.
+     * @param limit The limit for the intersection cardinality value.
+     * @return The cardinality of the intersection result. If one or more sets do not exist, <code>0
+     *     </code> is returned. If the intersection cardinality reaches <code>limit</code> partway
+     *     through the computation, returns <code>limit</code> as the cardinality.
+     * @example
+     *     <pre>{@code
+     * Long response = client.sintercard(new GlideString[] {gs("set1"), gs("set2")}, 3).get();
+     * assertEquals(2L, response);
+     *
+     * Long emptyResponse = client.sintercard(new GlideString[] {gs("set1"), gs("nonExistingSet")}, 3).get();
+     * assertEquals(emptyResponse, 0L);
+     *
+     * // when intersection cardinality > limit, returns limit as cardinality
+     * Long response2 = client.sintercard(new GlideString[] {gs("set3"), gs("set4")}, 3).get();
+     * assertEquals(3L, response2);
+     * }</pre>
+     */
+    CompletableFuture<Long> sintercard(GlideString[] keys, long limit);
+
+    /**
      * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
      * new set at <code>destination</code>.
      *
@@ -359,6 +475,24 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> sinterstore(String destination, String[] keys);
+
+    /**
+     * Stores the members of the intersection of all given sets specified by <code>keys</code> into a
+     * new set at <code>destination</code>.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same hash slot.
+     * @see <a href="https://redis.io/commands/sinterstore/">redis.io</a> for details.
+     * @param destination The key of the destination set.
+     * @param keys The keys from which to retrieve the set members.
+     * @return The number of elements in the resulting set.
+     * @example
+     *     <pre>{@code
+     * Long length = client.sinterstore(gs("mySet"), new GlideString[] { gs("set1"), gs("set2") }).get();
+     * assert length == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> sinterstore(GlideString destination, GlideString[] keys);
 
     /**
      * Stores the members of the union of all given sets specified by <code>keys</code> into a new set
@@ -470,4 +604,61 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Set<String>> sunion(String[] keys);
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the set. The second element is always an <code>
+     *     Array</code> of the subset of the set held in <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 members
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *   result = client.sscan(key1, cursor).get();
+     *   cursor = result[0].toString();
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nSSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * } while (!cursor.equals("0"));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> sscan(String key, String cursor);
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @param sScanOptions The {@link SScanOptions}.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the set. The second element is always an <code>
+     *     Array</code> of the subset of the set held in <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 members
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *   result = client.sscan(key1, cursor, SScanOptions.builder().matchPattern("*").count(20L).build()).get();
+     *   cursor = result[0].toString();
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nSSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * } while (!cursor.equals("0"));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> sscan(String key, String cursor, SScanOptions sScanOptions);
 }

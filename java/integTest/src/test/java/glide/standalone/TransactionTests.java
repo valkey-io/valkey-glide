@@ -122,6 +122,27 @@ public class TransactionTests {
 
     @SneakyThrows
     @Test
+    public void test_transaction_large_values() {
+        int length = 1 << 25; // 33mb
+        String key = "0".repeat(length);
+        String value = "0".repeat(length);
+
+        Transaction transaction = new Transaction();
+        transaction.set(key, value);
+        transaction.get(key);
+
+        Object[] expectedResult =
+                new Object[] {
+                    OK, // transaction.set(key, value);
+                    value, // transaction.get(key);
+                };
+
+        Object[] result = client.exec(transaction).get();
+        assertArrayEquals(expectedResult, result);
+    }
+
+    @SneakyThrows
+    @Test
     public void test_standalone_transaction() {
         String key = UUID.randomUUID().toString();
         String value = UUID.randomUUID().toString();
@@ -470,5 +491,27 @@ public class TransactionTests {
 
             assertArrayEquals(expectedResults, client.exec(transaction2).get());
         }
+    }
+
+    @SneakyThrows
+    @Test
+    public void waitTest() {
+        // setup
+        String key = UUID.randomUUID().toString();
+        long numreplicas = 1L;
+        long timeout = 1000L;
+        Transaction transaction = new Transaction();
+
+        transaction.set(key, "value");
+        transaction.wait(numreplicas, timeout);
+
+        Object[] results = client.exec(transaction).get();
+        Object[] expectedResult =
+                new Object[] {
+                    OK, // set(key,  "value")
+                    0L, // wait(numreplicas, timeout)
+                };
+        assertEquals(expectedResult[0], results[0]);
+        assertTrue((long) expectedResult[1] <= (long) results[1]);
     }
 }

@@ -5,7 +5,7 @@ from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union
 
 from glide.async_commands.core import InfoSection
 from glide.constants import TResult
-from glide.redis_client import TRedisClient
+from glide.glide_client import TGlideClient
 from packaging import version
 
 T = TypeVar("T")
@@ -70,7 +70,7 @@ def get_random_string(length):
     return result_str
 
 
-async def check_if_server_version_lt(client: TRedisClient, min_version: str) -> bool:
+async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
     # TODO: change it to pytest fixture after we'll implement a sync client
     info_str = await client.info([InfoSection.SERVER])
     redis_version = parse_info_response(info_str).get("redis_version")
@@ -113,3 +113,18 @@ def compare_maps(
     if map1 is None or map2 is None:
         return False
     return json.dumps(map1) == json.dumps(map2)
+
+
+def generate_lua_lib_code(
+    lib_name: str, functions: Mapping[str, str], readonly: bool
+) -> str:
+    code = f"#!lua name={lib_name}\n"
+    for function_name, function_body in functions.items():
+        code += (
+            f"redis.register_function{{ function_name = '{function_name}', callback = function(keys, args) "
+            f"{function_body} end"
+        )
+        if readonly:
+            code += ", flags = { 'no-writes' }"
+        code += " }\n"
+    return code

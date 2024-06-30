@@ -8,6 +8,7 @@ import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ListBaseCommands.COUNT_FOR_LIST_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.commands.SetBaseCommands.SET_LIMIT_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
@@ -37,6 +38,10 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.SET_COMMAND_STRIN
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
+import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
+import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
+import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
+import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
@@ -117,6 +122,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoSearch;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoSearchStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
@@ -132,6 +139,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
+import static redis_request.RedisRequestOuterClass.RequestType.HScan;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
@@ -194,6 +202,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SScan;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
@@ -208,6 +217,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -246,6 +256,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZScan;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
@@ -275,6 +286,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -293,8 +305,16 @@ import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.function.FunctionLoadOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoSearchOptions;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchResultOptions;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -406,6 +426,28 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String> response = service.echo(message);
         String echo = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(message, echo);
+    }
+
+    @SneakyThrows
+    @Test
+    public void echo_binary_returns_success() {
+        // setup
+        GlideString message = gs("GLIDE FOR REDIS");
+        GlideString[] arguments = new GlideString[] {message};
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(message);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(Echo), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.echo(message);
+        GlideString echo = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -1551,6 +1593,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void incr_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long value = 10L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Incr), eq(new GlideString[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.incr(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void incrBy_returns_success() {
         // setup
         String key = "testKey";
@@ -1852,6 +1917,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void hget_binary_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString field = gs("field");
+        GlideString[] args = new GlideString[] {key, field};
+        GlideString value = gs("value");
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<GlideString>submitNewCommand(eq(HGet), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.hget(key, field);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void hset_success() {
         // setup
         String key = "testKey";
@@ -1859,6 +1947,31 @@ public class RedisClientTest {
         fieldValueMap.put("field1", "value1");
         fieldValueMap.put("field2", "value2");
         String[] args = new String[] {key, "field1", "value1", "field2", "value2"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<Long>submitNewCommand(eq(HSet), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hset(key, fieldValueMap);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hset_binary_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Map<GlideString, GlideString> fieldValueMap = new LinkedHashMap<>();
+        fieldValueMap.put(gs("field1"), gs("value1"));
+        fieldValueMap.put(gs("field2"), gs("value2"));
+        GlideString[] args =
+                new GlideString[] {key, gs("field1"), gs("value1"), gs("field2"), gs("value2")};
         Long value = 2L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -1954,6 +2067,29 @@ public class RedisClientTest {
         // setup
         String key = "testKey";
         String[] args = {key};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(HLen), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hlen(key);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hlen_binary_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] args = {key};
         Long value = 2L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -2595,6 +2731,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lindex_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long index = 2;
+        GlideString[] args = new GlideString[] {key, gs(Long.toString(index))};
+        GlideString value = gs("value");
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(LIndex), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.lindex(key, index);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void ltrim_returns_success() {
         // setup
         String key = "testKey";
@@ -3057,6 +3218,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sdiff_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        Set<GlideString> value = Set.of(gs("1"), gs("2"));
+
+        CompletableFuture<Set<GlideString>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Set<GlideString>>submitNewCommand(eq(SDiff), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Set<GlideString>> response = service.sdiff(keys);
+        Set<GlideString> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void smismember_returns_success() {
         // setup
         String key = "testKey";
@@ -3082,11 +3266,63 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void smismember_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] members = {gs("1"), gs("2")};
+        GlideString[] arguments = {gs("testKey"), gs("1"), gs("2")};
+        Boolean[] value = {true, false};
+
+        CompletableFuture<Boolean[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Boolean[]>submitNewCommand(eq(SMIsMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Boolean[]> response = service.smismember(key, members);
+        Boolean[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sdiffstore_returns_success() {
         // setup
         String destination = "dest";
         String[] keys = new String[] {"set1", "set2"};
         String[] arguments = {"dest", "set1", "set2"};
+
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SDiffStore), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sdiffstore(destination, keys);
+
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sdiffstore_binary_returns_success() {
+        // setup
+        GlideString destination = gs("dest");
+        GlideString[] keys = new GlideString[] {gs("set1"), gs("set2")};
+        GlideString[] arguments = {gs("dest"), gs("set1"), gs("set2")};
 
         Long value = 2L;
 
@@ -3180,11 +3416,59 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sinter_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        Set<GlideString> value = Set.of(gs("1"), gs("2"));
+
+        CompletableFuture<Set<GlideString>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Set<GlideString>>submitNewCommand(eq(SInter), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Set<GlideString>> response = service.sinter(keys);
+        Set<GlideString> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sinterstore_returns_success() {
         // setup
         String destination = "key";
         String[] keys = new String[] {"set1", "set2"};
         String[] args = new String[] {"key", "set1", "set2"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SInterStore), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sinterstore(destination, keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sinterstore_binary_returns_success() {
+        // setup
+        GlideString destination = gs("key");
+        GlideString[] keys = new GlideString[] {gs("set1"), gs("set2")};
+        GlideString[] args = new GlideString[] {gs("key"), gs("set1"), gs("set2")};
         Long value = 2L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6537,6 +6821,33 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void linsert_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        var position = BEFORE;
+        GlideString pivot = gs("pivot");
+        GlideString elem = gs("elem");
+        GlideString[] arguments = new GlideString[] {key, gs(position.toString()), pivot, elem};
+        long value = 42;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LInsert), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.linsert(key, position, pivot, elem);
+        long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void blpop_returns_success() {
         // setup
         String key = "key";
@@ -7180,7 +7491,7 @@ public class RedisClientTest {
         String member1 = "Catania";
         String member2 = "Palermo";
         GeoUnit geoUnit = GeoUnit.KILOMETERS;
-        String[] arguments = new String[] {key, member1, member2, GeoUnit.KILOMETERS.getRedisApi()};
+        String[] arguments = new String[] {key, member1, member2, GeoUnit.KILOMETERS.getValkeyAPI()};
         Double value = 166.2742;
 
         CompletableFuture<Double> testResponse = new CompletableFuture<>();
@@ -7208,7 +7519,7 @@ public class RedisClientTest {
         GlideString member2 = gs("Palermo");
         GeoUnit geoUnit = GeoUnit.KILOMETERS;
         GlideString[] arguments =
-                new GlideString[] {key, member1, member2, gs(GeoUnit.KILOMETERS.getRedisApi())};
+                new GlideString[] {key, member1, member2, gs(GeoUnit.KILOMETERS.getValkeyAPI())};
         Double value = 166.2742;
 
         CompletableFuture<Double> testResponse = new CompletableFuture<>();
@@ -8164,6 +8475,33 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lmove_binary_returns_success() {
+        // setup
+        GlideString key1 = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        ListDirection wherefrom = ListDirection.LEFT;
+        ListDirection whereto = ListDirection.RIGHT;
+        GlideString[] arguments =
+                new GlideString[] {key1, key2, gs(wherefrom.toString()), gs(whereto.toString())};
+        GlideString value = gs("one");
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(LMove), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.lmove(key1, key2, wherefrom, whereto);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lset_returns_success() {
         // setup
         String key = "testKey";
@@ -8239,6 +8577,34 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void blmove_binary_returns_success() {
+        // setup
+        GlideString key1 = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        ListDirection wherefrom = ListDirection.LEFT;
+        ListDirection whereto = ListDirection.RIGHT;
+        GlideString[] arguments =
+                new GlideString[] {key1, key2, gs(wherefrom.toString()), gs(whereto.toString()), gs("0.1")};
+        GlideString value = gs("one");
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(BLMove), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.blmove(key1, key2, wherefrom, whereto, 0.1);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sintercard_returns_success() {
         // setup
         String key1 = "testKey";
@@ -8255,6 +8621,31 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.sintercard(new String[] {key1, key2});
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sintercard_binary_returns_success() {
+        // setup
+        GlideString key1 = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments = new GlideString[] {gs("2"), key1, key2};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sintercard(new GlideString[] {key1, key2});
         Long payload = response.get();
 
         // verify
@@ -8281,6 +8672,33 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.sintercard(new String[] {key1, key2}, limit);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sintercard_with_limit_binary_returns_success() {
+        // setup
+        GlideString key1 = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        long limit = 1L;
+        GlideString[] arguments =
+                new GlideString[] {gs("2"), key1, key2, gs(SET_LIMIT_REDIS_API), gs("1")};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SInterCard), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sintercard(new GlideString[] {key1, key2}, limit);
         Long payload = response.get();
 
         // verify
@@ -9045,6 +9463,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sscan_returns_success() {
+        // setup
+        String key = "testKey";
+        String cursor = "0";
+        String[] arguments = new String[] {key, cursor};
+        Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(SScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.sscan(key, cursor);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sortReadOnly_with_options_returns_success() {
         // setup
         String[] result = new String[] {"1", "2", "3"};
@@ -9120,5 +9563,531 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void wait_returns_success() {
+        // setup
+        long numreplicas = 1L;
+        long timeout = 1000L;
+        Long result = 5L;
+        String[] args = new String[] {"1", "1000"};
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Wait), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.wait(numreplicas, timeout);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sscan_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String cursor = "0";
+        String[] arguments =
+                new String[] {key, cursor, MATCH_OPTION_STRING, "*", COUNT_OPTION_STRING, "1"};
+        Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(SScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.sscan(key, cursor, SScanOptions.builder().matchPattern("*").count(1L).build());
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zscan_returns_success() {
+        // setup
+        String key = "testKey";
+        String cursor = "0";
+        String[] arguments = new String[] {key, cursor};
+        Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.zscan(key, cursor);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zscan_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String cursor = "0";
+        String[] arguments =
+                new String[] {key, cursor, MATCH_OPTION_STRING, "*", COUNT_OPTION_STRING, "1"};
+        Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.zscan(key, cursor, ZScanOptions.builder().matchPattern("*").count(1L).build());
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hscan_returns_success() {
+        // setup
+        String key = "testKey";
+        String cursor = "0";
+        String[] arguments = new String[] {key, cursor};
+        Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(HScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.hscan(key, cursor);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hscan_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String cursor = "0";
+        String[] arguments =
+                new String[] {key, cursor, MATCH_OPTION_STRING, "*", COUNT_OPTION_STRING, "1"};
+        Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(HScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.hscan(key, cursor, HScanOptions.builder().matchPattern("*").count(1L).build());
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    private static List<Arguments> getGeoSearchArguments() {
+        return List.of(
+                Arguments.of(
+                        "geosearch_from_member_no_options",
+                        new GeoSearchOrigin.MemberOrigin("member"),
+                        new GeoSearchShape(1L, GeoUnit.KILOMETERS),
+                        null,
+                        new String[] {
+                            "GeoSearchTestKey", FROMMEMBER_VALKEY_API, "member", "BYRADIUS", "1.0", "km"
+                        },
+                        new String[] {"place1", "place2"}),
+                Arguments.of(
+                        "geosearch_from_member_ASC",
+                        new GeoSearchOrigin.MemberOrigin("member"),
+                        new GeoSearchShape(1L, 1L, GeoUnit.KILOMETERS),
+                        new GeoSearchResultOptions(SortOrder.ASC),
+                        new String[] {
+                            "GeoSearchTestKey",
+                            FROMMEMBER_VALKEY_API,
+                            "member",
+                            "BYBOX",
+                            "1.0",
+                            "1.0",
+                            "km",
+                            "ASC"
+                        },
+                        new String[] {"place2", "place1"}),
+                Arguments.of(
+                        "geosearch_from_lonlat_with_count",
+                        new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
+                        new GeoSearchShape(1L, GeoUnit.KILOMETERS),
+                        new GeoSearchResultOptions(2),
+                        new String[] {
+                            "GeoSearchTestKey",
+                            FROMLONLAT_VALKEY_API,
+                            "1.0",
+                            "1.0",
+                            "BYRADIUS",
+                            "1.0",
+                            "km",
+                            COUNT_REDIS_API,
+                            "2"
+                        },
+                        new String[] {"place3", "place4"}),
+                Arguments.of(
+                        "geosearch_from_lonlat_with_count_any_DESC",
+                        new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
+                        new GeoSearchShape(1L, 1L, GeoUnit.KILOMETERS),
+                        new GeoSearchResultOptions(SortOrder.DESC, 2, true),
+                        new String[] {
+                            "GeoSearchTestKey",
+                            FROMLONLAT_VALKEY_API,
+                            "1.0",
+                            "1.0",
+                            "BYBOX",
+                            "1.0",
+                            "1.0",
+                            "km",
+                            COUNT_REDIS_API,
+                            "2",
+                            "ANY",
+                            "DESC"
+                        },
+                        new String[] {"place4", "place3"}));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{1}")
+    @MethodSource("getGeoSearchArguments")
+    public void geosearch_returns_success(
+            String testName,
+            GeoSearchOrigin.SearchOrigin origin,
+            GeoSearchShape shape,
+            GeoSearchResultOptions resultOptions,
+            String[] args,
+            String[] expected) {
+        // setup
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(expected);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(GeoSearch), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // Exercise
+        CompletableFuture<String[]> response =
+                resultOptions == null
+                        ? service.geosearch("GeoSearchTestKey", origin, shape)
+                        : service.geosearch("GeoSearchTestKey", origin, shape, resultOptions);
+        String[] payload = response.get();
+
+        // Verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(expected, payload);
+    }
+
+    private static List<Arguments> getGeoSearchWithOptionsArguments() {
+        return List.of(
+                Arguments.of(
+                        "geosearch_from_member_with_options",
+                        new GeoSearchOrigin.MemberOrigin("member"),
+                        new GeoSearchShape(1L, GeoUnit.KILOMETERS),
+                        GeoSearchOptions.builder().withcoord().withdist().withhash().build(),
+                        null,
+                        new String[] {
+                            "GeoSearchTestKey",
+                            FROMMEMBER_VALKEY_API,
+                            "member",
+                            "BYRADIUS",
+                            "1.0",
+                            "km",
+                            "WITHDIST",
+                            "WITHCOORD",
+                            "WITHHASH"
+                        },
+                        new Object[] {
+                            new Object[] {
+                                "Catania",
+                                new Object[] {
+                                    56.4413, 3479447370796909L, new Object[] {15.087267458438873, 37.50266842333162}
+                                }
+                            },
+                            new Object[] {
+                                "Palermo",
+                                new Object[] {
+                                    190.4424, 3479099956230698L, new Object[] {13.361389338970184, 38.1155563954963}
+                                }
+                            }
+                        }),
+                Arguments.of(
+                        "geosearch_from_member_with_options_and_SORT_and_COUNT_ANY",
+                        new GeoSearchOrigin.MemberOrigin("member"),
+                        new GeoSearchShape(1L, 1L, GeoUnit.KILOMETERS),
+                        GeoSearchOptions.builder().withcoord().withdist().withhash().build(),
+                        new GeoSearchResultOptions(SortOrder.ASC, 2, true),
+                        new String[] {
+                            "GeoSearchTestKey",
+                            FROMMEMBER_VALKEY_API,
+                            "member",
+                            "BYBOX",
+                            "1.0",
+                            "1.0",
+                            "km",
+                            "WITHDIST",
+                            "WITHCOORD",
+                            "WITHHASH",
+                            "COUNT",
+                            "2",
+                            "ANY",
+                            "ASC"
+                        },
+                        new Object[] {
+                            new Object[] {
+                                "Catania",
+                                new Object[] {
+                                    56.4413, 3479447370796909L, new Object[] {15.087267458438873, 37.50266842333162}
+                                }
+                            }
+                        }));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{2}")
+    @MethodSource("getGeoSearchWithOptionsArguments")
+    public void geosearch_with_options_returns_success(
+            String testName,
+            GeoSearchOrigin.SearchOrigin origin,
+            GeoSearchShape shape,
+            GeoSearchOptions options,
+            GeoSearchResultOptions resultOptions,
+            String[] args,
+            Object[] expected) {
+        // setup
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(expected);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(GeoSearch), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // Exercise
+        CompletableFuture<Object[]> response =
+                resultOptions == null
+                        ? service.geosearch("GeoSearchTestKey", origin, shape, options)
+                        : service.geosearch("GeoSearchTestKey", origin, shape, options, resultOptions);
+        Object[] payload = response.get();
+
+        // Verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(expected, payload);
+    }
+
+    private static List<Arguments> getGeoSearchStoreArguments() {
+        return List.of(
+                Arguments.of(
+                        "geosearchstore_from_member_no_options",
+                        new GeoSearchOrigin.MemberOrigin("member"),
+                        new GeoSearchShape(1L, GeoUnit.KILOMETERS),
+                        null,
+                        new String[] {
+                            "testDestination",
+                            "testSource",
+                            FROMMEMBER_VALKEY_API,
+                            "member",
+                            "BYRADIUS",
+                            "1.0",
+                            "km"
+                        },
+                        1L),
+                Arguments.of(
+                        "geosearchstore_from_member_ASC",
+                        new GeoSearchOrigin.MemberOrigin("member"),
+                        new GeoSearchShape(1L, 1L, GeoUnit.KILOMETERS),
+                        new GeoSearchResultOptions(SortOrder.ASC),
+                        new String[] {
+                            "testDestination",
+                            "testSource",
+                            FROMMEMBER_VALKEY_API,
+                            "member",
+                            "BYBOX",
+                            "1.0",
+                            "1.0",
+                            "km",
+                            "ASC"
+                        },
+                        2L),
+                Arguments.of(
+                        "geosearchstore_from_lonlat_with_count",
+                        new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
+                        new GeoSearchShape(1L, GeoUnit.KILOMETERS),
+                        new GeoSearchResultOptions(2),
+                        new String[] {
+                            "testDestination",
+                            "testSource",
+                            FROMLONLAT_VALKEY_API,
+                            "1.0",
+                            "1.0",
+                            "BYRADIUS",
+                            "1.0",
+                            "km",
+                            COUNT_REDIS_API,
+                            "2"
+                        },
+                        3L),
+                Arguments.of(
+                        "geosearchstore_from_lonlat_with_count_any_DESC",
+                        new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
+                        new GeoSearchShape(1L, 1L, GeoUnit.KILOMETERS),
+                        new GeoSearchResultOptions(SortOrder.DESC, 2, true),
+                        new String[] {
+                            "testDestination",
+                            "testSource",
+                            FROMLONLAT_VALKEY_API,
+                            "1.0",
+                            "1.0",
+                            "BYBOX",
+                            "1.0",
+                            "1.0",
+                            "km",
+                            COUNT_REDIS_API,
+                            "2",
+                            "ANY",
+                            "DESC"
+                        },
+                        4L));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{3}")
+    @MethodSource("getGeoSearchStoreArguments")
+    public void geosearchstore_returns_success(
+            String testName,
+            GeoSearchOrigin.SearchOrigin origin,
+            GeoSearchShape shape,
+            GeoSearchResultOptions resultOptions,
+            String[] args,
+            Long expected) {
+        // setup
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(expected);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(GeoSearchStore), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // Exercise
+        CompletableFuture<Long> response =
+                resultOptions == null
+                        ? service.geosearchstore("testDestination", "testSource", origin, shape)
+                        : service.geosearchstore("testDestination", "testSource", origin, shape, resultOptions);
+        Long payload = response.get();
+
+        // Verify
+        assertEquals(testResponse, response);
+        assertEquals(expected, payload);
+    }
+
+    private static List<Arguments> getGeoSearchStoreWithOptionsArguments() {
+        return List.of(
+                Arguments.of(
+                        "geosearchstore_from_member_with_options",
+                        new GeoSearchOrigin.MemberOrigin("member"),
+                        new GeoSearchShape(1L, GeoUnit.KILOMETERS),
+                        GeoSearchStoreOptions.builder().build(),
+                        null,
+                        new String[] {
+                            "testDestination",
+                            "testSource",
+                            FROMMEMBER_VALKEY_API,
+                            "member",
+                            "BYRADIUS",
+                            "1.0",
+                            "km"
+                        },
+                        1L),
+                Arguments.of(
+                        "geosearchstore_from_member_with_options_and_SORT_and_COUNT_ANY",
+                        new GeoSearchOrigin.MemberOrigin("member"),
+                        new GeoSearchShape(1L, 1L, GeoUnit.KILOMETERS),
+                        GeoSearchStoreOptions.builder().storedist().build(),
+                        new GeoSearchResultOptions(SortOrder.ASC, 2, true),
+                        new String[] {
+                            "testDestination",
+                            "testSource",
+                            FROMMEMBER_VALKEY_API,
+                            "member",
+                            "BYBOX",
+                            "1.0",
+                            "1.0",
+                            "km",
+                            "STOREDIST",
+                            "COUNT",
+                            "2",
+                            "ANY",
+                            "ASC"
+                        },
+                        2L));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{4}")
+    @MethodSource("getGeoSearchStoreWithOptionsArguments")
+    public void geosearchstore_with_options_returns_success(
+            String testName,
+            GeoSearchOrigin.SearchOrigin origin,
+            GeoSearchShape shape,
+            GeoSearchStoreOptions options,
+            GeoSearchResultOptions resultOptions,
+            String[] args,
+            Long expected) {
+        // setup
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(expected);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(GeoSearchStore), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // Exercise
+        CompletableFuture<Long> response =
+                resultOptions == null
+                        ? service.geosearchstore("testDestination", "testSource", origin, shape, options)
+                        : service.geosearchstore(
+                                "testDestination", "testSource", origin, shape, options, resultOptions);
+        Long payload = response.get();
+
+        // Verify
+        assertEquals(testResponse, response);
+        assertEquals(expected, payload);
     }
 }

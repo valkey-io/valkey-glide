@@ -237,6 +237,11 @@ enum RequestType {
     FunctionDump = 196;
     FunctionRestore = 197;
     XPending = 198;
+    XGroupSetId = 199;
+    SScan = 200;
+    ZScan = 201;
+    HScan = 202;
+    Wait = 208;
 }
 
 message Command {

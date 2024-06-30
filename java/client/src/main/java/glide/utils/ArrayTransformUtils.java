@@ -30,15 +30,15 @@ public class ArrayTransformUtils {
     }
 
     /**
-     * Converts a map of GlideString keys and values of any type that can be converted to string in to
-     * an array of strings with alternating keys and values.
+     * Converts a map of GlideString keys and values of any type in to an array of GlideStrings with
+     * alternating keys and values.
      *
      * @param args Map of GlideString keys to values of any type to convert.
-     * @return Array of GlideString [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
+     * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
      */
-    public static GlideString[] convertMapToKeyValueStringArrayBinary(Map<GlideString, ?> args) {
+    public static GlideString[] convertMapToKeyValueGlideStringArray(Map<GlideString, ?> args) {
         return args.entrySet().stream()
-                .flatMap(entry -> Stream.of(entry.getKey(), gs(entry.getValue().toString())))
+                .flatMap(entry -> Stream.of(entry.getKey(), GlideString.gs(entry.getValue().toString())))
                 .toArray(GlideString[]::new);
     }
 

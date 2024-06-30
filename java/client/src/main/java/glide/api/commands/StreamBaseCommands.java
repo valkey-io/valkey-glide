@@ -590,7 +590,7 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param groupname The newly created consumer group name.
+     * @param groupname The consumer group name to delete.
      * @return <code>true</code> if the consumer group is destroyed. Otherwise, <code>false</code>.
      * @example
      *     <pre>{@code
@@ -623,7 +623,7 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer to delete.
      * @return The number of pending messages the <code>consumer</code> had before it was deleted.
      * @example
      *     <pre>{@code
@@ -645,16 +645,15 @@ public interface StreamBaseCommands {
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer name.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code> with a value of <code>null</code> if the stream is empty.
+     *      Returns <code>null</code> if there is no stream that can be served.
      * @example
      *     <pre>{@code
      * // create a new stream at "mystream", with stream id "1-0"
-     * Map<String, String> xreadKeys = Map.of("myfield", "mydata");
      * String streamId = client.xadd("mystream", Map.of("myfield", "mydata"), StreamAddOptions.builder().id("1-0").build()).get();
-     * assert client.xgroupCreate("mystream", "mygroup").get().equals("OK"); // create the consumer group "mygroup"
+     * assert client.xgroupCreate("mystream", "mygroup", "0-0").get().equals("OK"); // create the consumer group "mygroup"
      * Map<String, Map<String, String[][]>> streamReadResponse = client.xreadgroup(Map.of("mystream", ">"), "mygroup", "myconsumer").get();
      * // Returns "mystream": "1-0": {{"myfield", "mydata"}}
      * for (var keyEntry : streamReadResponse.entrySet()) {
@@ -665,10 +664,6 @@ public interface StreamBaseCommands {
      *         );
      *     }
      * }
-     * assert client.xdel("mystream", "1-0").get() == 1L;
-     * client.xreadgroup(Map.of("mystream", "0"), "mygroup", "myconsumer").get();
-     * // Returns "mystream": "1-0": null
-     * assert streamReadResponse.get("mystream").get("1-0") == null;
      * </pre>
      */
     CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
@@ -684,17 +679,16 @@ public interface StreamBaseCommands {
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code> with a value of <code>null</code> if the stream is empty.
+     *      Returns <code>null</code> if the {@link StreamReadGroupOptions#block} option is given and a timeout occurs, or if there is no stream that can be served.
      * @example
      *     <pre>{@code
      * // create a new stream at "mystream", with stream id "1-0"
-     * Map<String, String> xreadKeys = Map.of("myfield", "mydata");
      * String streamId = client.xadd("mystream", Map.of("myfield", "mydata"), StreamAddOptions.builder().id("1-0").build()).get();
-     * assert client.xgroupCreate("mystream", "mygroup").get().equals("OK"); // create the consumer group "mygroup"
+     * assert client.xgroupCreate("mystream", "mygroup", "0-0").get().equals("OK"); // create the consumer group "mygroup"
      * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(1).build(); // retrieves only a single message at a time
      * Map<String, Map<String, String[][]>> streamReadResponse = client.xreadgroup(Map.of("mystream", ">"), "mygroup", "myconsumer", options).get();
      * // Returns "mystream": "1-0": {{"myfield", "mydata"}}
@@ -706,12 +700,6 @@ public interface StreamBaseCommands {
      *         );
      *     }
      * }
-     * assert client.xdel("mystream", "1-0").get() == 1L;
-     * // read the first 10 items and acknowledge (ACK) them:
-     * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(10L).noack().build();
-     * streamReadResponse = client.xreadgroup(Map.of("mystream", "0"), "mygroup", "myconsumer", options).get();
-     * // Returns "mystream": "1-0": null
-     * assert streamReadResponse.get("mystream").get("1-0") == null;
      * </pre>
      */
     CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
