@@ -758,7 +758,7 @@ public class CommandTests {
                         clusterClient.brpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
                 Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of(
-                        "blpop",
+                        "blpop binary",
                         null,
                         clusterClient.blpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
                 Arguments.of("pfcount", null, clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
