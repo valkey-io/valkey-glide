@@ -91,8 +91,7 @@ from tests.utils.utils import (
     check_if_server_version_lt,
     compare_maps,
     convert_bytes_to_string_dict,
-    convert_str_to_bytes_list,
-    convert_str_to_bytes_set,
+    convert_string_to_bytes_dict,
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
@@ -111,8 +110,6 @@ class TestGlideClients:
             # TODO: change it to pytest fixture after we'll implement a sync client
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         info = await redis_client.custom_command(["CLIENT", "INFO"])
-        # We check bytes string because custom_command will always return so.
-        # To get String, we use redis client's info command.
         assert isinstance(info, bytes)
         info_str = info.decode()
         assert "lib-name=GlidePy" in info_str
@@ -394,8 +391,9 @@ class TestCommands:
         cluster_mode = parse_info_response(info_res)["redis_mode"]
         expected_cluster_mode = isinstance(redis_client, GlideClusterClient)
         assert cluster_mode == "cluster" if expected_cluster_mode else "standalone"
-        info_res = get_first_result(await redis_client.info([InfoSection.REPLICATION]))
-        info = info_res.decode()
+        info = get_first_result(
+            await redis_client.info([InfoSection.REPLICATION])
+        ).decode()
         assert "# Replication" in info
         assert "# Errorstats" not in info
 
@@ -411,7 +409,7 @@ class TestCommands:
             expected_num_of_results = cluster_nodes.count(b"master")
             assert len(info_result) == expected_num_of_results
         info_result = get_first_result(info_result)
-        assert "# Memory" in info_result.decode()
+        assert b"# Memory" in info_result
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -1043,10 +1041,10 @@ class TestCommands:
 
         assert await redis_client.lpush(key, value_list) == 4
         assert await redis_client.lpop(key) == value_list[-1].encode("utf-8")
-        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_dict(
             value_list[-2::-1]
         )
-        assert await redis_client.lpop_count(key, 2) == convert_str_to_bytes_list(
+        assert await redis_client.lpop_count(key, 2) == convert_string_to_bytes_dict(
             value_list[-2:0:-1]
         )
         assert await redis_client.lrange("non_existing_key", 0, -1) == []
@@ -1084,7 +1082,7 @@ class TestCommands:
         # existing key
         assert await redis_client.lpush(key1, ["0"]) == 1
         assert await redis_client.lpushx(key1, ["1", "2", "3"]) == 4
-        assert await redis_client.lrange(key1, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_dict(
             ["3", "2", "1", "0"]
         )
         # key exists, but not a list
@@ -1105,9 +1103,9 @@ class TestCommands:
         value_list = [value1, value2]
 
         assert await redis_client.lpush(key1, value_list) == 2
-        assert await redis_client.blpop([key1, key2], 0.5) == convert_str_to_bytes_list(
-            [key1, value2]
-        )
+        assert await redis_client.blpop(
+            [key1, key2], 0.5
+        ) == convert_string_to_bytes_dict([key1, value2])
         # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
         assert await redis_client.blpop(["non_existent_key"], 0.5) is None
 
@@ -1231,7 +1229,7 @@ class TestCommands:
         assert await redis_client.rpush(key, value_list) == 4
         assert await redis_client.rpop(key) == value_list[-1].encode("utf-8")
 
-        assert await redis_client.rpop_count(key, 2) == convert_str_to_bytes_list(
+        assert await redis_client.rpop_count(key, 2) == convert_string_to_bytes_dict(
             value_list[-2:0:-1]
         )
         assert await redis_client.rpop("non_existing_key") is None
@@ -1262,7 +1260,7 @@ class TestCommands:
         # existing key
         assert await redis_client.rpush(key1, ["0"]) == 1
         assert await redis_client.rpushx(key1, ["1", "2", "3"]) == 4
-        assert await redis_client.lrange(key1, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_dict(
             ["0", "1", "2", "3"]
         )
         # key existing, but it is not a list
@@ -1284,9 +1282,9 @@ class TestCommands:
 
         assert await redis_client.lpush(key1, value_list) == 2
         # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
-        assert await redis_client.brpop([key1, key2], 0.5) == convert_str_to_bytes_list(
-            [key1, value1]
-        )
+        assert await redis_client.brpop(
+            [key1, key2], 0.5
+        ) == convert_string_to_bytes_dict([key1, value1])
 
         assert await redis_client.brpop(["non_existent_key"], 0.5) is None
 
@@ -1312,7 +1310,7 @@ class TestCommands:
         assert await redis_client.lpush(key1, ["4", "3", "2", "1"]) == 4
         assert await redis_client.linsert(key1, InsertPosition.BEFORE, "2", "1.5") == 5
         assert await redis_client.linsert(key1, InsertPosition.AFTER, "3", "3.5") == 6
-        assert await redis_client.lrange(key1, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_dict(
             [
                 "1",
                 "1.5",
@@ -1351,10 +1349,10 @@ class TestCommands:
             await redis_client.lmove(key1, key2, ListDirection.LEFT, ListDirection.LEFT)
             == b"1"
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_dict(
             ["2"]
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_dict(
             ["1", "3", "4"]
         )
 
@@ -1366,7 +1364,7 @@ class TestCommands:
             == b"2"
         )
         assert await redis_client.lrange(key1, 0, -1) == []
-        assert await redis_client.lrange(key2, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_dict(
             ["1", "3", "4", "2"]
         )
 
@@ -1377,10 +1375,10 @@ class TestCommands:
             )
             == b"2"
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_dict(
             ["1", "3", "4"]
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_dict(
             ["2"]
         )
 
@@ -1391,10 +1389,10 @@ class TestCommands:
             )
             == b"4"
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_dict(
             ["1", "3"]
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_dict(
             ["2", "4"]
         )
 
@@ -1436,10 +1434,10 @@ class TestCommands:
             )
             == b"1"
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_dict(
             ["2"]
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_dict(
             ["1", "3", "4"]
         )
 
@@ -1451,7 +1449,7 @@ class TestCommands:
             == b"2"
         )
         assert await redis_client.lrange(key1, 0, -1) == []
-        assert await redis_client.lrange(key2, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_dict(
             ["1", "3", "4", "2"]
         )
 
@@ -1462,10 +1460,10 @@ class TestCommands:
             )
             == b"2"
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_dict(
             ["1", "3", "4"]
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_dict(
             ["2"]
         )
 
@@ -1476,10 +1474,10 @@ class TestCommands:
             )
             == b"4"
         )
-        assert await redis_client.lrange(key2, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key2, 0, -1) == convert_string_to_bytes_dict(
             ["1", "3"]
         )
-        assert await redis_client.lrange(key1, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key1, 0, -1) == convert_string_to_bytes_dict(
             ["2", "4"]
         )
 
@@ -1545,7 +1543,7 @@ class TestCommands:
         assert await redis_client.lset(key, 0, element) == OK
 
         values = [element] + values[:-1][::-1]
-        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_dict(
             values
         )
 
@@ -1553,7 +1551,7 @@ class TestCommands:
         assert await redis_client.lset(key, -1, element) == OK
 
         values[-1] = element
-        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_dict(
             values
         )
 
@@ -1567,7 +1565,7 @@ class TestCommands:
         assert await redis_client.srem(key, ["member4", "nonExistingMember"]) == 1
 
         assert set(await redis_client.smembers(key)) == set(
-            convert_str_to_bytes_list(value_list[:3])
+            convert_string_to_bytes_dict(value_list[:3])
         )
 
         assert await redis_client.srem(key, ["member1"]) == 1
@@ -1628,7 +1626,7 @@ class TestCommands:
         member2 = get_random_string(5)
         member3 = get_random_string(5)
         assert await redis_client.sadd(key, [member, member2, member3]) == 3
-        assert await redis_client.spop_count(key, 4) == convert_str_to_bytes_set(
+        assert await redis_client.spop_count(key, 4) == convert_string_to_bytes_dict(
             {member, member2, member3}
         )
 
@@ -1651,19 +1649,27 @@ class TestCommands:
 
         # move an element
         assert await redis_client.smove(key1, key2, "1") is True
-        assert await redis_client.smembers(key1) == convert_str_to_bytes_set({"2", "3"})
-        assert await redis_client.smembers(key2) == convert_str_to_bytes_set(
+        assert await redis_client.smembers(key1) == convert_string_to_bytes_dict(
+            {"2", "3"}
+        )
+        assert await redis_client.smembers(key2) == convert_string_to_bytes_dict(
             {"1", "2", "3"}
         )
 
         # moved element already exists in the destination set
         assert await redis_client.smove(key2, key1, "2") is True
-        assert await redis_client.smembers(key1) == convert_str_to_bytes_set({"2", "3"})
-        assert await redis_client.smembers(key2) == convert_str_to_bytes_set({"1", "3"})
+        assert await redis_client.smembers(key1) == convert_string_to_bytes_dict(
+            {"2", "3"}
+        )
+        assert await redis_client.smembers(key2) == convert_string_to_bytes_dict(
+            {"1", "3"}
+        )
 
         # attempt to move from a non-existing key
         assert await redis_client.smove(non_existing_key, key1, "4") is False
-        assert await redis_client.smembers(key1) == convert_str_to_bytes_set({"2", "3"})
+        assert await redis_client.smembers(key1) == convert_string_to_bytes_dict(
+            {"2", "3"}
+        )
 
         # move to a new set
         assert await redis_client.smove(key1, key3, "2")
@@ -1705,7 +1711,7 @@ class TestCommands:
         # non-existing key returns the set of existing keys
         assert await redis_client.sunion(
             [key1, non_existing_key]
-        ) == convert_str_to_bytes_set(set(member1_list))
+        ) == convert_string_to_bytes_dict(set(member1_list))
 
         # non-set key
         assert await redis_client.set(key2, "value") == OK
@@ -1728,19 +1734,19 @@ class TestCommands:
 
         # store union in new key
         assert await redis_client.sunionstore(key4, [key1, key2]) == 5
-        assert await redis_client.smembers(key4) == convert_str_to_bytes_set(
+        assert await redis_client.smembers(key4) == convert_string_to_bytes_dict(
             {"a", "b", "c", "d", "e"}
         )
 
         # overwrite existing set
         assert await redis_client.sunionstore(key1, [key4, key2]) == 5
-        assert await redis_client.smembers(key1) == convert_str_to_bytes_set(
+        assert await redis_client.smembers(key1) == convert_string_to_bytes_dict(
             {"a", "b", "c", "d", "e"}
         )
 
         # overwrite one of the source keys
         assert await redis_client.sunionstore(key2, [key4, key2]) == 5
-        assert await redis_client.smembers(key1) == convert_str_to_bytes_set(
+        assert await redis_client.smembers(key1) == convert_string_to_bytes_dict(
             {"a", "b", "c", "d", "e"}
         )
 
@@ -1755,7 +1761,7 @@ class TestCommands:
 
         # overwrite destination when destination is not a set
         assert await redis_client.sunionstore(string_key, [key1, key3]) == 7
-        assert await redis_client.smembers(string_key) == convert_str_to_bytes_set(
+        assert await redis_client.smembers(string_key) == convert_string_to_bytes_dict(
             {
                 "a",
                 "b",
@@ -1779,7 +1785,7 @@ class TestCommands:
         # positive test case
         assert await redis_client.sadd(key1, member1_list) == 3
         assert await redis_client.sadd(key2, member2_list) == 3
-        assert await redis_client.sinter([key1, key2]) == set([b"c"])
+        assert await redis_client.sinter([key1, key2]) == {b"c"}
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
@@ -1895,16 +1901,16 @@ class TestCommands:
         assert await redis_client.sadd(key1, ["a", "b", "c"]) == 3
         assert await redis_client.sadd(key2, ["c", "d", "e"]) == 3
 
-        assert await redis_client.sdiff([key1, key2]) == convert_str_to_bytes_set(
+        assert await redis_client.sdiff([key1, key2]) == convert_string_to_bytes_dict(
             {"a", "b"}
         )
-        assert await redis_client.sdiff([key2, key1]) == convert_str_to_bytes_set(
+        assert await redis_client.sdiff([key2, key1]) == convert_string_to_bytes_dict(
             {"d", "e"}
         )
 
         assert await redis_client.sdiff(
             [key1, non_existing_key]
-        ) == convert_str_to_bytes_set({"a", "b", "c"})
+        ) == convert_string_to_bytes_dict({"a", "b", "c"})
         assert await redis_client.sdiff([non_existing_key, key1]) == set()
 
         # invalid argument - key list must not be empty
@@ -1930,11 +1936,15 @@ class TestCommands:
 
         # Store diff in new key
         assert await redis_client.sdiffstore(key3, [key1, key2]) == 2
-        assert await redis_client.smembers(key3) == convert_str_to_bytes_set({"a", "b"})
+        assert await redis_client.smembers(key3) == convert_string_to_bytes_dict(
+            {"a", "b"}
+        )
 
         # Overwrite existing set
         assert await redis_client.sdiffstore(key3, [key2, key1]) == 2
-        assert await redis_client.smembers(key3) == convert_str_to_bytes_set({"d", "e"})
+        assert await redis_client.smembers(key3) == convert_string_to_bytes_dict(
+            {"d", "e"}
+        )
 
         # Overwrite one of the source sets
         assert await redis_client.sdiffstore(key3, [key2, key3]) == 1
@@ -1942,7 +1952,7 @@ class TestCommands:
 
         # Diff between non-empty set and empty set
         assert await redis_client.sdiffstore(key3, [key1, non_existing_key]) == 3
-        assert await redis_client.smembers(key3) == convert_str_to_bytes_set(
+        assert await redis_client.smembers(key3) == convert_string_to_bytes_dict(
             {"a", "b", "c"}
         )
 
@@ -1961,7 +1971,7 @@ class TestCommands:
 
         # Overwrite a key holding a non-set value
         assert await redis_client.sdiffstore(string_key, [key1, key2]) == 2
-        assert await redis_client.smembers(string_key) == convert_str_to_bytes_set(
+        assert await redis_client.smembers(string_key) == convert_string_to_bytes_dict(
             {"a", "b"}
         )
 
@@ -1994,7 +2004,7 @@ class TestCommands:
 
         assert await redis_client.lpush(key, value_list) == 4
         assert await redis_client.ltrim(key, 0, 1) == OK
-        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_dict(
             ["value1", "value2"]
         )
 
@@ -2017,12 +2027,12 @@ class TestCommands:
         assert await redis_client.lpush(key, value_list) == 5
 
         assert await redis_client.lrem(key, 2, "value1") == 2
-        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_dict(
             ["value2", "value2", "value1"]
         )
 
         assert await redis_client.lrem(key, -1, "value2") == 1
-        assert await redis_client.lrange(key, 0, -1) == convert_str_to_bytes_list(
+        assert await redis_client.lrange(key, 0, -1) == convert_string_to_bytes_dict(
             ["value2", "value1"]
         )
 
@@ -2370,7 +2380,7 @@ class TestCommands:
             GeospatialData(15, 37),
             GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
             OrderBy.ASC,
-        ) == convert_str_to_bytes_list(members)
+        ) == convert_string_to_bytes_dict(members)
 
         assert await redis_client.geosearch(
             key,
@@ -2380,7 +2390,7 @@ class TestCommands:
             with_coord=True,
             with_dist=True,
             with_hash=True,
-        ) == convert_str_to_bytes_list(result[::-1])
+        ) == convert_string_to_bytes_dict(result[::-1])
 
         assert await redis_client.geosearch(
             key,
@@ -2400,7 +2410,7 @@ class TestCommands:
             GeoSearchByBox(meters, meters, GeoUnit.METERS),
             OrderBy.DESC,
             with_dist=True,
-        ) == convert_str_to_bytes_list(
+        ) == convert_string_to_bytes_dict(
             [["edge2", [236529.1799]], ["Palermo", [166274.1516]], ["Catania", [0.0]]]
         )
 
@@ -2424,7 +2434,7 @@ class TestCommands:
                 OrderBy.ASC,
                 count=GeoSearchCount(1, True),
             )
-        )[0] in convert_str_to_bytes_list(members)
+        )[0] in convert_string_to_bytes_dict(members)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2456,7 +2466,7 @@ class TestCommands:
             "Catania",
             GeoSearchByRadius(feet, GeoUnit.FEET),
             OrderBy.ASC,
-        ) == convert_str_to_bytes_list(members[:2])
+        ) == convert_string_to_bytes_dict(members[:2])
 
         # Test search by radius, units: meters, from a member
         meters = 200 * 1000
@@ -2465,7 +2475,7 @@ class TestCommands:
             "Catania",
             GeoSearchByRadius(meters, GeoUnit.METERS),
             OrderBy.DESC,
-        ) == convert_str_to_bytes_list(members[:2][::-1])
+        ) == convert_string_to_bytes_dict(members[:2][::-1])
 
         # Test search by radius, unit: miles, from a geospatial data
         assert await redis_client.geosearch(
@@ -2473,7 +2483,7 @@ class TestCommands:
             GeospatialData(15, 37),
             GeoSearchByRadius(175, GeoUnit.MILES),
             OrderBy.DESC,
-        ) == convert_str_to_bytes_list(members[::-1])
+        ) == convert_string_to_bytes_dict(members[::-1])
 
         # Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
         assert await redis_client.geosearch(
@@ -2485,7 +2495,7 @@ class TestCommands:
             with_coord=True,
             with_dist=True,
             with_hash=True,
-        ) == convert_str_to_bytes_list(result)
+        ) == convert_string_to_bytes_dict(result)
 
         # Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
         assert (
@@ -2499,7 +2509,7 @@ class TestCommands:
                 with_dist=True,
                 with_hash=True,
             )
-        )[0] in convert_str_to_bytes_list(result)
+        )[0] in convert_string_to_bytes_dict(result)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2876,7 +2886,7 @@ class TestCommands:
         assert await redis_client.geoadd(key, members_coordinates) == 2
         assert await redis_client.geohash(
             key, ["Palermo", "Catania", "Place"]
-        ) == convert_str_to_bytes_list(
+        ) == convert_string_to_bytes_dict(
             [
                 "sqc8b49rny0",
                 "sqdtr74hyu0",
@@ -3655,10 +3665,10 @@ class TestCommands:
         assert await redis_client.zadd(key2, {"c": 2.0}) == 1
         assert await redis_client.bzpopmin(
             [key1, key2], 0.5
-        ) == convert_str_to_bytes_list([key1, "a", 1.0])
+        ) == convert_string_to_bytes_dict([key1, "a", 1.0])
         assert await redis_client.bzpopmin(
             [non_existing_key, key2], 0.5
-        ) == convert_str_to_bytes_list(
+        ) == convert_string_to_bytes_dict(
             [
                 key2,
                 "c",
@@ -3714,10 +3724,10 @@ class TestCommands:
         assert await redis_client.zadd(key2, {"c": 2.0}) == 1
         assert await redis_client.bzpopmax(
             [key1, key2], 0.5
-        ) == convert_str_to_bytes_list([key1, "b", 1.5])
+        ) == convert_string_to_bytes_dict([key1, "b", 1.5])
         assert await redis_client.bzpopmax(
             [non_existing_key, key2], 0.5
-        ) == convert_str_to_bytes_list(
+        ) == convert_string_to_bytes_dict(
             [
                 key2,
                 "c",
@@ -4284,7 +4294,7 @@ class TestCommands:
             compare_maps(await redis_client.zdiff_withscores([key1, key3]), {}) is True
         )
         non_exist_res = await redis_client.zdiff_withscores([non_existing_key, key3])
-        assert compare_maps(non_exist_res, {})
+        assert non_exist_res == {}
 
         # invalid argument - key list must not be empty
         with pytest.raises(RequestError):
@@ -4657,7 +4667,7 @@ class TestCommands:
             get_patterns=["user:*->name"],
             alpha=True,
         )
-        assert result == convert_str_to_bytes_list(
+        assert result == convert_string_to_bytes_dict(
             ["Dave", "Bob", "Alice", "Charlie", "Eve"]
         )
 
@@ -4669,7 +4679,7 @@ class TestCommands:
             get_patterns=["user:*->name"],
             alpha=True,
         )
-        assert result == convert_str_to_bytes_list(
+        assert result == convert_string_to_bytes_dict(
             [None, "Dave", "Bob", "Alice", "Charlie", "Eve"]
         )
 
@@ -4680,7 +4690,9 @@ class TestCommands:
             get_patterns=["user:*->age"],
             alpha=True,
         )
-        assert result == convert_str_to_bytes_list([None, "30", "25", "35", "20", "40"])
+        assert result == convert_string_to_bytes_dict(
+            [None, "30", "25", "35", "20", "40"]
+        )
 
         # Test Limit with count 0
         result = await redis_client.sort(
@@ -4837,9 +4849,12 @@ class TestCommands:
             is None
         )
 
-        assert await redis_client.xadd(
-            key, [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1")
-        ) == "0-1".encode("utf-8")
+        assert (
+            await redis_client.xadd(
+                key, [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1")
+            )
+            == b"0-1"
+        )
 
         assert (
             await redis_client.xadd(key, [(field, "foo2"), (field2, "bar2")])
@@ -7861,36 +7876,42 @@ class TestClusterRoutes:
 
         # Empty set
         result = await redis_client.sscan(key1, initial_cursor)
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Negative cursor
         result = await redis_client.sscan(key1, "-1")
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert result[result_collection_index] == []
 
         # Result contains the whole set
         assert await redis_client.sadd(key1, char_members) == len(char_members)
         result = await redis_client.sscan(key1, initial_cursor)
-        assert result[result_cursor_index] == initial_cursor
+        assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result[result_collection_index]) == len(char_members)
-        assert set(result[result_collection_index]).issubset(set(char_members))
+        assert set(result[result_collection_index]).issubset(
+            convert_string_to_bytes_dict(char_members)
+        )
 
         result = await redis_client.sscan(key1, initial_cursor, match="a")
-        assert result[result_cursor_index] == initial_cursor
-        assert set(result[result_collection_index]).issubset(set(["a"]))
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert set(result[result_collection_index]).issubset(set([b"a"]))
 
         # Result contains a subset of the key
         assert await redis_client.sadd(key1, num_members) == len(num_members)
         result_cursor = "0"
         result_values = set()  # type: set[str]
-        result = await redis_client.sscan(key1, result_cursor)
+        result = convert_bytes_to_string_dict(
+            await redis_client.sscan(key1, result_cursor)
+        )
         result_cursor = str(result[result_cursor_index])
         result_values.update(result[result_collection_index])
 
         # 0 is returned for the cursor of the last iteration.
         while result_cursor != "0":
-            next_result = await redis_client.sscan(key1, result_cursor)
+            next_result = convert_bytes_to_string_dict(
+                await redis_client.sscan(key1, result_cursor)
+            )
             next_result_cursor = str(next_result[result_cursor_index])
             assert next_result_cursor != result_cursor
 

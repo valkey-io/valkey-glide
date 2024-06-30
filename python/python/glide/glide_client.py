@@ -251,8 +251,9 @@ class BaseClient(CoreCommands):
         request.callback_idx = self._get_callback_index()
         request.single_command.request_type = request_type
         request.single_command.args_array.args[:] = [
-            bytes(elem, encoding="utf8") for elem in args if isinstance(elem, str)
-        ]  # TODO - use arg pointer
+            bytes(elem, encoding="utf8") if isinstance(elem, str) else elem
+            for elem in args
+        ]
         (encoded_args, args_size) = self._encode_and_sum_size(args)
         if args_size < MAX_REQUEST_ARGS_LEN:
             request.single_command.args_array.args[:] = encoded_args

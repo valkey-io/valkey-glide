@@ -30,7 +30,6 @@ TRequest = Union[RedisRequest, ConnectionRequest]
 # When routing to a single node, response will be T
 # Otherwise, response will be : {Address : response , ... } with type of Dict[str, T].
 TClusterResponse = Union[T, Dict[bytes, T]]
-TClusterDecodedResponse = Union[T, Dict[str, T]]
 TSingleNodeRoute = Union[RandomNode, SlotKeyRoute, SlotIdRoute, ByAddressRoute]
 # When specifying legacy path (path doesn't start with `$`), response will be T
 # Otherwise, (when specifying JSONPath), response will be List[Optional[T]].

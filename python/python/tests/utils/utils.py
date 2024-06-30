@@ -4,7 +4,6 @@ import string
 from typing import Any, Dict, List, Mapping, Optional, TypeVar, Union, cast
 
 from glide.async_commands.core import InfoSection
-from glide.async_commands.utils.utils import convert_bytes_to_string_dict
 from glide.constants import TResult
 from glide.glide_client import TGlideClient
 from packaging import version
@@ -132,19 +131,72 @@ def compare_maps(
     )
 
 
-def convert_str_to_bytes_list(lst):
-    return [
-        (
-            elem.encode("utf-8")
-            if isinstance(elem, str)
-            else convert_str_to_bytes_list(elem) if isinstance(elem, list) else elem
-        )
-        for elem in lst
+def convert_bytes_to_string_dict(
+    # TODO: remove the str options
+    byte_string_dict: Optional[
+        Union[
+            Mapping[bytes, Any],
+            Dict[bytes, Any],
+            list[bytes, Any],
+            Mapping[str, Any],
+            Dict[str, Any],
+        ]
     ]
+) -> Optional[Dict[str, Any]]:
+    """
+    Recursively convert data structure from byte strings to regular strings,
+    handling nested data structures of any depth.
+    """
+    if byte_string_dict is None:
+        return None
+
+    def convert(item: Any) -> Any:
+        if isinstance(item, dict):
+            return {convert(key): convert(value) for key, value in item.items()}
+        elif isinstance(item, list):
+            return [convert(elem) for elem in item]
+        elif isinstance(item, set):
+            return {convert(elem) for elem in item}
+        elif isinstance(item, bytes):
+            return item.decode("utf-8")
+        else:
+            return item
+
+    return convert(byte_string_dict)
 
 
-def convert_str_to_bytes_set(set):
-    return {elem.encode("utf-8") if isinstance(elem, str) else elem for elem in set}
+def convert_string_to_bytes_dict(
+    # TODO: remove the bytes options
+    string_structure: Optional[
+        Union[
+            Mapping[bytes, Any],
+            Dict[bytes, Any],
+            list[str, Any],
+            Mapping[str, Any],
+            Dict[str, Any],
+        ]
+    ]
+) -> Optional[Dict[bytes, Any]]:
+    """
+    Recursively convert the data structure from strings to bytes,
+    handling nested data structures of any depth.
+    """
+    if string_structure is None:
+        return None
+
+    def convert(item: Any) -> Any:
+        if isinstance(item, dict):
+            return {convert(key): convert(value) for key, value in item.items()}
+        elif isinstance(item, list):
+            return [convert(elem) for elem in item]
+        elif isinstance(item, set):
+            return {convert(elem) for elem in item}
+        elif isinstance(item, str):
+            return item.encode("utf-8")
+        else:
+            return item
+
+    return convert(string_structure)
 
 
 def generate_lua_lib_code(

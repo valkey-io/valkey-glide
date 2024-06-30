@@ -12,7 +12,6 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, Transaction
-from glide.async_commands.utils.utils import convert_bytes_to_string_dict
 from glide.constants import OK, TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -50,7 +49,7 @@ class StandaloneCommands(CoreCommands):
 
 
         Returns:
-            str: Returns a string containing the information for the sections requested.
+            bytes: Returns bytes containing the information for the sections requested.
         """
         args = [section.value for section in sections] if sections else []
         return cast(bytes, await self._execute_command(RequestType.Info, args))
