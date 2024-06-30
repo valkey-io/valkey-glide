@@ -640,6 +640,34 @@ public interface SetBaseCommands {
      * @param key The key of the set.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
      *     </code> indicates the start of the search.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the set. The second element is always an <code>
+     *     Array</code> of the subset of the set held in <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 members
+     * GlideString cursor = gs("0");
+     * Object[] result;
+     * do {
+     *   result = client.sscan(key1, cursor).get();
+     *   cursor = gs(result[0].toString());
+     *   Object[] glideStringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nSSCAN iteration:");
+     *   Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * } while (!cursor.equals(gs("0")));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> sscan(GlideString key, GlideString cursor);
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @param sScanOptions The {@link SScanOptions}.
      * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
      *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
@@ -661,4 +689,33 @@ public interface SetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> sscan(String key, String cursor, SScanOptions sScanOptions);
+
+    /**
+     * Iterates incrementally over a set.
+     *
+     * @see <a href="https://valkey.io/commands/sscan">valkey.io</a> for details.
+     * @param key The key of the set.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @param sScanOptions The {@link SScanOptions}.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the set. The second element is always an <code>
+     *     Array</code> of the subset of the set held in <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 members
+     * GlideString cursor = gs("0");
+     * Object[] result;
+     * do {
+     *   result = client.sscan(key1, cursor, SScanOptions.builder().matchPattern(gs("*")).count(20L).build()).get();
+     *   cursor = gs(result[0].toString());
+     *   Object[] glideStringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nSSCAN iteration:");
+     *   Arrays.asList(glideStringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * } while (!cursor.equals(gs("0")));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> sscan(GlideString key, GlideString cursor, SScanOptions sScanOptions);
 }

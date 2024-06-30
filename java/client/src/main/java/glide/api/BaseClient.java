@@ -2940,6 +2940,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> sscan(@NonNull GlideString key, @NonNull GlideString cursor) {
+        GlideString[] arguments = new GlideString[] {key, cursor};
+        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayOrNullResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<Object[]> sscan(
             @NonNull String key, @NonNull String cursor, @NonNull SScanOptions sScanOptions) {
         String[] arguments = concatenateArrays(new String[] {key, cursor}, sScanOptions.toArgs());
@@ -2947,9 +2953,22 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> sscan(
+            @NonNull GlideString key, @NonNull GlideString cursor, @NonNull SScanOptions sScanOptions) {
+        GlideString[] arguments = concatenateArrays(new GlideString[] {key, cursor}, sScanOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayOrNullResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<Object[]> zscan(@NonNull String key, @NonNull String cursor) {
         String[] arguments = new String[] {key, cursor};
         return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zscan(@NonNull GlideString key, @NonNull GlideString cursor) {
+        GlideString[] arguments = new GlideString[] {key, cursor};
+        return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -2960,9 +2979,22 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> zscan(
+            @NonNull GlideString key, @NonNull GlideString cursor, @NonNull ZScanOptions zScanOptions) {
+        GlideString[] arguments = concatenateArrays(new GlideString[] {key, cursor}, zScanOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayOrNullResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<Object[]> hscan(@NonNull String key, @NonNull String cursor) {
         String[] arguments = new String[] {key, cursor};
         return commandManager.submitNewCommand(HScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> hscan(@NonNull GlideString key, @NonNull GlideString cursor) {
+        GlideString[] arguments = new GlideString[] {key, cursor};
+        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -2970,6 +3002,13 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String cursor, @NonNull HScanOptions hScanOptions) {
         String[] arguments = concatenateArrays(new String[] {key, cursor}, hScanOptions.toArgs());
         return commandManager.submitNewCommand(HScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> hscan(
+            @NonNull GlideString key, @NonNull GlideString cursor, @NonNull HScanOptions hScanOptions) {
+        GlideString[] arguments = concatenateArrays(new GlideString[] {key, cursor}, hScanOptions.toGlideStringArgs());
+        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override

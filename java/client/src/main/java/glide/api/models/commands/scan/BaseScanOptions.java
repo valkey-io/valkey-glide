@@ -1,7 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.scan;
-
+import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.experimental.SuperBuilder;
 
@@ -11,7 +12,7 @@ import lombok.experimental.SuperBuilder;
  * and ZSCAN).
  */
 @SuperBuilder
-public abstract class BaseScanOptions {
+public abstract class BaseScanOptions<T> {
     /** <code>MATCH</code> option string to include in the <code>SCAN</code> commands. */
     public static final String MATCH_OPTION_STRING = "MATCH";
 
@@ -26,7 +27,7 @@ public abstract class BaseScanOptions {
      * <code>COUNT</code> being <code>10</code> which indicates that it will only fetch and match
      * <code>10</code> items from the list.
      */
-    private final String matchPattern;
+    private final T matchPattern;
 
     /**
      * <code>COUNT</code> is a just a hint for the command for how many elements to fetch from the
@@ -46,7 +47,7 @@ public abstract class BaseScanOptions {
 
         if (matchPattern != null) {
             optionArgs.add(MATCH_OPTION_STRING);
-            optionArgs.add(matchPattern);
+            optionArgs.add(matchPattern.toString());
         }
 
         if (count != null) {
@@ -55,5 +56,14 @@ public abstract class BaseScanOptions {
         }
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Creates the arguments to be used in <code>SCAN</code> commands.
+     *
+     * @return a GlideString array that holds the options and their arguments.
+     */
+    public GlideString[] toGlideStringArgs() {
+        return Arrays.stream(toArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }
