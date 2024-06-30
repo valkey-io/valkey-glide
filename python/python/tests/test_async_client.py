@@ -8226,10 +8226,14 @@ class TestClusterRoutes:
         result_cursor_index = 0
         result_collection_index = 1
         default_count = 20
-        num_members = {}
-        for i in range(240):  # Use large dataset to force an iterative cursor.
-            num_members.update({"value " + str(i): i})
-        char_members = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4}
+        num_map = {}
+        num_map_with_str_scores = {}
+        for i in range(50000):  # Use large dataset to force an iterative cursor.
+            num_map.update({"value " + str(i): i})
+            num_map_with_str_scores.update({"value " + str(i): str(i)})
+        char_map = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4}
+        char_map_with_str_scores = {"a": "0", "b": "1", "c": "2", "d": "3", "e": "4"}
+
         convert_list_to_dict = lambda list: {
             list[i]: list[i + 1] for i in range(0, len(list), 2)
         }
@@ -8245,49 +8249,44 @@ class TestClusterRoutes:
         assert result[result_collection_index] == []
 
         # Result contains the whole set
-        assert await redis_client.zadd(key1, char_members) == len(char_members)
+        assert await redis_client.zadd(key1, char_map) == len(char_map)
         result = await redis_client.zscan(key1, initial_cursor)
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor
-        assert len(result_collection) == len(char_members) * 2
-        assert set(convert_list_to_dict(result_collection)).issubset(
-            set(char_members.keys())
-        )
+        assert len(result_collection) == len(char_map) * 2
+        assert convert_list_to_dict(result_collection) == char_map_with_str_scores
 
         result = await redis_client.zscan(key1, initial_cursor, match="a")
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor
-        assert set(convert_list_to_dict(result_collection)).issubset(set(["a"]))
+        assert convert_list_to_dict(result_collection) == {"a": "0"}
 
         # Result contains a subset of the key
-        assert await redis_client.zadd(key1, num_members) == len(num_members)
+        assert await redis_client.zadd(key1, num_map) == len(num_map)
         result_cursor = "0"
-        result_values = set()  # type: set[str]
+        full_result_map = {}
         result = await redis_client.zscan(key1, result_cursor)
         result_cursor = str(result[result_cursor_index])
         result_iteration_collection: dict[str, str] = convert_list_to_dict(
             result[result_collection_index]
         )
-        result_values.update(result_iteration_collection.keys())
+        full_result_map.update(result_iteration_collection)
 
         # 0 is returned for the cursor of the last iteration.
         while result_cursor != "0":
-            next_result = await redis_client.zscan(key1, result_cursor, count=5)
+            next_result = await redis_client.zscan(key1, result_cursor)
             next_result_cursor = str(next_result[result_cursor_index])
             assert next_result_cursor != result_cursor
 
             next_result_collection = convert_list_to_dict(
                 next_result[result_collection_index]
             )
-            assert not set(result_iteration_collection).issubset(
-                set(next_result_collection.keys())
-            )
+            assert result_iteration_collection != next_result_collection
 
-            result_values.update(next_result_collection.keys())
+            full_result_map.update(next_result_collection)
             result_iteration_collection = next_result_collection
             result_cursor = next_result_cursor
-        assert set(num_members.keys()).issubset(result_values)
-        assert set(char_members.keys()).issubset(result_values)
+        assert (num_map_with_str_scores | char_map_with_str_scores) == full_result_map
 
         # Test match pattern
         result = await redis_client.zscan(key1, initial_cursor, match="*")
@@ -8315,6 +8314,107 @@ class TestClusterRoutes:
         # Negative count
         with pytest.raises(RequestError):
             await redis_client.zscan(key2, initial_cursor, count=-1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hscan(self, redis_client: GlideClusterClient):
+        key1 = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        initial_cursor = "0"
+        result_cursor_index = 0
+        result_collection_index = 1
+        default_count = 20
+        num_map = {}
+        for i in range(50000):  # Use large dataset to force an iterative cursor.
+            num_map.update({"field " + str(i): "value " + str(i)})
+        char_map = {
+            "field a": "value a",
+            "field b": "value b",
+            "field c": "value c",
+            "field d": "value d",
+            "field e": "value e",
+        }
+
+        convert_list_to_dict = lambda list: {
+            list[i]: list[i + 1] for i in range(0, len(list), 2)
+        }
+
+        # Empty set
+        result = await redis_client.hscan(key1, initial_cursor)
+        assert result[result_cursor_index] == initial_cursor
+        assert result[result_collection_index] == []
+
+        # Negative cursor
+        result = await redis_client.hscan(key1, "-1")
+        assert result[result_cursor_index] == initial_cursor
+        assert result[result_collection_index] == []
+
+        # Result contains the whole set
+        assert await redis_client.hset(key1, char_map) == len(char_map)
+        result = await redis_client.hscan(key1, initial_cursor)
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor
+        assert len(result_collection) == len(char_map) * 2
+        assert convert_list_to_dict(result_collection) == char_map
+
+        result = await redis_client.hscan(key1, initial_cursor, match="field a")
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor
+        assert convert_list_to_dict(result_collection) == {"field a": "value a"}
+
+        # Result contains a subset of the key
+        assert await redis_client.hset(key1, num_map) == len(num_map)
+        result_cursor = "0"
+        full_result_map = {}
+        result = await redis_client.hscan(key1, result_cursor)
+        result_cursor = str(result[result_cursor_index])
+        result_iteration_collection: dict[str, str] = convert_list_to_dict(
+            result[result_collection_index]
+        )
+        full_result_map.update(result_iteration_collection)
+
+        # 0 is returned for the cursor of the last iteration.
+        while result_cursor != "0":
+            next_result = await redis_client.hscan(key1, result_cursor)
+            next_result_cursor = str(next_result[result_cursor_index])
+            assert next_result_cursor != result_cursor
+
+            next_result_collection = convert_list_to_dict(
+                next_result[result_collection_index]
+            )
+            assert result_iteration_collection != next_result_collection
+
+            full_result_map.update(next_result_collection)
+            result_iteration_collection = next_result_collection
+            result_cursor = next_result_cursor
+        assert (num_map | char_map) == full_result_map
+
+        # Test match pattern
+        result = await redis_client.hscan(key1, initial_cursor, match="*")
+        assert result[result_cursor_index] != "0"
+        assert len(result[result_collection_index]) >= default_count
+
+        # Test count
+        result = await redis_client.hscan(key1, initial_cursor, count=20)
+        assert result[result_cursor_index] != "0"
+        assert len(result[result_collection_index]) >= 20
+
+        # Test count with match returns a non-empty list
+        result = await redis_client.hscan(key1, initial_cursor, match="1*", count=20)
+        assert result[result_cursor_index] != "0"
+        assert len(result[result_collection_index]) >= 0
+
+        # Exceptions
+        # Non-set key
+        assert await redis_client.set(key2, "test") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hscan(key2, initial_cursor)
+        with pytest.raises(RequestError):
+            await redis_client.hscan(key2, initial_cursor, match="test", count=20)
+
+        # Negative count
+        with pytest.raises(RequestError):
+            await redis_client.hscan(key2, initial_cursor, count=-1)
 
 
 @pytest.mark.asyncio
