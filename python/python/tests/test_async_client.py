@@ -8274,7 +8274,7 @@ class TestClusterRoutes:
 
         # 0 is returned for the cursor of the last iteration.
         while result_cursor != b"0":
-            next_result = await redis_client.zscan(key1, result_cursor)
+            next_result = await redis_client.zscan(key1, result_cursor.decode("utf-8"))
             next_result_cursor = str(next_result[result_cursor_index])
             assert next_result_cursor != result_cursor
 
@@ -8375,7 +8375,7 @@ class TestClusterRoutes:
 
         # 0 is returned for the cursor of the last iteration.
         while result_cursor != "0":
-            next_result = await redis_client.hscan(key1, result_cursor)
+            next_result = await redis_client.hscan(key1, result_cursor.decode("utf-8"))
             next_result_cursor = str(next_result[result_cursor_index])
             assert next_result_cursor != result_cursor
 
@@ -8386,7 +8386,7 @@ class TestClusterRoutes:
 
             full_result_map.update(next_result_collection)
             result_iteration_collection = next_result_collection
-            result_cursor = next_result_cursor.decode("utf-8")
+            result_cursor = next_result_cursor
         assert (num_map | char_map) == full_result_map
 
         # Test match pattern
