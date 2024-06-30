@@ -491,7 +491,7 @@ public interface StringBaseCommands {
      * Long len = client.setrange(gs("key"), 6, gs("GLIDE")).get();
      * assert len == 11L; // New key was created with length of 11 symbols
      * GlideString value = client.get(gs("key")).get();
-     * assert value.equals("\0\0\0\0\0\0GLIDE"); // The string was padded with zero bytes
+     * assert value.equals(gs("\0\0\0\0\0\0GLIDE")); // The string was padded with zero bytes
      * }</pre>
      */
     CompletableFuture<Long> setrange(GlideString key, int offset, GlideString value);
