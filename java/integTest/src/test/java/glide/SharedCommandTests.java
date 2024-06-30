@@ -4369,8 +4369,7 @@ public class SharedCommandTests {
         String streamId1_2 = "1-2";
 
         // Setup: Create stream with 3 entries, create consumer group, read entries to add them to the
-        // Pending Entries
-        // List.
+        // Pending Entries List.
         assertEquals(
                 streamId1_0,
                 client
@@ -4404,15 +4403,14 @@ public class SharedCommandTests {
         assertNull(client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get());
 
         // Reset the last delivered ID for the consumer group to "1-1".
-        // ENRIESREAD is only supported in Redis version 7.0.0
+        // ENTRIESREAD is only supported in Redis version 7.0.0 and higher.
         if (REDIS_VERSION.isLowerThan("7.0.0")) {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1).get());
         } else {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1, streamId0).get());
 
             // The entriesReadId cannot be the first, last, or zero ID. Here we pass the first ID and
-            // assert
-            // that an error is raised.
+            // assert that an error is raised.
             ExecutionException executionException =
                     assertThrows(
                             ExecutionException.class,

@@ -3109,7 +3109,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Set the last delivered ID for a consumer group.
+     * Sets the last delivered ID for a consumer group.
      *
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
@@ -3124,8 +3124,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     }
 
     /**
-     * Set the last delivered ID for a consumer group.
+     * Sets the last delivered ID for a consumer group.
      *
+     * @since Redis 7.0 and above
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
@@ -3133,8 +3134,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     group.
      * @param entriesReadId An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
      *     "0-0"</code>)) used to find out how many entries are between the arbitrary ID (excluding
-     *     it) and the stream's last entry. This argument can only be specified if you are using Redis
-     *     version 7.0.0 or above.
+     *     it) and the stream's last entry.
      * @return Command Response - <code>OK</code>.
      */
     public T xgroupSetId(
