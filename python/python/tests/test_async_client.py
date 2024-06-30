@@ -8374,9 +8374,9 @@ class TestClusterRoutes:
         full_result_map.update(result_iteration_collection)
 
         # 0 is returned for the cursor of the last iteration.
-        while result_cursor != "0":
+        while result_cursor != b"0":
             next_result = await redis_client.hscan(key1, result_cursor.decode("utf-8"))
-            next_result_cursor = str(next_result[result_cursor_index])
+            next_result_cursor = next_result[result_cursor_index]
             assert next_result_cursor != result_cursor
 
             next_result_collection = convert_list_to_dict(
