@@ -128,15 +128,6 @@ jobs:
                   sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.host.CLASSIFIER }}/g' build.gradle
                   sed -i $SED_FOR_MACOS "s/255.255.255/${{ env.RELEASE_VERSION }}/g" build.gradle
 
-            - name: Replace placeholders and version in build.gradle for examples
-              shell: bash
-              working-directory: ./java/examples
-              run: |
-                  SED_FOR_MACOS=`if [[ "${{ matrix.host.os }}" =~ .*"macos".*  ]]; then echo "''"; fi`
-                  sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.host.CLASSIFIER }}/g' build.gradle
-                  sed -i $SED_FOR_MACOS "s/255.255.255/${{ env.RELEASE_VERSION }}/g" build.gradle
-
-
             - name: Build java client
               working-directory: java
               run: |
@@ -153,7 +144,6 @@ jobs:
                   cp $src_folder/bundle.jar .
 
             - name: Upload artifacts to publish
-              if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
               with:
