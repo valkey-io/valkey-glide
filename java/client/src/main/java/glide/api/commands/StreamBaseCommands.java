@@ -470,9 +470,10 @@ public interface StreamBaseCommands {
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
-     * @param entriesRead An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>"0-0"</code>))
-     *     used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last entry.
-     *     This argument can only be specified if you are using Redis version 7.0.0 or above.
+     * @param entriesRead An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
+     *     "0-0"</code>)) used to find out how many entries are between the arbitrary ID (excluding
+     *     it) and the stream's last entry. This argument can only be specified if you are using Redis
+     *     version 7.0.0 or above.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
