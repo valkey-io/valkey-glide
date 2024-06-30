@@ -248,13 +248,13 @@ public interface ListBaseCommands {
      * @example
      *     <pre>{@code
      * GlideString[] payload = lient.lrange(gs("my_list"), 0, 2).get();
-     * assert payload.equals(new GlideString[] {gs("value1"), gs("value2"), gs("value3")});
+     * assert Arrays.equals(new GlideString[] {gs("value1"), gs("value2"), gs("value3")});
      *
      * GlideString[] payload = client.lrange(gs("my_list"), -2, -1).get();
-     * assert payload.equals(new GlideString[] {gs("value2"), gs("value3")});
+     * assert Arrays.equals(new GlideString[] {gs("value2"), gs("value3")});
      *
      * GlideString[] payload = client.lrange(gs("non_exiting_key"), 0, 2).get();
-     * assert payload.equals(new GlideString[] {});
+     * assert Arrays.equals(new GlideString[] {});
      * }</pre>
      */
     CompletableFuture<GlideString[]> lrange(GlideString key, long start, long end);
