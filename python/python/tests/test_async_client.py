@@ -7265,15 +7265,18 @@ class TestCommands:
             result = await redis_client.lolwut(parameters=[10, 20], route=AllNodes())
             assert isinstance(result, dict)
             result_decoded = convert_bytes_to_string_dict(result)
+            assert result_decoded is not None
             for node_result in result_decoded.values():
                 assert "Redis ver. " in node_result
 
             # test with single-node route
             result = await redis_client.lolwut(2, route=RandomNode())
+            assert isinstance(result, bytes)
             result_decoded = convert_bytes_to_string_dict(result)
             assert "Redis ver. " in node_result
 
             result = await redis_client.lolwut(2, [10, 20], RandomNode())
+            assert isinstance(result, bytes)
             result_decoded = convert_bytes_to_string_dict(result)
             assert "Redis ver. " in node_result
 
