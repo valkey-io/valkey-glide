@@ -684,6 +684,31 @@ public class RedisClientTest {
                         "test_with_persist", GetExOptions.Persist(), new String[] {"PERSIST"}));
     }
 
+    private static List<Arguments> getGetExOptionsBinary() {
+        return List.of(
+                Arguments.of(
+                        // seconds
+                        "test_with_seconds", GetExOptions.Seconds(10L), new GlideString[] {gs("EX"), gs("10")}),
+                Arguments.of(
+                        // milliseconds
+                        "test_with_milliseconds",
+                        GetExOptions.Milliseconds(1000L),
+                        new GlideString[] {gs("PX"), gs("1000")}),
+                Arguments.of(
+                        // unix seconds
+                        "test_with_unix_seconds",
+                        GetExOptions.UnixSeconds(10L),
+                        new GlideString[] {gs("EXAT"), gs("10")}),
+                Arguments.of(
+                        // unix milliseconds
+                        "test_with_unix_milliseconds",
+                        GetExOptions.UnixMilliseconds(1000L),
+                        new GlideString[] {gs("PXAT"), gs("1000")}),
+                Arguments.of(
+                        // persist
+                        "test_with_persist", GetExOptions.Persist(), new GlideString[] {gs("PERSIST")}));
+    }
+
     @SneakyThrows
     @ParameterizedTest(name = "{0}")
     @MethodSource("getGetExOptions")
@@ -691,6 +716,18 @@ public class RedisClientTest {
         assertArrayEquals(
                 expectedArgs, options.toArgs(), "Expected " + testName + " toArgs() to pass.");
         System.out.println(expectedArgs);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("getGetExOptionsBinary")
+    public void getex_options_binary(
+            String testName, GetExOptions options, GlideString[] expectedGlideStringArgs) {
+        assertArrayEquals(
+                expectedGlideStringArgs,
+                options.toGlideStringArgs(),
+                "Expected " + testName + " toArgs() to pass.");
+        System.out.println(expectedGlideStringArgs);
     }
 
     @SneakyThrows
@@ -5615,12 +5652,66 @@ public class RedisClientTest {
                         }));
     }
 
+    private static List<Arguments> getStreamTrimOptionsBinary() {
+        return List.of(
+                Arguments.of(
+                        // MAXLEN just THRESHOLD
+                        "test_xtrim_maxlen",
+                        new MaxLen(5L),
+                        new GlideString[] {gs(TRIM_MAXLEN_REDIS_API), gs("5")}),
+                Arguments.of(
+                        // MAXLEN with LIMIT
+                        "test_xtrim_maxlen_with_limit",
+                        new MaxLen(5L, 10L),
+                        new GlideString[] {
+                            gs(TRIM_MAXLEN_REDIS_API),
+                            gs(TRIM_NOT_EXACT_REDIS_API),
+                            gs("5"),
+                            gs(TRIM_LIMIT_REDIS_API),
+                            gs("10")
+                        }),
+                Arguments.of(
+                        // MAXLEN with exact
+                        "test_xtrim_exact_maxlen",
+                        new MaxLen(true, 10L),
+                        new GlideString[] {gs(TRIM_MAXLEN_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("10")}),
+                Arguments.of(
+                        // MINID just THRESHOLD
+                        "test_xtrim_minid",
+                        new MinId("0-1"),
+                        new GlideString[] {gs(TRIM_MINID_REDIS_API), gs("0-1")}),
+                Arguments.of(
+                        // MINID with exact
+                        "test_xtrim_exact_minid",
+                        new MinId(true, "0-2"),
+                        new GlideString[] {gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("0-2")}),
+                Arguments.of(
+                        // MINID with LIMIT
+                        "test_xtrim_minid_with_limit",
+                        new MinId("0-3", 10L),
+                        new GlideString[] {
+                            gs(TRIM_MINID_REDIS_API),
+                            gs(TRIM_NOT_EXACT_REDIS_API),
+                            gs("0-3"),
+                            gs(TRIM_LIMIT_REDIS_API),
+                            gs("10")
+                        }));
+    }
+
     @SneakyThrows
     @ParameterizedTest(name = "{0}")
     @MethodSource("getStreamTrimOptions")
     public void xtrim_with_options_to_arguments(
             String testName, StreamTrimOptions options, String[] expectedArgs) {
         assertArrayEquals(expectedArgs, options.toArgs());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("getStreamTrimOptionsBinary")
+    public void xtrim_with_options_to_arguments_binary(
+            String testName, StreamTrimOptions options, GlideString[] expectedGlideStringArgs) {
+        assertArrayEquals(expectedGlideStringArgs, options.toGlideStringArgs());
     }
 
     @Test
