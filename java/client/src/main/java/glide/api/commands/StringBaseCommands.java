@@ -255,7 +255,9 @@ public interface StringBaseCommands {
      * @apiNote When in cluster mode, the command may route to multiple nodes when keys in <code>
      *     keyValueMap</code> map to different hash slots.
      * @see <a href="https://redis.io/commands/mset/">redis.io</a> for details.
-     * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * @param keyValueMap A key-value map consisting of keys and their respective values to set. 
+     * Note you can only pass Keys and Values of types String and GlideString. 
+     * Key and Value must be of same type.
      * @return Always <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -553,7 +555,7 @@ public interface StringBaseCommands {
      *     <pre>{@code
      * // testKey1 = abcd, testKey2 = axcd
      * GlideString result = client.lcs(gs("testKey1"), gs("testKey2")).get();
-     * assert result.equals("acd");
+     * assert result.equals(gs("acd"));
      * }</pre>
      */
     CompletableFuture<GlideString> lcs(GlideString key1, GlideString key2);

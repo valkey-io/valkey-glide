@@ -1565,6 +1565,14 @@ public class RedisClientTest {
         assertEquals(testResponse, response);
         assertEquals(OK, payload);
     }
+    @SneakyThrows
+    @Test
+    public void mset_withIllegalArgument_throws_exception() {
+        // setup
+        Map<Integer, Integer> keyValueMap = new LinkedHashMap<>();
+        keyValueMap.put(2, 8);
+        assertThrows(IllegalArgumentException.class, () -> service.mset(keyValueMap));
+    }
 
     @SneakyThrows
     @Test

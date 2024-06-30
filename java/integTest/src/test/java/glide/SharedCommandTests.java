@@ -548,6 +548,23 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void mset_mget_success(BaseClient client) {
+        // keys are from different slots
+        String key1 = UUID.randomUUID().toString();
+        String key2 = UUID.randomUUID().toString();
+        String key3 = UUID.randomUUID().toString();
+        String value = UUID.randomUUID().toString();
+        Map<String, String> keyValueMap = Map.of(key1, value, key2, value, key3, value);
+
+        assertEquals(OK, client.mset(keyValueMap).get());
+        assertArrayEquals(
+                new String[] {value, value, value},
+                client.mget(new String[] {key1, key2, key3}).get());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void mset_mget_binary(BaseClient client) {
         // keys are from different slots
         String key1 = UUID.randomUUID().toString();
