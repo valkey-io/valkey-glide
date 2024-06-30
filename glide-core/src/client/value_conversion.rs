@@ -640,10 +640,14 @@ pub(crate) fn convert_to_expected_type(
             // Response will have 2 elements if Redis version < 7.0.0, and 3 elements otherwise.
             Value::Array(mut array) if array.len() == 2 || array.len() == 3 => {
                 let mut result: Vec<Value> = Vec::with_capacity(array.len());
+                // The first element is always a stream ID as a string, so the clone is cheap.
                 result.push(array[0].clone());
 
                 let mut stale_entry_ids: Option<Value> = None;
                 if array.len() == 3 {
+                    // We use array.remove to avoid having to clone the other element(s). If we removed the second
+                    // element before the third, the third would have to be shifted, so we remove the third element
+                    // first to improve performance.
                     stale_entry_ids = Some(array.remove(2));
                 }
 
