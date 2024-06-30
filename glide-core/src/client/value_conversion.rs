@@ -621,7 +621,7 @@ pub(crate) fn convert_to_expected_type(
               2) 1) "field3"
                  2) "value3"
            3) (nil)  // Entry IDs that were in the Pending Entry List but no longer in the stream get a nil value.
-           4) (nil)
+           4) (nil)  // These nil values will be dropped so that we can return a map value for the second response element.
 
         Redis version >= 7.0.0 example:
         1) "0-0"
