@@ -8230,9 +8230,9 @@ class TestClusterRoutes:
         num_map_with_str_scores = {}
         for i in range(50000):  # Use large dataset to force an iterative cursor.
             num_map.update({"value " + str(i): i})
-            num_map_with_str_scores.update({"value " + str(i): str(i)})
+            num_map_with_str_scores.update({b"value " + str(i): str(i).encode()})
         char_map = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4}
-        char_map_with_str_scores = {"a": "0", "b": "1", "c": "2", "d": "3", "e": "4"}
+        char_map_with_str_scores = {b"a": b"0", b"b": b"1", b"c": b"2", b"d": b"3", b"e": b"4"}
 
         convert_list_to_dict = lambda list: {
             list[i]: list[i + 1] for i in range(0, len(list), 2)
