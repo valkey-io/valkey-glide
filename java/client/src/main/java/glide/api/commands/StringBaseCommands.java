@@ -275,6 +275,8 @@ public interface StringBaseCommands {
      *     slot.
      * @see <a href="https://redis.io/commands/msetnx/">redis.io</a> for details.
      * @param keyValueMap A key-value map consisting of keys and their respective values to set.
+     * Note you can only pass Keys and Values of types String and GlideString. 
+     * Key and Value must be of same type.
      * @return <code>true</code> if all keys were set. <code>false</code> if no key was set.
      * @example
      *     <pre>{@code
@@ -282,7 +284,7 @@ public interface StringBaseCommands {
      * assert result;
      * }</pre>
      */
-    CompletableFuture<Boolean> msetnx(Map<String, String> keyValueMap);
+    ArgType> CompletableFuture<Boolean> msetnx(Map<ArgType, ArgType> keyValueMap);
 
     /**
      * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
