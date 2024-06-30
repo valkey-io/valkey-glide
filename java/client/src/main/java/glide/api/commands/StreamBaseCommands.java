@@ -758,11 +758,11 @@ public interface StreamBaseCommands {
      * // assign (force) unread and unclaimed messages to consumer2
      * StreamClaimOptions options = StreamClaimOptions.builder().force().build()
      * Map<String, String[]> results = client.xclaim("mystream", "mygroup", "consumer2", 0L, new String[] {entryId}, options).get();
-     *  for (String key: results.keySet()) {
-     *      System.out.println(key);
-     *      for (String[] entry: results.get(key)) {
-     *          System.out.printf("{%s=%s}%n", entry[0], entry[1]);
-     *      }
+     * for (String key: results.keySet()) {
+     *     System.out.println(key);
+     *     for (String[] entry: results.get(key)) {
+     *         System.out.printf("{%s=%s}%n", entry[0], entry[1]);
+     *     }
      * }
      * </pre>
      */
@@ -791,8 +791,8 @@ public interface StreamBaseCommands {
      * var readResult = client.xreadgroup(Map.of("mystream", entryId), "mygroup", "consumer1").get();
      * // assign unclaimed messages to consumer2
      * Map<String, String[]> results = client.xclaimJustId("mystream", "mygroup", "consumer2", 0L, new String[] {entryId}).get();
-     *  for (String key: results.keySet()) {
-     *      System.out.println(key);
+     * for (String key: results.keySet()) {
+     *     System.out.println(key);
      * }
      * </pre>
      */
@@ -816,8 +816,8 @@ public interface StreamBaseCommands {
      * // assign (force) unread and unclaimed messages to consumer2
      * StreamClaimOptions options = StreamClaimOptions.builder().force().build()
      * Map<String, String[]> results = client.xclaimJustId("mystream", "mygroup", "consumer2", 0L, new String[] {entryId}, options).get();
-     *  for (String key: results.keySet()) {
-     *      System.out.println(key);
+     * for (String key: results.keySet()) {
+     *     System.out.println(key);
      * }
      */
     CompletableFuture<String[]> xclaimJustId(

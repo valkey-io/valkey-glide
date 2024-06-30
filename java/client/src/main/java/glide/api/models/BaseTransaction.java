@@ -3342,7 +3342,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param minIdleTime The minimum idle time for the message to be claimed.
      * @param ids An array of entry ids.
      * @return Command Response - A <code>Map</code> of message entries with the format <code>
-     *     {"entryId": ["entry", "data"], ...}</code> that are claimed by the consumer.
+     *      {"entryId": [["entry", "data"], ...], ...}</code> that are claimed by the consumer.
      */
     public T xclaim(
             @NonNull String key,
@@ -3367,7 +3367,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param ids An array of entry ids.
      * @param options Stream claim options {@link StreamClaimOptions}.
      * @return Command Response - A <code>Map</code> of message entries with the format <code>
-     *     {"entryId": ["entry", "data"], ...}</code> that are claimed by the consumer.
+     *      {"entryId": [["entry", "data"], ...], ...}</code> that are claimed by the consumer.
      */
     public T xclaim(
             @NonNull String key,
