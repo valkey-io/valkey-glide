@@ -8108,7 +8108,8 @@ public class SharedCommandTests {
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         GlideString initialCursor = gs("0");
         long defaultCount = 10;
-        GlideString[] numberMembers = new GlideString[50000]; // Use large dataset to force an iterative cursor.
+        GlideString[] numberMembers =
+                new GlideString[50000]; // Use large dataset to force an iterative cursor.
         for (int i = 0; i < numberMembers.length; i++) {
             numberMembers[i] = gs(String.valueOf(i));
         }
@@ -8140,7 +8141,9 @@ public class SharedCommandTests {
                 String.format("resultMembers: {%s}, charMemberSet: {%s}", resultMembers, charMemberSet));
 
         result =
-                client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern(gs("a")).build()).get();
+                client
+                        .sscan(key1, initialCursor, SScanOptions.builder().matchPattern(gs("a")).build())
+                        .get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertDeepEquals(new GlideString[] {gs("a")}, result[resultCollectionIndex]);
 
@@ -8190,7 +8193,9 @@ public class SharedCommandTests {
 
         // Test match pattern
         result =
-                client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern(gs("*")).build()).get();
+                client
+                        .sscan(key1, initialCursor, SScanOptions.builder().matchPattern(gs("*")).build())
+                        .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
@@ -8203,7 +8208,9 @@ public class SharedCommandTests {
         result =
                 client
                         .sscan(
-                                key1, initialCursor, SScanOptions.builder().matchPattern(gs("1*")).count(20L).build())
+                                key1,
+                                initialCursor,
+                                SScanOptions.builder().matchPattern(gs("1*")).count(20L).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
@@ -8481,7 +8488,9 @@ public class SharedCommandTests {
                         resultValues, expectedScoresAsGlideStrings));
 
         result =
-                client.zscan(key1, initialCursor, ZScanOptions.builder().matchPattern(gs("a")).build()).get();
+                client
+                        .zscan(key1, initialCursor, ZScanOptions.builder().matchPattern(gs("a")).build())
+                        .get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertDeepEquals(new GlideString[] {gs("a"), gs("0")}, result[resultCollectionIndex]);
 
@@ -8543,7 +8552,9 @@ public class SharedCommandTests {
 
         // Test match pattern
         result =
-                client.zscan(key1, initialCursor, ZScanOptions.builder().matchPattern(gs("*")).build()).get();
+                client
+                        .zscan(key1, initialCursor, ZScanOptions.builder().matchPattern(gs("*")).build())
+                        .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
@@ -8556,7 +8567,9 @@ public class SharedCommandTests {
         result =
                 client
                         .zscan(
-                                key1, initialCursor, ZScanOptions.builder().matchPattern(gs("1*")).count(20L).build())
+                                key1,
+                                initialCursor,
+                                ZScanOptions.builder().matchPattern(gs("1*")).count(20L).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
@@ -8764,33 +8777,33 @@ public class SharedCommandTests {
         int resultCollectionIndex = 1;
 
         // Setup test data
-        Map<String, String> numberMap = new HashMap<>();
+        Map<GlideString, GlideString> numberMap = new HashMap<>();
         // This is an unusually large dataset because the server can ignore the COUNT option
         // if the dataset is small enough that it is more efficient to transfer its entire contents
         // at once.
         for (int i = 0; i < 50000; i++) {
-            numberMap.put(String.valueOf(i), "num" + i);
+            numberMap.put(gs(String.valueOf(i)), gs("num" + i));
         }
-        String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
-        Map<String, String> charMap = new HashMap<>();
+        GlideString[] charMembers = new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e")};
+        Map<GlideString, GlideString> charMap = new HashMap<>();
         for (int i = 0; i < 5; i++) {
-            charMap.put(charMembers[i], String.valueOf(i));
+            charMap.put(charMembers[i], gs(String.valueOf(i)));
         }
 
         // Empty set
         Object[] result = client.hscan(key1, initialCursor).get();
-        assertEquals(initialCursor, result[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+        assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
+        assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Negative cursor
-        result = client.hscan(key1, "-1").get();
-        assertEquals(initialCursor, result[resultCursorIndex]);
-        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+        result = client.hscan(key1, gs("-1")).get();
+        assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
+        assertDeepEquals(new GlideString[] {}, result[resultCollectionIndex]);
 
         // Result contains the whole set
         assertEquals(charMembers.length, client.hset(key1, charMap).get());
         result = client.hscan(key1, initialCursor).get();
-        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertEquals(
                 charMap.size() * 2,
                 ((Object[]) result[resultCollectionIndex])
@@ -8812,21 +8825,23 @@ public class SharedCommandTests {
                 String.format("resultValues: {%s} charMap.values(): {%s}", resultValues, charMap.values()));
 
         result =
-                client.hscan(key1, initialCursor, HScanOptions.builder().matchPattern("a").build()).get();
+                client
+                        .hscan(key1, initialCursor, HScanOptions.builder().matchPattern(gs("a")).build())
+                        .get();
         assertEquals(initialCursor, result[resultCursorIndex]);
-        assertDeepEquals(new String[] {"a", "0"}, result[resultCollectionIndex]);
+        assertDeepEquals(new GlideString[] {gs("a"), gs("0")}, result[resultCollectionIndex]);
 
         // Result contains a subset of the key
-        final HashMap<String, String> combinedMap = new HashMap<>(numberMap);
+        final HashMap<GlideString, GlideString> combinedMap = new HashMap<>(numberMap);
         combinedMap.putAll(charMap);
         assertEquals(numberMap.size(), client.hset(key1, combinedMap).get());
-        String resultCursor = "0";
+        GlideString resultCursor = gs("0");
         final Set<Object> secondResultAllKeys = new HashSet<>();
         final Set<Object> secondResultAllValues = new HashSet<>();
         boolean isFirstLoop = true;
         do {
             result = client.hscan(key1, resultCursor).get();
-            resultCursor = result[resultCursorIndex].toString();
+            resultCursor = gs(result[resultCursorIndex].toString());
             Object[] resultEntry = (Object[]) result[resultCollectionIndex];
             for (int i = 0; i < resultEntry.length; i += 2) {
                 secondResultAllKeys.add(resultEntry[i]);
@@ -8834,15 +8849,15 @@ public class SharedCommandTests {
             }
 
             if (isFirstLoop) {
-                assertNotEquals("0", resultCursor);
+                assertNotEquals(gs("0"), resultCursor);
                 isFirstLoop = false;
-            } else if (resultCursor.equals("0")) {
+            } else if (resultCursor.equals(gs("0"))) {
                 break;
             }
 
             // Scan with result cursor has a different set
             Object[] secondResult = client.hscan(key1, resultCursor).get();
-            String newResultCursor = secondResult[resultCursorIndex].toString();
+            GlideString newResultCursor = gs(secondResult[resultCursorIndex].toString());
             assertNotEquals(resultCursor, newResultCursor);
             resultCursor = newResultCursor;
             Object[] secondResultEntry = (Object[]) secondResult[resultCollectionIndex];
@@ -8855,7 +8870,7 @@ public class SharedCommandTests {
                 secondResultAllKeys.add(secondResultEntry[i]);
                 secondResultAllValues.add(secondResultEntry[i + 1]);
             }
-        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+        } while (!resultCursor.equals(gs("0"))); // 0 is returned for the cursor of the last iteration.
 
         assertTrue(
                 secondResultAllKeys.containsAll(numberMap.keySet()),
@@ -8871,7 +8886,9 @@ public class SharedCommandTests {
 
         // Test match pattern
         result =
-                client.hscan(key1, initialCursor, HScanOptions.builder().matchPattern("*").build()).get();
+                client
+                        .hscan(key1, initialCursor, HScanOptions.builder().matchPattern(gs("*")).build())
+                        .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
@@ -8884,14 +8901,16 @@ public class SharedCommandTests {
         result =
                 client
                         .hscan(
-                                key1, initialCursor, HScanOptions.builder().matchPattern("1*").count(20L).build())
+                                key1,
+                                initialCursor,
+                                HScanOptions.builder().matchPattern(gs("1*")).count(20L).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
 
         // Exceptions
         // Non-hash key
-        assertEquals(OK, client.set(key2, "test").get());
+        assertEquals(OK, client.set(key2, gs("test")).get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.hscan(key2, initialCursor).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -8904,7 +8923,7 @@ public class SharedCommandTests {
                                         .hscan(
                                                 key2,
                                                 initialCursor,
-                                                HScanOptions.builder().matchPattern("test").count(1L).build())
+                                                HScanOptions.builder().matchPattern(gs("test")).count(1L).build())
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
@@ -8912,7 +8931,7 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> client.hscan(key1, "-1", HScanOptions.builder().count(-1L).build()).get());
+                        () -> client.hscan(key1, gs("-1"), HScanOptions.builder().count(-1L).build()).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 

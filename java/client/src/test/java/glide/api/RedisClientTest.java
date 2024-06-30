@@ -9362,7 +9362,9 @@ public class RedisClientTest {
         GlideString key = gs("testKey");
         GlideString cursor = gs("0");
         GlideString[] arguments =
-                new GlideString[] {key, cursor, gs(MATCH_OPTION_STRING), gs("*"), gs(COUNT_OPTION_STRING), gs("1")};
+                new GlideString[] {
+                    key, cursor, gs(MATCH_OPTION_STRING), gs("*"), gs(COUNT_OPTION_STRING), gs("1")
+                };
         Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -9466,7 +9468,9 @@ public class RedisClientTest {
         GlideString key = gs("testKey");
         GlideString cursor = gs("0");
         GlideString[] arguments =
-                new GlideString[] {key, cursor, gs(MATCH_OPTION_STRING), gs("*"), gs(COUNT_OPTION_STRING), gs("1")};
+                new GlideString[] {
+                    key, cursor, gs(MATCH_OPTION_STRING), gs("*"), gs(COUNT_OPTION_STRING), gs("1")
+                };
         Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -9570,7 +9574,9 @@ public class RedisClientTest {
         GlideString key = gs("testKey");
         GlideString cursor = gs("0");
         GlideString[] arguments =
-                new GlideString[] {key, cursor, gs(MATCH_OPTION_STRING), gs("*"), gs(COUNT_OPTION_STRING), gs("1")};
+                new GlideString[] {
+                    key, cursor, gs(MATCH_OPTION_STRING), gs("*"), gs(COUNT_OPTION_STRING), gs("1")
+                };
         Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
