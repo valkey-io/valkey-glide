@@ -229,7 +229,7 @@ public interface GenericCommands {
      * @example
      *     <pre>{@code
      * client.hset(gs("user:1"), Map.of(gs("name"), gs("Alice"), gs("age"), gs("30"))).get();
-     * client.hset(gs("user:2"), Map.of("name"), gs("Bob"), gs("age"), gs("25"))).get();
+     * client.hset(gs("user:2"), Map.of(gs("name"), gs("Bob"), gs("age"), gs("25"))).get();
      * client.lpush(gs("user_ids"), new GlideString[] {gs("2"), gs("1")}).get();
      * GlideString [] payload = client.sort(gs("user_ids"), SortOptions.builder().byPattern("user:*->age")
      *                  .getPattern("user:*->name").build()).get();

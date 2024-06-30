@@ -143,7 +143,7 @@ public interface HashBaseCommands {
      * @example
      *     <pre>{@code
      * String[] values = client.hvals("myHash").get();
-     * assert values.equals(new String[] {"value1", "value2", "value3"}); // Returns all the values stored in the hash "myHash".
+     * assert Arrays.equals(values, new String[] {"value1", "value2", "value3"}); // Returns all the values stored in the hash "myHash".
      * }</pre>
      */
     CompletableFuture<String[]> hvals(String key);
@@ -158,7 +158,7 @@ public interface HashBaseCommands {
      * @example
      *     <pre>{@code
      * GlideString[] values = client.hvals(gs("myHash")).get();
-     * assert values.equals(new GlideString[] {gs("value1"), gs("value2"), gs("value3")}); // Returns all the values stored in the hash "myHash".
+     * assert Arrays.equals(values, new GlideString[] {gs("value1"), gs("value2"), gs("value3")}); // Returns all the values stored in the hash "myHash".
      * }</pre>
      */
     CompletableFuture<GlideString[]> hvals(GlideString key);
@@ -177,7 +177,7 @@ public interface HashBaseCommands {
      * @example
      *     <pre>{@code
      * String[] values = client.hmget("my_hash", new String[] {"field1", "field2"}).get()
-     * assert values.equals(new String[] {"value1", "value2"});
+     * assert Arrays.equals(values, new String[] {"value1", "value2"});
      * }</pre>
      */
     CompletableFuture<String[]> hmget(String key, String[] fields);
@@ -196,7 +196,7 @@ public interface HashBaseCommands {
      * @example
      *     <pre>{@code
      * GlideString[] values = client.hmget(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2")}).get()
-     * assert values.equals(new GlideString[] {gs("value1"), gs("value2")});
+     * assert Arrays.equals(values, new GlideString[] {gs("value1"), gs("value2")});
      * }</pre>
      */
     CompletableFuture<GlideString[]> hmget(GlideString key, GlideString[] fields);

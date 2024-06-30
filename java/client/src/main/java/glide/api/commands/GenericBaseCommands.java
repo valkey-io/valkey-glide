@@ -1262,7 +1262,7 @@ public interface GenericBaseCommands {
      * assert client.sortStore(gs("mylist"), gs("destination")).get() == 3;
      * assertArrayEquals(
      *    new GlideString[] {gs("1"), gs("2"), gs("3")},
-     *    client.lrange("destination", 0, -1).get()); // Sorted list is stored in `destination`
+     *    client.lrange(gs("destination"), 0, -1).get()); // Sorted list is stored in `destination`
      * }</pre>
      */
     CompletableFuture<Long> sortStore(GlideString key, GlideString destination);
