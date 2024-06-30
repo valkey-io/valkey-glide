@@ -8230,9 +8230,17 @@ class TestClusterRoutes:
         num_map_with_str_scores = {}
         for i in range(50000):  # Use large dataset to force an iterative cursor.
             num_map.update({"value " + str(i): i})
-            num_map_with_str_scores.update({b"value " + str(i).encode(): str(i).encode()})
+            num_map_with_str_scores.update(
+                {b"value " + str(i).encode(): str(i).encode()}
+            )
         char_map = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4}
-        char_map_with_str_scores = {b"a": b"0", b"b": b"1", b"c": b"2", b"d": b"3", b"e": b"4"}
+        char_map_with_str_scores = {
+            b"a": b"0",
+            b"b": b"1",
+            b"c": b"2",
+            b"d": b"3",
+            b"e": b"4",
+        }
 
         convert_list_to_dict = lambda list: {
             list[i]: list[i + 1] for i in range(0, len(list), 2)
@@ -8263,9 +8271,8 @@ class TestClusterRoutes:
 
         # Result contains a subset of the key
         assert await redis_client.zadd(key1, num_map) == len(num_map)
-        result_cursor = "0"
         full_result_map = {}
-        result = await redis_client.zscan(key1, result_cursor)
+        result = await redis_client.zscan(key1, initial_cursor)
         result_cursor = result[result_cursor_index]
         result_iteration_collection: dict[str, str] = convert_list_to_dict(
             result[result_collection_index]
@@ -8355,7 +8362,9 @@ class TestClusterRoutes:
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result_collection) == len(char_map) * 2
-        assert convert_list_to_dict(result_collection) == cast(dict, convert_string_to_bytes_object(char_map))
+        assert convert_list_to_dict(result_collection) == cast(
+            dict, convert_string_to_bytes_object(char_map)
+        )
 
         result = await redis_client.hscan(key1, initial_cursor, match="field a")
         result_collection = result[result_collection_index]
