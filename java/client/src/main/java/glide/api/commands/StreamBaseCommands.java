@@ -1,10 +1,11 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
@@ -397,7 +398,7 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param groupname The newly created consumer group name.
+     * @param groupname The consumer group name to delete.
      * @return <code>true</code> if the consumer group is destroyed. Otherwise, <code>false</code>.
      * @example
      *     <pre>{@code
@@ -430,7 +431,7 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer to delete.
      * @return The number of pending messages the <code>consumer</code> had before it was deleted.
      * @example
      *     <pre>{@code
@@ -452,16 +453,15 @@ public interface StreamBaseCommands {
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer name.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code> with a value of <code>null</code> if the stream is empty.
+     *      Returns <code>null</code> if there is no stream that can be served.
      * @example
      *     <pre>{@code
      * // create a new stream at "mystream", with stream id "1-0"
-     * Map<String, String> xreadKeys = Map.of("myfield", "mydata");
      * String streamId = client.xadd("mystream", Map.of("myfield", "mydata"), StreamAddOptions.builder().id("1-0").build()).get();
-     * assert client.xgroupCreate("mystream", "mygroup").get().equals("OK"); // create the consumer group "mygroup"
+     * assert client.xgroupCreate("mystream", "mygroup", "0-0").get().equals("OK"); // create the consumer group "mygroup"
      * Map<String, Map<String, String[][]>> streamReadResponse = client.xreadgroup(Map.of("mystream", ">"), "mygroup", "myconsumer").get();
      * // Returns "mystream": "1-0": {{"myfield", "mydata"}}
      * for (var keyEntry : streamReadResponse.entrySet()) {
@@ -472,10 +472,6 @@ public interface StreamBaseCommands {
      *         );
      *     }
      * }
-     * assert client.xdel("mystream", "1-0").get() == 1L;
-     * client.xreadgroup(Map.of("mystream", "0"), "mygroup", "myconsumer").get();
-     * // Returns "mystream": "1-0": null
-     * assert streamReadResponse.get("mystream").get("1-0") == null;
      * </pre>
      */
     CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
@@ -491,17 +487,16 @@ public interface StreamBaseCommands {
      *     Map</code> is composed of a stream's key and the id of the entry after which the stream
      *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
-     * @param consumer The newly created consumer.
+     * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns <code>null</code> if the consumer group does not exist. Returns a <code>Map</code> with a value of <code>null</code> if the stream is empty.
+     *      Returns <code>null</code> if the {@link StreamReadGroupOptions#block} option is given and a timeout occurs, or if there is no stream that can be served.
      * @example
      *     <pre>{@code
      * // create a new stream at "mystream", with stream id "1-0"
-     * Map<String, String> xreadKeys = Map.of("myfield", "mydata");
      * String streamId = client.xadd("mystream", Map.of("myfield", "mydata"), StreamAddOptions.builder().id("1-0").build()).get();
-     * assert client.xgroupCreate("mystream", "mygroup").get().equals("OK"); // create the consumer group "mygroup"
+     * assert client.xgroupCreate("mystream", "mygroup", "0-0").get().equals("OK"); // create the consumer group "mygroup"
      * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(1).build(); // retrieves only a single message at a time
      * Map<String, Map<String, String[][]>> streamReadResponse = client.xreadgroup(Map.of("mystream", ">"), "mygroup", "myconsumer", options).get();
      * // Returns "mystream": "1-0": {{"myfield", "mydata"}}
@@ -513,12 +508,6 @@ public interface StreamBaseCommands {
      *         );
      *     }
      * }
-     * assert client.xdel("mystream", "1-0").get() == 1L;
-     * // read the first 10 items and acknowledge (ACK) them:
-     * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(10L).noack().build();
-     * streamReadResponse = client.xreadgroup(Map.of("mystream", "0"), "mygroup", "myconsumer", options).get();
-     * // Returns "mystream": "1-0": null
-     * assert streamReadResponse.get("mystream").get("1-0") == null;
      * </pre>
      */
     CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
@@ -531,6 +520,7 @@ public interface StreamBaseCommands {
      * Returns the number of messages that were successfully acknowledged by the consumer group member of a stream.
      * This command should be called on a pending message so that such message does not get processed again.
      *
+     * @see <a href="https://valkey.io/commands/xack/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param group The consumer group name.
      * @param ids Stream entry ID to acknowledge and purge messages.
@@ -564,4 +554,122 @@ public interface StreamBaseCommands {
      * </pre>
      */
     CompletableFuture<Long> xack(GlideString key, GlideString group, GlideString[] ids);
+
+    /**
+     * Returns stream message summary information for pending messages matching a given range of IDs.
+     *
+     * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @return An <code>array</code> that includes the summary of pending messages, with the format
+     * <code>[NumOfMessages, StartId, EndId, [Consumer, NumOfMessages]]</code>, where:
+     * <ul>
+     *      <li> <code>NumOfMessages</code>: The total number of pending messages for this consumer group.
+     *      <li> <code>StartId</code>: The smallest ID among the pending messages.
+     *      <li> <code>EndId</code>: The greatest ID among the pending messages.
+     *      <li> <code>[[Consumer, NumOfMessages], ...]</code>: A 2D-<code>array</code> of every consumer
+     *      in the consumer group with at least one pending message, and the number of pending messages it has.
+     * </ul>
+     * @example
+     *       <pre>{@code
+     * // Retrieve a summary of all pending messages from key "my_stream"
+     * Object[] result = client.xpending("my_stream", "my_group").get();
+     * System.out.println("Number of pending messages: " + result[0]);
+     * System.out.println("Start and End ID of messages: [" + result[1] + ", " + result[2] + "]");
+     * for (Object[] consumerResult : (Object[][]) result[3]) {
+     *     System.out.println("Number of Consumer messages: [" + consumerResult[0] + ", " + consumerResult[1] + "]");
+     * }</pre>
+     */
+    CompletableFuture<Object[]> xpending(String key, String group);
+
+    /**
+     * Returns an extended form of stream message information for pending messages matching a given range of IDs.
+     *
+     * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     * @param count Limits the number of messages returned.
+     * @return A 2D-<code>array</code> of 4-tuples containing extended message information with the format
+     * <code>[[ID, Consumer, TimeElapsed, NumOfDelivered], ... ]</code>, where:
+     * <ul>
+     *      <li> <code>ID</code>: The ID of the message.
+     *      <li> <code>Consumer</code>: The name of the consumer that fetched the message and has still to acknowledge it. We call it the current owner of the message.
+     *      <li> <code>TimeElapsed</code>: The number of milliseconds that elapsed since the last time this message was delivered to this consumer.
+     *      <li> <code>NumOfDelivered</code>: The number of times this message was delivered.
+     * </ul>
+     * @example
+     *       <pre>{@code
+     * // Retrieve up to 10 pending messages from key "my_stream" in extended form
+     * Object[][] result = client.xpending("my_stream", "my_group", InfRangeBound.MIN, InfRangeBound.MAX, 10L).get();
+     * for (Object[] messageResult : result) {
+     *     System.out.printf("Message %s from consumer %s was read %s times", messageResult[0], messageResult[1], messageResult[2]);
+     * }</pre>
+     */
+    CompletableFuture<Object[][]> xpending(
+            String key, String group, StreamRange start, StreamRange end, long count);
+
+    /**
+     * Returns an extended form of stream message information for pending messages matching a given range of IDs.
+     *
+     * @see <a href="https://valkey.io/commands/xpending/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param start Starting stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MIN} to start with the minimum available ID.
+     *     </ul>
+     *
+     * @param end Ending stream ID bound for range.
+     *     <ul>
+     *       <li>Use {@link IdBound#of} to specify a stream ID.
+     *       <li>Use {@link IdBound#ofExclusive} to specify an exclusive bounded stream ID.
+     *       <li>Use {@link InfRangeBound#MAX} to end with the maximum available ID.
+     *     </ul>
+     * @param count Limits the number of messages returned.
+     * @param options Stream add options {@link StreamPendingOptions}.
+     * @return A 2D-<code>array</code> of 4-tuples containing extended message information with the format
+     * <code>[[ID, Consumer, TimeElapsed, NumOfDelivered], ... ]</code>, where:
+     * <ul>
+     *      <li> <code>ID</code>: The ID of the message.
+     *      <li> <code>Consumer</code>: The name of the consumer that fetched the message and has still to acknowledge it. We call it the current owner of the message.
+     *      <li> <code>TimeElapsed</code>: The number of milliseconds that elapsed since the last time this message was delivered to this consumer.
+     *      <li> <code>NumOfDelivered</code>: The number of times this message was delivered.
+     * </ul>
+     * @example
+     *       <pre>{@code
+     * // Retrieve up to 10 pending messages from key "my_stream" and consumer "my_consumer" in extended form
+     * Object[][] result = client.xpending(
+     *     "my_stream",
+     *     "my_group",
+     *     InfRangeBound.MIN,
+     *     InfRangeBound.MAX,
+     *     10L,
+     *     StreamPendingOptions.builder().consumer("my_consumer").build()
+     * ).get();
+     * for (Object[] messageResult : result) {
+     *     System.out.printf("Message %s from consumer %s was read %s times", messageResult[0], messageResult[1], messageResult[2]);
+     * }</pre>
+     */
+    CompletableFuture<Object[][]> xpending(
+            String key,
+            String group,
+            StreamRange start,
+            StreamRange end,
+            long count,
+            StreamPendingOptions options);
 }

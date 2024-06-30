@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 import time
 from datetime import date, datetime, timedelta, timezone
@@ -39,8 +39,11 @@ from glide.async_commands.sorted_set import (
 )
 from glide.async_commands.stream import (
     IdBound,
+    MaxId,
+    MinId,
     StreamAddOptions,
     StreamGroupOptions,
+    StreamReadGroupOptions,
     TrimByMinId,
 )
 from glide.async_commands.transaction import (
@@ -50,15 +53,19 @@ from glide.async_commands.transaction import (
 )
 from glide.config import ProtocolVersion
 from glide.constants import OK, TResult
-from glide.redis_client import RedisClient, RedisClusterClient, TRedisClient
+from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from tests.conftest import create_client
-from tests.utils.utils import check_if_server_version_lt, get_random_string
+from tests.utils.utils import (
+    check_if_server_version_lt,
+    generate_lua_lib_code,
+    get_random_string,
+)
 
 
 async def transaction_test(
     transaction: Union[Transaction, ClusterTransaction],
     keyslot: str,
-    redis_client: TRedisClient,
+    redis_client: TGlideClient,
 ) -> List[TResult]:
     key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
     key2 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
@@ -81,11 +88,30 @@ async def transaction_test(
     key19 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
     key20 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # bitmap
     key22 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # getex
+    key23 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # string
+    key24 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # string
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value2 = get_random_string(5)
     value3 = get_random_string(5)
+    lib_name = f"mylib1C{get_random_string(5)}"
+    func_name = f"myfunc1c{get_random_string(5)}"
+    code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
     args: List[TResult] = []
+
+    if not await check_if_server_version_lt(redis_client, "7.0.0"):
+        transaction.function_load(code)
+        args.append(lib_name)
+        transaction.function_load(code, True)
+        args.append(lib_name)
+        transaction.function_delete(lib_name)
+        args.append(OK)
+        transaction.function_flush()
+        args.append(OK)
+        transaction.function_flush(FlushMode.ASYNC)
+        args.append(OK)
+        transaction.function_flush(FlushMode.SYNC)
+        args.append(OK)
 
     transaction.dbsize()
     args.append(0)
@@ -270,6 +296,10 @@ async def transaction_test(
     args.append(2)
     transaction.srem(key7, ["foo"])
     args.append(1)
+    transaction.sscan(key7, "0")
+    args.append(["0", ["bar"]])
+    transaction.sscan(key7, "0", match="*", count=10)
+    args.append(["0", ["bar"]])
     transaction.smembers(key7)
     args.append({"bar"})
     transaction.scard(key7)
@@ -491,7 +521,7 @@ async def transaction_test(
     group_name1 = get_random_string(10)
     group_name2 = get_random_string(10)
     consumer = get_random_string(10)
-    transaction.xgroup_create(key11, group_name1, "0-0")
+    transaction.xgroup_create(key11, group_name1, "0-1")
     args.append(OK)
     transaction.xgroup_create(
         key11, group_name2, "0-0", StreamGroupOptions(make_stream=True)
@@ -499,6 +529,18 @@ async def transaction_test(
     args.append(OK)
     transaction.xgroup_create_consumer(key11, group_name1, consumer)
     args.append(True)
+    transaction.xreadgroup(
+        {key11: ">"}, group_name1, consumer, StreamReadGroupOptions(count=5)
+    )
+    args.append({key11: {"0-2": [["foo", "bar"]]}})
+    transaction.xpending(key11, group_name1)
+    args.append([1, "0-2", "0-2", [[consumer, "1"]]])
+    transaction.xack(key11, group_name1, ["0-2"])
+    args.append(1)
+    transaction.xpending_range(key11, group_name1, MinId(), MaxId(), 1)
+    args.append([])
+    transaction.xgroup_set_id(key11, group_name1, "0-2")
+    args.append(OK)
     transaction.xgroup_del_consumer(key11, group_name1, consumer)
     args.append(0)
     transaction.xgroup_destroy(key11, group_name1)
@@ -536,10 +578,20 @@ async def transaction_test(
     args.append(OK)
     transaction.flushall()
     args.append(OK)
+    transaction.flushdb(FlushMode.ASYNC)
+    args.append(OK)
+    transaction.flushdb()
+    args.append(OK)
+    transaction.set(key, "foo")
+    args.append(OK)
+    transaction.random_key()
+    args.append(key)
 
     min_version = "6.2.0"
     if not await check_if_server_version_lt(redis_client, min_version):
         transaction.flushall(FlushMode.SYNC)
+        args.append(OK)
+        transaction.flushdb(FlushMode.SYNC)
         args.append(OK)
 
     min_version = "6.2.0"
@@ -560,6 +612,19 @@ async def transaction_test(
         transaction.bzmpop([key16], ScoreFilter.MIN, 0.1, 2)
         args.append([key16, {"a": 1.0, "b": 2.0}])
 
+        transaction.mset({key23: "abcd1234", key24: "bcdef1234"})
+        args.append(OK)
+        transaction.lcs(key23, key24)
+        args.append("bcd1234")
+        transaction.lcs_len(key23, key24)
+        args.append(7)
+        transaction.lcs_idx(key23, key24)
+        args.append({"matches": [[[4, 7], [5, 8]], [[1, 3], [0, 2]]], "len": 7})
+        transaction.lcs_idx(key23, key24, min_match_len=4)
+        args.append({"matches": [[[4, 7], [5, 8]]], "len": 7})
+        transaction.lcs_idx(key23, key24, with_match_len=True)
+        args.append({"matches": [[[4, 7], [5, 8], 4], [[1, 3], [0, 2], 3]], "len": 7})
+
     return args
 
 
@@ -567,10 +632,10 @@ async def transaction_test(
 class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_with_different_slots(self, redis_client: TRedisClient):
+    async def test_transaction_with_different_slots(self, redis_client: TGlideClient):
         transaction = (
             Transaction()
-            if isinstance(redis_client, RedisClient)
+            if isinstance(redis_client, GlideClient)
             else ClusterTransaction()
         )
         transaction.set("key1", "value1")
@@ -580,11 +645,11 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_custom_command(self, redis_client: TRedisClient):
+    async def test_transaction_custom_command(self, redis_client: TGlideClient):
         key = get_random_string(10)
         transaction = (
             Transaction()
-            if isinstance(redis_client, RedisClient)
+            if isinstance(redis_client, GlideClient)
             else ClusterTransaction()
         )
         transaction.custom_command(["HSET", key, "foo", "bar"])
@@ -595,12 +660,12 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_custom_unsupported_command(
-        self, redis_client: TRedisClient
+        self, redis_client: TGlideClient
     ):
         key = get_random_string(10)
         transaction = (
             Transaction()
-            if isinstance(redis_client, RedisClient)
+            if isinstance(redis_client, GlideClient)
             else ClusterTransaction()
         )
         transaction.custom_command(["WATCH", key])
@@ -612,12 +677,12 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_discard_command(self, redis_client: TRedisClient):
+    async def test_transaction_discard_command(self, redis_client: TGlideClient):
         key = get_random_string(10)
         await redis_client.set(key, "1")
         transaction = (
             Transaction()
-            if isinstance(redis_client, RedisClient)
+            if isinstance(redis_client, GlideClient)
             else ClusterTransaction()
         )
 
@@ -631,7 +696,7 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_exec_abort(self, redis_client: TRedisClient):
+    async def test_transaction_exec_abort(self, redis_client: TGlideClient):
         key = get_random_string(10)
         transaction = BaseTransaction()
         transaction.custom_command(["INCR", key, key, key])
@@ -643,7 +708,7 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_cluster_transaction(self, redis_client: RedisClusterClient):
+    async def test_cluster_transaction(self, redis_client: GlideClusterClient):
         assert await redis_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
         transaction = ClusterTransaction()
@@ -658,9 +723,9 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_can_return_null_on_watch_transaction_failures(
-        self, redis_client: TRedisClient, request
+        self, redis_client: TGlideClient, request
     ):
-        is_cluster = isinstance(redis_client, RedisClusterClient)
+        is_cluster = isinstance(redis_client, GlideClusterClient)
         client2 = await create_client(
             request,
             is_cluster,
@@ -679,9 +744,26 @@ class TestTransaction:
 
         await client2.close()
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_transaction_large_values(self, request, cluster_mode, protocol):
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+        )
+        length = 2**25  # 33mb
+        key = "0" * length
+        value = "0" * length
+        transaction = Transaction()
+        transaction.set(key, value)
+        transaction.get(key)
+        result = await redis_client.exec(transaction)
+        assert isinstance(result, list)
+        assert result[0] == OK
+        assert result[1] == value
+
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_standalone_transaction(self, redis_client: RedisClient):
+    async def test_standalone_transaction(self, redis_client: GlideClient):
         assert await redis_client.custom_command(["FLUSHALL"]) == OK
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot
@@ -731,7 +813,7 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_standalone_copy_transaction(self, redis_client: RedisClient):
+    async def test_standalone_copy_transaction(self, redis_client: GlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -752,8 +834,8 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_transaction_chaining_calls(self, redis_client: TRedisClient):
-        cluster_mode = isinstance(redis_client, RedisClusterClient)
+    async def test_transaction_chaining_calls(self, redis_client: TGlideClient):
+        cluster_mode = isinstance(redis_client, GlideClusterClient)
         key = get_random_string(3)
 
         transaction = ClusterTransaction() if cluster_mode else Transaction()
@@ -768,7 +850,7 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_object_commands(
-        self, redis_client: TRedisClient, cluster_mode: bool
+        self, redis_client: TGlideClient, cluster_mode: bool
     ):
         string_key = get_random_string(10)
         maxmemory_policy_key = "maxmemory-policy"
@@ -806,7 +888,7 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_lastsave(
-        self, redis_client: TRedisClient, cluster_mode: bool
+        self, redis_client: TGlideClient, cluster_mode: bool
     ):
         yesterday = date.today() - timedelta(1)
         yesterday_unix_time = time.mktime(yesterday.timetuple())
@@ -820,7 +902,7 @@ class TestTransaction:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_lolwut_transaction(self, redis_client: RedisClusterClient):
+    async def test_lolwut_transaction(self, redis_client: GlideClusterClient):
         transaction = Transaction()
         transaction.lolwut().lolwut(5).lolwut(parameters=[1, 2]).lolwut(6, [42])
         results = await redis_client.exec(transaction)

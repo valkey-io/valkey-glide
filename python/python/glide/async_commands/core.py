@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -48,9 +48,12 @@ from glide.async_commands.sorted_set import (
 from glide.async_commands.stream import (
     StreamAddOptions,
     StreamGroupOptions,
+    StreamPendingOptions,
     StreamRangeBound,
+    StreamReadGroupOptions,
     StreamReadOptions,
     StreamTrimOptions,
+    _create_xpending_range_args,
 )
 from glide.constants import TOK, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
@@ -2916,6 +2919,215 @@ class CoreCommands(Protocol):
             ),
         )
 
+    async def xgroup_set_id(
+        self,
+        key: str,
+        group_name: str,
+        stream_id: str,
+        entries_read_id: Optional[str] = None,
+    ) -> TOK:
+        """
+        Set the last delivered ID for a consumer group.
+
+        See https://valkey.io/commands/xgroup-setid for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            stream_id (str): The stream entry ID that should be set as the last delivered ID for the consumer group.
+            entries_read_id (Optional[str]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
+                used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last
+                entry. This argument can only be specified if you are using Redis version 7.0.0 or above.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.xgroup_set_id("mystream", "mygroup", "0")
+                OK  # The last delivered ID for consumer group "mygroup" was set to 0.
+        """
+        args = [key, group_name, stream_id]
+        if entries_read_id is not None:
+            args.extend(["ENTRIESREAD", entries_read_id])
+
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.XGroupSetId, args),
+        )
+
+    async def xreadgroup(
+        self,
+        keys_and_ids: Mapping[str, str],
+        group_name: str,
+        consumer_name: str,
+        options: Optional[StreamReadGroupOptions] = None,
+    ) -> Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]:
+        """
+        Reads entries from the given streams owned by a consumer group.
+
+        See https://valkey.io/commands/xreadgroup for more details.
+
+        Note:
+            When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
+
+        Args:
+            keys_and_ids (Mapping[str, str]): A mapping of stream keys to stream entry IDs to read from. The special ">"
+                ID returns messages that were never delivered to any other consumer. Any other valid ID will return
+                entries pending for the consumer with IDs greater than the one provided.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name. The consumer will be auto-created if it does not already exist.
+            options (Optional[StreamReadGroupOptions]): Options detailing how to read the stream.
+
+        Returns:
+            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]: A mapping of stream keys, to a mapping of
+                stream IDs, to a list of pairings with format `[[field, entry], [field, entry], ...]`.
+                Returns None if the BLOCK option is given and a timeout occurs, or if there is no stream that can be served.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="1-0"))
+            >>> await client.xgroup_create("mystream", "mygroup", "0-0")
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer", StreamReadGroupOptions(count=1))
+                {
+                    "mystream": {
+                        "1-0": [["field1", "value1"]],
+                    }
+                }  # Read one stream entry from "mystream" using "myconsumer" in the consumer group "mygroup".
+        """
+        args = ["GROUP", group_name, consumer_name]
+        if options is not None:
+            args.extend(options.to_args())
+
+        args.append("STREAMS")
+        args.extend([key for key in keys_and_ids.keys()])
+        args.extend([value for value in keys_and_ids.values()])
+
+        return cast(
+            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]],
+            await self._execute_command(RequestType.XReadGroup, args),
+        )
+
+    async def xack(
+        self,
+        key: str,
+        group_name: str,
+        ids: List[str],
+    ) -> int:
+        """
+        Removes one or multiple messages from the Pending Entries List (PEL) of a stream consumer group.
+        This command should be called on pending messages so that such messages do not get processed again by the
+        consumer group.
+
+        See https://valkey.io/commands/xack for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            ids (List[str]): The stream entry IDs to acknowledge and consume for the given consumer group.
+
+        Returns:
+            int: The number of messages that were successfully acknowledged.
+
+        Examples:
+            >>> await client.xadd("mystream", [("field1", "value1")], StreamAddOptions(id="1-0"))
+            >>> await client.xgroup_create("mystream", "mygroup", "0-0")
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer")
+                {
+                    "mystream": {
+                        "1-0": [["field1", "value1"]],
+                    }
+                }  # Read one stream entry, the entry is now in the Pending Entries List for "mygroup".
+            >>> await client.xack("mystream", "mygroup", ["1-0"])
+                1  # 1 pending message was acknowledged and removed from the Pending Entries List for "mygroup".
+        """
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.XAck, [key, group_name] + ids),
+        )
+
+    async def xpending(
+        self,
+        key: str,
+        group_name: str,
+    ) -> List[Union[int, str, List[List[str]], None]]:
+        """
+        Returns stream message summary information for pending messages for the given consumer group.
+
+        See https://valkey.io/commands/xpending for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+
+        Returns:
+            List[Union[int, str, List[List[str]], None]]: A list that includes the summary of pending messages, with the
+                format `[num_group_messages, start_id, end_id, [[consumer_name, num_consumer_messages]]]`, where:
+                - `num_group_messages`: The total number of pending messages for this consumer group.
+                - `start_id`: The smallest ID among the pending messages.
+                - `end_id`: The greatest ID among the pending messages.
+                - `[[consumer_name, num_consumer_messages]]`: A 2D list of every consumer in the consumer group with at
+                least one pending message, and the number of pending messages it has.
+
+                If there are no pending messages for the given consumer group, `[0, None, None, None]` will be returned.
+
+        Examples:
+            >>> await client.xpending("my_stream", "my_group")
+                [4, "1-0", "1-3", [["my_consumer1", "3"], ["my_consumer2", "1"]]
+        """
+        return cast(
+            List[Union[int, str, List[List[str]], None]],
+            await self._execute_command(RequestType.XPending, [key, group_name]),
+        )
+
+    async def xpending_range(
+        self,
+        key: str,
+        group_name: str,
+        start: StreamRangeBound,
+        end: StreamRangeBound,
+        count: int,
+        options: Optional[StreamPendingOptions] = None,
+    ) -> List[List[Union[str, int]]]:
+        """
+        Returns an extended form of stream message information for pending messages matching a given range of IDs.
+
+        See https://valkey.io/commands/xpending for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            start (StreamRangeBound): The starting stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MinId` to start with the minimum available ID.
+            end (StreamRangeBound): The ending stream ID bound for the range.
+                - Use `IdBound` to specify a stream ID.
+                - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
+                - Use `MaxId` to end with the maximum available ID.
+            count (int): Limits the number of messages returned.
+            options (Optional[StreamPendingOptions]): The stream pending options.
+
+        Returns:
+            List[List[Union[str, int]]]: A list of lists, where each inner list is a length 4 list containing extended
+                message information with the format `[[id, consumer_name, time_elapsed, num_delivered]]`, where:
+                - `id`: The ID of the message.
+                - `consumer_name`: The name of the consumer that fetched the message and has still to acknowledge it. We
+                call it the current owner of the message.
+                - `time_elapsed`: The number of milliseconds that elapsed since the last time this message was delivered
+                to this consumer.
+                - `num_delivered`: The number of times this message was delivered.
+
+        Examples:
+            >>> await client.xpending_range("my_stream", "my_group", MinId(), MaxId(), 10, StreamPendingOptions(consumer_name="my_consumer"))
+                [["1-0", "my_consumer", 1234, 1], ["1-1", "my_consumer", 1123, 1]]
+                # Extended stream entry information for the pending entries associated with "my_consumer".
+        """
+        args = _create_xpending_range_args(key, group_name, start, end, count, options)
+        return cast(
+            List[List[Union[str, int]]],
+            await self._execute_command(RequestType.XPending, args),
+        )
+
     async def geoadd(
         self,
         key: str,
@@ -5168,6 +5380,66 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GetEx, args),
         )
 
+    async def sscan(
+        self,
+        key: str,
+        cursor: str,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> List[Union[str, List[str]]]:
+        """
+        Iterates incrementally over a set.
+
+        See https://valkey.io/commands/sscan for more details.
+
+        Args:
+            key (str): The key of the set.
+            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+                the search.
+            match (Optional[str]): The match filter is applied to the result of the command and will only include
+                strings that match the pattern specified. If the set is large enough for scan commands to return only a
+                subset of the set then there could be a case where the result is empty although there are items that
+                match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
+                only fetch and match `10` items from the list.
+            count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the set.
+                `COUNT` could be ignored until the set is large enough for the `SCAN` commands to represent the results
+                as compact single-allocation packed encoding.
+
+        Returns:
+            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the set held by `key`.
+                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+                returned on the last iteration of the set. The second element is always an `Array` of the subset of the
+                set held in `key`.
+
+        Examples:
+            # Assume "key" contains a set with 130 members
+            >>> result_cursor = "0"
+            >>> while True:
+            ...     result = await redis_client.sscan("key", "0", match="*")
+            ...     new_cursor = str(result [0])
+            ...     print("Cursor: ", new_cursor)
+            ...     print("Members: ", result[1])
+            ...     if new_cursor == "0":
+            ...         break
+            ...     result_cursor = new_cursor
+            Cursor:  48
+            Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
+            Cursor:  24
+            Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
+            Cursor:  0
+            Members:  ['47', '122', '1', '53', '10', '14', '80']
+        """
+        args = [key, cursor]
+        if match is not None:
+            args += ["MATCH", match]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return cast(
+            List[Union[str, List[str]]],
+            await self._execute_command(RequestType.SScan, args),
+        )
+
     @dataclass
     class PubSubMsg:
         """
@@ -5216,3 +5488,173 @@ class CoreCommands(Protocol):
             >>> pubsub_msg = listening_client.try_get_pubsub_message()
         """
         ...
+
+    async def lcs(
+        self,
+        key1: str,
+        key2: str,
+    ) -> str:
+        """
+        Returns the longest common subsequence between strings stored at key1 and key2.
+
+        Note that this is different than the longest common string algorithm, since
+        matching characters in the two strings do not need to be contiguous.
+
+        For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
+        from left to right, the longest common set of characters is composed of the first "f" and then the "o".
+
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+
+        Returns:
+            A String containing the longest common subsequence between the 2 strings.
+            An empty String is returned if the keys do not exist or have no common subsequences.
+
+        Examples:
+            >>> await client.mset({"testKey1" : "abcd", "testKey2": "axcd"})
+                'OK'
+            >>> await client.lcs("testKey1", "testKey2")
+                'acd'
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2]
+
+        return cast(
+            str,
+            await self._execute_command(RequestType.LCS, args),
+        )
+
+    async def lcs_len(
+        self,
+        key1: str,
+        key2: str,
+    ) -> int:
+        """
+        Returns the length of the longest common subsequence between strings stored at key1 and key2.
+
+        Note that this is different than the longest common string algorithm, since
+        matching characters in the two strings do not need to be contiguous.
+
+        For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
+        from left to right, the longest common set of characters is composed of the first "f" and then the "o".
+
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+
+        Returns:
+            The length of the longest common subsequence between the 2 strings.
+
+        Examples:
+            >>> await client.mset({"testKey1" : "abcd", "testKey2": "axcd"})
+                'OK'
+            >>> await client.lcs_len("testKey1", "testKey2")
+                3  # the length of the longest common subsequence between these 2 strings ("acd") is 3.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2, "LEN"]
+
+        return cast(
+            int,
+            await self._execute_command(RequestType.LCS, args),
+        )
+
+    async def lcs_idx(
+        self,
+        key1: str,
+        key2: str,
+        min_match_len: Optional[int] = None,
+        with_match_len: Optional[bool] = False,
+    ) -> Mapping[str, Union[list[list[Union[list[int], int]]], int]]:
+        """
+        Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
+
+        Note that this is different than the longest common string algorithm, since
+        matching characters in the two strings do not need to be contiguous.
+
+        For instance the LCS between "foo" and "fao" is "fo", since scanning the two strings
+        from left to right, the longest common set of characters is composed of the first "f" and then the "o".
+
+        See https://valkey.io/commands/lcs for more details.
+
+        Args:
+            key1 (str): The key that stores the first string.
+            key2 (str): The key that stores the second string.
+            min_match_len (Optional[int]): The minimum length of matches to include in the result.
+            with_match_len (Optional[bool]): If True, include the length of the substring matched for each substring.
+
+        Returns:
+            A Mapping containing the indices of the longest common subsequence between the
+            2 strings and the length of the longest common subsequence. The resulting map contains two
+            keys, "matches" and "len":
+                - "len" is mapped to the length of the longest common subsequence between the 2 strings.
+                - "matches" is mapped to a three dimensional int array that stores pairs of indices that
+                  represent the location of the common subsequences in the strings held by key1 and key2,
+                  with the length of the match after each matches, if with_match_len is enabled.
+
+        Examples:
+            >>> await client.mset({"testKey1" : "abcd1234", "testKey2": "bcdef1234"})
+                'OK'
+            >>> await client.lcs_idx("testKey1", "testKey2")
+                {
+                    'matches': [
+                        [
+                            [4, 7],  # starting and ending indices of the subsequence "1234" in "abcd1234" (testKey1)
+                            [5, 8],  # starting and ending indices of the subsequence "1234" in "bcdef1234" (testKey2)
+                        ],
+                        [
+                            [1, 3],  # starting and ending indices of the subsequence "bcd" in "abcd1234" (testKey1)
+                            [0, 2],  # starting and ending indices of the subsequence "bcd" in "bcdef1234" (testKey2)
+                        ],
+                    ],
+                    'len': 7  # length of the entire longest common subsequence
+                }
+            >>> await client.lcs_idx("testKey1", "testKey2", min_match_len=4)
+                {
+                    'matches': [
+                        [
+                            [4, 7],
+                            [5, 8],
+                        ],
+                        # the other match with a length of 3 is excluded
+                    ],
+                    'len': 7
+                }
+            >>> await client.lcs_idx("testKey1", "testKey2", with_match_len=True)
+                {
+                    'matches': [
+                        [
+                            [4, 7],
+                            [5, 8],
+                            4,  # length of this match ("1234")
+                        ],
+                        [
+                            [1, 3],
+                            [0, 2],
+                            3,  # length of this match ("bcd")
+                        ],
+                    ],
+                    'len': 7
+                }
+
+        Since: Redis version 7.0.0.
+        """
+        args = [key1, key2, "IDX"]
+
+        if min_match_len is not None:
+            args.extend(["MINMATCHLEN", str(min_match_len)])
+
+        if with_match_len:
+            args.append("WITHMATCHLEN")
+
+        return cast(
+            Mapping[str, Union[list[list[Union[list[int], int]]], int]],
+            await self._execute_command(RequestType.LCS, args),
+        )

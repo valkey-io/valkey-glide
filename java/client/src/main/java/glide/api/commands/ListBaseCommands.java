@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.GlideString;
@@ -742,6 +742,25 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> lset(String key, long index, String element);
+
+    /**
+     * Sets the list element at <code>index</code> to <code>element</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to be set.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.lset(gs("testKey"), 1, gs("two")).get();
+     * assertEquals(response, "OK");
+     * }</pre>
+     */
+    CompletableFuture<String> lset(GlideString key, long index, GlideString element);
 
     /**
      * Atomically pops and removes the left/right-most element to the list stored at <code>source
