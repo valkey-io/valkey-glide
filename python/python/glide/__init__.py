@@ -76,6 +76,8 @@ from glide.config import (
 from glide.constants import OK
 from glide.exceptions import (
     ClosingError,
+    ConfigurationError,
+    ConnectionError,
     ExecAbortError,
     RedisError,
     RequestError,
@@ -135,8 +137,10 @@ __all__ = [
     "ScoreBoundary",
     "ConditionalChange",
     "ExpireOptions",
+    "ExpiryGetEx",
     "ExpirySet",
     "ExpiryType",
+    "ExpiryTypeGetEx",
     "FlushMode",
     "GeoSearchByBox",
     "GeoSearchByRadius",
@@ -182,6 +186,8 @@ __all__ = [
     "SlotIdRoute",
     # Exceptions
     "ClosingError",
+    "ConfigurationError",
+    "ConnectionError",
     "ExecAbortError",
     "RedisError",
     "RequestError",

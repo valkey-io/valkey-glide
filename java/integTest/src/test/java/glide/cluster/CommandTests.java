@@ -12,6 +12,7 @@ import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLIENTS;
@@ -47,6 +48,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.ListDirection;
 import glide.api.models.commands.RangeOptions.RangeByIndex;
@@ -54,6 +56,7 @@ import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.bitmap.BitwiseOperation;
+import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.SlotKeyRoute;
@@ -560,6 +563,26 @@ public class CommandTests {
         multiPayload.forEach((key, value) -> assertEquals(message, value));
     }
 
+    @SneakyThrows
+    @Test
+    public void echo_gs() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString response = clusterClient.echo(gs(message)).get();
+        assertEquals(gs(message), response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void echo_gs_with_route() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString singlePayload = clusterClient.echo(gs(message), RANDOM).get().getSingleValue();
+        assertEquals(gs(message), singlePayload);
+
+        Map<String, GlideString> multiPayload =
+                clusterClient.echo(gs(message), ALL_NODES).get().getMultiValue();
+        multiPayload.forEach((key, value) -> assertEquals(gs(message), value));
+    }
+
     @Test
     @SneakyThrows
     public void time() {
@@ -722,10 +745,18 @@ public class CommandTests {
                 Arguments.of("renamenx", null, clusterClient.renamenx("abc", "zxy")),
                 Arguments.of(
                         "sinterstore", null, clusterClient.sinterstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "sinterstore_gs",
+                        null,
+                        clusterClient.sinterstore(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of("sdiff", null, clusterClient.sdiff(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
                         "sdiffstore", null, clusterClient.sdiffstore("abc", new String[] {"zxy", "lkn"})),
                 Arguments.of("sinter", null, clusterClient.sinter(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "sinter_gs",
+                        null,
+                        clusterClient.sinter(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
                 Arguments.of(
                         "sunionstore", null, clusterClient.sunionstore("abc", new String[] {"zxy", "lkn"})),
                 Arguments.of("zdiff", null, clusterClient.zdiff(new String[] {"abc", "zxy", "lkn"})),
@@ -783,7 +814,15 @@ public class CommandTests {
                         clusterClient.blmove("abc", "def", ListDirection.LEFT, ListDirection.LEFT, 1)),
                 Arguments.of("sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"})),
                 Arguments.of(
+                        "sintercard_gs",
+                        "7.0.0",
+                        clusterClient.sintercard(new GlideString[] {gs("abc"), gs("def")})),
+                Arguments.of(
                         "sintercard", "7.0.0", clusterClient.sintercard(new String[] {"abc", "def"}, 1)),
+                Arguments.of(
+                        "sintercard_gs",
+                        "7.0.0",
+                        clusterClient.sintercard(new GlideString[] {gs("abc"), gs("def")}, 1)),
                 Arguments.of(
                         "fcall",
                         "7.0.0",

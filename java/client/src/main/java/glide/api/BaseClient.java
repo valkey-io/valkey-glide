@@ -399,6 +399,10 @@ public abstract class BaseClient
         return handleRedisResponse(GlideString.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
+    protected GlideString handleGlideStringResponse(Response response) throws RedisException {
+        return handleRedisResponse(GlideString.class, EnumSet.noneOf(ResponseFlags.class), response);
+    }
+
     protected Boolean handleBooleanResponse(Response response) throws RedisException {
         return handleRedisResponse(Boolean.class, EnumSet.noneOf(ResponseFlags.class), response);
     }
@@ -1185,8 +1189,20 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> sinterstore(
+            @NonNull GlideString destination, @NonNull GlideString[] keys) {
+        GlideString[] arguments = ArrayUtils.addFirst(keys, destination);
+        return commandManager.submitNewCommand(SInterStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Set<String>> sinter(@NonNull String[] keys) {
         return commandManager.submitNewCommand(SInter, keys, this::handleSetResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<GlideString>> sinter(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(SInter, keys, this::handleSetBinaryResponse);
     }
 
     @Override
@@ -2586,12 +2602,28 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> sintercard(@NonNull GlideString[] keys) {
+        GlideString[] arguments = ArrayUtils.addFirst(keys, gs(Long.toString(keys.length)));
+        return commandManager.submitNewCommand(SInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> sintercard(@NonNull String[] keys, long limit) {
         String[] arguments =
                 concatenateArrays(
                         new String[] {Long.toString(keys.length)},
                         keys,
                         new String[] {SET_LIMIT_REDIS_API, Long.toString(limit)});
+        return commandManager.submitNewCommand(SInterCard, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sintercard(@NonNull GlideString[] keys, long limit) {
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {gs(Long.toString(keys.length))},
+                        keys,
+                        new GlideString[] {gs(SET_LIMIT_REDIS_API), gs(Long.toString(limit))});
         return commandManager.submitNewCommand(SInterCard, arguments, this::handleLongResponse);
     }
 
