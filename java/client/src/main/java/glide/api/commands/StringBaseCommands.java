@@ -98,9 +98,9 @@ public interface StringBaseCommands {
      * @example
      *     <pre>{@code
      * GlideString value = client.getdel(gs("key")).get();
-     * assert assert Arrays.equals(value.getString(), "value");
+     * assert value.getString().equals("value");
      *
-     * String value = client.getdel("key").get();
+     * GlideString value = client.getdel(gs("key")).get();
      * assert value.equals(null);
      * }</pre>
      */
@@ -132,7 +132,7 @@ public interface StringBaseCommands {
      *     Otherwise, return <code>null</code>.
      * @example
      *     <pre>{@code
-     * String value = client.getex(gs("key")).get();
+     * GlideString value = client.getex(gs("key")).get();
      * assert value.equals(gs("value"));
      * }</pre>
      */
@@ -170,7 +170,7 @@ public interface StringBaseCommands {
      *     <pre>{@code
      * String response = client.set(gs("key"), gs("value").get();
      * assert response.equals(OK);
-     * String value = client.getex(gs("key"), GetExOptions.Seconds(10L)).get();
+     * GlideString value = client.getex(gs("key"), GetExOptions.Seconds(10L)).get();
      * assert value.equals(gs("value"));
      * }</pre>
      */
