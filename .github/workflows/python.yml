@@ -116,7 +116,7 @@ jobs:
               run: |
                   source .env/bin/activate
                   cd python/tests/
-                  pytest --asyncio-mode=auto -k test_zscan
+                  pytest --asyncio-mode=auto -k test_hscan
 
             - uses: ./.github/workflows/test-benchmark
               with:
