@@ -9195,6 +9195,8 @@ public class RedisClientTest {
         assertEquals(result, payload);
     }
 
+    @SneakyThrows
+    @Test
     public void sscan_returns_success() {
         // setup
         String key = "testKey";

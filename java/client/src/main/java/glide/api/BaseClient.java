@@ -2879,10 +2879,11 @@ public abstract class BaseClient
             @NonNull GlideString key, @NonNull GlideString destination) {
         return commandManager.submitNewCommand(
                 Sort,
-                new GlideString[] {key, gs(STORE_COMMAND_STRING), destination},  this::handleLongResponse);
-            }
+                new GlideString[] {key, gs(STORE_COMMAND_STRING), destination},
+                this::handleLongResponse);
+    }
 
-    @Override           
+    @Override
     public CompletableFuture<String[]> geosearch(
             @NonNull String key,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
