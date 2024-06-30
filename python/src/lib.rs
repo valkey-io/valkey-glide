@@ -111,15 +111,15 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
     fn redis_value_to_py(py: Python, val: Value) -> PyResult<PyObject> {
         match val {
             Value::Nil => Ok(py.None()),
-            Value::SimpleString(str) => Ok(str.into_py(py)),
+            Value::SimpleString(str) => {
+                let data_bytes = PyBytes::new(py, str.as_bytes());
+                Ok(data_bytes.into_py(py))
+            }
             Value::Okay => Ok("OK".into_py(py)),
             Value::Int(num) => Ok(num.into_py(py)),
             Value::BulkString(data) => {
-                // TODO: for now, and in order to keep the current tests to work,
-                // we still return a UTF-8 encoded string instead of `&[u8]`. This needs
-                // to be changed
-                let value_str = String::from_utf8_lossy(&data);
-                Ok(value_str.into_py(py))
+                let data_bytes = PyBytes::new(py, &data);
+                Ok(data_bytes.into_py(py))
             }
             Value::Array(bulk) => {
                 let elements: &PyList = PyList::new(py, iter_to_value(py, bulk)?);
@@ -147,7 +147,11 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
             }
             Value::Double(double) => Ok(PyFloat::new(py, double).into_py(py)),
             Value::Boolean(boolean) => Ok(PyBool::new(py, boolean).into_py(py)),
-            Value::VerbatimString { format: _, text } => Ok(text.into_py(py)),
+            Value::VerbatimString { format: _, text } => {
+                // TODO create MATCH on the format
+                let data_bytes = PyBytes::new(py, text.as_bytes());
+                Ok(data_bytes.into_py(py))
+            }
             Value::BigNumber(bigint) => Ok(bigint.into_py(py)),
             Value::Push { kind, data } => {
                 let dict = PyDict::new(py);
