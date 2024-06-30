@@ -8054,4 +8054,47 @@ public class SharedCommandTests {
                         () -> client.hscan(key1, "-1", HScanOptions.builder().count(-1L).build()).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void waitTest(BaseClient client) {
+        // setup
+        String key = UUID.randomUUID().toString();
+        long numreplicas = 1L;
+        long timeout = 1000L;
+
+        // assert that wait returns 0 under standalone and 1 under cluster mode.
+        assertEquals(OK, client.set(key, "value").get());
+        assertTrue(client.wait(numreplicas, timeout).get() >= (client instanceof RedisClient ? 0 : 1));
+
+        // command should fail on a negative timeout value
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.wait(1L, -1L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void wait_timeout_check(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands do not time out, even if timeout > request timeout
+            assertEquals(OK, testClient.set(key, "value").get());
+            assertEquals((client instanceof RedisClient ? 0 : 1), testClient.wait(1L, 1000L).get());
+
+            // with 0 timeout (no timeout) wait should block indefinitely,
+            // but we wrap the test with timeout to avoid test failing or being stuck forever
+            assertEquals(OK, testClient.set(key, "value2").get());
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.wait(100L, 0L).get(1000, TimeUnit.MILLISECONDS));
+        }
+    }
 }
