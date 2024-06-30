@@ -4059,9 +4059,9 @@ class BaseTransaction:
         timeout: int,
     ) -> TTransaction:
         """
-        Blocks the current client until all the previous write commands are successfully transferred
-        and acknowledged by at least `numreplicas` of replicas. If `timeout` is
-        reached, the command returns even if the specified number of replicas were not yet reached.
+        Returns the number of replicas that acknowledged the write commands sent by the current client
+        before this command, both in the case where the specified number of replicas are reached, or
+        when the timeout is reached.
 
         See https://valkey.io/commands/wait for more details.
 

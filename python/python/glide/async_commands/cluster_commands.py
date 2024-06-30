@@ -758,7 +758,7 @@ class ClusterCommands(CoreCommands):
 
         Args:
             numreplicas (int): The number of replicas to reach.
-            timeout (int): The timeout value specified in milliseconds.
+            timeout (int): The timeout value specified in milliseconds. A value of <code>0</code> will block indefinitely.
 
         Returns:
             str: The number of replicas reached by all the writes performed in the context of the current connection.
