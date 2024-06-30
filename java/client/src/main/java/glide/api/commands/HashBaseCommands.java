@@ -36,6 +36,25 @@ public interface HashBaseCommands {
     CompletableFuture<String> hget(String key, String field);
 
     /**
+     * Retrieves the value associated with <code>field</code> in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hget/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param field The field in the hash stored at <code>key</code> to retrieve from the database.
+     * @return The value associated with <code>field</code>, or <code>null</code> when <code>field
+     *     </code> is not present in the hash or <code>key</code> does not exist.
+     * @example
+     *     <pre>{@code
+     * String payload = client.hget(gs("my_hash"), gs("field1")).get();
+     * assert payload.equals(gs("value"));
+     *
+     * String payload = client.hget(gs("my_hash"), gs("nonexistent_field")).get();
+     * assert payload.equals(null);
+     * }</pre>
+     */
+    CompletableFuture<GlideString> hget(GlideString key, GlideString field);
+
+    /**
      * Sets the specified fields to their respective values in the hash stored at <code>key</code>.
      *
      * @see <a href="https://redis.io/commands/hset/">redis.io</a> for details.
@@ -50,6 +69,22 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> hset(String key, Map<String, String> fieldValueMap);
+
+    /**
+     * Sets the specified fields to their respective values in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hset/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
+     *     be set in the hash stored at the specified key.
+     * @return The number of fields that were added.
+     * @example
+     *     <pre>{@code
+     * Long num = client.hset(gs("my_hash"), Map.of(gs("field"), gs("value"), gs("field2"), gs("value2"))).get();
+     * assert num == 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hset(GlideString key, Map<GlideString, GlideString> fieldValueMap);
 
     /**
      * Sets <code>field</code> in the hash stored at <code>key</code> to <code>value</code>, only if
@@ -132,6 +167,24 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> hlen(String key);
+
+    /**
+     * Returns the number of fields contained in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hlen/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return The number of fields in the hash, or <code>0</code> when the key does not exist.<br>
+     *     If <code>key</code> holds a value that is not a hash, an error is returned.
+     * @example
+     *     <pre>{@code
+     * Long num1 = client.hlen(gs("myHash")).get();
+     * assert num1 == 3L;
+     *
+     * Long num2 = client.hlen(gs("nonExistingKey")).get();
+     * assert num2 == 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> hlen(GlideString key);
 
     /**
      * Returns all values in the hash stored at <code>key</code>.

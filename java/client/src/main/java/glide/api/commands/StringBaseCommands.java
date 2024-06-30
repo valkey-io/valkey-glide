@@ -298,6 +298,21 @@ public interface StringBaseCommands {
     CompletableFuture<Long> incr(String key);
 
     /**
+     * Increments the number stored at <code>key</code> by one. If <code>key</code> does not exist, it
+     * is set to 0 before performing the operation.
+     *
+     * @see <a href="https://redis.io/commands/incr/">redis.io</a> for details.
+     * @param key The key to increment its value.
+     * @return The value of <code>key</code> after the increment.
+     * @example
+     *     <pre>{@code
+     * Long num = client.incr(gs("key")).get();
+     * assert num == 5L;
+     * }</pre>
+     */
+    CompletableFuture<Long> incr(GlideString key);
+
+    /**
      * Increments the number stored at <code>key</code> by <code>amount</code>. If <code>key</code>
      * does not exist, it is set to 0 before performing the operation.
      *

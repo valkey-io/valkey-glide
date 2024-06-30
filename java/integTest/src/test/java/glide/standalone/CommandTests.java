@@ -202,11 +202,11 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void move_binary() {
-        GlideString key1 = GlideString.gs(UUID.randomUUID().toString());
-        GlideString key2 = GlideString.gs(UUID.randomUUID().toString());
-        GlideString value1 = GlideString.gs(UUID.randomUUID().toString());
-        GlideString value2 = GlideString.gs(UUID.randomUUID().toString());
-        GlideString nonExistingKey = GlideString.gs(UUID.randomUUID().toString());
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString value1 = gs(UUID.randomUUID().toString());
+        GlideString value2 = gs(UUID.randomUUID().toString());
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
         assertEquals(OK, regularClient.select(0).get());
 
         assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
