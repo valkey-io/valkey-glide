@@ -8259,7 +8259,7 @@ class TestClusterRoutes:
         result = await redis_client.zscan(key1, initial_cursor, match="a")
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor.encode()
-        assert convert_list_to_dict(result_collection) == {"a": "0"}
+        assert convert_list_to_dict(result_collection) == {b"a": b"0"}
 
         # Result contains a subset of the key
         assert await redis_client.zadd(key1, num_map) == len(num_map)
@@ -8355,12 +8355,12 @@ class TestClusterRoutes:
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result_collection) == len(char_map) * 2
-        assert convert_list_to_dict(result_collection) == char_map
+        assert convert_list_to_dict(result_collection) == cast(dict, convert_string_to_bytes_object(char_map))
 
         result = await redis_client.hscan(key1, initial_cursor, match="field a")
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor.encode()
-        assert convert_list_to_dict(result_collection) == {"field a": "value a"}
+        assert convert_list_to_dict(result_collection) == {b"field a": b"value a"}
 
         # Result contains a subset of the key
         assert await redis_client.hset(key1, num_map) == len(num_map)
