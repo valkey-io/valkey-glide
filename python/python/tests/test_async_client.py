@@ -100,6 +100,8 @@ from tests.utils.utils import (
     parse_info_response,
 )
 
+from glide.async_commands.transaction import Transaction
+
 
 @pytest.mark.asyncio
 class TestGlideClients:
