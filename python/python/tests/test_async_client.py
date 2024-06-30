@@ -7268,14 +7268,12 @@ class TestCommands:
         value = get_random_string(5)
         value2 = get_random_string(5)
 
-        await redis_client.set(key, value)
+        assert await redis_client.set(key, value) == OK
         assert await redis_client.wait(1, 1000) >= 0
 
         # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
-        assert (
-            await redis_client.set(key, value2) == OK,
-            await redis_client.wait(100, 500) >= 0,
-        )
+        assert await redis_client.set(key, value2) == OK
+        assert await redis_client.wait(100, 500) >= 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
