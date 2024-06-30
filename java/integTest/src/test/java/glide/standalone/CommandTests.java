@@ -11,6 +11,7 @@ import static glide.TestUtilities.generateLuaLibCode;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.FlushMode.ASYNC;
 import static glide.api.models.commands.FlushMode.SYNC;
 import static glide.api.models.commands.InfoOptions.Section.CLUSTER;
@@ -201,11 +202,11 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void move_binary() {
-        GlideString key1 = GlideString.gs(UUID.randomUUID().toString());
-        GlideString key2 = GlideString.gs(UUID.randomUUID().toString());
-        GlideString value1 = GlideString.gs(UUID.randomUUID().toString());
-        GlideString value2 = GlideString.gs(UUID.randomUUID().toString());
-        GlideString nonExistingKey = GlideString.gs(UUID.randomUUID().toString());
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        GlideString value1 = gs(UUID.randomUUID().toString());
+        GlideString value2 = gs(UUID.randomUUID().toString());
+        GlideString nonExistingKey = gs(UUID.randomUUID().toString());
         assertEquals(OK, regularClient.select(0).get());
 
         assertEquals(false, regularClient.move(nonExistingKey, 1L).get());
@@ -335,6 +336,17 @@ public class CommandTests {
         String message = "GLIDE";
         String response = regularClient.echo(message).get();
         assertEquals(message, response);
+        message = "";
+        response = regularClient.echo(message).get();
+        assertEquals(message, response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void echo_gs() {
+        byte[] message = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
+        GlideString response = regularClient.echo(gs(message)).get();
+        assertEquals(gs(message), response);
     }
 
     @Test

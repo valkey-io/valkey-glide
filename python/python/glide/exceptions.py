@@ -56,7 +56,7 @@ class ConnectionError(RequestError):
     pass
 
 
-class WrongConfiguration(RequestError):
+class ConfigurationError(RequestError):
     """
-    Errors that are thrown when a request cannot be completed in current configuration settings
+    Errors that are thrown when a request cannot be completed in current configuration settings.
     """
