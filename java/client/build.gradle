@@ -253,5 +253,4 @@ spotbugsMain {
 spotbugs {
     ignoreFailures = true
     showStackTraces = true
-    showProgress = true
 }
