@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast
+from typing import Dict, List, Mapping, Optional, Union, cast
 
 from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
@@ -46,7 +46,7 @@ class ClusterCommands(CoreCommands):
         self,
         sections: Optional[List[InfoSection]] = None,
         route: Optional[Route] = None,
-    ) -> TClusterResponse[str]:
+    ) -> TClusterResponse[bytes]:
         """
         Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
@@ -65,7 +65,7 @@ class ClusterCommands(CoreCommands):
         args = [section.value for section in sections] if sections else []
 
         return cast(
-            TClusterResponse[str],
+            TClusterResponse[bytes],
             await self._execute_command(RequestType.Info, args, route),
         )
 
@@ -380,6 +380,37 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(
                 RequestType.FunctionFlush,
                 [mode.value] if mode else [],
+                route,
+            ),
+        )
+
+    async def function_delete(
+        self, library_name: str, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Deletes a library and all its functions.
+
+        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+
+        Args:
+            library_code (str): The libary name to delete
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_delete("my_lib")
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionDelete,
+                [library_name],
                 route,
             ),
         )

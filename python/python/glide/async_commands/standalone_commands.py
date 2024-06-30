@@ -38,7 +38,7 @@ class StandaloneCommands(CoreCommands):
     async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
-    ) -> str:
+    ) -> bytes:
         """
         Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
@@ -49,10 +49,10 @@ class StandaloneCommands(CoreCommands):
 
 
         Returns:
-            str: Returns a string containing the information for the sections requested.
+            bytes: Returns bytes containing the information for the sections requested.
         """
         args = [section.value for section in sections] if sections else []
-        return cast(str, await self._execute_command(RequestType.Info, args))
+        return cast(bytes, await self._execute_command(RequestType.Info, args))
 
     async def exec(
         self,
@@ -285,6 +285,32 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(
                 RequestType.FunctionFlush,
                 [mode.value] if mode else [],
+            ),
+        )
+
+    async def function_delete(self, library_name: str) -> TOK:
+        """
+        Deletes a library and all its functions.
+
+        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+
+        Args:
+            library_code (str): The libary name to delete
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_delete("my_lib")
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionDelete,
+                [library_name],
             ),
         )
 
