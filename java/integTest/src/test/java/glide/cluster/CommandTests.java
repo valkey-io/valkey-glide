@@ -820,7 +820,7 @@ public class CommandTests {
                 Arguments.of("lcsLEN", "7.0.0", clusterClient.lcsLen("abc", "def")),
                 Arguments.of("sunion", "1.0.0", clusterClient.sunion(new String[] {"abc", "def", "ghi"})),
                 Arguments.of(
-                        "sunion",
+                        "sunion binary",
                         "1.0.0",
                         clusterClient.sunion(new GlideString[] {gs("abc"), gs("def"), gs("ghi")})),
                 Arguments.of("sortStore", "1.0.0", clusterClient.sortStore("abc", "def")),
