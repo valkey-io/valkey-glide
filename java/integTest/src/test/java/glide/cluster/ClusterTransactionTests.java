@@ -308,4 +308,24 @@ public class ClusterTransactionTests {
 
         assertDeepEquals(expectedResult, results);
     }
+
+    @SneakyThrows
+    @Test
+    public void waitTest() {
+        // setup
+        String key = UUID.randomUUID().toString();
+        long numreplicas = 1L;
+        long timeout = 1000L;
+        ClusterTransaction transaction = new ClusterTransaction();
+
+        transaction.set(key, "value").wait(numreplicas, timeout);
+        Object[] results = clusterClient.exec(transaction).get();
+        Object[] expectedResult =
+                new Object[] {
+                    OK, // set(key,  "value")
+                    0L, // wait(numreplicas, timeout)
+                };
+        assertEquals(expectedResult[0], results[0]);
+        assertTrue((Long) expectedResult[1] <= (Long) results[1]);
+    }
 }
