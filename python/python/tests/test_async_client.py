@@ -7550,7 +7550,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_unwatch_with_route(self, redis_client: GlideClient):
+    async def test_unwatch_with_route(self, redis_client: GlideClusterClient):
         assert await redis_client.unwatch(RandomNode()) == OK
 
 
@@ -7594,6 +7594,7 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.sunion(["def", "ghi"]),
             redis_client.bitop(BitwiseOperation.OR, "abc", ["zxy", "lkn"]),
             redis_client.xread({"abc": "0-0", "zxy": "0-0"}),
+            redis_client.watch(["abc", "def"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "6.2.0"):
