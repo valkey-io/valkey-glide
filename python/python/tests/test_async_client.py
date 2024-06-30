@@ -7344,12 +7344,23 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_dump_restore(self, redis_client: GlideClient):
-        key = f"{{key}}-1{get_random_string(5)}"
+        key = f"{{key}}-1{get_random_string(10)}"
+        key1 = f"{{key}}-1{get_random_string(10)}"
+        key2 = f"{{key}}-1{get_random_string(10)}"
+        nonExistingKey = f"{{key}}-1{get_random_string(10)}"
         value = get_random_string(5)
 
         await redis_client.set(key, value)
-        # TODO: add DUMP and RESTORE once support bytes
-        # assert await redis_client.dump(key) == value
+
+        # Dump existing key
+        data = await redis_client.dump(key)
+        assert data is not None
+
+        # Dump non-existing key
+        assert await redis_client.dump(nonExistingKey) is None
+
+        # Restore to a new key
+        assert await redis_client.restore(key1, 0, data) == OK
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
