@@ -180,6 +180,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
@@ -1386,6 +1387,9 @@ public class TransactionTests {
                                 "*",
                                 HScanOptions.COUNT_OPTION_STRING,
                                 "10")));
+
+        transaction.wait(1L, 1000L);
+        results.add(Pair.of(Wait, buildArgs("1", "1000")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

@@ -211,6 +211,7 @@ pub enum RequestType {
     SScan = 200,
     ZScan = 201,
     HScan = 202,
+    Wait = 208,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -425,6 +426,7 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SScan => RequestType::SScan,
             ProtobufRequestType::ZScan => RequestType::ZScan,
             ProtobufRequestType::HScan => RequestType::HScan,
+            ProtobufRequestType::Wait => RequestType::Wait,
         }
     }
 }
@@ -637,6 +639,7 @@ impl RequestType {
             RequestType::SScan => Some(cmd("SSCAN")),
             RequestType::ZScan => Some(cmd("ZSCAN")),
             RequestType::HScan => Some(cmd("HSCAN")),
+            RequestType::Wait => Some(cmd("WAIT")),
         }
     }
 }

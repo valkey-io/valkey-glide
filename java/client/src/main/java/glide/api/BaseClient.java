@@ -131,6 +131,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
@@ -2949,5 +2950,13 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String cursor, @NonNull HScanOptions hScanOptions) {
         String[] arguments = concatenateArrays(new String[] {key, cursor}, hScanOptions.toArgs());
         return commandManager.submitNewCommand(HScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> wait(long numreplicas, long timeout) {
+        return commandManager.submitNewCommand(
+                Wait,
+                new String[] {Long.toString(numreplicas), Long.toString(timeout)},
+                this::handleLongResponse);
     }
 }
