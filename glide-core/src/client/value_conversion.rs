@@ -822,9 +822,9 @@ fn convert_array_to_map_by_type(
                 ));
             }
             Value::Nil => {
-                // Ignore nil key values - they will not be placed in the list. This is necessary for commands like
-                // XAUTOCLAIM, which can return a result that contains an array representation of a map with nil keys
-                // in place of stream IDs that existed in the Pending Entries List but no longer existed in the stream.
+                // Ignore nil key values - they will not be placed in the map. This is necessary for commands like
+                // XAUTOCLAIM, which can contain an array representation of a map with nil keys in place of stream IDs
+                // that existed in the Pending Entries List but no longer existed in the stream.
                 continue;
             }
             _ => {
