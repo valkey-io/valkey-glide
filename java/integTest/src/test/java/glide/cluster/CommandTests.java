@@ -852,7 +852,7 @@ public class CommandTests {
                 Arguments.of("mset", clusterClient.mset(Map.of("abc", "1", "zxy", "2", "lkn", "3"))),
                 Arguments.of("touch", clusterClient.touch(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
-                        "touch", clusterClient.touch(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
+                        "touch binary", clusterClient.touch(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
                 Arguments.of("watch", clusterClient.watch(new String[] {"ghi", "zxy", "lkn"})));
     }
 
