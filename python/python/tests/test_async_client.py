@@ -6064,33 +6064,33 @@ class TestCommands:
             await redis_client.xadd(
                 key, [("f1", "v1"), ("f2", "v2")], StreamAddOptions(stream_id1_0)
             )
-            == stream_id1_0
+            == stream_id1_0.encode()
         )
         assert (
             await redis_client.xadd(
                 key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
             )
-            == stream_id1_1
+            == stream_id1_1.encode()
         )
         assert (
             await redis_client.xadd(
                 key, [("f1_2", "v1_2")], StreamAddOptions(stream_id1_2)
             )
-            == stream_id1_2
+            == stream_id1_2.encode()
         )
         assert (
             await redis_client.xadd(
                 key, [("f1_3", "v1_3")], StreamAddOptions(stream_id1_3)
             )
-            == stream_id1_3
+            == stream_id1_3.encode()
         )
         assert await redis_client.xgroup_create(key, group_name, stream_id0_0) == OK
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
-            key: {
-                stream_id1_0: [["f1", "v1"], ["f2", "v2"]],
-                stream_id1_1: [["f1_1", "v1_1"]],
-                stream_id1_2: [["f1_2", "v1_2"]],
-                stream_id1_3: [["f1_3", "v1_3"]],
+            key.encode(): {
+                stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]],
+                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
+                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
+                stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
             }
         }
 
@@ -6098,8 +6098,8 @@ class TestCommands:
         result = await redis_client.xautoclaim(
             key, group_name, consumer, 0, stream_id0_0, count=1
         )
-        assert result[0] == stream_id1_1
-        assert result[1] == {stream_id1_0: [["f1", "v1"], ["f2", "v2"]]}
+        assert result[0] == stream_id1_1.encode()
+        assert result[1] == {stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]]}
         # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
         # Entries List because they no longer exist in the stream
         if version7_or_above:
@@ -6113,31 +6113,35 @@ class TestCommands:
             key, group_name, consumer, 0, stream_id1_1
         )
         assert (
-            result[0] == stream_id0_0
+            result[0] == stream_id0_0.encode()
         )  # "0-0" is returned to indicate the entire stream was scanned.
         assert result[1] == {
-            stream_id1_1: [["f1_1", "v1_1"]],
-            stream_id1_3: [["f1_3", "v1_3"]],
+            stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
+            stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
         }
         if version7_or_above:
-            assert result[2] == [stream_id1_2]
+            assert result[2] == [stream_id1_2.encode()]
 
         # autoclaim with JUSTID: result at index 1 does not contain fields/values of the claimed entries, only IDs
         just_id_result = await redis_client.xautoclaim_just_id(
             key, group_name, consumer, 0, stream_id0_0
         )
-        assert just_id_result[0] == stream_id0_0
+        assert just_id_result[0] == stream_id0_0.encode()
         if version7_or_above:
-            assert just_id_result[1] == [stream_id1_0, stream_id1_1, stream_id1_3]
+            assert just_id_result[1] == [
+                stream_id1_0.encode(),
+                stream_id1_1.encode(),
+                stream_id1_3.encode(),
+            ]
             assert just_id_result[2] == []
         else:
             # in Redis < 7.0.0, specifically for XAUTOCLAIM with JUSTID, entry IDs that were in the Pending Entries List
             # but are no longer in the stream still show up in the response
             assert just_id_result[1] == [
-                stream_id1_0,
-                stream_id1_1,
-                stream_id1_2,
-                stream_id1_3,
+                stream_id1_0.encode(),
+                stream_id1_1.encode(),
+                stream_id1_2.encode(),
+                stream_id1_3.encode(),
             ]
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -6165,11 +6169,11 @@ class TestCommands:
         # setup: add entry, create consumer group, add entry to Pending Entries List for group
         assert (
             await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_0))
-            == stream_id1_0
+            == stream_id1_0.encode()
         )
         assert await redis_client.xgroup_create(key, group_name, stream_id0_0) == OK
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
-            key: {stream_id1_0: [["f1", "v1"]]}
+            key.encode(): {stream_id1_0.encode(): [[b"f1", b"v1"]]}
         }
 
         # passing a non-existing key is not allowed and will raise an error
@@ -6196,8 +6200,8 @@ class TestCommands:
         result = await redis_client.xautoclaim(
             key, group_name, "non_existing_consumer", 0, stream_id0_0
         )
-        assert result[0] == stream_id0_0
-        assert result[1] == {stream_id1_0: [["f1", "v1"]]}
+        assert result[0] == stream_id0_0.encode()
+        assert result[1] == {stream_id1_0.encode(): [[b"f1", b"v1"]]}
         # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
         # Entries List because they no longer exist in the stream
         if version7_or_above:
@@ -6206,8 +6210,8 @@ class TestCommands:
         just_id_result = await redis_client.xautoclaim_just_id(
             key, group_name, "non_existing_consumer", 0, stream_id0_0
         )
-        assert just_id_result[0] == stream_id0_0
-        assert just_id_result[1] == [stream_id1_0]
+        assert just_id_result[0] == stream_id0_0.encode()
+        assert just_id_result[1] == [stream_id1_0.encode()]
         if version7_or_above:
             assert just_id_result[2] == []
 
@@ -6215,16 +6219,16 @@ class TestCommands:
         result = await redis_client.xautoclaim(
             key, group_name, consumer, -1, stream_id0_0
         )
-        assert result[0] == stream_id0_0
-        assert result[1] == {stream_id1_0: [["f1", "v1"]]}
+        assert result[0] == stream_id0_0.encode()
+        assert result[1] == {stream_id1_0.encode(): [[b"f1", b"v1"]]}
         if version7_or_above:
             assert result[2] == []
 
         just_id_result = await redis_client.xautoclaim_just_id(
             key, group_name, consumer, -1, stream_id0_0
         )
-        assert just_id_result[0] == stream_id0_0
-        assert just_id_result[1] == [stream_id1_0]
+        assert just_id_result[0] == stream_id0_0.encode()
+        assert just_id_result[1] == [stream_id1_0.encode()]
         if version7_or_above:
             assert just_id_result[2] == []
 
@@ -6239,7 +6243,7 @@ class TestCommands:
 
         # no stream entries to claim above the given start value
         result = await redis_client.xautoclaim(key, group_name, consumer, 0, "99-99")
-        assert result[0] == stream_id0_0
+        assert result[0] == stream_id0_0.encode()
         assert result[1] == {}
         if version7_or_above:
             assert result[2] == []
@@ -6247,7 +6251,7 @@ class TestCommands:
         just_id_result = await redis_client.xautoclaim_just_id(
             key, group_name, consumer, 0, "99-99"
         )
-        assert just_id_result[0] == stream_id0_0
+        assert just_id_result[0] == stream_id0_0.encode()
         assert just_id_result[1] == []
         if version7_or_above:
             assert just_id_result[2] == []

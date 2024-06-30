@@ -555,17 +555,17 @@ async def transaction_test(
         # Entries List because they no longer exist in the stream
         if await check_if_server_version_lt(redis_client, "7.0.0"):
             args.append(
-                ["0-0", {"0-2": [["foo", "bar"]]}]
+                [b"0-0", {b"0-2": [[b"foo", b"bar"]]}]
             )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
             args.append(
-                ["0-0", ["0-2"]]
+                [b"0-0", [b"0-2"]]
             )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
         else:
             args.append(
-                ["0-0", {"0-2": [["foo", "bar"]]}, []]
+                [b"0-0", {b"0-2": [[b"foo", b"bar"]]}, []]
             )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
             args.append(
-                ["0-0", ["0-2"], []]
+                [b"0-0", [b"0-2"], []]
             )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
 
     transaction.xack(key11, group_name1, ["0-2"])
