@@ -4,6 +4,7 @@ package glide.api.models;
 import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.HashBaseCommands.WITH_VALUES_REDIS_API;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
+import static glide.api.commands.SortedSetBaseCommands.COUNT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.LIMIT_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORE_REDIS_API;
@@ -28,6 +29,8 @@ import static glide.api.models.commands.ZAddOptions.UpdateOptions.SCORE_LESS_THA
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
+import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
+import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
@@ -85,6 +88,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoSearch;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoSearchStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
@@ -100,6 +105,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
+import static redis_request.RedisRequestOuterClass.RequestType.HScan;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
@@ -160,6 +166,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SScan;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -173,6 +180,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Time;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
@@ -210,6 +218,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZScan;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
@@ -229,6 +238,7 @@ import glide.api.models.commands.RangeOptions.RangeByIndex;
 import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -245,8 +255,16 @@ import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoSearchOptions;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchResultOptions;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -1167,6 +1185,211 @@ public class TransactionTests {
         results.add(Pair.of(SortReadOnly, buildArgs("key1")));
         transaction.sortStore("key1", "key2");
         results.add(Pair.of(Sort, buildArgs("key1", STORE_COMMAND_STRING, "key2")));
+
+        transaction.geosearch(
+                "key",
+                new GeoSearchOrigin.MemberOrigin("member"),
+                new GeoSearchShape(1, GeoUnit.KILOMETERS));
+        results.add(
+                Pair.of(
+                        GeoSearch, buildArgs("key", FROMMEMBER_VALKEY_API, "member", "BYRADIUS", "1.0", "km")));
+
+        transaction.geosearch(
+                "key",
+                new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
+                new GeoSearchShape(1, 1, GeoUnit.KILOMETERS),
+                new GeoSearchResultOptions(SortOrder.ASC, 2));
+        results.add(
+                Pair.of(
+                        GeoSearch,
+                        buildArgs(
+                                "key",
+                                FROMLONLAT_VALKEY_API,
+                                "1.0",
+                                "1.0",
+                                "BYBOX",
+                                "1.0",
+                                "1.0",
+                                "km",
+                                COUNT_REDIS_API,
+                                "2",
+                                "ASC")));
+
+        transaction.geosearch(
+                "key",
+                new GeoSearchOrigin.MemberOrigin("member"),
+                new GeoSearchShape(1, GeoUnit.KILOMETERS),
+                GeoSearchOptions.builder().withhash().withdist().withcoord().build(),
+                new GeoSearchResultOptions(SortOrder.ASC, 1, true));
+        results.add(
+                Pair.of(
+                        GeoSearch,
+                        buildArgs(
+                                "key",
+                                FROMMEMBER_VALKEY_API,
+                                "member",
+                                "BYRADIUS",
+                                "1.0",
+                                "km",
+                                "WITHDIST",
+                                "WITHCOORD",
+                                "WITHHASH",
+                                "COUNT",
+                                "1",
+                                "ANY",
+                                "ASC")));
+
+        transaction.geosearch(
+                "key",
+                new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
+                new GeoSearchShape(1, 1, GeoUnit.KILOMETERS),
+                GeoSearchOptions.builder().withhash().withdist().withcoord().build());
+        results.add(
+                Pair.of(
+                        GeoSearch,
+                        buildArgs(
+                                "key",
+                                FROMLONLAT_VALKEY_API,
+                                "1.0",
+                                "1.0",
+                                "BYBOX",
+                                "1.0",
+                                "1.0",
+                                "km",
+                                "WITHDIST",
+                                "WITHCOORD",
+                                "WITHHASH")));
+
+        transaction.geosearchstore(
+                "destination",
+                "source",
+                new GeoSearchOrigin.MemberOrigin("member"),
+                new GeoSearchShape(1, GeoUnit.KILOMETERS));
+        results.add(
+                Pair.of(
+                        GeoSearchStore,
+                        buildArgs(
+                                "destination",
+                                "source",
+                                FROMMEMBER_VALKEY_API,
+                                "member",
+                                "BYRADIUS",
+                                "1.0",
+                                "km")));
+
+        transaction.geosearchstore(
+                "destination",
+                "source",
+                new GeoSearchOrigin.CoordOrigin(new GeospatialData(1.0, 1.0)),
+                new GeoSearchShape(1, 1, GeoUnit.KILOMETERS),
+                new GeoSearchResultOptions(SortOrder.ASC, 2));
+        results.add(
+                Pair.of(
+                        GeoSearchStore,
+                        buildArgs(
+                                "destination",
+                                "source",
+                                FROMLONLAT_VALKEY_API,
+                                "1.0",
+                                "1.0",
+                                "BYBOX",
+                                "1.0",
+                                "1.0",
+                                "km",
+                                COUNT_REDIS_API,
+                                "2",
+                                "ASC")));
+
+        transaction.geosearchstore(
+                "destination",
+                "source",
+                new GeoSearchOrigin.MemberOrigin("member"),
+                new GeoSearchShape(1, GeoUnit.KILOMETERS),
+                GeoSearchStoreOptions.builder().storedist().build());
+        results.add(
+                Pair.of(
+                        GeoSearchStore,
+                        buildArgs(
+                                "destination",
+                                "source",
+                                FROMMEMBER_VALKEY_API,
+                                "member",
+                                "BYRADIUS",
+                                "1.0",
+                                "km",
+                                "STOREDIST")));
+
+        transaction.geosearchstore(
+                "destination",
+                "source",
+                new GeoSearchOrigin.MemberOrigin("member"),
+                new GeoSearchShape(1, GeoUnit.KILOMETERS),
+                GeoSearchStoreOptions.builder().storedist().build(),
+                new GeoSearchResultOptions(SortOrder.ASC, 1, true));
+        results.add(
+                Pair.of(
+                        GeoSearchStore,
+                        buildArgs(
+                                "destination",
+                                "source",
+                                FROMMEMBER_VALKEY_API,
+                                "member",
+                                "BYRADIUS",
+                                "1.0",
+                                "km",
+                                "STOREDIST",
+                                "COUNT",
+                                "1",
+                                "ANY",
+                                "ASC")));
+
+        transaction.sscan("key1", "0");
+        results.add(Pair.of(SScan, buildArgs("key1", "0")));
+
+        transaction.sscan("key1", "0", SScanOptions.builder().matchPattern("*").count(10L).build());
+        results.add(
+                Pair.of(
+                        SScan,
+                        buildArgs(
+                                "key1",
+                                "0",
+                                SScanOptions.MATCH_OPTION_STRING,
+                                "*",
+                                SScanOptions.COUNT_OPTION_STRING,
+                                "10")));
+
+        transaction.zscan("key1", "0");
+        results.add(Pair.of(ZScan, buildArgs("key1", "0")));
+
+        transaction.zscan("key1", "0", ZScanOptions.builder().matchPattern("*").count(10L).build());
+        results.add(
+                Pair.of(
+                        ZScan,
+                        buildArgs(
+                                "key1",
+                                "0",
+                                ZScanOptions.MATCH_OPTION_STRING,
+                                "*",
+                                ZScanOptions.COUNT_OPTION_STRING,
+                                "10")));
+
+        transaction.hscan("key1", "0");
+        results.add(Pair.of(HScan, buildArgs("key1", "0")));
+
+        transaction.hscan("key1", "0", HScanOptions.builder().matchPattern("*").count(10L).build());
+        results.add(
+                Pair.of(
+                        HScan,
+                        buildArgs(
+                                "key1",
+                                "0",
+                                HScanOptions.MATCH_OPTION_STRING,
+                                "*",
+                                HScanOptions.COUNT_OPTION_STRING,
+                                "10")));
+
+        transaction.wait(1L, 1000L);
+        results.add(Pair.of(Wait, buildArgs("1", "1000")));
 
         var protobufTransaction = transaction.getProtobufTransaction().build();
 

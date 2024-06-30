@@ -22,6 +22,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -49,6 +50,7 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
 import glide.api.models.commands.SetOptions;
+import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
@@ -67,8 +69,18 @@ import glide.api.models.commands.bitmap.BitFieldOptions.UnsignedEncoding;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoSearchOptions;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchOrigin.CoordOrigin;
+import glide.api.models.commands.geospatial.GeoSearchOrigin.MemberOrigin;
+import glide.api.models.commands.geospatial.GeoSearchResultOptions;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -94,6 +106,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import org.apache.commons.lang3.ArrayUtils;
@@ -1735,6 +1748,55 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void sinterstore_gs(BaseClient client) {
+        GlideString key1 = gs("{key}-1-" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2-" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3-" + UUID.randomUUID());
+        GlideString key4 = gs("{key}-4-" + UUID.randomUUID());
+        GlideString key5 = gs("{key}-5-" + UUID.randomUUID());
+
+        assertEquals(3, client.sadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertEquals(3, client.sadd(key2, new GlideString[] {gs("c"), gs("d"), gs("e")}).get());
+        assertEquals(3, client.sadd(key4, new GlideString[] {gs("e"), gs("f"), gs("g")}).get());
+
+        // create new
+        assertEquals(1, client.sinterstore(key3, new GlideString[] {key1, key2}).get());
+        assertEquals(Set.of(gs("c")), client.smembers(key3).get());
+
+        // overwrite existing set
+        assertEquals(1, client.sinterstore(key2, new GlideString[] {key3, key2}).get());
+        assertEquals(Set.of(gs("c")), client.smembers(key2).get());
+
+        // overwrite source
+        assertEquals(0, client.sinterstore(key1, new GlideString[] {key1, key4}).get());
+        assertEquals(Set.of(), client.smembers(key1).get());
+
+        // overwrite source
+        assertEquals(1, client.sinterstore(key2, new GlideString[] {key2}).get());
+        assertEquals(Set.of(gs("c")), client.smembers(key2).get());
+
+        // source key exists, but it is not a set
+        assertEquals(OK, client.set(key5, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.sinterstore(key1, new GlideString[] {key5}).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+
+        // overwrite destination - not a set
+        assertEquals(0, client.sinterstore(key5, new GlideString[] {key1, key2}).get());
+        assertEquals(Set.of(), client.smembers(key5).get());
+
+        // wrong arguments
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.sinterstore(key5, new GlideString[0]).get());
+        assertTrue(executionException.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sdiff(BaseClient client) {
         String key1 = "{key}-1-" + UUID.randomUUID();
         String key2 = "{key}-2-" + UUID.randomUUID();
@@ -1779,6 +1841,32 @@ public class SharedCommandTests {
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class, () -> client.smismember(key2, new String[] {"_"}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void smismember_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+
+        assertEquals(2, client.sadd(key1, new GlideString[] {gs("one"), gs("two")}).get());
+        assertArrayEquals(
+                new Boolean[] {true, false},
+                client.smismember(key1, new GlideString[] {gs("one"), gs("three")}).get());
+
+        // empty set
+        assertArrayEquals(
+                new Boolean[] {false, false},
+                client.smismember(key2, new GlideString[] {gs("one"), gs("three")}).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.smismember(key2, new GlideString[] {gs("_")}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -1850,6 +1938,26 @@ public class SharedCommandTests {
         assertEquals(OK, client.set(key3, "bar").get());
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sinter(new String[] {key3}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sinter_gs(BaseClient client) {
+        GlideString key1 = gs("{sinter}-" + UUID.randomUUID());
+        GlideString key2 = gs("{sinter}-" + UUID.randomUUID());
+        GlideString key3 = gs("{sinter}-" + UUID.randomUUID());
+
+        assertEquals(3, client.sadd(key1, new GlideString[] {gs("a"), gs("b"), gs("c")}).get());
+        assertEquals(3, client.sadd(key2, new GlideString[] {gs("c"), gs("d"), gs("e")}).get());
+        assertEquals(Set.of(gs("c")), client.sinter(new GlideString[] {key1, key2}).get());
+        assertEquals(0, client.sinter(new GlideString[] {key1, key3}).get().size());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key3, gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sinter(new GlideString[] {key3}).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -4184,6 +4292,20 @@ public class SharedCommandTests {
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
+        // group doesn't exists, throws a request error with "NOGROUP"
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xreadgroup(Map.of(key, timestamp_1_1), "not_a_group", consumerName).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+        // consumer doesn't exist and will be created
+        var emptyResult =
+                client.xreadgroup(Map.of(key, timestamp_1_1), groupName, "non_existing_consumer").get();
+        // no available pending messages
+        assertEquals(0, emptyResult.get(key).size());
+
         try (var testClient =
                 client instanceof RedisClient
                         ? RedisClient.CreateClient(commonClientConfig().build()).get()
@@ -4348,6 +4470,8 @@ public class SharedCommandTests {
         };
         assertDeepEquals(expectedResult, pending_results);
 
+        // ensure idle_time > 0
+        Thread.sleep(2000);
         Object[][] pending_results_extended =
                 client.xpending(key, groupName, InfRangeBound.MIN, InfRangeBound.MAX, 10L).get();
 
@@ -5150,10 +5274,10 @@ public class SharedCommandTests {
     public void objectEncoding_returns_list_listpack(BaseClient client) {
         String listListpackKey = UUID.randomUUID().toString();
         assertEquals(1, client.lpush(listListpackKey, new String[] {"1"}).get());
-        // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
+        // API documentation states that a ziplist should be returned for Redis versions < 7.2, but
         // actual behavior returns a quicklist.
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.0.0") ? "quicklist" : "listpack",
+                REDIS_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
                 client.objectEncoding(listListpackKey).get());
     }
 
@@ -5166,7 +5290,7 @@ public class SharedCommandTests {
         // API documentation states that a ziplist should be returned for Redis versions <= 6.2, but
         // actual behavior returns a quicklist.
         assertEquals(
-                REDIS_VERSION.isLowerThan("7.0.0") ? "quicklist" : "listpack",
+                REDIS_VERSION.isLowerThan("7.2.0") ? "quicklist" : "listpack",
                 client.objectEncoding(listListpackKey).get());
     }
 
@@ -6731,9 +6855,53 @@ public class SharedCommandTests {
         // returns limit as cardinality when the limit is reached partway through the computation
         assertEquals(limit, client.sintercard(keys, limit).get());
 
+        // returns actual cardinality if limit is higher
+        assertEquals(3, client.sintercard(keys, limit2).get());
+
         // non set keys are used
         assertEquals(OK, client.set(nonSetKey, "NotASet").get());
         String[] badArr = new String[] {key1, nonSetKey};
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sintercard(badArr).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sintercard_gs(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString nonSetKey = gs("{key}-4" + UUID.randomUUID());
+        GlideString[] saddargs = {gs("one"), gs("two"), gs("three"), gs("four")};
+        GlideString[] saddargs2 = {gs("two"), gs("three"), gs("four"), gs("five")};
+        long limit = 2;
+        long limit2 = 4;
+
+        // keys does not exist or is empty
+        GlideString[] keys = {key1, key2};
+        assertEquals(0, client.sintercard(keys).get());
+        assertEquals(0, client.sintercard(keys, limit).get());
+
+        // one of the keys is empty, intersection is empty, cardinality equals to 0
+        assertEquals(4, client.sadd(key1, saddargs).get());
+        assertEquals(0, client.sintercard(keys).get());
+
+        // sets at both keys have value, get cardinality of the intersection
+        assertEquals(4, client.sadd(key2, saddargs2).get());
+        assertEquals(3, client.sintercard(keys).get());
+
+        // returns limit as cardinality when the limit is reached partway through the computation
+        assertEquals(limit, client.sintercard(keys, limit).get());
+
+        // returns actual cardinality if limit is higher
+        assertEquals(3, client.sintercard(keys, limit2).get());
+
+        // non set keys are used
+        assertEquals(OK, client.set(nonSetKey, gs("NotASet")).get());
+        GlideString[] badArr = new GlideString[] {key1, nonSetKey};
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.sintercard(badArr).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
@@ -7193,5 +7361,1078 @@ public class SharedCommandTests {
                         ExecutionException.class,
                         () -> client.lcsIdxWithMatchLen(nonStringKey, key1, 10L).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geosearch(BaseClient client) {
+        // setup
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String[] members = {"Catania", "Palermo", "edge2", "edge1"};
+        GeospatialData[] members_coordinates = {
+            new GeospatialData(15.087269, 37.502669),
+            new GeospatialData(13.361389, 38.115556),
+            new GeospatialData(17.241510, 38.788135),
+            new GeospatialData(12.758489, 38.788135)
+        };
+        Object[] expectedResult = {
+            new Object[] {
+                "Catania",
+                new Object[] {
+                    56.4413, 3479447370796909L, new Object[] {15.087267458438873, 37.50266842333162}
+                }
+            },
+            new Object[] {
+                "Palermo",
+                new Object[] {
+                    190.4424, 3479099956230698L, new Object[] {13.361389338970184, 38.1155563954963}
+                }
+            },
+            new Object[] {
+                "edge2",
+                new Object[] {
+                    279.7403, 3481342659049484L, new Object[] {17.241510450839996, 38.78813451624225}
+                }
+            },
+            new Object[] {
+                "edge1",
+                new Object[] {
+                    279.7405, 3479273021651468L, new Object[] {12.75848776102066, 38.78813451624225}
+                }
+            },
+        };
+
+        // geoadd
+        assertEquals(
+                4,
+                client
+                        .geoadd(
+                                key1,
+                                Map.of(
+                                        members[0],
+                                        members_coordinates[0],
+                                        members[1],
+                                        members_coordinates[1],
+                                        members[2],
+                                        members_coordinates[2],
+                                        members[3],
+                                        members_coordinates[3]))
+                        .get());
+
+        // Search by box, unit: km, from a geospatial data point
+        assertArrayEquals(
+                members,
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        assertDeepEquals(
+                expectedResult,
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                GeoSearchOptions.builder().withcoord().withdist().withhash().build(),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        assertDeepEquals(
+                new Object[] {new Object[] {"Catania", new Object[] {56.4413, 3479447370796909L}}},
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                GeoSearchOptions.builder().withdist().withhash().build(),
+                                new GeoSearchResultOptions(SortOrder.ASC, 1))
+                        .get());
+
+        // test search by box, unit: meters, from member, with distance
+        long meters = 400 * 1000;
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {"edge2", new Object[] {236529.1799}},
+                    new Object[] {"Palermo", new Object[] {166274.1516}},
+                    new Object[] {"Catania", new Object[] {0.0}},
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOrigin("Catania"),
+                                new GeoSearchShape(meters, meters, GeoUnit.METERS),
+                                GeoSearchOptions.builder().withdist().build(),
+                                new GeoSearchResultOptions(SortOrder.DESC))
+                        .get());
+
+        // test search by box, unit: feet, from member, with limited count 2, with hash
+        double feet = 400 * 3280.8399;
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {"Palermo", new Object[] {3479099956230698L}},
+                    new Object[] {"edge1", new Object[] {3479273021651468L}},
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOrigin("Palermo"),
+                                new GeoSearchShape(feet, feet, GeoUnit.FEET),
+                                GeoSearchOptions.builder().withhash().build(),
+                                new GeoSearchResultOptions(SortOrder.ASC, 2))
+                        .get());
+
+        // test search by box, unit: miles, from geospatial position, with limited ANY count to 1
+        ArrayUtils.contains(
+                members,
+                client.geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(250, 250, GeoUnit.MILES),
+                                new GeoSearchResultOptions(1, true))
+                        .get()[0]);
+
+        // test search by radius, units: feet, from member
+        double feet_radius = 200 * 3280.8399;
+        assertArrayEquals(
+                new String[] {"Catania", "Palermo"},
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOrigin("Catania"),
+                                new GeoSearchShape(feet_radius, GeoUnit.FEET),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        // Test search by radius, unit: meters, from member
+        double meters_radius = 200 * 1000;
+        assertArrayEquals(
+                new String[] {"Palermo", "Catania"},
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOrigin("Catania"),
+                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                new GeoSearchResultOptions(SortOrder.DESC))
+                        .get());
+
+        // Test search by radius, unit: miles, from geospatial data
+        assertArrayEquals(
+                new String[] {"edge1", "edge2", "Palermo", "Catania"},
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(175, GeoUnit.MILES),
+                                new GeoSearchResultOptions(SortOrder.DESC))
+                        .get());
+
+        // Test search by radius, unit: kilometers, from a geospatial data, with limited count to 2
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {
+                        "Catania",
+                        new Object[] {
+                            56.4413, 3479447370796909L, new Object[] {15.087267458438873, 37.50266842333162}
+                        }
+                    },
+                    new Object[] {
+                        "Palermo",
+                        new Object[] {
+                            190.4424, 3479099956230698L, new Object[] {13.361389338970184, 38.1155563954963}
+                        }
+                    }
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(200, GeoUnit.KILOMETERS),
+                                GeoSearchOptions.builder().withdist().withhash().withcoord().build(),
+                                new GeoSearchResultOptions(SortOrder.ASC, 2))
+                        .get());
+
+        // Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
+        assertTrue(
+                ArrayUtils.contains(
+                        members,
+                        ((Object[])
+                                        client.geosearch(
+                                                        key1,
+                                                        new CoordOrigin(new GeospatialData(15, 37)),
+                                                        new GeoSearchShape(200, GeoUnit.KILOMETERS),
+                                                        GeoSearchOptions.builder().withdist().withhash().withcoord().build(),
+                                                        new GeoSearchResultOptions(SortOrder.ASC, 1, true))
+                                                .get()[0])
+                                [0]));
+
+        // no members within the area
+        assertArrayEquals(
+                new String[] {},
+                client
+                        .geosearch(
+                                key1,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(50, 50, GeoUnit.METERS),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        // no members within the area
+        assertArrayEquals(
+                new String[] {},
+                client
+                        .geosearch(
+                                key1,
+                                new GeoSearchOrigin.CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(5, GeoUnit.METERS),
+                                new GeoSearchResultOptions(SortOrder.ASC))
+                        .get());
+
+        // member does not exist
+        ExecutionException requestException1 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .geosearch(
+                                                key1,
+                                                new MemberOrigin("non-existing-member"),
+                                                new GeoSearchShape(100, GeoUnit.METERS))
+                                        .get());
+        assertInstanceOf(RequestException.class, requestException1.getCause());
+
+        // key exists but holds a non-ZSET value
+        assertEquals(OK, client.set(key2, "nonZSETvalue").get());
+        ExecutionException requestException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .geosearch(
+                                                key2,
+                                                new CoordOrigin(new GeospatialData(15, 37)),
+                                                new GeoSearchShape(100, GeoUnit.METERS))
+                                        .get());
+        assertInstanceOf(RequestException.class, requestException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void geosearchstore(BaseClient client) {
+        // setup
+        String sourceKey = "{key}-1" + UUID.randomUUID();
+        String destinationKey = "{key}-2" + UUID.randomUUID();
+        String key3 = "{key}-3" + UUID.randomUUID();
+        String[] members = {"Catania", "Palermo", "edge2", "edge1"};
+        GeospatialData[] members_coordinates = {
+            new GeospatialData(15.087269, 37.502669),
+            new GeospatialData(13.361389, 38.115556),
+            new GeospatialData(17.241510, 38.788135),
+            new GeospatialData(12.758489, 38.788135)
+        };
+        Map<String, Double> expectedMap =
+                Map.of(
+                        "Catania", 3479447370796909.0,
+                        "Palermo", 3479099956230698.0,
+                        "edge2", 3481342659049484.0,
+                        "edge1", 3479273021651468.0);
+        Map<String, Double> expectedMap2 =
+                Map.of(
+                        "Catania", 56.4412578701582,
+                        "Palermo", 190.44242984775784,
+                        "edge2", 279.7403417843143,
+                        "edge1", 279.7404521356343);
+        Map<String, Double> expectedMap3 =
+                Map.of(
+                        "Catania", 3479447370796909.0,
+                        "Palermo", 3479099956230698.0);
+        Map<String, Double> expectedMap4 =
+                Map.of(
+                        "Catania", 56.4412578701582,
+                        "Palermo", 190.44242984775784);
+
+        // geoadd
+        assertEquals(
+                4,
+                client
+                        .geoadd(
+                                sourceKey,
+                                Map.of(
+                                        members[0],
+                                        members_coordinates[0],
+                                        members[1],
+                                        members_coordinates[1],
+                                        members[2],
+                                        members_coordinates[2],
+                                        members[3],
+                                        members_coordinates[3]))
+                        .get());
+
+        // Test storing results of a box search, unit: kilometers, from a geospatial data position
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                        .get(),
+                4L);
+
+        // Verify the stored results
+        Map<String, Double> zrange_map =
+                client.zrangeWithScores(destinationKey, new RangeByIndex(0, -1)).get();
+        assertDeepEquals(expectedMap, zrange_map);
+
+        // Test storing results of a box search, unit: kilometes, from a geospatial data position, with
+        // distance
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                GeoSearchStoreOptions.builder().storedist().build())
+                        .get(),
+                4L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey, new RangeByIndex(0, -1)).get();
+        assertDeepEquals(expectedMap2, zrange_map);
+
+        // Test storing results of a box search, unit: kilometes, from a geospatial data, with count
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS),
+                                new GeoSearchResultOptions(1))
+                        .get(),
+                1L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey, new RangeByIndex(0, -1)).get();
+        assertDeepEquals(Map.of("Catania", 3479447370796909.0), zrange_map);
+
+        // Test storing results of a box search, unit: meters, from a member, with distance
+        double metersValue = 400 * 1000;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOrigin("Catania"),
+                                new GeoSearchShape(metersValue, metersValue, GeoUnit.METERS),
+                                GeoSearchStoreOptions.builder().storedist().build())
+                        .get(),
+                3L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey, new RangeByIndex(0, -1)).get();
+        assertDeepEquals(
+                Map.of(
+                        "Catania", 0.0,
+                        "Palermo", 166274.15156960033,
+                        "edge2", 236529.17986494553),
+                zrange_map);
+
+        // Test search by box, unit: feet, from a member, with limited ANY count to 2, with hash
+        double feetValue = 400 * 3280.8399;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOrigin("Palermo"),
+                                new GeoSearchShape(feetValue, feetValue, GeoUnit.FEET),
+                                new GeoSearchResultOptions(2))
+                        .get(),
+                2L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey, new RangeByIndex(0, -1)).get();
+        for (String memberKey : zrange_map.keySet()) {
+            assertTrue(expectedMap.containsKey(memberKey));
+        }
+
+        // Test storing results of a radius search, unit: feet, from a member
+        double feetValue2 = 200 * 3280.8399;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOrigin("Catania"),
+                                new GeoSearchShape(feetValue2, GeoUnit.FEET))
+                        .get(),
+                2L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey, new RangeByIndex(0, -1)).get();
+        assertDeepEquals(expectedMap3, zrange_map);
+
+        // Test search by radius, units: meters, from a member
+        double metersValue2 = 200 * 1000;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOrigin("Catania"),
+                                new GeoSearchShape(metersValue2, GeoUnit.METERS),
+                                GeoSearchStoreOptions.builder().storedist().build())
+                        .get(),
+                2L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey, new RangeByIndex(0, -1)).get();
+        assertDeepEquals(
+                Map.of(
+                        "Catania", 0.0,
+                        "Palermo", 166274.15156960033),
+                zrange_map);
+
+        // Test search by radius, unit: miles, from a geospatial data
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(175, GeoUnit.MILES))
+                        .get(),
+                4L);
+
+        // Test storing results of a radius search, unit: kilometers, from a geospatial data, with
+        // limited count to 2
+        double kmValue = 200.0;
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(kmValue, GeoUnit.KILOMETERS),
+                                GeoSearchStoreOptions.builder().storedist().build(),
+                                new GeoSearchResultOptions(2))
+                        .get(),
+                2L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey, new RangeByIndex(0, -1)).get();
+        assertDeepEquals(expectedMap4, zrange_map);
+
+        // Test storing results of a radius search, unit: kilometers, from a geospatial data, with
+        // limited ANY count to 1
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(kmValue, GeoUnit.KILOMETERS),
+                                new GeoSearchResultOptions(1, true))
+                        .get(),
+                1L);
+
+        // Verify stored results
+        zrange_map = client.zrangeWithScores(destinationKey, new RangeByIndex(0, -1)).get();
+        for (String memberKey : zrange_map.keySet()) {
+            assertTrue(expectedMap.containsKey(memberKey));
+        }
+
+        // Test no members within the area
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(50, 50, GeoUnit.METERS))
+                        .get(),
+                0L);
+
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new CoordOrigin(new GeospatialData(15, 37)),
+                                new GeoSearchShape(1, GeoUnit.METERS))
+                        .get(),
+                0L);
+
+        // No members in the area (apart from the member we search from itself)
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOrigin("Catania"),
+                                new GeoSearchShape(10, 10, GeoUnit.METERS))
+                        .get(),
+                1L);
+
+        assertEquals(
+                client
+                        .geosearchstore(
+                                destinationKey,
+                                sourceKey,
+                                new MemberOrigin("Catania"),
+                                new GeoSearchShape(10, GeoUnit.METERS))
+                        .get(),
+                1L);
+
+        // member does not exist
+        ExecutionException requestException1 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .geosearchstore(
+                                                destinationKey,
+                                                sourceKey,
+                                                new MemberOrigin("non-existing-member"),
+                                                new GeoSearchShape(100, GeoUnit.METERS))
+                                        .get());
+        assertInstanceOf(RequestException.class, requestException1.getCause());
+
+        // key exists but holds a non-ZSET value
+        assertEquals(OK, client.set(key3, "nonZSETvalue").get());
+        ExecutionException requestException2 =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .geosearchstore(
+                                                key3,
+                                                key3,
+                                                new CoordOrigin(new GeospatialData(15, 37)),
+                                                new GeoSearchShape(100, GeoUnit.METERS))
+                                        .get());
+        assertInstanceOf(RequestException.class, requestException2.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void sscan(BaseClient client) {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String initialCursor = "0";
+        long defaultCount = 10;
+        String[] numberMembers = new String[50000]; // Use large dataset to force an iterative cursor.
+        for (int i = 0; i < numberMembers.length; i++) {
+            numberMembers[i] = String.valueOf(i);
+        }
+        Set<String> numberMembersSet = Set.of(numberMembers);
+        String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
+        Set<String> charMemberSet = Set.of(charMembers);
+        int resultCursorIndex = 0;
+        int resultCollectionIndex = 1;
+
+        // Empty set
+        Object[] result = client.sscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Negative cursor
+        result = client.sscan(key1, "-1").get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Result contains the whole set
+        assertEquals(charMembers.length, client.sadd(key1, charMembers).get());
+        result = client.sscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertEquals(charMembers.length, ((Object[]) result[resultCollectionIndex]).length);
+        final Set<Object> resultMembers =
+                Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet());
+        assertTrue(
+                resultMembers.containsAll(charMemberSet),
+                String.format("resultMembers: {%s}, charMemberSet: {%s}", resultMembers, charMemberSet));
+
+        result =
+                client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern("a").build()).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {"a"}, result[resultCollectionIndex]);
+
+        // Result contains a subset of the key
+        assertEquals(numberMembers.length, client.sadd(key1, numberMembers).get());
+        String resultCursor = "0";
+        final Set<Object> secondResultValues = new HashSet<>();
+        boolean isFirstLoop = true;
+        do {
+            result = client.sscan(key1, resultCursor).get();
+            resultCursor = result[resultCursorIndex].toString();
+            secondResultValues.addAll(
+                    Arrays.stream((Object[]) result[resultCollectionIndex]).collect(Collectors.toSet()));
+
+            if (isFirstLoop) {
+                assertNotEquals("0", resultCursor);
+                isFirstLoop = false;
+            } else if (resultCursor.equals("0")) {
+                break;
+            }
+
+            // Scan with result cursor has a different set
+            Object[] secondResult = client.sscan(key1, resultCursor).get();
+            String newResultCursor = secondResult[resultCursorIndex].toString();
+            assertNotEquals(resultCursor, newResultCursor);
+            resultCursor = newResultCursor;
+            assertFalse(
+                    Arrays.deepEquals(
+                            ArrayUtils.toArray(result[resultCollectionIndex]),
+                            ArrayUtils.toArray(secondResult[resultCollectionIndex])));
+            secondResultValues.addAll(
+                    Arrays.stream((Object[]) secondResult[resultCollectionIndex])
+                            .collect(Collectors.toSet()));
+        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+
+        assertTrue(
+                secondResultValues.containsAll(numberMembersSet),
+                String.format(
+                        "secondResultValues: {%s}, numberMembersSet: {%s}",
+                        secondResultValues, numberMembersSet));
+
+        assertTrue(
+                secondResultValues.containsAll(numberMembersSet),
+                String.format(
+                        "secondResultValues: {%s}, numberMembersSet: {%s}",
+                        secondResultValues, numberMembersSet));
+
+        // Test match pattern
+        result =
+                client.sscan(key1, initialCursor, SScanOptions.builder().matchPattern("*").build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
+
+        // Test count
+        result = client.sscan(key1, initialCursor, SScanOptions.builder().count(20L).build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
+
+        // Test count with match returns a non-empty list
+        result =
+                client
+                        .sscan(
+                                key1, initialCursor, SScanOptions.builder().matchPattern("1*").count(20L).build())
+                        .get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
+
+        // Exceptions
+        // Non-set key
+        assertEquals(OK, client.set(key2, "test").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.sscan(key2, initialCursor).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .sscan(
+                                                key2,
+                                                initialCursor,
+                                                SScanOptions.builder().matchPattern("test").count(1L).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Negative count
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.sscan(key1, "-1", SScanOptions.builder().count(-1L).build()).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void zscan(BaseClient client) {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String initialCursor = "0";
+        long defaultCount = 20;
+        int resultCursorIndex = 0;
+        int resultCollectionIndex = 1;
+
+        // Setup test data - use a large number of entries to force an iterative cursor.
+        Map<String, Double> numberMap = new HashMap<>();
+        for (Double i = 0.0; i < 50000; i++) {
+            numberMap.put(String.valueOf(i), i);
+        }
+        String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
+        Map<String, Double> charMap = new HashMap<>();
+        for (double i = 0.0; i < 5; i++) {
+            charMap.put(charMembers[(int) i], i);
+        }
+
+        // Empty set
+        Object[] result = client.zscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Negative cursor
+        result = client.zscan(key1, "-1").get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Result contains the whole set
+        assertEquals(charMembers.length, client.zadd(key1, charMap).get());
+        result = client.zscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertEquals(
+                charMap.size() * 2,
+                ((Object[]) result[resultCollectionIndex])
+                        .length); // Length includes the score which is twice the map size
+        final Object[] resultArray = (Object[]) result[resultCollectionIndex];
+
+        final Set<Object> resultKeys = new HashSet<>();
+        final Set<Object> resultValues = new HashSet<>();
+        for (int i = 0; i < resultArray.length; i += 2) {
+            resultKeys.add(resultArray[i]);
+            resultValues.add(resultArray[i + 1]);
+        }
+        assertTrue(
+                resultKeys.containsAll(charMap.keySet()),
+                String.format("resultKeys: {%s} charMap.keySet(): {%s}", resultKeys, charMap.keySet()));
+
+        // The score comes back as an integer converted to a String when the fraction is zero.
+        final Set<String> expectedScoresAsStrings =
+                charMap.values().stream()
+                        .map(v -> String.valueOf(v.intValue()))
+                        .collect(Collectors.toSet());
+
+        assertTrue(
+                resultValues.containsAll(expectedScoresAsStrings),
+                String.format(
+                        "resultValues: {%s} expectedScoresAsStrings: {%s}",
+                        resultValues, expectedScoresAsStrings));
+
+        result =
+                client.zscan(key1, initialCursor, ZScanOptions.builder().matchPattern("a").build()).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {"a", "0"}, result[resultCollectionIndex]);
+
+        // Result contains a subset of the key
+        assertEquals(numberMap.size(), client.zadd(key1, numberMap).get());
+        String resultCursor = "0";
+        final Set<Object> secondResultAllKeys = new HashSet<>();
+        final Set<Object> secondResultAllValues = new HashSet<>();
+        boolean isFirstLoop = true;
+        do {
+            result = client.zscan(key1, resultCursor).get();
+            resultCursor = result[resultCursorIndex].toString();
+            Object[] resultEntry = (Object[]) result[resultCollectionIndex];
+            for (int i = 0; i < resultEntry.length; i += 2) {
+                secondResultAllKeys.add(resultEntry[i]);
+                secondResultAllValues.add(resultEntry[i + 1]);
+            }
+
+            if (isFirstLoop) {
+                assertNotEquals("0", resultCursor);
+                isFirstLoop = false;
+            } else if (resultCursor.equals("0")) {
+                break;
+            }
+
+            // Scan with result cursor has a different set
+            Object[] secondResult = client.zscan(key1, resultCursor).get();
+            String newResultCursor = secondResult[resultCursorIndex].toString();
+            assertNotEquals(resultCursor, newResultCursor);
+            resultCursor = newResultCursor;
+            Object[] secondResultEntry = (Object[]) secondResult[resultCollectionIndex];
+            assertFalse(
+                    Arrays.deepEquals(
+                            ArrayUtils.toArray(result[resultCollectionIndex]),
+                            ArrayUtils.toArray(secondResult[resultCollectionIndex])));
+
+            for (int i = 0; i < secondResultEntry.length; i += 2) {
+                secondResultAllKeys.add(secondResultEntry[i]);
+                secondResultAllValues.add(secondResultEntry[i + 1]);
+            }
+        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+
+        assertTrue(
+                secondResultAllKeys.containsAll(numberMap.keySet()),
+                String.format(
+                        "secondResultAllKeys: {%s} numberMap.keySet: {%s}",
+                        secondResultAllKeys, numberMap.keySet()));
+
+        final Set<String> numberMapValuesAsStrings =
+                numberMap.values().stream()
+                        .map(d -> String.valueOf(d.intValue()))
+                        .collect(Collectors.toSet());
+
+        assertTrue(
+                secondResultAllValues.containsAll(numberMapValuesAsStrings),
+                String.format(
+                        "secondResultAllValues: {%s} numberMapValuesAsStrings: {%s}",
+                        secondResultAllValues, numberMapValuesAsStrings));
+
+        // Test match pattern
+        result =
+                client.zscan(key1, initialCursor, ZScanOptions.builder().matchPattern("*").build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
+
+        // Test count
+        result = client.zscan(key1, initialCursor, ZScanOptions.builder().count(20L).build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
+
+        // Test count with match returns a non-empty list
+        result =
+                client
+                        .zscan(
+                                key1, initialCursor, ZScanOptions.builder().matchPattern("1*").count(20L).build())
+                        .get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
+
+        // Exceptions
+        // Non-set key
+        assertEquals(OK, client.set(key2, "test").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.zscan(key2, initialCursor).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .zscan(
+                                                key2,
+                                                initialCursor,
+                                                ZScanOptions.builder().matchPattern("test").count(1L).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Negative count
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.zscan(key1, "-1", ZScanOptions.builder().count(-1L).build()).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void hscan(BaseClient client) {
+        String key1 = "{key}-1" + UUID.randomUUID();
+        String key2 = "{key}-2" + UUID.randomUUID();
+        String initialCursor = "0";
+        long defaultCount = 20;
+        int resultCursorIndex = 0;
+        int resultCollectionIndex = 1;
+
+        // Setup test data
+        Map<String, String> numberMap = new HashMap<>();
+        // This is an unusually large dataset because the server can ignore the COUNT option
+        // if the dataset is small enough that it is more efficient to transfer its entire contents
+        // at once.
+        for (int i = 0; i < 50000; i++) {
+            numberMap.put(String.valueOf(i), "num" + i);
+        }
+        String[] charMembers = new String[] {"a", "b", "c", "d", "e"};
+        Map<String, String> charMap = new HashMap<>();
+        for (int i = 0; i < 5; i++) {
+            charMap.put(charMembers[i], String.valueOf(i));
+        }
+
+        // Empty set
+        Object[] result = client.hscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Negative cursor
+        result = client.hscan(key1, "-1").get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {}, result[resultCollectionIndex]);
+
+        // Result contains the whole set
+        assertEquals(charMembers.length, client.hset(key1, charMap).get());
+        result = client.hscan(key1, initialCursor).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertEquals(
+                charMap.size() * 2,
+                ((Object[]) result[resultCollectionIndex])
+                        .length); // Length includes the score which is twice the map size
+        final Object[] resultArray = (Object[]) result[resultCollectionIndex];
+
+        final Set<Object> resultKeys = new HashSet<>();
+        final Set<Object> resultValues = new HashSet<>();
+        for (int i = 0; i < resultArray.length; i += 2) {
+            resultKeys.add(resultArray[i]);
+            resultValues.add(resultArray[i + 1]);
+        }
+        assertTrue(
+                resultKeys.containsAll(charMap.keySet()),
+                String.format("resultKeys: {%s} charMap.keySet(): {%s}", resultKeys, charMap.keySet()));
+
+        assertTrue(
+                resultValues.containsAll(charMap.values()),
+                String.format("resultValues: {%s} charMap.values(): {%s}", resultValues, charMap.values()));
+
+        result =
+                client.hscan(key1, initialCursor, HScanOptions.builder().matchPattern("a").build()).get();
+        assertEquals(initialCursor, result[resultCursorIndex]);
+        assertDeepEquals(new String[] {"a", "0"}, result[resultCollectionIndex]);
+
+        // Result contains a subset of the key
+        final HashMap<String, String> combinedMap = new HashMap<>(numberMap);
+        combinedMap.putAll(charMap);
+        assertEquals(numberMap.size(), client.hset(key1, combinedMap).get());
+        String resultCursor = "0";
+        final Set<Object> secondResultAllKeys = new HashSet<>();
+        final Set<Object> secondResultAllValues = new HashSet<>();
+        boolean isFirstLoop = true;
+        do {
+            result = client.hscan(key1, resultCursor).get();
+            resultCursor = result[resultCursorIndex].toString();
+            Object[] resultEntry = (Object[]) result[resultCollectionIndex];
+            for (int i = 0; i < resultEntry.length; i += 2) {
+                secondResultAllKeys.add(resultEntry[i]);
+                secondResultAllValues.add(resultEntry[i + 1]);
+            }
+
+            if (isFirstLoop) {
+                assertNotEquals("0", resultCursor);
+                isFirstLoop = false;
+            } else if (resultCursor.equals("0")) {
+                break;
+            }
+
+            // Scan with result cursor has a different set
+            Object[] secondResult = client.hscan(key1, resultCursor).get();
+            String newResultCursor = secondResult[resultCursorIndex].toString();
+            assertNotEquals(resultCursor, newResultCursor);
+            resultCursor = newResultCursor;
+            Object[] secondResultEntry = (Object[]) secondResult[resultCollectionIndex];
+            assertFalse(
+                    Arrays.deepEquals(
+                            ArrayUtils.toArray(result[resultCollectionIndex]),
+                            ArrayUtils.toArray(secondResult[resultCollectionIndex])));
+
+            for (int i = 0; i < secondResultEntry.length; i += 2) {
+                secondResultAllKeys.add(secondResultEntry[i]);
+                secondResultAllValues.add(secondResultEntry[i + 1]);
+            }
+        } while (!resultCursor.equals("0")); // 0 is returned for the cursor of the last iteration.
+
+        assertTrue(
+                secondResultAllKeys.containsAll(numberMap.keySet()),
+                String.format(
+                        "secondResultAllKeys: {%s} numberMap.keySet: {%s}",
+                        secondResultAllKeys, numberMap.keySet()));
+
+        assertTrue(
+                secondResultAllValues.containsAll(numberMap.values()),
+                String.format(
+                        "secondResultAllValues: {%s} numberMap.values(): {%s}",
+                        secondResultAllValues, numberMap.values()));
+
+        // Test match pattern
+        result =
+                client.hscan(key1, initialCursor, HScanOptions.builder().matchPattern("*").build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
+
+        // Test count
+        result = client.hscan(key1, initialCursor, HScanOptions.builder().count(20L).build()).get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
+
+        // Test count with match returns a non-empty list
+        result =
+                client
+                        .hscan(
+                                key1, initialCursor, HScanOptions.builder().matchPattern("1*").count(20L).build())
+                        .get();
+        assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
+        assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 0);
+
+        // Exceptions
+        // Non-hash key
+        assertEquals(OK, client.set(key2, "test").get());
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.hscan(key2, initialCursor).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .hscan(
+                                                key2,
+                                                initialCursor,
+                                                HScanOptions.builder().matchPattern("test").count(1L).build())
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Negative count
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.hscan(key1, "-1", HScanOptions.builder().count(-1L).build()).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void waitTest(BaseClient client) {
+        // setup
+        String key = UUID.randomUUID().toString();
+        long numreplicas = 1L;
+        long timeout = 1000L;
+
+        // assert that wait returns 0 under standalone and 1 under cluster mode.
+        assertEquals(OK, client.set(key, "value").get());
+        assertTrue(client.wait(numreplicas, timeout).get() >= (client instanceof RedisClient ? 0 : 1));
+
+        // command should fail on a negative timeout value
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.wait(1L, -1L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void wait_timeout_check(BaseClient client) {
+        String key = UUID.randomUUID().toString();
+        // create new client with default request timeout (250 millis)
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands do not time out, even if timeout > request timeout
+            assertEquals(OK, testClient.set(key, "value").get());
+            assertEquals((client instanceof RedisClient ? 0 : 1), testClient.wait(1L, 1000L).get());
+
+            // with 0 timeout (no timeout) wait should block indefinitely,
+            // but we wrap the test with timeout to avoid test failing or being stuck forever
+            assertEquals(OK, testClient.set(key, "value2").get());
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.wait(100L, 0L).get(1000, TimeUnit.MILLISECONDS));
+        }
     }
 }
