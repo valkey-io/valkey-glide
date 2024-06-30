@@ -766,6 +766,7 @@ class ClusterCommands(CoreCommands):
         Examples:
             >>> await client.set("key", "value");
             >>> await client.wait(1, 1000);
+            // return 1 when a replica is reached or 0 if 1000ms is reached.
         """
         args = [str(numreplicas), str(timeout)]
         return cast(
