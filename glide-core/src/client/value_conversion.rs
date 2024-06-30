@@ -1347,7 +1347,7 @@ mod tests {
                         Value::BulkString("value2".to_string().into_bytes()),
                     ]),
                 ]),
-                Value::Nil,
+                Value::Nil, // Entry IDs that were in the Pending Entry List but no longer in the stream get a nil value.
                 Value::Array(vec![
                     Value::BulkString("1-1".to_string().into_bytes()),
                     Value::Array(vec![
