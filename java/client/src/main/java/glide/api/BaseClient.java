@@ -2686,7 +2686,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public <ArgType> CompletableFuture<String> msetnx(@NonNull Map<ArgType, ArgType> keyValueMap) {
+    public <ArgType> CompletableFuture<Boolean> msetnx(@NonNull Map<ArgType, ArgType> keyValueMap) {
         if (keyValueMap.isEmpty()) {
             throw new IllegalArgumentException("empty map");
         }
@@ -2696,11 +2696,11 @@ public abstract class BaseClient
         Object[] args;
         if (firstValue instanceof String) {
             args = convertMapToKeyValueStringArray((Map<String, ?>) keyValueMap);
-            return commandManager.submitNewCommand(MSetNX, (String[]) args, this::handleStringResponse);
+            return commandManager.submitNewCommand(MSetNX, (String[]) args, this::handleBooleanResponse);
         } else if (firstValue instanceof GlideString) {
             args = convertMapToKeyValueGlideStringArray((Map<GlideString, GlideString>) keyValueMap);
             return commandManager.submitNewCommand(
-                    MSetNX, (GlideString[]) args, this::handleStringResponse);
+                    MSetNX, (GlideString[]) args, this::handleBooleanResponse);
         } else {
             throw new IllegalArgumentException("Expected String or GlideString");
         }
