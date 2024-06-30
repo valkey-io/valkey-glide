@@ -7054,10 +7054,13 @@ class TestCommands:
         code = generate_lua_lib_code(lib_name, {func_name: "return keys[1]"}, True)
 
         assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
-        assert await redis_client.function_load(code, False, route) == lib_name
+        assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
         # TODO: add when FCALL is implemented.
-        assert await redis_client.fcall_ro(func_name, keys=keys, arguments=[]) == key1
+        assert (
+            await redis_client.fcall_ro(func_name, keys=keys, arguments=[])
+            == key1.encode()
+        )
 
         transaction = ClusterTransaction()
         # TODO: add when FCALL is implemented.
@@ -7066,12 +7069,12 @@ class TestCommands:
         # check response from a routed transaction request
         result = await redis_client.exec(transaction, route)
         assert result is not None
-        assert result[0] == key1
+        assert result[0] == key1.encode()
 
         # if no route given, GLIDE should detect it automatically
         result = await redis_client.exec(transaction)
         assert result is not None
-        assert result[0] == key1
+        assert result[0] == key1.encode()
 
         assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
 
@@ -7091,7 +7094,7 @@ class TestCommands:
         # function $funcName returns a magic number
         code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, False)
 
-        assert await redis_client.function_load(code, False) == lib_name
+        assert await redis_client.function_load(code, False) == lib_name.encode()
 
         # On a replica node should fail, because a function isn't guaranteed to be RO
         # TODO: add when FCALL is implemented.
@@ -7110,7 +7113,7 @@ class TestCommands:
 
         # create the same function, but with RO flag
         code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, True)
-        assert await redis_client.function_load(code, True) == lib_name
+        assert await redis_client.function_load(code, True) == lib_name.encode()
 
         # fcall should succeed now
         assert (

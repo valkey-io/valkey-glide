@@ -119,9 +119,9 @@ async def transaction_test(
         transaction.function_load(code, True)
         args.append(lib_name)
         transaction.fcall_ro(func_name, [], arguments=["one", "two"])
-        args.append("one")
+        args.append(b"one")
         transaction.fcall_ro(func_name, [key], arguments=["one", "two"])
-        args.append("one")
+        args.append(b"one")
 
     transaction.dbsize()
     args.append(0)
