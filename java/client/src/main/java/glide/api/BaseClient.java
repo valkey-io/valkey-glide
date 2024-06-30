@@ -2021,8 +2021,8 @@ public abstract class BaseClient
             @NonNull String key,
             @NonNull String groupName,
             @NonNull String id,
-            @NonNull String entriesRead) {
-        String[] arguments = new String[] {key, groupName, id, "ENTRIESREAD", entriesRead};
+            @NonNull String entriesReadId) {
+        String[] arguments = new String[] {key, groupName, id, "ENTRIESREAD", entriesReadId};
         return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
     }
 

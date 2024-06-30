@@ -3114,9 +3114,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
-     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
-     *     in the stream.
+     * @param id The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
      * @return Command Response - <code>OK</code>.
      */
     public T xgroupSetId(@NonNull String key, @NonNull String groupName, @NonNull String id) {
@@ -3130,10 +3129,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
-     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
-     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
-     *     in the stream.
-     * @param entriesRead An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
+     * @param id The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @param entriesReadId An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
      *     "0-0"</code>)) used to find out how many entries are between the arbitrary ID (excluding
      *     it) and the stream's last entry. This argument can only be specified if you are using Redis
      *     version 7.0.0 or above.
@@ -3143,8 +3141,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull String key,
             @NonNull String groupName,
             @NonNull String id,
-            @NonNull String entriesRead) {
-        String[] commandArgs = buildArgs(key, groupName, id, "ENTRIESREAD", entriesRead);
+            @NonNull String entriesReadId) {
+        String[] commandArgs = buildArgs(key, groupName, id, "ENTRIESREAD", entriesReadId);
         protobufTransaction.addCommands(buildCommand(XGroupSetId, commandArgs));
         return getThis();
     }

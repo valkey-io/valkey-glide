@@ -4357,6 +4357,102 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void xgroupSetId_entriesRead(BaseClient client) {
+        String key = "testKey" + UUID.randomUUID();
+        String nonExistingKey = "group" + UUID.randomUUID();
+        String stringKey = "testKey" + UUID.randomUUID();
+        String groupName = UUID.randomUUID().toString();
+        String consumerName = UUID.randomUUID().toString();
+        String streamId0 = "0";
+        String streamId1_0 = "1-0";
+        String streamId1_1 = "1-1";
+        String streamId1_2 = "1-2";
+
+        // Setup: Create stream with 3 entries, create consumer group, read entries to add them to the
+        // Pending Entries
+        // List.
+        assertEquals(
+                streamId1_0,
+                client
+                        .xadd(key, Map.of("f0", "v0"), StreamAddOptions.builder().id(streamId1_0).build())
+                        .get());
+        assertEquals(
+                streamId1_1,
+                client
+                        .xadd(key, Map.of("f1", "v1"), StreamAddOptions.builder().id(streamId1_1).build())
+                        .get());
+        assertEquals(
+                streamId1_2,
+                client
+                        .xadd(key, Map.of("f2", "v2"), StreamAddOptions.builder().id(streamId1_2).build())
+                        .get());
+
+        assertEquals(OK, client.xgroupCreate(key, groupName, streamId0).get());
+
+        var result = client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get();
+        assertDeepEquals(
+                Map.of(
+                        key,
+                        Map.of(
+                                streamId1_0, new String[][] {{"f0", "v0"}},
+                                streamId1_1, new String[][] {{"f1", "v1"}},
+                                streamId1_2, new String[][] {{"f2", "v2"}})),
+                result);
+
+        // Sanity check: xreadgroup should not return more entries since they're all already in the
+        // Pending Entries List.
+        assertNull(client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get());
+
+        // Reset the last delivered ID for the consumer group to "1-1".
+        // ENRIESREAD is only supported in Redis version 7.0.0
+        if (REDIS_VERSION.isLowerThan("7.0.0")) {
+            assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1).get());
+        } else {
+            assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1, streamId0).get());
+
+            // The entriesReadId cannot be the first, last, or zero ID. Here we pass the first ID and
+            // assert
+            // that an error is raised.
+            ExecutionException executionException =
+                    assertThrows(
+                            ExecutionException.class,
+                            () -> client.xgroupSetId(key, groupName, streamId1_1, streamId1_0).get());
+            assertInstanceOf(RequestException.class, executionException.getCause());
+        }
+
+        // xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1.
+        result = client.xreadgroup(Map.of(key, ">"), groupName, consumerName).get();
+        assertDeepEquals(Map.of(key, Map.of(streamId1_2, new String[][] {{"f2", "v2"}})), result);
+
+        // An error is raised if XGROUP SETID is called with a non-existing key.
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xgroupSetId(nonExistingKey, groupName, streamId0).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // An error is raised if XGROUP SETID is called with a non-existing group.
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xgroupSetId(key, "non_existing_group", streamId0).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // Setting the ID to a non-existing ID is allowed
+        assertEquals("OK", client.xgroupSetId(key, groupName, "99-99").get());
+
+        // Key exists, but it is not a stream
+        assertEquals("OK", client.set(stringKey, "foo").get());
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xgroupSetId(stringKey, groupName, streamId0).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void xreadgroup_return_failures(BaseClient client) {
         String key = "{key}:1" + UUID.randomUUID();
         String nonStreamKey = "{key}:3" + UUID.randomUUID();

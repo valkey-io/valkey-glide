@@ -830,6 +830,7 @@ public class TransactionTestUtilities {
                 .xgroupCreate(
                         streamKey1, groupName2, "0-0", StreamGroupOptions.builder().makeStream().build())
                 .xgroupCreateConsumer(streamKey1, groupName1, consumer1)
+                .xgroupSetId(streamKey1, groupName1, "0-2")
                 .xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1)
                 .xreadgroup(
                         Map.of(streamKey1, "0-3"),
@@ -871,6 +872,7 @@ public class TransactionTestUtilities {
             OK, // xgroupCreate(streamKey1, groupName1, "0-0")
             OK, // xgroupCreate(streamKey1, groupName1, "0-0", options)
             true, // xgroupCreateConsumer(streamKey1, groupName1, consumer1)
+            OK, // xgroupSetId(streamKey1, groupName1, "0-2")
             Map.of(
                     streamKey1,
                     Map.of(
