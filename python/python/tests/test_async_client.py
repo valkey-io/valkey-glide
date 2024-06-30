@@ -8266,7 +8266,7 @@ class TestClusterRoutes:
         result_cursor = "0"
         full_result_map = {}
         result = await redis_client.zscan(key1, result_cursor)
-        result_cursor = result[result_cursor_index].encode()
+        result_cursor = result[result_cursor_index]
         result_iteration_collection: dict[str, str] = convert_list_to_dict(
             result[result_collection_index]
         )
