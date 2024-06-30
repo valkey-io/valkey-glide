@@ -415,10 +415,9 @@ class ClusterCommands(CoreCommands):
             ),
         )
 
-    async def fcall_ro(
+    async def fcall_ro_route(
         self,
         function: str,
-        keys: Optional[List[str]] = None,
         arguments: Optional[List[str]] = None,
         route: Optional[Route] = None,
     ) -> TClusterResponse[TResult]:
@@ -429,32 +428,25 @@ class ClusterCommands(CoreCommands):
 
         Args:
             function (str): The function name.
-            keys (List[str]): An `array` of keys accessed by the function. To ensure the correct
-                execution of functions, all names of keys that a function accesses must be
-                explicitly provided as `keys`.
             arguments (List[str]): An `array` of `function` arguments. `arguments` should not
                 represent names of keys.
             route (Optional[Route]): Specifies the routing configuration of the command. The client
                 will route the command to the nodes defined by `route`.
 
         Returns:
-            TResult: The return value depends on the function that was executed.
+            TClusterResponse[TResult]: The return value depends on the function that was executed.
 
         Examples:
-            >>> await client.FCallReadOnly("Deep_Thought", ALL_NODES)
+            >>> await client.fcall_ro_route("Deep_Thought", ALL_NODES)
                 42 # The return value on the function that was executed
 
         Since: Redis version 7.0.0.
         """
-        args = []
-        if keys is not None:
-            args.extend([function, str(len(keys))] + keys)
-        else:
-            args.extend([function, str(0)])
+        args = [function, "0"]
         if arguments is not None:
             args.extend(arguments)
         return cast(
-            TResult,
+            TClusterResponse[TResult],
             await self._execute_command(RequestType.FCallReadOnly, args, route),
         )
 

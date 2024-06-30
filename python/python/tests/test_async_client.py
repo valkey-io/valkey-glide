@@ -6712,7 +6712,7 @@ class TestCommands:
             )
             == "one"
         )
-        result = await redis_client.fcall_ro(
+        result = await redis_client.fcall_ro_route(
             func_name, arguments=["one", "two"], route=route
         )
 
@@ -6742,7 +6742,7 @@ class TestCommands:
         assert await redis_client.function_load(new_code, True, route) == lib_name
 
         # TODO: add when FCALL is implemented.
-        result = await redis_client.fcall_ro(
+        result = await redis_client.fcall_ro_route(
             func2_name, arguments=["one", "two"], route=route
         )
 
@@ -6928,16 +6928,18 @@ class TestCommands:
 
         # On a replica node should fail, because a function isn't guaranteed to be RO
         # TODO: add when FCALL is implemented.
-        with pytest.raises(RequestError):
-            assert await redis_client.fcall_ro(
-                func_name, keys=[], arguments=[], route=replicaRoute
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.fcall_ro_route(
+                func_name, arguments=[], route=replicaRoute
             )
+        assert "You can't write against a read only replica." in str(e)
 
         # fcall_ro also fails to run it even on primary - another error
-        with pytest.raises(RequestError):
-            assert await redis_client.fcall_ro(
-                func_name, keys=[], arguments=[], route=primaryRoute
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.fcall_ro_route(
+                func_name, arguments=[], route=primaryRoute
             )
+        assert "Can not execute a script with write flag using *_ro command." in str(e)
 
         # create the same function, but with RO flag
         code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, True)
@@ -6945,9 +6947,7 @@ class TestCommands:
 
         # fcall should succeed now
         assert (
-            await redis_client.fcall_ro(
-                func_name, keys=[], arguments=[], route=replicaRoute
-            )
+            await redis_client.fcall_ro_route(func_name, arguments=[], route=replicaRoute)
             == 42
         )
 

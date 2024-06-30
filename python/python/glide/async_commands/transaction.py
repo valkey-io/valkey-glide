@@ -1860,7 +1860,7 @@ class BaseTransaction:
             arguments (List[str]): An `array` of `function` arguments. `arguments` should not
                 represent names of keys.
 
-        Command Response::
+        Command Response:
             TResult: The return value depends on the function that was executed.
 
         Since: Redis version 7.0.0.
