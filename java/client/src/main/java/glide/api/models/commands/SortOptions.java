@@ -3,6 +3,7 @@ package glide.api.models.commands;
 
 import glide.api.commands.GenericCommands;
 import glide.api.models.GlideString;
+import static glide.api.models.GlideString.gs;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -18,7 +19,7 @@ import lombok.experimental.SuperBuilder;
  *     href="https://redis.io/docs/latest/commands/sort_ro/">redis.io</a>
  */
 @SuperBuilder
-public class SortOptions extends SortBaseOptions {
+public class SortOptions<T> extends SortBaseOptions {
     /**
      * <code>BY</code> subcommand string to include in the <code>SORT</code> and <code>SORT_RO</code>
      * commands.
@@ -38,7 +39,7 @@ public class SortOptions extends SortBaseOptions {
      * contains IDs of objects, <code>byPattern</code> can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps.
      */
-    private final String byPattern;
+    private final T byPattern;
 
     /**
      * A pattern used to retrieve external keys' values, instead of the elements at <code>key</code>.
@@ -55,7 +56,7 @@ public class SortOptions extends SortBaseOptions {
      *
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for more information.
      */
-    @Singular private final List<String> getPatterns;
+    @Singular private final List<T> getPatterns;
 
     /**
      * Creates the arguments to be used in <code>SORT</code> and <code>SORT_RO</code> commands.
@@ -66,12 +67,12 @@ public class SortOptions extends SortBaseOptions {
         List<String> optionArgs = new ArrayList<>(List.of(super.toArgs()));
 
         if (byPattern != null) {
-            optionArgs.addAll(List.of(BY_COMMAND_STRING, byPattern));
+            optionArgs.addAll(List.of(BY_COMMAND_STRING, byPattern.toString()));
         }
 
         if (getPatterns != null) {
             getPatterns.stream()
-                    .forEach(getPattern -> optionArgs.addAll(List.of(GET_COMMAND_STRING, getPattern)));
+                    .forEach(getPattern -> optionArgs.addAll(List.of(GET_COMMAND_STRING, getPattern.toString())));
         }
 
         return optionArgs.toArray(new String[0]);

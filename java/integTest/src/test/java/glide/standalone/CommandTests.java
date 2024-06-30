@@ -54,6 +54,7 @@ import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -76,6 +77,12 @@ public class CommandTests {
     @SneakyThrows
     public static void teardown() {
         regularClient.close();
+    }
+
+    @AfterEach
+    @SneakyThrows
+    public void cleanup() {
+        regularClient.flushall().get();
     }
 
     @Test
@@ -1037,7 +1044,6 @@ public class CommandTests {
     @Test
     @SneakyThrows
     public void sort_binary() {
-        assertEquals(OK, regularClient.flushall().get());
         GlideString setKey1 = gs("setKey1");
         GlideString setKey2 = gs("setKey2");
         GlideString setKey3 = gs("setKey3");
@@ -1055,8 +1061,8 @@ public class CommandTests {
                 new GlideString[] {gs("Dave"), gs("Bob"), gs("Alice"), gs("Charlie"), gs("Eve")};
         GlideString[] ages = new GlideString[] {gs("30"), gs("25"), gs("35"), gs("20"), gs("40")};
         GlideString[] userIDs = new GlideString[] {gs("3"), gs("1"), gs("5"), gs("4"), gs("2")};
-        String namePattern = "setKey*->name";
-        String agePattern = "setKey*->age";
+        GlideString namePattern = gs("setKey*->name");
+        GlideString agePattern = gs("setKey*->age");
         GlideString missingListKey = gs("100000");
 
         for (int i = 0; i < setKeys.length; i++) {

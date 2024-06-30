@@ -9155,8 +9155,8 @@ public class RedisClientTest {
         GlideString key = gs("key");
         Long limitOffset = 0L;
         Long limitCount = 2L;
-        String byPattern = "byPattern";
-        String getPattern = "getPattern";
+        GlideString byPattern = gs("byPattern");
+        GlideString getPattern = gs("getPattern");
         GlideString[] args =
                 new GlideString[] {
                     key,
@@ -9166,9 +9166,9 @@ public class RedisClientTest {
                     gs(DESC.toString()),
                     gs(ALPHA_COMMAND_STRING),
                     gs(BY_COMMAND_STRING),
-                    gs(byPattern),
+                    byPattern,
                     gs(GET_COMMAND_STRING),
-                    gs(getPattern)
+                    getPattern
                 };
         CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
         testResponse.complete(result);
