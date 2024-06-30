@@ -3113,7 +3113,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param groupName The newly created consumer group name.
+     * @param groupName The consumer group name.
      * @param id The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
      * @return Command Response - <code>OK</code>.
@@ -3129,7 +3129,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @since Redis 7.0 and above
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param groupName The newly created consumer group name.
+     * @param groupName The consumer group name.
      * @param id The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
      * @param entriesReadId An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
