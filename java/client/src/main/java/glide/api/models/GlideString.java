@@ -30,6 +30,22 @@ public class GlideString {
         return res;
     }
 
+    /** Allow converting any type to GlideString */
+    public static <ArgType> GlideString of(ArgType o) {
+        if (o instanceof GlideString) {
+            return (GlideString) o;
+        } else if (o instanceof byte[]) {
+            return GlideString.of((byte[]) o);
+        } else if (o instanceof String) {
+            return GlideString.of((String) o);
+        } else {
+            var res = new GlideString();
+            res.string = o.toString();
+            res.bytes = res.string.getBytes(StandardCharsets.UTF_8);
+            return res;
+        }
+    }
+
     public static GlideString gs(String string) {
         return GlideString.of(string);
     }

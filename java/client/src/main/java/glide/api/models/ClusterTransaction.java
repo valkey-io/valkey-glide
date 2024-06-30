@@ -2,14 +2,13 @@
 package glide.api.models;
 
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
 import glide.api.models.commands.SortClusterOptions;
 import lombok.NonNull;
-import org.apache.commons.lang3.ArrayUtils;
+import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 
 /**
  * Extends BaseTransaction class for cluster mode commands. Transactions allow the execution of a
@@ -60,10 +59,10 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
-    public ClusterTransaction sort(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        protobufTransaction.addCommands(
-                buildCommand(Sort, ArrayUtils.addFirst(sortClusterOptions.toArgs(), key)));
+    public <ArgType> ClusterTransaction sort(
+            @NonNull ArgType key, @NonNull SortClusterOptions sortClusterOptions) {
+        ArgsArray args = new ArgsBuilder().add(key).add(sortClusterOptions.toArgs()).build();
+        protobufTransaction.addCommands(buildCommand(Sort, args));
         return this;
     }
 
@@ -78,10 +77,10 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
-    public ClusterTransaction sortReadOnly(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
-        protobufTransaction.addCommands(
-                buildCommand(SortReadOnly, ArrayUtils.addFirst(sortClusterOptions.toArgs(), key)));
+    public <ArgType> ClusterTransaction sortReadOnly(
+            @NonNull ArgType key, @NonNull SortClusterOptions sortClusterOptions) {
+        ArgsArray args = new ArgsBuilder().add(key).add(sortClusterOptions.toArgs()).build();
+        protobufTransaction.addCommands(buildCommand(SortReadOnly, args));
         return this;
     }
 
@@ -99,15 +98,19 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @return Command Response - The number of elements in the sorted key stored at <code>destination
      *     </code>.
      */
-    public ClusterTransaction sortStore(
-            @NonNull String key,
-            @NonNull String destination,
+    public <ArgType> ClusterTransaction sortStore(
+            @NonNull ArgType key,
+            @NonNull ArgType destination,
             @NonNull SortClusterOptions sortClusterOptions) {
-        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
-        protobufTransaction.addCommands(
-                buildCommand(
-                        Sort,
-                        concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments)));
+        ArgsArray args =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(sortClusterOptions.toArgs())
+                        .add(STORE_COMMAND_STRING)
+                        .add(destination)
+                        .build();
+
+        protobufTransaction.addCommands(buildCommand(Sort, args));
         return this;
     }
 }

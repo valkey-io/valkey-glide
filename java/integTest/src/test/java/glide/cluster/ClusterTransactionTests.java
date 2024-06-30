@@ -103,6 +103,7 @@ public class ClusterTransactionTests {
 
     @SneakyThrows
     @Test
+    @Timeout(30)
     public void test_transaction_large_values() {
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);
