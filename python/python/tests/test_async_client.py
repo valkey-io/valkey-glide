@@ -6698,7 +6698,7 @@ class TestCommands:
         assert await redis_client.object_encoding(hashtable_key) == "hashtable".encode()
 
         assert await redis_client.sadd(intset_key, ["1"]) == 1
-        assert await redis_client.object_encoding(intset_key) == "intset".encode("-8")
+        assert await redis_client.object_encoding(intset_key) == "intset".encode()
 
         assert await redis_client.sadd(set_listpack_key, ["foo"]) == 1
         if await check_if_server_version_lt(redis_client, "7.2.0"):
