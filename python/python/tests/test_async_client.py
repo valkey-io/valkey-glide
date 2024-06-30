@@ -8276,7 +8276,7 @@ class TestClusterRoutes:
         while result_cursor != b"0":
             next_result = await redis_client.zscan(key1, result_cursor.decode("utf-8"))
             next_result_cursor = next_result[result_cursor_index]
-            assert next_result_cursor != result_cursor.encode()
+            assert next_result_cursor != result_cursor
 
             next_result_collection = convert_list_to_dict(
                 next_result[result_collection_index]
