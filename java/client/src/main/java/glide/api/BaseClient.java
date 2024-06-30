@@ -6,6 +6,7 @@ import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
@@ -136,6 +137,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
@@ -223,6 +225,7 @@ import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
@@ -2083,6 +2086,66 @@ public abstract class BaseClient
         String[] args = concatenateArrays(new String[] {key, group}, options.toArgs(start, end, count));
         return commandManager.submitNewCommand(
                 XPending, args, response -> castArray(handleArrayResponse(response), Object[].class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[][]>> xclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String[] ids) {
+        String[] args =
+                concatenateArrays(new String[] {key, group, consumer, Long.toString(minIdleTime)}, ids);
+        return commandManager.submitNewCommand(XClaim, args, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[][]>> xclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String[] ids,
+            @NonNull StreamClaimOptions options) {
+        String[] args =
+                concatenateArrays(
+                        new String[] {key, group, consumer, Long.toString(minIdleTime)}, ids, options.toArgs());
+        return commandManager.submitNewCommand(XClaim, args, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> xclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String[] ids) {
+        String[] args =
+                concatenateArrays(
+                        new String[] {key, group, consumer, Long.toString(minIdleTime)},
+                        ids,
+                        new String[] {JUST_ID_REDIS_API});
+        return commandManager.submitNewCommand(
+                XClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> xclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String[] ids,
+            @NonNull StreamClaimOptions options) {
+        String[] args =
+                concatenateArrays(
+                        new String[] {key, group, consumer, Long.toString(minIdleTime)},
+                        ids,
+                        options.toArgs(),
+                        new String[] {JUST_ID_REDIS_API});
+        return commandManager.submitNewCommand(
+                XClaim, args, response -> castArray(handleArrayResponse(response), String.class));
     }
 
     @Override
