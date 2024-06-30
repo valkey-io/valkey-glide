@@ -172,12 +172,8 @@ fn get_timeout_from_cmd_arg(
             format!("Received timeout = {:?}.", timeout_secs),
         )))
     } else if timeout_secs == 0.0 {
-        if std::str::from_utf8(&cmd.command().unwrap_or_default()) == Ok("WAIT") {
-            Ok(RequestTimeoutOption::ClientConfig)
-        } else {
             // `0` means we should set no timeout
             Ok(RequestTimeoutOption::NoTimeout)
-        }
     } else {
         // We limit the maximum timeout due to restrictions imposed by Redis and the Duration crate
         if timeout_secs > u32::MAX as f64 {

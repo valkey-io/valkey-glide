@@ -8084,6 +8084,12 @@ public class SharedCommandTests {
 
             // ensure that commands doesn't time out even if timeout > request timeout
             assertEquals((client instanceof RedisClient ? 0 : 1), testClient.wait(1L, 1000L).get());
+
+            // with 0 timeout (no timeout) wait should block forever,
+            // but we wrap the test with timeout to avoid test failing or being stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () -> testClient.wait(1L, 0L).get(1, TimeUnit.SECONDS));
         }
     }
 }
