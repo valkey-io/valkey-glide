@@ -1778,6 +1778,32 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void smismember_binary(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+
+        assertEquals(2, client.sadd(key1, new GlideString[] {gs("one"), gs("two")}).get());
+        assertArrayEquals(
+                new Boolean[] {true, false},
+                client.smismember(key1, new GlideString[] {gs("one"), gs("three")}).get());
+
+        // empty set
+        assertArrayEquals(
+                new Boolean[] {false, false},
+                client.smismember(key2, new GlideString[] {gs("one"), gs("three")}).get());
+
+        // Key exists, but it is not a set
+        assertEquals(OK, client.set(key2, gs("value")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.smismember(key2, new GlideString[] {gs("_")}).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void sdiffstore(BaseClient client) {
         String key1 = "{key}-1-" + UUID.randomUUID();
         String key2 = "{key}-2-" + UUID.randomUUID();
