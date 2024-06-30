@@ -3,7 +3,6 @@ package glide.api.models.commands;
 
 import glide.api.commands.GenericCommands;
 import glide.api.models.GlideString;
-import static glide.api.models.GlideString.gs;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -72,7 +71,8 @@ public class SortOptions<T> extends SortBaseOptions {
 
         if (getPatterns != null) {
             getPatterns.stream()
-                    .forEach(getPattern -> optionArgs.addAll(List.of(GET_COMMAND_STRING, getPattern.toString())));
+                    .forEach(
+                            getPattern -> optionArgs.addAll(List.of(GET_COMMAND_STRING, getPattern.toString())));
         }
 
         return optionArgs.toArray(new String[0]);
