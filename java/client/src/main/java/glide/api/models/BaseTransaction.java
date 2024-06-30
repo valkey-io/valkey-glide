@@ -5630,12 +5630,13 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * reached, the command returns even if the specified number of replicas were not yet reached.
      *
      * @param numreplicas The number of replicas to reach.
-     * @param timeout The timeout value specified in milliseconds.
+     * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will
+     *     block indefinitely.
      * @return Command Response - The number of replicas reached by all the writes performed in the
      *     context of the current connection.
      */
     public T wait(long numreplicas, long timeout) {
-        ArgsArray args = buildArgs(Long.toString(numreplicas), Long.toString(timeout));
+        String[] args = buildArgs(Long.toString(numreplicas), Long.toString(timeout));
         protobufTransaction.addCommands(buildCommand(Wait, args));
         return getThis();
     }

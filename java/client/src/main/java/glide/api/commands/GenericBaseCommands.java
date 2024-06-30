@@ -1214,7 +1214,8 @@ public interface GenericBaseCommands {
      * reached, the command returns even if the specified number of replicas were not yet reached.
      *
      * @param numreplicas The number of replicas to reach.
-     * @param timeout The timeout value specified in milliseconds.
+     * @param timeout The timeout value specified in milliseconds. A value of <code>0</code> will
+     *     block indefinitely.
      * @return The number of replicas reached by all the writes performed in the context of the
      *     current connection.
      * @example
