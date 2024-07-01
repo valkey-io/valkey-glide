@@ -238,21 +238,21 @@ def check_function_list_response(
     assert len(response) > 0
     has_lib = False
     for lib in response:
-        has_lib = lib.get(b'library_name') == lib_name
+        has_lib = lib.get(b"library_name") == lib_name
         if has_lib:
             functions: List[Mapping[bytes, Any]] = cast(
-                List[Mapping[bytes, Any]], lib.get(b'functions')
+                List[Mapping[bytes, Any]], lib.get(b"functions")
             )
             assert len(functions) == len(function_descriptions)
             for function in functions:
-                function_name: bytes = cast(bytes, function.get(b'name'))
-                assert function.get(b'description') == function_descriptions.get(
+                function_name: bytes = cast(bytes, function.get(b"name"))
+                assert function.get(b"description") == function_descriptions.get(
                     function_name
                 )
-                assert function.get(b'flags') == function_flags.get(function_name)
+                assert function.get(b"flags") == function_flags.get(function_name)
 
                 if lib_code:
-                    assert lib.get(b'library_code') == lib_code
+                    assert lib.get(b"library_code") == lib_code
             break
 
     assert has_lib is True
