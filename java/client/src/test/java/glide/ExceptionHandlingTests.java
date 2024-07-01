@@ -26,7 +26,7 @@ import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
-import glide.managers.BaseCommandResponseResolver;
+import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import io.netty.channel.ChannelFuture;
@@ -35,7 +35,6 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Stream;
-import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -175,7 +174,7 @@ public class ExceptionHandlingTests {
     public void close_connection_on_response_with_closing_error() {
         // CallbackDispatcher throws ClosingException which causes ConnectionManager and CommandManager
         // to close the channel
-        var callbackDispatcher = new CallbackDispatcher();
+        var callbackDispatcher = new CallbackDispatcher(null);
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
 
@@ -217,7 +216,7 @@ public class ExceptionHandlingTests {
             // CallbackDispatcher throws a corresponding exception which should not cause
             // ConnectionManager and CommandManager to close the channel
             RequestErrorType errorType, Class<? extends RedisException> exceptionType) {
-        var callbackDispatcher = new CallbackDispatcher();
+        var callbackDispatcher = new CallbackDispatcher(null);
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var commandManager = new CommandManager(channelHandler);
 
@@ -242,7 +241,7 @@ public class ExceptionHandlingTests {
     @SneakyThrows
     public void close_connection_on_response_without_error_but_with_incorrect_callback_id() {
         // CallbackDispatcher does the same as it received closing error
-        var callbackDispatcher = new CallbackDispatcher();
+        var callbackDispatcher = new CallbackDispatcher(null);
         var channelHandler = new TestChannelHandler(callbackDispatcher);
         var connectionManager = new ConnectionManager(channelHandler);
 
@@ -272,7 +271,7 @@ public class ExceptionHandlingTests {
 
     @Test
     public void response_resolver_does_not_expect_errors() {
-        var resolver = new BaseCommandResponseResolver(null);
+        var resolver = new BaseResponseResolver(null);
 
         var response1 =
                 Response.newBuilder()
@@ -285,6 +284,8 @@ public class ExceptionHandlingTests {
         exception = assertThrows(Throwable.class, () -> resolver.apply(response2));
         assertEquals("Unhandled response closing error", exception.getMessage());
     }
+
+    // TODO add tests for error handling in MessageHandler
 
     /** Create a config which causes connection failure. */
     private static RedisClientConfiguration createDummyConfig() {
@@ -323,10 +324,14 @@ public class ExceptionHandlingTests {
     }
 
     /** Test ChannelHandler extension which aborts futures for all commands. */
-    @RequiredArgsConstructor
     private static class TestCallbackDispatcher extends CallbackDispatcher {
 
         public final Throwable exceptionToThrow;
+
+        private TestCallbackDispatcher(Throwable exceptionToThrow) {
+            super(null);
+            this.exceptionToThrow = exceptionToThrow;
+        }
 
         @Override
         public void completeRequest(Response response) {

@@ -41,7 +41,9 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
         Logger.setLoggerConfig(Logger.Level.DISABLED);
         channelHandler =
                 new ChannelHandler(
-                        new CallbackDispatcher(), socketPath, Platform.getThreadPoolResourceSupplier().get());
+                        new CallbackDispatcher(null),
+                        socketPath,
+                        Platform.getThreadPoolResourceSupplier().get());
     }
 
     @AfterEach
@@ -187,7 +189,12 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
     private static class TestClient extends RedisClient {
 
         public TestClient(ChannelHandler channelHandler) {
-            super(new ConnectionManager(channelHandler), new CommandManager(channelHandler));
+            super(
+                    new ClientBuilder(
+                            new ConnectionManager(channelHandler),
+                            new CommandManager(channelHandler),
+                            null,
+                            null));
         }
     }
 }

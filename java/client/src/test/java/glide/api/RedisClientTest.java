@@ -43,6 +43,11 @@ import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VA
 import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
 import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.TIME_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
 import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
@@ -180,6 +185,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.Publish;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
@@ -220,6 +226,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
@@ -316,6 +323,7 @@ import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
@@ -327,7 +335,6 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -352,15 +359,12 @@ public class RedisClientTest {
 
     RedisClient service;
 
-    ConnectionManager connectionManager;
-
     CommandManager commandManager;
 
     @BeforeEach
     public void setUp() {
-        connectionManager = mock(ConnectionManager.class);
         commandManager = mock(CommandManager.class);
-        service = new RedisClient(connectionManager, commandManager);
+        service = new RedisClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
     }
 
     @SneakyThrows
@@ -6058,6 +6062,155 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xclaim_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String[] ids = new String[] {"testId"};
+        String[] arguments = concatenateArrays(new String[] {key, groupName, consumer, "18"}, ids);
+        Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
+
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[][]>> response =
+                service.xclaim(key, groupName, consumer, minIdleTime, ids);
+        Map<String, String[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xclaim_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String[] ids = new String[] {"testId"};
+        StreamClaimOptions options =
+                StreamClaimOptions.builder().force().idle(11L).idleUnixTime(12L).retryCount(5L).build();
+        String[] arguments =
+                new String[] {
+                    key,
+                    groupName,
+                    consumer,
+                    "18",
+                    "testId",
+                    IDLE_REDIS_API,
+                    "11",
+                    TIME_REDIS_API,
+                    "12",
+                    RETRY_COUNT_REDIS_API,
+                    "5",
+                    FORCE_REDIS_API
+                };
+        Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
+
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[][]>> response =
+                service.xclaim(key, groupName, consumer, minIdleTime, ids, options);
+        Map<String, String[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xclaimJustId_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String[] ids = new String[] {"testId"};
+        String[] arguments = new String[] {key, groupName, consumer, "18", "testId", JUST_ID_REDIS_API};
+        String[] mockResult = {"message", "log"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.xclaimJustId(key, groupName, consumer, minIdleTime, ids);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xclaimJustId_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String[] ids = new String[] {"testId"};
+        StreamClaimOptions options =
+                StreamClaimOptions.builder().force().idle(11L).idleUnixTime(12L).retryCount(5L).build();
+        String[] arguments =
+                new String[] {
+                    key,
+                    groupName,
+                    consumer,
+                    "18",
+                    "testId",
+                    IDLE_REDIS_API,
+                    "11",
+                    TIME_REDIS_API,
+                    "12",
+                    RETRY_COUNT_REDIS_API,
+                    "5",
+                    FORCE_REDIS_API,
+                    JUST_ID_REDIS_API
+                };
+        String[] mockResult = {"message", "log"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.xclaimJustId(key, groupName, consumer, minIdleTime, ids, options);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xack_binary_returns_success() {
         // setup
         GlideString key = gs("testKey");
@@ -9060,6 +9213,30 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String> response = service.unwatch();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void publish_returns_success() {
+        // setup
+        String channel = "channel";
+        String message = "message";
+        String[] arguments = new String[] {channel, message};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Publish), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.publish(channel, message);
         String payload = response.get();
 
         // verify

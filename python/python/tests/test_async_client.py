@@ -68,6 +68,7 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
+from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
     ClusterClientConfiguration,
     GlideClientConfiguration,
@@ -7052,16 +7053,13 @@ class TestCommands:
 
         assert await redis_client.function_load(code) == lib_name.encode()
 
-        # TODO: change when FCALL, FCALL_RO is implemented
+        # TODO: change when FCALL is implemented
         assert (
             await redis_client.custom_command(["FCALL", func_name, "0", "one", "two"])
             == b"one"
         )
         assert (
-            await redis_client.custom_command(
-                ["FCALL_RO", func_name, "0", "one", "two"]
-            )
-            == b"one"
+            await redis_client.fcall_ro(func_name, arguments=["one", "two"]) == b"one"
         )
 
         # TODO: add FUNCTION LIST once implemented
@@ -7082,6 +7080,11 @@ class TestCommands:
 
         assert await redis_client.function_load(new_code, True) == lib_name.encode()
 
+        # TODO: add when FCALL is implemented
+        assert await redis_client.fcall_ro(func2_name, arguments=["one", "two"]) == 2
+
+        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
@@ -7101,7 +7104,7 @@ class TestCommands:
 
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
-        # TODO: change when FCALL, FCALL_RO is implemented.
+        # TODO: change when FCALL is implemented.
         assert (
             await redis_client.custom_command(
                 ["FCALL", func_name, "0", "one", "two"],
@@ -7109,13 +7112,16 @@ class TestCommands:
             )
             == b"one"
         )
-        assert (
-            await redis_client.custom_command(
-                ["FCALL_RO", func_name, "0", "one", "two"],
-                SlotKeyRoute(SlotType.PRIMARY, "1"),
-            )
-            == b"one"
+        result = await redis_client.fcall_ro_route(
+            func_name, arguments=["one", "two"], route=route
         )
+
+        if single_route:
+            assert result == b"one"
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert nodeResponse == b"one"
 
         # TODO: add FUNCTION LIST once implemented
 
@@ -7136,6 +7142,20 @@ class TestCommands:
         assert (
             await redis_client.function_load(new_code, True, route) == lib_name.encode()
         )
+
+        # TODO: add when FCALL is implemented.
+        result = await redis_client.fcall_ro_route(
+            func2_name, arguments=["one", "two"], route=route
+        )
+
+        if single_route:
+            assert result == 2
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert nodeResponse == 2
+
+        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7253,6 +7273,91 @@ class TestCommands:
             await redis_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_fcall_with_key(self, redis_client: GlideClusterClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        keys = [key1, key2]
+        route = SlotKeyRoute(SlotType.PRIMARY, key1)
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return keys[1]"}, True)
+
+        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
+        assert await redis_client.function_load(code, False, route) == lib_name.encode()
+
+        # TODO: add when FCALL is implemented.
+        assert (
+            await redis_client.fcall_ro(func_name, keys=keys, arguments=[])
+            == key1.encode()
+        )
+
+        transaction = ClusterTransaction()
+        # TODO: add when FCALL is implemented.
+        transaction.fcall_ro(func_name, keys=keys, arguments=[])
+
+        # check response from a routed transaction request
+        result = await redis_client.exec(transaction, route)
+        assert result is not None
+        assert result[0] == key1.encode()
+
+        # if no route given, GLIDE should detect it automatically
+        result = await redis_client.exec(transaction)
+        assert result is not None
+        assert result[0] == key1.encode()
+
+        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_fcall_readonly_function(self, redis_client: GlideClusterClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        lib_name = f"fcall_readonly_function{get_random_string(5)}"
+        # intentionally using a REPLICA route
+        replicaRoute = SlotKeyRoute(SlotType.REPLICA, lib_name)
+        primaryRoute = SlotKeyRoute(SlotType.PRIMARY, lib_name)
+        func_name = f"fcall_readonly_function{get_random_string(5)}"
+
+        # function $funcName returns a magic number
+        code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, False)
+
+        assert await redis_client.function_load(code, False) == lib_name.encode()
+
+        # On a replica node should fail, because a function isn't guaranteed to be RO
+        # TODO: add when FCALL is implemented.
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.fcall_ro_route(
+                func_name, arguments=[], route=replicaRoute
+            )
+        assert "You can't write against a read only replica." in str(e)
+
+        # fcall_ro also fails to run it even on primary - another error
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.fcall_ro_route(
+                func_name, arguments=[], route=primaryRoute
+            )
+        assert "Can not execute a script with write flag using *_ro command." in str(e)
+
+        # create the same function, but with RO flag
+        code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, True)
+        assert await redis_client.function_load(code, True) == lib_name.encode()
+
+        # fcall should succeed now
+        assert (
+            await redis_client.fcall_ro_route(
+                func_name, arguments=[], route=replicaRoute
+            )
+            == 42
+        )
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_srandmember(self, redis_client: TGlideClient):
@@ -7311,18 +7416,18 @@ class TestCommands:
 
         await redis_client.set(key, value)
         assert await redis_client.dbsize() > 0
-        assert await redis_client.flushall() is OK
-        assert await redis_client.flushall(FlushMode.ASYNC) is OK
+        assert await redis_client.flushall() == OK
+        assert await redis_client.flushall(FlushMode.ASYNC) == OK
         if not await check_if_server_version_lt(redis_client, min_version):
-            assert await redis_client.flushall(FlushMode.SYNC) is OK
+            assert await redis_client.flushall(FlushMode.SYNC) == OK
         assert await redis_client.dbsize() == 0
 
         if isinstance(redis_client, GlideClusterClient):
             await redis_client.set(key, value)
-            assert await redis_client.flushall(route=AllPrimaries()) is OK
-            assert await redis_client.flushall(FlushMode.ASYNC, AllPrimaries()) is OK
+            assert await redis_client.flushall(route=AllPrimaries()) == OK
+            assert await redis_client.flushall(FlushMode.ASYNC, AllPrimaries()) == OK
             if not await check_if_server_version_lt(redis_client, min_version):
-                assert await redis_client.flushall(FlushMode.SYNC, AllPrimaries()) is OK
+                assert await redis_client.flushall(FlushMode.SYNC, AllPrimaries()) == OK
             assert await redis_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [False])
@@ -7334,30 +7439,30 @@ class TestCommands:
         value = get_random_string(5)
 
         # fill DB 0 and check size non-empty
-        assert await redis_client.select(0) is OK
+        assert await redis_client.select(0) == OK
         await redis_client.set(key1, value)
         assert await redis_client.dbsize() > 0
 
         # fill DB 1 and check size non-empty
-        assert await redis_client.select(1) is OK
+        assert await redis_client.select(1) == OK
         await redis_client.set(key2, value)
         assert await redis_client.dbsize() > 0
 
         # flush DB 1 and check again
-        assert await redis_client.flushdb() is OK
+        assert await redis_client.flushdb() == OK
         assert await redis_client.dbsize() == 0
 
         # swith to DB 0, flush, and check
-        assert await redis_client.select(0) is OK
+        assert await redis_client.select(0) == OK
         assert await redis_client.dbsize() > 0
-        assert await redis_client.flushdb(FlushMode.ASYNC) is OK
+        assert await redis_client.flushdb(FlushMode.ASYNC) == OK
         assert await redis_client.dbsize() == 0
 
         # verify flush SYNC
         if not await check_if_server_version_lt(redis_client, min_version):
             await redis_client.set(key2, value)
             assert await redis_client.dbsize() > 0
-            assert await redis_client.flushdb(FlushMode.SYNC) is OK
+            assert await redis_client.flushdb(FlushMode.SYNC) == OK
             assert await redis_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -7742,6 +7847,58 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.lcs_idx(key1, lcs_non_string_key)
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_watch(self, redis_client: GlideClient):
+        # watched key didn't change outside of transaction before transaction execution, transaction will execute
+        assert await redis_client.set("key1", "original_value") == OK
+        assert await redis_client.watch(["key1"]) == OK
+        transaction = Transaction()
+        transaction.set("key1", "transaction_value")
+        transaction.get("key1")
+        assert await redis_client.exec(transaction) is not None
+
+        # watched key changed outside of transaction before transaction execution, transaction will not execute
+        assert await redis_client.set("key1", "original_value") == OK
+        assert await redis_client.watch(["key1"]) == OK
+        transaction = Transaction()
+        transaction.set("key1", "transaction_value")
+        assert await redis_client.set("key1", "standalone_value") == OK
+        transaction.get("key1")
+        assert await redis_client.exec(transaction) is None
+
+        # empty list not supported
+        with pytest.raises(RequestError):
+            await redis_client.watch([])
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_unwatch(self, redis_client: GlideClient):
+
+        # watched key unwatched before transaction execution even if changed
+        # outside of transaction, transaction will still execute
+        assert await redis_client.set("key1", "original_value") == OK
+        assert await redis_client.watch(["key1"]) == OK
+        transaction = Transaction()
+        transaction.set("key1", "transaction_value")
+        assert await redis_client.set("key1", "standalone_value") == OK
+        transaction.get("key1")
+        assert await redis_client.unwatch() == OK
+        result = await redis_client.exec(transaction)
+        assert result is not None
+        assert isinstance(result, list)
+        assert len(result) == 2
+        assert result[0] == "OK"
+        assert result[1] == b"transaction_value"
+
+        # UNWATCH returns OK when there no watched keys
+        assert await redis_client.unwatch() == OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_unwatch_with_route(self, redis_client: GlideClusterClient):
+        assert await redis_client.unwatch(RandomNode()) == OK
+
 
 class TestMultiKeyCommandCrossSlot:
     @pytest.mark.parametrize("cluster_mode", [True])
@@ -7810,6 +7967,7 @@ class TestMultiKeyCommandCrossSlot:
                     redis_client.lcs("abc", "def"),
                     redis_client.lcs_len("abc", "def"),
                     redis_client.lcs_idx("abc", "def"),
+                    redis_client.fcall_ro("func", ["abc", "zxy", "lkn"], []),
                 ]
             )
 
@@ -7832,6 +7990,7 @@ class TestMultiKeyCommandCrossSlot:
         await redis_client.mget(["abc", "zxy", "lkn"])
         await redis_client.mset({"abc": "1", "zxy": "2", "lkn": "3"})
         await redis_client.touch(["abc", "zxy", "lkn"])
+        await redis_client.watch(["abc", "zxy", "lkn"])
 
 
 class TestCommandsUnitTests:
@@ -8106,18 +8265,18 @@ class TestClusterRoutes:
 
         await redis_client.set(key, value)
         assert await redis_client.dbsize() > 0
-        assert await redis_client.flushdb(route=AllPrimaries()) is OK
+        assert await redis_client.flushdb(route=AllPrimaries()) == OK
         assert await redis_client.dbsize() == 0
 
         await redis_client.set(key, value)
         assert await redis_client.dbsize() > 0
-        assert await redis_client.flushdb(FlushMode.ASYNC, AllPrimaries()) is OK
+        assert await redis_client.flushdb(FlushMode.ASYNC, AllPrimaries()) == OK
         assert await redis_client.dbsize() == 0
 
         if not await check_if_server_version_lt(redis_client, min_version):
             await redis_client.set(key, value)
             assert await redis_client.dbsize() > 0
-            assert await redis_client.flushdb(FlushMode.SYNC, AllPrimaries()) is OK
+            assert await redis_client.flushdb(FlushMode.SYNC, AllPrimaries()) == OK
             assert await redis_client.dbsize() == 0
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -8185,6 +8344,7 @@ class TestClusterRoutes:
                 set(next_result[result_collection_index])
             )
             result_values.update(next_result[result_collection_index])
+            result = next_result
             result_cursor = next_result_cursor
         assert set(num_members).issubset(result_values)
         assert set(char_members).issubset(result_values)
@@ -8215,6 +8375,233 @@ class TestClusterRoutes:
         # Negative count
         with pytest.raises(RequestError):
             await redis_client.sscan(key2, initial_cursor, count=-1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zscan(self, redis_client: GlideClusterClient):
+        key1 = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        initial_cursor = "0"
+        result_cursor_index = 0
+        result_collection_index = 1
+        default_count = 20
+        num_map = {}
+        num_map_with_str_scores = {}
+        for i in range(50000):  # Use large dataset to force an iterative cursor.
+            num_map.update({"value " + str(i): i})
+            num_map_with_str_scores.update({"value " + str(i): str(i)})
+        char_map = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4}
+        char_map_with_str_scores = {
+            "a": "0",
+            "b": "1",
+            "c": "2",
+            "d": "3",
+            "e": "4",
+        }
+
+        convert_list_to_dict = lambda list: {
+            list[i]: list[i + 1] for i in range(0, len(list), 2)
+        }
+
+        # Empty set
+        result = await redis_client.zscan(key1, initial_cursor)
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert result[result_collection_index] == []
+
+        # Negative cursor
+        result = await redis_client.zscan(key1, "-1")
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert result[result_collection_index] == []
+
+        # Result contains the whole set
+        assert await redis_client.zadd(key1, char_map) == len(char_map)
+        result = await redis_client.zscan(key1, initial_cursor)
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert len(result_collection) == len(char_map) * 2
+        assert convert_list_to_dict(result_collection) == cast(
+            list, convert_string_to_bytes_object(char_map_with_str_scores)
+        )
+
+        result = await redis_client.zscan(key1, initial_cursor, match="a")
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert convert_list_to_dict(result_collection) == {b"a": b"0"}
+
+        # Result contains a subset of the key
+        assert await redis_client.zadd(key1, num_map) == len(num_map)
+        full_result_map = {}
+        result = result = cast(
+            list,
+            convert_bytes_to_string_object(
+                await redis_client.zscan(key1, initial_cursor)
+            ),
+        )
+        result_cursor = str(result[result_cursor_index])
+        result_iteration_collection: dict[str, str] = convert_list_to_dict(
+            result[result_collection_index]
+        )
+        full_result_map.update(result_iteration_collection)
+
+        # 0 is returned for the cursor of the last iteration.
+        while result_cursor != "0":
+            next_result = cast(
+                list,
+                convert_bytes_to_string_object(
+                    await redis_client.zscan(key1, result_cursor)
+                ),
+            )
+            next_result_cursor = next_result[result_cursor_index]
+            assert next_result_cursor != result_cursor
+
+            next_result_collection = convert_list_to_dict(
+                next_result[result_collection_index]
+            )
+            assert result_iteration_collection != next_result_collection
+
+            full_result_map.update(next_result_collection)
+            result_iteration_collection = next_result_collection
+            result_cursor = next_result_cursor
+        assert (num_map_with_str_scores | char_map_with_str_scores) == full_result_map
+
+        # Test match pattern
+        result = await redis_client.zscan(key1, initial_cursor, match="*")
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= default_count
+
+        # Test count
+        result = await redis_client.zscan(key1, initial_cursor, count=20)
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= 20
+
+        # Test count with match returns a non-empty list
+        result = await redis_client.zscan(key1, initial_cursor, match="1*", count=20)
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= 0
+
+        # Exceptions
+        # Non-set key
+        assert await redis_client.set(key2, "test") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zscan(key2, initial_cursor)
+        with pytest.raises(RequestError):
+            await redis_client.zscan(key2, initial_cursor, match="test", count=20)
+
+        # Negative count
+        with pytest.raises(RequestError):
+            await redis_client.zscan(key2, initial_cursor, count=-1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hscan(self, redis_client: GlideClusterClient):
+        key1 = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        initial_cursor = "0"
+        result_cursor_index = 0
+        result_collection_index = 1
+        default_count = 20
+        num_map = {}
+        for i in range(50000):  # Use large dataset to force an iterative cursor.
+            num_map.update({"field " + str(i): "value " + str(i)})
+        char_map = {
+            "field a": "value a",
+            "field b": "value b",
+            "field c": "value c",
+            "field d": "value d",
+            "field e": "value e",
+        }
+
+        convert_list_to_dict = lambda list: {
+            list[i]: list[i + 1] for i in range(0, len(list), 2)
+        }
+
+        # Empty set
+        result = await redis_client.hscan(key1, initial_cursor)
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert result[result_collection_index] == []
+
+        # Negative cursor
+        result = await redis_client.hscan(key1, "-1")
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert result[result_collection_index] == []
+
+        # Result contains the whole set
+        assert await redis_client.hset(key1, char_map) == len(char_map)
+        result = await redis_client.hscan(key1, initial_cursor)
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert len(result_collection) == len(char_map) * 2
+        assert convert_list_to_dict(result_collection) == cast(
+            dict, convert_string_to_bytes_object(char_map)
+        )
+
+        result = await redis_client.hscan(key1, initial_cursor, match="field a")
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert convert_list_to_dict(result_collection) == {b"field a": b"value a"}
+
+        # Result contains a subset of the key
+        assert await redis_client.hset(key1, num_map) == len(num_map)
+        full_result_map = {}
+        result = result = cast(
+            list,
+            convert_bytes_to_string_object(
+                await redis_client.hscan(key1, initial_cursor)
+            ),
+        )
+        result_cursor = str(result[result_cursor_index])
+        result_iteration_collection: dict[str, str] = convert_list_to_dict(
+            result[result_collection_index]
+        )
+        full_result_map.update(result_iteration_collection)
+
+        # 0 is returned for the cursor of the last iteration.
+        while result_cursor != "0":
+            next_result = cast(
+                list,
+                convert_bytes_to_string_object(
+                    await redis_client.hscan(key1, result_cursor)
+                ),
+            )
+            next_result_cursor = next_result[result_cursor_index]
+            assert next_result_cursor != result_cursor
+
+            next_result_collection = convert_list_to_dict(
+                next_result[result_collection_index]
+            )
+            assert result_iteration_collection != next_result_collection
+
+            full_result_map.update(next_result_collection)
+            result_iteration_collection = next_result_collection
+            result_cursor = next_result_cursor
+        assert (num_map | char_map) == full_result_map
+
+        # Test match pattern
+        result = await redis_client.hscan(key1, initial_cursor, match="*")
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= default_count
+
+        # Test count
+        result = await redis_client.hscan(key1, initial_cursor, count=20)
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= 20
+
+        # Test count with match returns a non-empty list
+        result = await redis_client.hscan(key1, initial_cursor, match="1*", count=20)
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= 0
+
+        # Exceptions
+        # Non-hash key
+        assert await redis_client.set(key2, "test") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hscan(key2, initial_cursor)
+        with pytest.raises(RequestError):
+            await redis_client.hscan(key2, initial_cursor, match="test", count=20)
+
+        # Negative count
+        with pytest.raises(RequestError):
+            await redis_client.hscan(key2, initial_cursor, count=-1)
 
 
 @pytest.mark.asyncio

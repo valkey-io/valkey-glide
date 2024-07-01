@@ -46,6 +46,7 @@ import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
@@ -97,7 +98,9 @@ public class TransactionTestUtilities {
                         "Geospatial Commands",
                         (TransactionBuilder) TransactionTestUtilities::geospatialCommands),
                 Arguments.of(
-                        "Bitmap Commands", (TransactionBuilder) TransactionTestUtilities::bitmapCommands));
+                        "Bitmap Commands", (TransactionBuilder) TransactionTestUtilities::bitmapCommands),
+                Arguments.of(
+                        "PubSub Commands", (TransactionBuilder) TransactionTestUtilities::pubsubCommands));
     }
 
     /** Generate test samples for parametrized tests. Could be routed to primary nodes only. */
@@ -839,6 +842,22 @@ public class TransactionTestUtilities {
                         groupName1,
                         consumer1,
                         StreamReadGroupOptions.builder().count(2L).build())
+                .xclaim(streamKey1, groupName1, consumer1, 0L, new String[] {"0-1"})
+                .xclaim(
+                        streamKey1,
+                        groupName1,
+                        consumer1,
+                        0L,
+                        new String[] {"0-3"},
+                        StreamClaimOptions.builder().force().build())
+                .xclaimJustId(streamKey1, groupName1, consumer1, 0L, new String[] {"0-3"})
+                .xclaimJustId(
+                        streamKey1,
+                        groupName1,
+                        consumer1,
+                        0L,
+                        new String[] {"0-4"},
+                        StreamClaimOptions.builder().force().build())
                 .xpending(streamKey1, groupName1)
                 .xack(streamKey1, groupName1, new String[] {"0-3"})
                 .xpending(
@@ -892,6 +911,12 @@ public class TransactionTestUtilities {
             Map.of(
                     streamKey1,
                     Map.of()), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1, options);
+            Map.of(), // xclaim(streamKey1, groupName1, consumer1, 0L, new String[] {"0-1"})
+            Map.of(
+                    "0-3",
+                    new String[][] {{"field3", "value3"}}), // xclaim(streamKey1, ..., {"0-3"}, options)
+            new String[] {"0-3"}, // xclaimJustId(streamKey1, ..., new String[] {"0-3"})
+            new String[0], // xclaimJustId(streamKey1, ..., new String[] {"0-4"}, options)
             new Object[] {
                 1L, "0-3", "0-3", new Object[][] {{consumer1, "1"}}
             }, // xpending(streamKey1, groupName1)
@@ -1182,5 +1207,13 @@ public class TransactionTestUtilities {
                     });
         }
         return expectedResults;
+    }
+
+    private static Object[] pubsubCommands(BaseTransaction<?> transaction) {
+        transaction.publish("Tchannel", "message");
+
+        return new Object[] {
+            0L, // publish("Tchannel", "message")
+        };
     }
 }
