@@ -46,6 +46,7 @@ import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
@@ -97,7 +98,9 @@ public class TransactionTestUtilities {
                         "Geospatial Commands",
                         (TransactionBuilder) TransactionTestUtilities::geospatialCommands),
                 Arguments.of(
-                        "Bitmap Commands", (TransactionBuilder) TransactionTestUtilities::bitmapCommands));
+                        "Bitmap Commands", (TransactionBuilder) TransactionTestUtilities::bitmapCommands),
+                Arguments.of(
+                        "PubSub Commands", (TransactionBuilder) TransactionTestUtilities::pubsubCommands));
     }
 
     /** Generate test samples for parametrized tests. Could be routed to primary nodes only. */
@@ -813,6 +816,8 @@ public class TransactionTestUtilities {
         final String groupName1 = "{groupName}-1-" + UUID.randomUUID();
         final String groupName2 = "{groupName}-2-" + UUID.randomUUID();
         final String consumer1 = "{consumer}-1-" + UUID.randomUUID();
+        final String streamKey2 = "{streamKey}-2-" + UUID.randomUUID();
+        final String groupName3 = "{groupName}-2-" + UUID.randomUUID();
 
         transaction
                 .xadd(streamKey1, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
@@ -830,12 +835,29 @@ public class TransactionTestUtilities {
                 .xgroupCreate(
                         streamKey1, groupName2, "0-0", StreamGroupOptions.builder().makeStream().build())
                 .xgroupCreateConsumer(streamKey1, groupName1, consumer1)
+                .xgroupSetId(streamKey1, groupName1, "0-2")
                 .xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1)
                 .xreadgroup(
                         Map.of(streamKey1, "0-3"),
                         groupName1,
                         consumer1,
                         StreamReadGroupOptions.builder().count(2L).build())
+                .xclaim(streamKey1, groupName1, consumer1, 0L, new String[] {"0-1"})
+                .xclaim(
+                        streamKey1,
+                        groupName1,
+                        consumer1,
+                        0L,
+                        new String[] {"0-3"},
+                        StreamClaimOptions.builder().force().build())
+                .xclaimJustId(streamKey1, groupName1, consumer1, 0L, new String[] {"0-3"})
+                .xclaimJustId(
+                        streamKey1,
+                        groupName1,
+                        consumer1,
+                        0L,
+                        new String[] {"0-4"},
+                        StreamClaimOptions.builder().force().build())
                 .xpending(streamKey1, groupName1)
                 .xack(streamKey1, groupName1, new String[] {"0-3"})
                 .xpending(
@@ -849,7 +871,14 @@ public class TransactionTestUtilities {
                 .xgroupDestroy(streamKey1, groupName2)
                 .xdel(streamKey1, new String[] {"0-3", "0-5"});
 
-        return new Object[] {
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            transaction
+                    .xadd(streamKey2, Map.of("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
+                    .xgroupCreate(streamKey2, groupName3, "0")
+                    .xgroupSetId(streamKey2, groupName3, "1-0", "0");
+        }
+
+        Object[] result = {
             "0-1", // xadd(streamKey1, Map.of("field1", "value1"), ... .id("0-1").build());
             "0-2", // xadd(streamKey1, Map.of("field2", "value2"), ... .id("0-2").build());
             "0-3", // xadd(streamKey1, Map.of("field3", "value3"), ... .id("0-3").build());
@@ -871,6 +900,7 @@ public class TransactionTestUtilities {
             OK, // xgroupCreate(streamKey1, groupName1, "0-0")
             OK, // xgroupCreate(streamKey1, groupName1, "0-0", options)
             true, // xgroupCreateConsumer(streamKey1, groupName1, consumer1)
+            OK, // xgroupSetId(streamKey1, groupName1, "0-2")
             Map.of(
                     streamKey1,
                     Map.of(
@@ -881,6 +911,12 @@ public class TransactionTestUtilities {
             Map.of(
                     streamKey1,
                     Map.of()), // xreadgroup(Map.of(streamKey1, ">"), groupName1, consumer1, options);
+            Map.of(), // xclaim(streamKey1, groupName1, consumer1, 0L, new String[] {"0-1"})
+            Map.of(
+                    "0-3",
+                    new String[][] {{"field3", "value3"}}), // xclaim(streamKey1, ..., {"0-3"}, options)
+            new String[] {"0-3"}, // xclaimJustId(streamKey1, ..., new String[] {"0-3"})
+            new String[0], // xclaimJustId(streamKey1, ..., new String[] {"0-4"}, options)
             new Object[] {
                 1L, "0-3", "0-3", new Object[][] {{consumer1, "1"}}
             }, // xpending(streamKey1, groupName1)
@@ -891,6 +927,20 @@ public class TransactionTestUtilities {
             true, // xgroupDestroy(streamKey1, groupName2)
             1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"});
         };
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            result =
+                    concatenateArrays(
+                            result,
+                            new Object[] {
+                                "1-0", // xadd(streamKey2, Map.of("f0", "v0"),
+                                // StreamAddOptions.builder().id("1-0").build())
+                                OK, // xgroupCreate(streamKey2, groupName3, "0")
+                                OK, // xgroupSetId(streamKey2, groupName3, "1-0", "0");
+                            });
+        }
+
+        return result;
     }
 
     private static Object[] geospatialCommands(BaseTransaction<?> transaction) {
@@ -1157,5 +1207,13 @@ public class TransactionTestUtilities {
                     });
         }
         return expectedResults;
+    }
+
+    private static Object[] pubsubCommands(BaseTransaction<?> transaction) {
+        transaction.publish("Tchannel", "message");
+
+        return new Object[] {
+            0L, // publish("Tchannel", "message")
+        };
     }
 }
