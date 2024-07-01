@@ -5700,12 +5700,12 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.HScan, args),
         )
 
-        async def fcall(
-            self,
-            function: str,
-            keys: Optional[List[str]] = None,
-            arguments: Optional[List[str]] = None
-        ) -> TResult:
+    async def fcall(
+        self,
+        function: str,
+        keys: Optional[List[str]] = None,
+        arguments: Optional[List[str]] = None
+    ) -> TResult:
         """
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.
