@@ -147,7 +147,6 @@ For Java, we use Spotless and SpotBugs.
    Ensure any new findings are addressed and fixed before committing and pushing your changes.
 
    _Note: The `spotbugs` task is currently configured to not fail the build on findings._
-    ```
 
 ### Troubleshooting
 

@@ -103,7 +103,7 @@ jobs:
               with:
                   language-flag: -java
 
-            - name: Upload test reports
+            - name: Upload test & spotbugs reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
@@ -114,14 +114,6 @@ jobs:
                       java/integTest/build/reports/**
                       utils/clusters/**
                       benchmarks/results/**
-
-            - name: Upload SpotBugs reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: spotbugs-reports-java-${{ matrix.java }}-${{ matrix.host.RUNNER }}
-                  path: |
                       java/client/build/reports/spotbugs/**
 
     build-amazonlinux-latest:
@@ -179,7 +171,7 @@ jobs:
               working-directory: java
               run: ./gradlew --continue build
 
-            - name: Upload test reports
+            - name: Upload test & spotbugs reports
               if: always()
               continue-on-error: true
               uses: actions/upload-artifact@v4
@@ -188,14 +180,6 @@ jobs:
                   path: |
                       java/client/build/reports/**
                       java/integTest/build/reports/**
-
-            - name: Upload SpotBugs reports
-              if: always()
-              continue-on-error: true
-              uses: actions/upload-artifact@v4
-              with:
-                  name: spotbugs-reports-java-${{ matrix.java }}-amazonlinux
-                  path: |
                       java/client/build/reports/spotbugs/**
 
     lint-rust:
