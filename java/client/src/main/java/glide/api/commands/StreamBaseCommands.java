@@ -379,6 +379,25 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
+     * @param groupname The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Create the consumer group "mygroup", using zero as the starting ID:
+     * assert client.xgroupCreate(gs("mystream"), gs("mygroup"), gs("0-0")).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupCreate(GlideString key, GlideString groupname, GlideString id);
+
+    /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
      * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
@@ -393,6 +412,28 @@ public interface StreamBaseCommands {
      */
     CompletableFuture<String> xgroupCreate(
             String key, String groupName, String id, StreamGroupOptions options);
+
+  
+    /**
+     * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
+     * stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The newly created consumer group name.
+     * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
+     *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
+     *     in the stream.
+     * @param options The group options {@link StreamGroupOptionsBinary}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Create the consumer group "mygroup", and the stream if it does not exist, after the last ID
+     * assert client.xgroupCreate("gs(mystream"), gs("mygroup"), gs("$"), new StreamGroupOptionsBinary(true)).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupCreate(
+            GlideString key, GlideString groupName, GlideString id, StreamGroupOptionsBinary options);
 
     /**
      * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.

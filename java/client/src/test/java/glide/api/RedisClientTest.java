@@ -5781,6 +5781,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xgroupCreateBinary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id =gs("testId");
+        GlideString[] arguments = new GlideString[] {key, groupName, id};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupCreate), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupCreate(key, groupName, id);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xgroupCreate_withOptions() {
         // setup
         String key = "testKey";
@@ -5791,6 +5816,37 @@ public class RedisClientTest {
                 StreamGroupOptions.builder().makeStream().entriesRead(testEntry).build();
         String[] arguments =
                 new String[] {
+                    key, groupName, id, MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, testEntry
+                };
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupCreate), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupCreate(key, groupName, id, options);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupCreate_withOptionsBinary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString id = gs("testId");
+        GlideString testEntry = gs("testEntry");
+        StreamGroupOptionsBinary options =
+                StreamGroupOptionsBinary.builder().makeStream().entriesRead(testEntry).build();
+        GlideString[] arguments =
+                new GlideString[] {
                     key, groupName, id, MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, testEntry
                 };
 
