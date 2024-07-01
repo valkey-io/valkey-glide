@@ -7,7 +7,6 @@ import static glide.ffi.resolvers.ScriptResolver.storeScript;
 
 import glide.api.commands.GenericBaseCommands;
 import lombok.Getter;
-import lombok.Setter;
 
 /**
  * A wrapper for a Script object for {@link GenericBaseCommands#invokeScript(Script)} As long as
@@ -21,15 +20,16 @@ public class Script implements AutoCloseable {
     @Getter private final String hash;
 
     /** Indicatoin if script invocation output can return binary data. */
-    @Getter @Setter private Boolean binarySafeOutput = false;
+    @Getter private final Boolean binarySafeOutput;
 
     /**
      * Wraps around creating a Script object from <code>code</code>.
      *
      * @param code To execute with a ScriptInvoke call.
      */
-    public Script(String code) {
+    public Script(String code, Boolean binarySafeOutput) {
         hash = storeScript(gs(code).getBytes());
+        this.binarySafeOutput = binarySafeOutput;
     }
 
     /**
@@ -37,8 +37,9 @@ public class Script implements AutoCloseable {
      *
      * @param code To execute with a ScriptInvoke call.
      */
-    public Script(GlideString code) {
+    public Script(GlideString code, Boolean binarySafeOutput) {
         hash = storeScript(code.getBytes());
+        this.binarySafeOutput = binarySafeOutput;
     }
 
     /** Drop the linked script from glide-rs <code>code</code>. */
