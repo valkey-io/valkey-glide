@@ -122,10 +122,11 @@ public class CallbackDispatcher {
             Logger.log(
                     ERROR,
                     "callback dispatcher",
-                () -> "Received a response for not registered callback id "
-                            + callbackId
-                            + ", request error = "
-                            + response.getRequestError());
+                    () ->
+                            "Received a response for not registered callback id "
+                                    + callbackId
+                                    + ", request error = "
+                                    + response.getRequestError());
             distributeClosingException("Client is in an erroneous state and should close");
         }
     }

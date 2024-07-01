@@ -1,13 +1,12 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.logging;
 
 import static glide.ffi.resolvers.LoggerResolver.initInternal;
 import static glide.ffi.resolvers.LoggerResolver.logInternal;
 
+import java.util.function.Supplier;
 import lombok.Getter;
 import lombok.NonNull;
-
-import java.util.function.Supplier;
 
 /**
  * A singleton class that allows logging which is consistent with logs from the internal rust core.
