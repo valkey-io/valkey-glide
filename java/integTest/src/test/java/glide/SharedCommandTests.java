@@ -79,10 +79,10 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
-import glide.api.models.commands.scan.SScanOptions;
-import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.HScanOptionsGlideString;
+import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.SScanOptionsGlideString;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.ZScanOptionsGlideString;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
@@ -8145,7 +8145,10 @@ public class SharedCommandTests {
 
         result =
                 client
-                        .sscan(key1, initialCursor, SScanOptionsGlideString.builder().matchPattern(gs("a")).build())
+                        .sscan(
+                                key1,
+                                initialCursor,
+                                SScanOptionsGlideString.builder().matchPattern(gs("a")).build())
                         .get();
         assertEquals(initialCursor, gs(result[resultCursorIndex].toString()));
         assertDeepEquals(new GlideString[] {gs("a")}, result[resultCollectionIndex]);
@@ -8197,13 +8200,19 @@ public class SharedCommandTests {
         // Test match pattern
         result =
                 client
-                        .sscan(key1, initialCursor, SScanOptionsGlideString.builder().matchPattern(gs("*")).build())
+                        .sscan(
+                                key1,
+                                initialCursor,
+                                SScanOptionsGlideString.builder().matchPattern(gs("*")).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
-        result = client.sscan(key1, initialCursor, SScanOptionsGlideString.builder().count(20L).build()).get();
+        result =
+                client
+                        .sscan(key1, initialCursor, SScanOptionsGlideString.builder().count(20L).build())
+                        .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
@@ -8233,7 +8242,10 @@ public class SharedCommandTests {
                                         .sscan(
                                                 key2,
                                                 initialCursor,
-                                                SScanOptionsGlideString.builder().matchPattern(gs("test")).count(1L).build())
+                                                SScanOptionsGlideString.builder()
+                                                        .matchPattern(gs("test"))
+                                                        .count(1L)
+                                                        .build())
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
@@ -8241,7 +8253,10 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> client.sscan(key1, gs("-1"), SScanOptionsGlideString.builder().count(-1L).build()).get());
+                        () ->
+                                client
+                                        .sscan(key1, gs("-1"), SScanOptionsGlideString.builder().count(-1L).build())
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -8492,7 +8507,10 @@ public class SharedCommandTests {
 
         result =
                 client
-                        .zscan(key1, initialCursor, ZScanOptionsGlideString.builder().matchPattern(gs("a")).build())
+                        .zscan(
+                                key1,
+                                initialCursor,
+                                ZScanOptionsGlideString.builder().matchPattern(gs("a")).build())
                         .get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertDeepEquals(new GlideString[] {gs("a"), gs("0")}, result[resultCollectionIndex]);
@@ -8556,13 +8574,19 @@ public class SharedCommandTests {
         // Test match pattern
         result =
                 client
-                        .zscan(key1, initialCursor, ZScanOptionsGlideString.builder().matchPattern(gs("*")).build())
+                        .zscan(
+                                key1,
+                                initialCursor,
+                                ZScanOptionsGlideString.builder().matchPattern(gs("*")).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
-        result = client.zscan(key1, initialCursor, ZScanOptionsGlideString.builder().count(20L).build()).get();
+        result =
+                client
+                        .zscan(key1, initialCursor, ZScanOptionsGlideString.builder().count(20L).build())
+                        .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
@@ -8592,7 +8616,10 @@ public class SharedCommandTests {
                                         .zscan(
                                                 key2,
                                                 initialCursor,
-                                                ZScanOptionsGlideString.builder().matchPattern(gs("test")).count(1L).build())
+                                                ZScanOptionsGlideString.builder()
+                                                        .matchPattern(gs("test"))
+                                                        .count(1L)
+                                                        .build())
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
@@ -8600,7 +8627,10 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> client.zscan(key1, gs("-1"), ZScanOptionsGlideString.builder().count(-1L).build()).get());
+                        () ->
+                                client
+                                        .zscan(key1, gs("-1"), ZScanOptionsGlideString.builder().count(-1L).build())
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -8829,7 +8859,10 @@ public class SharedCommandTests {
 
         result =
                 client
-                        .hscan(key1, initialCursor, HScanOptionsGlideString.builder().matchPattern(gs("a")).build())
+                        .hscan(
+                                key1,
+                                initialCursor,
+                                HScanOptionsGlideString.builder().matchPattern(gs("a")).build())
                         .get();
         assertEquals(initialCursor, result[resultCursorIndex]);
         assertDeepEquals(new GlideString[] {gs("a"), gs("0")}, result[resultCollectionIndex]);
@@ -8890,13 +8923,19 @@ public class SharedCommandTests {
         // Test match pattern
         result =
                 client
-                        .hscan(key1, initialCursor, HScanOptionsGlideString.builder().matchPattern(gs("*")).build())
+                        .hscan(
+                                key1,
+                                initialCursor,
+                                HScanOptionsGlideString.builder().matchPattern(gs("*")).build())
                         .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= defaultCount);
 
         // Test count
-        result = client.hscan(key1, initialCursor, HScanOptionsGlideString.builder().count(20L).build()).get();
+        result =
+                client
+                        .hscan(key1, initialCursor, HScanOptionsGlideString.builder().count(20L).build())
+                        .get();
         assertTrue(Long.parseLong(result[resultCursorIndex].toString()) >= 0);
         assertTrue(ArrayUtils.getLength(result[resultCollectionIndex]) >= 20);
 
@@ -8926,7 +8965,10 @@ public class SharedCommandTests {
                                         .hscan(
                                                 key2,
                                                 initialCursor,
-                                                HScanOptionsGlideString.builder().matchPattern(gs("test")).count(1L).build())
+                                                HScanOptionsGlideString.builder()
+                                                        .matchPattern(gs("test"))
+                                                        .count(1L)
+                                                        .build())
                                         .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
 
@@ -8934,7 +8976,10 @@ public class SharedCommandTests {
         executionException =
                 assertThrows(
                         ExecutionException.class,
-                        () -> client.hscan(key1, gs("-1"), HScanOptionsGlideString.builder().count(-1L).build()).get());
+                        () ->
+                                client
+                                        .hscan(key1, gs("-1"), HScanOptionsGlideString.builder().count(-1L).build())
+                                        .get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 

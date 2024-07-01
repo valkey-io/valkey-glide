@@ -314,10 +314,10 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
-import glide.api.models.commands.scan.SScanOptions;
-import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.HScanOptionsGlideString;
+import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.SScanOptionsGlideString;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.scan.ZScanOptionsGlideString;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
@@ -9381,7 +9381,8 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Object[]> response =
-                service.sscan(key, cursor, SScanOptionsGlideString.builder().matchPattern(gs("*")).count(1L).build());
+                service.sscan(
+                        key, cursor, SScanOptionsGlideString.builder().matchPattern(gs("*")).count(1L).build());
         Object[] payload = response.get();
 
         // verify
@@ -9487,7 +9488,8 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Object[]> response =
-                service.zscan(key, cursor, ZScanOptionsGlideString.builder().matchPattern(gs("*")).count(1L).build());
+                service.zscan(
+                        key, cursor, ZScanOptionsGlideString.builder().matchPattern(gs("*")).count(1L).build());
         Object[] payload = response.get();
 
         // verify
@@ -9593,7 +9595,8 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Object[]> response =
-                service.hscan(key, cursor, HScanOptionsGlideString.builder().matchPattern(gs("*")).count(1L).build());
+                service.hscan(
+                        key, cursor, HScanOptionsGlideString.builder().matchPattern(gs("*")).count(1L).build());
         Object[] payload = response.get();
 
         // verify

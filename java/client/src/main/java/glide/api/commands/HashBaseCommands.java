@@ -628,5 +628,6 @@ public interface HashBaseCommands {
      * } while (!cursor.equals(gs("0")));
      * }</pre>
      */
-    CompletableFuture<Object[]> hscan(GlideString key, GlideString cursor, HScanOptionsGlideString hScanOptions);
+    CompletableFuture<Object[]> hscan(
+            GlideString key, GlideString cursor, HScanOptionsGlideString hScanOptions);
 }

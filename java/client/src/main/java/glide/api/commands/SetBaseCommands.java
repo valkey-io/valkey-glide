@@ -718,5 +718,6 @@ public interface SetBaseCommands {
      * } while (!cursor.equals(gs("0")));
      * }</pre>
      */
-    CompletableFuture<Object[]> sscan(GlideString key, GlideString cursor, SScanOptionsGlideString sScanOptions);
+    CompletableFuture<Object[]> sscan(
+            GlideString key, GlideString cursor, SScanOptionsGlideString sScanOptions);
 }

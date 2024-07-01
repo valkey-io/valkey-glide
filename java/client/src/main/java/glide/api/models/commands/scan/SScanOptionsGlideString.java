@@ -5,7 +5,8 @@ import glide.api.commands.SetBaseCommands;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Optional arguments for {@link SetBaseCommands#sscan(GlideString, GlideString, SScanOptionsGlideString)}.
+ * Optional arguments for {@link SetBaseCommands#sscan(GlideString, GlideString,
+ * SScanOptionsGlideString)}.
  *
  * @see <a href="https://valkey.io/commands/sscan/">valkey.io</a>
  */

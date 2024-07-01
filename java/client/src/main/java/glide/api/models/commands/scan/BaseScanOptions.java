@@ -1,9 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.scan;
 
-import glide.api.models.GlideString;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import lombok.experimental.SuperBuilder;
 
@@ -48,7 +46,7 @@ public abstract class BaseScanOptions {
 
         if (matchPattern != null) {
             optionArgs.add(MATCH_OPTION_STRING);
-            optionArgs.add(matchPattern.toString());
+            optionArgs.add(matchPattern);
         }
 
         if (count != null) {

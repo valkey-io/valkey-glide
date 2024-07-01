@@ -1724,5 +1724,6 @@ public interface SortedSetBaseCommands {
      * } while (!cursor.equals(gs("0")));
      * }</pre>
      */
-    CompletableFuture<Object[]> zscan(GlideString key, GlideString cursor, ZScanOptionsGlideString zScanOptions);
+    CompletableFuture<Object[]> zscan(
+            GlideString key, GlideString cursor, ZScanOptionsGlideString zScanOptions);
 }
