@@ -31,7 +31,6 @@ import java.util.UUID;
 import lombok.SneakyThrows;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -104,7 +103,6 @@ public class ClusterTransactionTests {
 
     @SneakyThrows
     @Test
-    @Disabled("Disabled until functionality is completed")
     public void test_transaction_large_values() {
         int length = 1 << 25; // 33mb
         String key = "0".repeat(length);

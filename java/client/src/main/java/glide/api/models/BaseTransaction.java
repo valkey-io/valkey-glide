@@ -271,6 +271,7 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.ReadFrom;
+import glide.managers.CommandManager;
 import java.util.Arrays;
 import java.util.Map;
 import lombok.Getter;
@@ -426,8 +427,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     key</code> as a String. Otherwise, return <code>null</code>.
      */
     public <ArgType> T get(@NonNull ArgType key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Get, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Get, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -485,29 +485,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A response from Redis.
      */
     public <ArgType> T set(@NonNull ArgType key, @NonNull ArgType value) {
-        ArgsArray commandArgs = buildArgs(key, value);
-        protobufTransaction.addCommands(buildCommand(Set, commandArgs));
-        return getThis();
-    }
-
-    /**
-     * Sets the given key with the given value. Return value is dependent on the passed options.
-     *
-     * @see <a href="https://redis.io/commands/set/">redis.io</a> for details.
-     * @param key The key to store.
-     * @param value The value to store with the given key.
-     * @param options The Set options.
-     * @return Command Response - A <code>String</code> or <code>null</code> response. The old value
-     *     as a <code>String</code> if {@link SetOptionsBuilder#returnOldValue(boolean)} is set.
-     *     Otherwise, if the value isn't set because of {@link ConditionalSet#ONLY_IF_EXISTS} or
-     *     {@link ConditionalSet#ONLY_IF_DOES_NOT_EXIST} conditions, return <code>null</code>.
-     *     Otherwise, return <code>OK</code>.
-     */
-    public <ArgType> T set(@NonNull String key, @NonNull String value, @NonNull SetOptions options) {
-        ArgsArray commandArgs =
-                buildArgs(ArrayUtils.addAll(new String[] {key, value}, options.toArgs()));
-
-        protobufTransaction.addCommands(buildCommand(Set, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Set, newArgsBuilder().add(key).add(value)));
         return getThis();
     }
 
@@ -526,9 +504,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T set(
             @NonNull ArgType key, @NonNull ArgType value, @NonNull SetOptions options) {
-        ArgsArray commandArgs = buildArgs(key, value, this.convertTo(key.getClass(), options.toArgs()));
-
-        protobufTransaction.addCommands(buildCommand(Set, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(Set, newArgsBuilder().add(key).add(value).add(options.toArgs())));
         return getThis();
     }
 
@@ -3107,8 +3084,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull StreamGroupOptions options) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        XGroupCreate,
-                        newArgsArrayBuilder().add(key).add(groupName).add(id).add(options.toArgs())));
+                        XGroupCreate, newArgsBuilder().add(key).add(groupName).add(id).add(options.toArgs())));
         return getThis();
     }
 
@@ -3189,13 +3165,20 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     it) and the stream's last entry.
      * @return Command Response - <code>OK</code>.
      */
-    public T xgroupSetId(
-            @NonNull String key,
-            @NonNull String groupName,
-            @NonNull String id,
-            @NonNull String entriesReadId) {
-        String[] commandArgs = buildArgs(key, groupName, id, "ENTRIESREAD", entriesReadId);
-        protobufTransaction.addCommands(buildCommand(XGroupSetId, commandArgs));
+    public <ArgType> T xgroupSetId(
+            @NonNull ArgType key,
+            @NonNull ArgType groupName,
+            @NonNull ArgType id,
+            @NonNull ArgType entriesReadId) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        XGroupSetId,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(groupName)
+                                .add(id)
+                                .add("ENTRIESREAD")
+                                .add(entriesReadId)));
         return getThis();
     }
 
@@ -5144,8 +5127,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
      */
     public <ArgType> T lcsIdx(@NonNull ArgType key1, @NonNull ArgType key2) {
-        ArgsArray args = new ArgsBuilder().add(key1).add(key2).add(IDX_COMMAND_STRING).build();
-        protobufTransaction.addCommands(buildCommand(LCS, args));
+        protobufTransaction.addCommands(
+                buildCommand(LCS, newArgsBuilder().add(key1).add(key2).add(IDX_COMMAND_STRING)));
         return getThis();
     }
 
@@ -5190,15 +5173,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the substring in <code>key2</code> at index <code>0</code> to <code>2</code>.
      */
     public <ArgType> T lcsIdx(@NonNull ArgType key1, @NonNull ArgType key2, long minMatchLen) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(key1)
-                        .add(key2)
-                        .add(IDX_COMMAND_STRING)
-                        .add(MINMATCHLEN_COMMAND_STRING)
-                        .add(minMatchLen)
-                        .build();
-        protobufTransaction.addCommands(buildCommand(LCS, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        LCS,
+                        newArgsBuilder()
+                                .add(key1)
+                                .add(key2)
+                                .add(IDX_COMMAND_STRING)
+                                .add(MINMATCHLEN_COMMAND_STRING)
+                                .add(minMatchLen)));
         return getThis();
     }
 
@@ -5244,14 +5227,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     the last element in the array is the length of the substring match which is <code>3</code>.
      */
     public <ArgType> T lcsIdxWithMatchLen(@NonNull ArgType key1, @NonNull ArgType key2) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(key1)
-                        .add(key2)
-                        .add(IDX_COMMAND_STRING)
-                        .add(WITHMATCHLEN_COMMAND_STRING)
-                        .build();
-        protobufTransaction.addCommands(buildCommand(LCS, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        LCS,
+                        newArgsBuilder()
+                                .add(key1)
+                                .add(key2)
+                                .add(IDX_COMMAND_STRING)
+                                .add(WITHMATCHLEN_COMMAND_STRING)));
         return getThis();
     }
 
@@ -5299,17 +5282,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T lcsIdxWithMatchLen(
             @NonNull ArgType key1, @NonNull ArgType key2, long minMatchLen) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(key1)
-                        .add(key2)
-                        .add(IDX_COMMAND_STRING)
-                        .add(MINMATCHLEN_COMMAND_STRING)
-                        .add(minMatchLen)
-                        .add(WITHMATCHLEN_COMMAND_STRING)
-                        .build();
-
-        protobufTransaction.addCommands(buildCommand(LCS, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        LCS,
+                        newArgsBuilder()
+                                .add(key1)
+                                .add(key2)
+                                .add(IDX_COMMAND_STRING)
+                                .add(MINMATCHLEN_COMMAND_STRING)
+                                .add(minMatchLen)
+                                .add(WITHMATCHLEN_COMMAND_STRING)));
         return getThis();
     }
 
@@ -5359,9 +5341,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code>.
      */
     public <ArgType> T sortStore(@NonNull ArgType key, @NonNull ArgType destination) {
-        ArgsArray commandArgs =
-                new ArgsBuilder().add(key).add(STORE_COMMAND_STRING).add(destination).build();
-        protobufTransaction.addCommands(buildCommand(Sort, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(Sort, newArgsBuilder().add(key).add(STORE_COMMAND_STRING).add(destination)));
         return getThis();
     }
 
@@ -5394,9 +5375,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType key,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
-        ArgsArray args =
-                new ArgsBuilder().add(key).add(searchFrom.toArgs()).add(searchBy.toArgs()).build();
-        protobufTransaction.addCommands(buildCommand(GeoSearch, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoSearch, newArgsBuilder().add(key).add(searchFrom.toArgs()).add(searchBy.toArgs())));
         return getThis();
     }
 
@@ -5432,14 +5413,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(resultOptions.toArgs())
-                        .build();
-        protobufTransaction.addCommands(buildCommand(GeoSearch, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoSearch,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(searchFrom.toArgs())
+                                .add(searchBy.toArgs())
+                                .add(resultOptions.toArgs())));
         return getThis();
     }
 
@@ -5482,14 +5463,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchOptions options) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(options.toArgs())
-                        .build();
-        protobufTransaction.addCommands(buildCommand(GeoSearch, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoSearch,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(searchFrom.toArgs())
+                                .add(searchBy.toArgs())
+                                .add(options.toArgs())));
         return getThis();
     }
 
@@ -5535,16 +5516,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(options.toArgs())
-                        .add(resultOptions.toArgs())
-                        .build();
-
-        protobufTransaction.addCommands(buildCommand(GeoSearch, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoSearch,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(searchFrom.toArgs())
+                                .add(searchBy.toArgs())
+                                .add(options.toArgs())
+                                .add(resultOptions.toArgs())));
         return getThis();
     }
 
@@ -5582,14 +5562,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType source,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(source)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .build();
-        protobufTransaction.addCommands(buildCommand(GeoSearchStore, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoSearchStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(source)
+                                .add(searchFrom.toArgs())
+                                .add(searchBy.toArgs())));
         return getThis();
     }
 
@@ -5630,15 +5610,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(source)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(resultOptions.toArgs())
-                        .build();
-        protobufTransaction.addCommands(buildCommand(GeoSearchStore, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoSearchStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(source)
+                                .add(searchFrom.toArgs())
+                                .add(searchBy.toArgs())
+                                .add(resultOptions.toArgs())));
         return getThis();
     }
 
@@ -5678,16 +5658,15 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchStoreOptions options) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(source)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(options.toArgs())
-                        .build();
-
-        protobufTransaction.addCommands(buildCommand(GeoSearchStore, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoSearchStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(source)
+                                .add(searchFrom.toArgs())
+                                .add(searchBy.toArgs())
+                                .add(options.toArgs())));
         return getThis();
     }
 
@@ -5730,17 +5709,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchStoreOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(destination)
-                        .add(source)
-                        .add(searchFrom.toArgs())
-                        .add(searchBy.toArgs())
-                        .add(options.toArgs())
-                        .add(resultOptions.toArgs())
-                        .build();
-
-        protobufTransaction.addCommands(buildCommand(GeoSearchStore, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoSearchStore,
+                        newArgsBuilder()
+                                .add(destination)
+                                .add(source)
+                                .add(searchFrom.toArgs())
+                                .add(searchBy.toArgs())
+                                .add(options.toArgs())
+                                .add(resultOptions.toArgs())));
         return getThis();
     }
 
@@ -5776,8 +5754,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T sscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull SScanOptions sScanOptions) {
-        ArgsArray args = new ArgsBuilder().add(key).add(cursor).add(sScanOptions.toArgs()).build();
-        protobufTransaction.addCommands(buildCommand(SScan, args));
+        protobufTransaction.addCommands(
+                buildCommand(SScan, newArgsBuilder().add(key).add(cursor).add(sScanOptions.toArgs())));
         return getThis();
     }
 
@@ -5817,8 +5795,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T zscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull ZScanOptions zScanOptions) {
-        ArgsArray args = new ArgsBuilder().add(key).add(cursor).add(zScanOptions.toArgs()).build();
-        protobufTransaction.addCommands(buildCommand(ZScan, args));
+        protobufTransaction.addCommands(
+                buildCommand(ZScan, newArgsBuilder().add(key).add(cursor).add(zScanOptions.toArgs())));
         return getThis();
     }
 
@@ -5858,8 +5836,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public <ArgType> T hscan(
             @NonNull ArgType key, @NonNull ArgType cursor, @NonNull HScanOptions hScanOptions) {
-        ArgsArray args = new ArgsBuilder().add(key).add(cursor).add(hScanOptions.toArgs()).build();
-        protobufTransaction.addCommands(buildCommand(HScan, args));
+        protobufTransaction.addCommands(
+                buildCommand(HScan, newArgsBuilder().add(key).add(cursor).add(hScanOptions.toArgs())));
         return getThis();
     }
 
@@ -5886,6 +5864,14 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /** Build protobuf {@link Command} object for given command and arguments. */
     protected Command buildCommand(RequestType requestType, ArgsArray args) {
         return Command.newBuilder().setRequestType(requestType).setArgsArray(args).build();
+    }
+
+    /** Build protobuf {@link Command} object for given command and arguments. */
+    protected Command buildCommand(RequestType requestType, ArgsBuilder argsBuilder) {
+        final Command.Builder builder = Command.newBuilder();
+        builder.setRequestType(requestType);
+        CommandManager.populateCommandWithArgs(argsBuilder.toArray(), builder);
+        return builder.build();
     }
 
     /** Build protobuf {@link ArgsArray} object for empty arguments. */
@@ -5919,6 +5905,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                     "Arguments can only be of type String or GlideString. Got: "
                             + cls.getClass().getSimpleName());
         }
+    }
+
+    protected ArgsBuilder newArgsBuilder() {
+        return new ArgsBuilder();
     }
 
     protected <ArgType> ArgType[] intoArray(ArgType... args) {

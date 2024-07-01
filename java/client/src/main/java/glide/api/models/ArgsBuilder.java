@@ -1,37 +1,40 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import com.google.protobuf.ByteString;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
+import java.util.ArrayList;
 
-// TODO docs for the god of docs
+/**
+ * Helper class for collecting arbitrary type of arguments and stores them as an array of
+ * GlideString
+ */
 public class ArgsBuilder {
-    ArgsArray.Builder commandArgs = null;
+    ArrayList<GlideString> argumentsList = null;
 
     public ArgsBuilder() {
-        commandArgs = ArgsArray.newBuilder();
+        argumentsList = new ArrayList<>();
     }
 
     public <ArgType> ArgsBuilder add(ArgType[] args) {
         for (ArgType arg : args) {
-            commandArgs.addArgs(ByteString.copyFrom(GlideString.of(arg).getBytes()));
+            argumentsList.add(GlideString.of(arg));
         }
+
         return this;
     }
 
     public <ArgType> ArgsBuilder add(ArgType arg) {
-        commandArgs.addArgs(ByteString.copyFrom(GlideString.of(arg).getBytes()));
+        argumentsList.add(GlideString.of(arg));
         return this;
     }
 
-    public <ArgType> ArgsBuilder add(String[] args) {
+    public ArgsBuilder add(String[] args) {
         for (String arg : args) {
-            commandArgs.addArgs(ByteString.copyFromUtf8(arg));
+            argumentsList.add(GlideString.of(arg));
         }
         return this;
     }
 
-    public ArgsArray build() {
-        return commandArgs.build();
+    public GlideString[] toArray() {
+        return argumentsList.toArray(new GlideString[0]);
     }
 }

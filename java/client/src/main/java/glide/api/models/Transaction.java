@@ -14,7 +14,6 @@ import glide.api.models.commands.SortOptions;
 import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
-import redis_request.RedisRequestOuterClass.Command.ArgsArray;
 
 /**
  * Extends BaseTransaction class for Redis standalone commands. Transactions allow the execution of
@@ -124,8 +123,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
     public <ArgType> Transaction sort(@NonNull ArgType key, @NonNull SortOptions sortOptions) {
-        ArgsArray args = new ArgsBuilder().add(key).add(sortOptions.toArgs()).build();
-        protobufTransaction.addCommands(buildCommand(Sort, args));
+        protobufTransaction.addCommands(
+                buildCommand(Sort, newArgsBuilder().add(key).add(sortOptions.toArgs())));
         return this;
     }
 
@@ -141,8 +140,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      */
     public <ArgType> Transaction sortReadOnly(
             @NonNull ArgType key, @NonNull SortOptions sortOptions) {
-        ArgsArray args = new ArgsBuilder().add(key).add(sortOptions.toArgs()).build();
-        protobufTransaction.addCommands(buildCommand(SortReadOnly, args));
+        protobufTransaction.addCommands(
+                buildCommand(SortReadOnly, newArgsBuilder().add(key).add(sortOptions.toArgs())));
         return this;
     }
 
@@ -161,14 +160,14 @@ public class Transaction extends BaseTransaction<Transaction> {
      */
     public <ArgType> Transaction sortStore(
             @NonNull ArgType key, @NonNull ArgType destination, @NonNull SortOptions sortOptions) {
-        ArgsArray args =
-                new ArgsBuilder()
-                        .add(key)
-                        .add(sortOptions.toArgs())
-                        .add(STORE_COMMAND_STRING)
-                        .add(destination)
-                        .build();
-        protobufTransaction.addCommands(buildCommand(Sort, args));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        Sort,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(sortOptions.toArgs())
+                                .add(STORE_COMMAND_STRING)
+                                .add(destination)));
         return this;
     }
 }
