@@ -240,7 +240,7 @@ async def transaction_test(
     transaction.hscan(key4, "0")
     args.append([b"0", [key3.encode(), b"10.5"]])
     transaction.hscan(key4, "0", match="*", count=10)
-    args.append([b"0", [key3, b"10.5"]])
+    args.append([b"0", [key3.encode(), b"10.5"]])
     transaction.hrandfield(key4)
     args.append(key3_bytes)
     transaction.hrandfield_count(key4, 1)

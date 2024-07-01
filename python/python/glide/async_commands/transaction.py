@@ -4084,7 +4084,7 @@ class BaseTransaction:
         count: Optional[int] = None,
     ) -> TTransaction:
         """
-        Iterates incrementally over a sorted set.
+        Iterates incrementally over a hash.
 
         See https://valkey.io/commands/hscan for more details.
 

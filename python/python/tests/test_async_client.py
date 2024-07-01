@@ -8230,16 +8230,14 @@ class TestClusterRoutes:
         num_map_with_str_scores = {}
         for i in range(50000):  # Use large dataset to force an iterative cursor.
             num_map.update({"value " + str(i): i})
-            num_map_with_str_scores.update(
-                {b"value " + str(i).encode(): str(i).encode()}
-            )
+            num_map_with_str_scores.update({"value " + str(i): str(i)})
         char_map = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4}
         char_map_with_str_scores = {
-            b"a": b"0",
-            b"b": b"1",
-            b"c": b"2",
-            b"d": b"3",
-            b"e": b"4",
+            "a": "0",
+            "b": "1",
+            "c": "2",
+            "d": "3",
+            "e": "4",
         }
 
         convert_list_to_dict = lambda list: {
@@ -8262,7 +8260,9 @@ class TestClusterRoutes:
         result_collection = result[result_collection_index]
         assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result_collection) == len(char_map) * 2
-        assert convert_list_to_dict(result_collection) == char_map_with_str_scores
+        assert convert_list_to_dict(result_collection) == cast(
+            list, convert_string_to_bytes_object(char_map_with_str_scores)
+        )
 
         result = await redis_client.zscan(key1, initial_cursor, match="a")
         result_collection = result[result_collection_index]
@@ -8272,16 +8272,26 @@ class TestClusterRoutes:
         # Result contains a subset of the key
         assert await redis_client.zadd(key1, num_map) == len(num_map)
         full_result_map = {}
-        result = await redis_client.zscan(key1, initial_cursor)
-        result_cursor = result[result_cursor_index]
+        result = result = cast(
+            list,
+            convert_bytes_to_string_object(
+                await redis_client.zscan(key1, initial_cursor)
+            ),
+        )
+        result_cursor = str(result[result_cursor_index])
         result_iteration_collection: dict[str, str] = convert_list_to_dict(
             result[result_collection_index]
         )
         full_result_map.update(result_iteration_collection)
 
         # 0 is returned for the cursor of the last iteration.
-        while result_cursor != b"0":
-            next_result = await redis_client.zscan(key1, result_cursor.decode("utf-8"))
+        while result_cursor != "0":
+            next_result = cast(
+                list,
+                convert_bytes_to_string_object(
+                    await redis_client.zscan(key1, result_cursor)
+                ),
+            )
             next_result_cursor = next_result[result_cursor_index]
             assert next_result_cursor != result_cursor
 
@@ -8373,18 +8383,27 @@ class TestClusterRoutes:
 
         # Result contains a subset of the key
         assert await redis_client.hset(key1, num_map) == len(num_map)
-        result_cursor = "0"
         full_result_map = {}
-        result = await redis_client.hscan(key1, result_cursor)
-        result_cursor = result[result_cursor_index]
+        result = result = cast(
+            list,
+            convert_bytes_to_string_object(
+                await redis_client.hscan(key1, initial_cursor)
+            ),
+        )
+        result_cursor = str(result[result_cursor_index])
         result_iteration_collection: dict[str, str] = convert_list_to_dict(
             result[result_collection_index]
         )
         full_result_map.update(result_iteration_collection)
 
         # 0 is returned for the cursor of the last iteration.
-        while result_cursor != b"0":
-            next_result = await redis_client.hscan(key1, result_cursor.decode("utf-8"))
+        while result_cursor != "0":
+            next_result = cast(
+                list,
+                convert_bytes_to_string_object(
+                    await redis_client.hscan(key1, result_cursor)
+                ),
+            )
             next_result_cursor = next_result[result_cursor_index]
             assert next_result_cursor != result_cursor
 

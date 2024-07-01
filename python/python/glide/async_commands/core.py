@@ -5611,7 +5611,7 @@ class CoreCommands(Protocol):
                 `String` pairs, where the value is at even indices and the score is at odd indices.
 
         Examples:
-            # Assume "key" contains a sorted set with 200 members
+            # Assume "key" contains a sorted set with multiple members
             >>> result_cursor = "0"
             >>> while True:
             ...     result = await redis_client.zscan("key", "0", match="*", count=5)
@@ -5647,7 +5647,7 @@ class CoreCommands(Protocol):
         count: Optional[int] = None,
     ) -> List[Union[str, List[str]]]:
         """
-        Iterates incrementally over a sorted set.
+        Iterates incrementally over a hash.
 
         See https://valkey.io/commands/hscan for more details.
 
@@ -5672,7 +5672,7 @@ class CoreCommands(Protocol):
                 where the value is at even indices and the score is at odd indices.
 
         Examples:
-            # Assume "key" contains a sorted set with 200 members
+            # Assume "key" contains a hash with multiple members
             >>> result_cursor = "0"
             >>> while True:
             ...     result = await redis_client.hscan("key", "0", match="*", count=3)
