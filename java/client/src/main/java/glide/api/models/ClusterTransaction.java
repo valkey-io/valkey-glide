@@ -2,14 +2,12 @@
 package glide.api.models;
 
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
 import glide.api.models.commands.SortClusterOptions;
-import lombok.AllArgsConstructor;
 import lombok.NonNull;
-import org.apache.commons.lang3.ArrayUtils;
 
 /**
  * Extends BaseTransaction class for cluster mode commands. Transactions allow the execution of a
@@ -29,11 +27,25 @@ import org.apache.commons.lang3.ArrayUtils;
  *  // result contains: OK and "value"
  *  </pre>
  */
-@AllArgsConstructor
 public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     @Override
     protected ClusterTransaction getThis() {
         return this;
+    }
+
+    /**
+     * Publishes message on pubsub channel in sharded mode.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/publish/">redis.io</a> for details.
+     * @param channel The channel to publish the message on.
+     * @param message The message to publish.
+     * @return Command response - The number of clients that received the message.
+     */
+    public <ArgType> ClusterTransaction spublish(@NonNull ArgType channel, @NonNull ArgType message) {
+        protobufTransaction.addCommands(
+                buildCommand(SPublish, newArgsBuilder().add(channel).add(message)));
+        return getThis();
     }
 
     /**
@@ -47,10 +59,10 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
-    public ClusterTransaction sort(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
+    public <ArgType> ClusterTransaction sort(
+            @NonNull ArgType key, @NonNull SortClusterOptions sortClusterOptions) {
         protobufTransaction.addCommands(
-                buildCommand(Sort, ArrayUtils.addFirst(sortClusterOptions.toArgs(), key)));
+                buildCommand(Sort, newArgsBuilder().add(key).add(sortClusterOptions.toArgs())));
         return this;
     }
 
@@ -65,10 +77,10 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @param sortClusterOptions The {@link SortClusterOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
-    public ClusterTransaction sortReadOnly(
-            @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
+    public <ArgType> ClusterTransaction sortReadOnly(
+            @NonNull ArgType key, @NonNull SortClusterOptions sortClusterOptions) {
         protobufTransaction.addCommands(
-                buildCommand(SortReadOnly, ArrayUtils.addFirst(sortClusterOptions.toArgs(), key)));
+                buildCommand(SortReadOnly, newArgsBuilder().add(key).add(sortClusterOptions.toArgs())));
         return this;
     }
 
@@ -86,15 +98,18 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @return Command Response - The number of elements in the sorted key stored at <code>destination
      *     </code>.
      */
-    public ClusterTransaction sortStore(
-            @NonNull String key,
-            @NonNull String destination,
+    public <ArgType> ClusterTransaction sortStore(
+            @NonNull ArgType key,
+            @NonNull ArgType destination,
             @NonNull SortClusterOptions sortClusterOptions) {
-        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         protobufTransaction.addCommands(
                 buildCommand(
                         Sort,
-                        concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments)));
+                        newArgsBuilder()
+                                .add(key)
+                                .add(sortClusterOptions.toArgs())
+                                .add(STORE_COMMAND_STRING)
+                                .add(destination)));
         return this;
     }
 }

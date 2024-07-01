@@ -4,6 +4,7 @@ package glide.api.commands;
 import glide.api.models.GlideString;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
+import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
@@ -378,7 +379,7 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @param groupname The newly created consumer group name.
+     * @param groupName The newly created consumer group name.
      * @param id Stream entry ID that specifies the last delivered entry in the stream from the new
      *     group’s perspective. The special ID <code>"$"</code> can be used to specify the last entry
      *     in the stream.
@@ -391,7 +392,7 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> xgroupCreate(
-            String key, String groupname, String id, StreamGroupOptions options);
+            String key, String groupName, String id, StreamGroupOptions options);
 
     /**
      * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.
@@ -442,6 +443,45 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> xgroupDelConsumer(String key, String group, String consumer);
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The consumer group name.
+     * @param id The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Update consumer group "mygroup", to set the last delivered entry ID.
+     * assert client.xgroupSetId("mystream", "mygroup", "0").get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupSetId(String key, String groupName, String id);
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The consumer group name.
+     * @param id The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @param entriesReadId An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
+     *     "0-0"</code>)) used to find out how many entries are between the arbitrary ID (excluding
+     *     it) and the stream's last entry.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Update consumer group "mygroup", to set the last delivered entry ID.
+     * assert client.xgroupSetId("mystream", "mygroup", "0", "1-1").get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupSetId(
+            String key, String groupName, String id, String entriesReadId);
 
     /**
      * Reads entries from the given streams owned by a consumer group.
@@ -672,4 +712,119 @@ public interface StreamBaseCommands {
             StreamRange end,
             long count,
             StreamPendingOptions options);
+
+    /**
+     * Changes the ownership of a pending message.
+     *
+     * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param ids A array of entry ids.
+     * @return A <code>Map</code> of message entries with the format <code>
+     *     {"entryId": [["entry", "data"], ...], ...}</code> that are claimed by the consumer.
+     * @example
+     *     <pre>
+     * // read messages from streamId for consumer1
+     * var readResult = client.xreadgroup(Map.of("mystream", ">"), "mygroup", "consumer1").get();
+     * // "entryId" is now read, and we can assign the pending messages to consumer2
+     * Map<String, String[][]> results = client.xclaim("mystream", "mygroup", "consumer2", 0L, new String[] {entryId}).get();
+     * for (String key: results.keySet()) {
+     *     System.out.println(key);
+     *     for (String[] entry: results.get(key)) {
+     *         System.out.printf("{%s=%s}%n", entry[0], entry[1]);
+     *     }
+     * }
+     * </pre>
+     */
+    CompletableFuture<Map<String, String[][]>> xclaim(
+            String key, String group, String consumer, long minIdleTime, String[] ids);
+
+    /**
+     * Changes the ownership of a pending message.
+     *
+     * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param ids An array of entry ids.
+     * @param options Stream claim options {@link StreamClaimOptions}.
+     * @return A <code>Map</code> of message entries with the format <code>
+     *     {"entryId": [["entry", "data"], ...], ...}</code> that are claimed by the consumer.
+     * @example
+     *     <pre>
+     * // assign (force) unread and unclaimed messages to consumer2
+     * StreamClaimOptions options = StreamClaimOptions.builder().force().build();
+     * Map<String, String[][]> results = client.xclaim("mystream", "mygroup", "consumer2", 0L, new String[] {entryId}, options).get();
+     * for (String key: results.keySet()) {
+     *     System.out.println(key);
+     *     for (String[] entry: results.get(key)) {
+     *         System.out.printf("{%s=%s}%n", entry[0], entry[1]);
+     *     }
+     * }
+     * </pre>
+     */
+    CompletableFuture<Map<String, String[][]>> xclaim(
+            String key,
+            String group,
+            String consumer,
+            long minIdleTime,
+            String[] ids,
+            StreamClaimOptions options);
+
+    /**
+     * Changes the ownership of a pending message. This function returns an <code>array</code> with
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     *
+     * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param ids An array of entry ids.
+     * @return An <code>array</code> of message ids claimed by the consumer.
+     * @example
+     *     <pre>
+     * // read messages from streamId for consumer1
+     * var readResult = client.xreadgroup(Map.of("mystream", ">"), "mygroup", "consumer1").get();
+     * // "entryId" is now read, and we can assign the pending messages to consumer2
+     * String[] results = client.xclaimJustId("mystream", "mygroup", "consumer2", 0L, new String[] {entryId}).get();
+     * for (String id: results) {
+     *     System.out.printf("consumer2 claimed stream entry ID: %s %n", id);
+     * }
+     * </pre>
+     */
+    CompletableFuture<String[]> xclaimJustId(
+            String key, String group, String consumer, long minIdleTime, String[] ids);
+
+    /**
+     * Changes the ownership of a pending message. This function returns an <code>array</code> with
+     * only the message/entry IDs, and is equivalent to using <code>JUSTID</code> in the Redis API.
+     *
+     * @see <a href="https://valkey.io/commands/xclaim/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The group consumer.
+     * @param minIdleTime The minimum idle time for the message to be claimed.
+     * @param ids An array of entry ids.
+     * @param options Stream claim options {@link StreamClaimOptions}.
+     * @return An <code>array</code> of message ids claimed by the consumer.
+     * @example
+     *     <pre>
+     * // assign (force) unread and unclaimed messages to consumer2
+     * StreamClaimOptions options = StreamClaimOptions.builder().force().build();
+     * String[] results = client.xclaimJustId("mystream", "mygroup", "consumer2", 0L, new String[] {entryId}, options).get();
+     * for (String id: results) {
+     *     System.out.printf("consumer2 claimed stream entry ID: %s %n", id);
+     * }
+     */
+    CompletableFuture<String[]> xclaimJustId(
+            String key,
+            String group,
+            String consumer,
+            long minIdleTime,
+            String[] ids,
+            StreamClaimOptions options);
 }
