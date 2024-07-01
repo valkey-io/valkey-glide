@@ -777,3 +777,35 @@ class ClusterCommands(CoreCommands):
             Optional[str],
             await self._execute_command(RequestType.RandomKey, [], route),
         )
+
+    async def wait(
+        self,
+        numreplicas: int,
+        timeout: int,
+        route: Optional[Route] = None,
+    ) -> int:
+        """
+        Blocks the current client until all the previous write commands are successfully transferred
+        and acknowledged by at least `numreplicas` of replicas. If `timeout` is
+        reached, the command returns even if the specified number of replicas were not yet reached.
+
+        See https://valkey.io/commands/wait for more details.
+
+        Args:
+            numreplicas (int): The number of replicas to reach.
+            timeout (int): The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+            in which case the client will route the command to the nodes defined by `route`.
+        Returns:
+            int: The number of replicas reached by all the writes performed in the context of the current connection.
+
+        Examples:
+            >>> await client.set("key", "value");
+            >>> await client.wait(1, 1000);
+            // return 1 when a replica is reached or 0 if 1000ms is reached.
+        """
+        args = [str(numreplicas), str(timeout)]
+        return cast(
+            int,
+            await self._execute_command(RequestType.Wait, args, route),
+        )

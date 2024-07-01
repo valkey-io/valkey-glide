@@ -241,6 +241,7 @@ enum RequestType {
     SScan = 200;
     ZScan = 201;
     HScan = 202;
+    XAutoClaim = 203;
     Wait = 208;
 }
 

@@ -6045,6 +6045,245 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xautoclaim(self, redis_client: TGlideClient, protocol):
+        min_version = "6.2.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            version7_or_above = False
+        else:
+            version7_or_above = True
+
+        key = get_random_string(10)
+        group_name = get_random_string(10)
+        consumer = get_random_string(10)
+        stream_id0_0 = "0-0"
+        stream_id1_0 = "1-0"
+        stream_id1_1 = "1-1"
+        stream_id1_2 = "1-2"
+        stream_id1_3 = "1-3"
+
+        # setup: add stream entries, create consumer group, add entries to Pending Entries List for group
+        assert (
+            await redis_client.xadd(
+                key, [("f1", "v1"), ("f2", "v2")], StreamAddOptions(stream_id1_0)
+            )
+            == stream_id1_0.encode()
+        )
+        assert (
+            await redis_client.xadd(
+                key, [("f1_1", "v1_1")], StreamAddOptions(stream_id1_1)
+            )
+            == stream_id1_1.encode()
+        )
+        assert (
+            await redis_client.xadd(
+                key, [("f1_2", "v1_2")], StreamAddOptions(stream_id1_2)
+            )
+            == stream_id1_2.encode()
+        )
+        assert (
+            await redis_client.xadd(
+                key, [("f1_3", "v1_3")], StreamAddOptions(stream_id1_3)
+            )
+            == stream_id1_3.encode()
+        )
+        assert await redis_client.xgroup_create(key, group_name, stream_id0_0) == OK
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
+            key.encode(): {
+                stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]],
+                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
+                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
+                stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
+            }
+        }
+
+        # autoclaim the first entry only
+        result = await redis_client.xautoclaim(
+            key, group_name, consumer, 0, stream_id0_0, count=1
+        )
+        assert result[0] == stream_id1_1.encode()
+        assert result[1] == {stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]]}
+        # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # Entries List because they no longer exist in the stream
+        if version7_or_above:
+            assert result[2] == []
+
+        # delete entry 1-2
+        assert await redis_client.xdel(key, [stream_id1_2])
+
+        # autoclaim the rest of the entries
+        result = await redis_client.xautoclaim(
+            key, group_name, consumer, 0, stream_id1_1
+        )
+        assert (
+            result[0] == stream_id0_0.encode()
+        )  # "0-0" is returned to indicate the entire stream was scanned.
+        assert result[1] == {
+            stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
+            stream_id1_3.encode(): [[b"f1_3", b"v1_3"]],
+        }
+        if version7_or_above:
+            assert result[2] == [stream_id1_2.encode()]
+
+        # autoclaim with JUSTID: result at index 1 does not contain fields/values of the claimed entries, only IDs
+        just_id_result = await redis_client.xautoclaim_just_id(
+            key, group_name, consumer, 0, stream_id0_0
+        )
+        assert just_id_result[0] == stream_id0_0.encode()
+        if version7_or_above:
+            assert just_id_result[1] == [
+                stream_id1_0.encode(),
+                stream_id1_1.encode(),
+                stream_id1_3.encode(),
+            ]
+            assert just_id_result[2] == []
+        else:
+            # in Redis < 7.0.0, specifically for XAUTOCLAIM with JUSTID, entry IDs that were in the Pending Entries List
+            # but are no longer in the stream still show up in the response
+            assert just_id_result[1] == [
+                stream_id1_0.encode(),
+                stream_id1_1.encode(),
+                stream_id1_2.encode(),
+                stream_id1_3.encode(),
+            ]
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xautoclaim_edge_cases_and_failures(
+        self, redis_client: TGlideClient, protocol
+    ):
+        min_version = "6.2.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            version7_or_above = False
+        else:
+            version7_or_above = True
+
+        key = get_random_string(10)
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        group_name = get_random_string(10)
+        consumer = get_random_string(10)
+        stream_id0_0 = "0-0"
+        stream_id1_0 = "1-0"
+
+        # setup: add entry, create consumer group, add entry to Pending Entries List for group
+        assert (
+            await redis_client.xadd(key, [("f1", "v1")], StreamAddOptions(stream_id1_0))
+            == stream_id1_0.encode()
+        )
+        assert await redis_client.xgroup_create(key, group_name, stream_id0_0) == OK
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
+            key.encode(): {stream_id1_0.encode(): [[b"f1", b"v1"]]}
+        }
+
+        # passing a non-existing key is not allowed and will raise an error
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim(
+                non_existing_key, group_name, consumer, 0, stream_id0_0
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim_just_id(
+                non_existing_key, group_name, consumer, 0, stream_id0_0
+            )
+
+        # passing a non-existing group is not allowed and will raise an error
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim(
+                key, "non_existing_group", consumer, 0, stream_id0_0
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim_just_id(
+                key, "non_existing_group", consumer, 0, stream_id0_0
+            )
+
+        # non-existing consumers are created automatically
+        result = await redis_client.xautoclaim(
+            key, group_name, "non_existing_consumer", 0, stream_id0_0
+        )
+        assert result[0] == stream_id0_0.encode()
+        assert result[1] == {stream_id1_0.encode(): [[b"f1", b"v1"]]}
+        # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # Entries List because they no longer exist in the stream
+        if version7_or_above:
+            assert result[2] == []
+
+        just_id_result = await redis_client.xautoclaim_just_id(
+            key, group_name, "non_existing_consumer", 0, stream_id0_0
+        )
+        assert just_id_result[0] == stream_id0_0.encode()
+        assert just_id_result[1] == [stream_id1_0.encode()]
+        if version7_or_above:
+            assert just_id_result[2] == []
+
+        # negative min_idle_time_ms values are allowed
+        result = await redis_client.xautoclaim(
+            key, group_name, consumer, -1, stream_id0_0
+        )
+        assert result[0] == stream_id0_0.encode()
+        assert result[1] == {stream_id1_0.encode(): [[b"f1", b"v1"]]}
+        if version7_or_above:
+            assert result[2] == []
+
+        just_id_result = await redis_client.xautoclaim_just_id(
+            key, group_name, consumer, -1, stream_id0_0
+        )
+        assert just_id_result[0] == stream_id0_0.encode()
+        assert just_id_result[1] == [stream_id1_0.encode()]
+        if version7_or_above:
+            assert just_id_result[2] == []
+
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim(
+                key, group_name, consumer, 0, "invalid_stream_id"
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim_just_id(
+                key, group_name, consumer, 0, "invalid_stream_id"
+            )
+
+        # no stream entries to claim above the given start value
+        result = await redis_client.xautoclaim(key, group_name, consumer, 0, "99-99")
+        assert result[0] == stream_id0_0.encode()
+        assert result[1] == {}
+        if version7_or_above:
+            assert result[2] == []
+
+        just_id_result = await redis_client.xautoclaim_just_id(
+            key, group_name, consumer, 0, "99-99"
+        )
+        assert just_id_result[0] == stream_id0_0.encode()
+        assert just_id_result[1] == []
+        if version7_or_above:
+            assert just_id_result[2] == []
+
+        # invalid arg - count must be positive
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim(
+                key, group_name, consumer, 0, stream_id0_0, count=0
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim_just_id(
+                key, group_name, consumer, 0, stream_id0_0, count=0
+            )
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim(
+                string_key, group_name, consumer, 0, stream_id0_0
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xautoclaim_just_id(
+                string_key, group_name, consumer, 0, stream_id0_0
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xgroup_set_id(
         self, redis_client: TGlideClient, cluster_mode, protocol, request
     ):
@@ -7372,6 +7611,27 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_wait(self, redis_client: TGlideClient):
+        key = f"{{key}}-1{get_random_string(5)}"
+        value = get_random_string(5)
+        value2 = get_random_string(5)
+
+        assert await redis_client.set(key, value) == OK
+        if isinstance(redis_client, GlideClusterClient):
+            assert await redis_client.wait(1, 1000) >= 1
+        else:
+            assert await redis_client.wait(1, 1000) >= 0
+
+        # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
+        assert await redis_client.set(key, value2) == OK
+        assert await redis_client.wait(100, 500) >= 0
+
+        # command should fail on a negative timeout value
+        with pytest.raises(RequestError):
+            await redis_client.wait(1, -1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lolwut(self, redis_client: TGlideClient):
         result = await redis_client.lolwut()
         assert b"Redis ver. " in result
@@ -8035,6 +8295,7 @@ class TestClusterRoutes:
                 set(next_result[result_collection_index])
             )
             result_values.update(next_result[result_collection_index])
+            result = next_result
             result_cursor = next_result_cursor
         assert set(num_members).issubset(result_values)
         assert set(char_members).issubset(result_values)
@@ -8065,6 +8326,233 @@ class TestClusterRoutes:
         # Negative count
         with pytest.raises(RequestError):
             await redis_client.sscan(key2, initial_cursor, count=-1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_zscan(self, redis_client: GlideClusterClient):
+        key1 = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        initial_cursor = "0"
+        result_cursor_index = 0
+        result_collection_index = 1
+        default_count = 20
+        num_map = {}
+        num_map_with_str_scores = {}
+        for i in range(50000):  # Use large dataset to force an iterative cursor.
+            num_map.update({"value " + str(i): i})
+            num_map_with_str_scores.update({"value " + str(i): str(i)})
+        char_map = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4}
+        char_map_with_str_scores = {
+            "a": "0",
+            "b": "1",
+            "c": "2",
+            "d": "3",
+            "e": "4",
+        }
+
+        convert_list_to_dict = lambda list: {
+            list[i]: list[i + 1] for i in range(0, len(list), 2)
+        }
+
+        # Empty set
+        result = await redis_client.zscan(key1, initial_cursor)
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert result[result_collection_index] == []
+
+        # Negative cursor
+        result = await redis_client.zscan(key1, "-1")
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert result[result_collection_index] == []
+
+        # Result contains the whole set
+        assert await redis_client.zadd(key1, char_map) == len(char_map)
+        result = await redis_client.zscan(key1, initial_cursor)
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert len(result_collection) == len(char_map) * 2
+        assert convert_list_to_dict(result_collection) == cast(
+            list, convert_string_to_bytes_object(char_map_with_str_scores)
+        )
+
+        result = await redis_client.zscan(key1, initial_cursor, match="a")
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert convert_list_to_dict(result_collection) == {b"a": b"0"}
+
+        # Result contains a subset of the key
+        assert await redis_client.zadd(key1, num_map) == len(num_map)
+        full_result_map = {}
+        result = result = cast(
+            list,
+            convert_bytes_to_string_object(
+                await redis_client.zscan(key1, initial_cursor)
+            ),
+        )
+        result_cursor = str(result[result_cursor_index])
+        result_iteration_collection: dict[str, str] = convert_list_to_dict(
+            result[result_collection_index]
+        )
+        full_result_map.update(result_iteration_collection)
+
+        # 0 is returned for the cursor of the last iteration.
+        while result_cursor != "0":
+            next_result = cast(
+                list,
+                convert_bytes_to_string_object(
+                    await redis_client.zscan(key1, result_cursor)
+                ),
+            )
+            next_result_cursor = next_result[result_cursor_index]
+            assert next_result_cursor != result_cursor
+
+            next_result_collection = convert_list_to_dict(
+                next_result[result_collection_index]
+            )
+            assert result_iteration_collection != next_result_collection
+
+            full_result_map.update(next_result_collection)
+            result_iteration_collection = next_result_collection
+            result_cursor = next_result_cursor
+        assert (num_map_with_str_scores | char_map_with_str_scores) == full_result_map
+
+        # Test match pattern
+        result = await redis_client.zscan(key1, initial_cursor, match="*")
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= default_count
+
+        # Test count
+        result = await redis_client.zscan(key1, initial_cursor, count=20)
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= 20
+
+        # Test count with match returns a non-empty list
+        result = await redis_client.zscan(key1, initial_cursor, match="1*", count=20)
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= 0
+
+        # Exceptions
+        # Non-set key
+        assert await redis_client.set(key2, "test") == OK
+        with pytest.raises(RequestError):
+            await redis_client.zscan(key2, initial_cursor)
+        with pytest.raises(RequestError):
+            await redis_client.zscan(key2, initial_cursor, match="test", count=20)
+
+        # Negative count
+        with pytest.raises(RequestError):
+            await redis_client.zscan(key2, initial_cursor, count=-1)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_hscan(self, redis_client: GlideClusterClient):
+        key1 = f"{{key}}-1{get_random_string(5)}"
+        key2 = f"{{key}}-2{get_random_string(5)}"
+        initial_cursor = "0"
+        result_cursor_index = 0
+        result_collection_index = 1
+        default_count = 20
+        num_map = {}
+        for i in range(50000):  # Use large dataset to force an iterative cursor.
+            num_map.update({"field " + str(i): "value " + str(i)})
+        char_map = {
+            "field a": "value a",
+            "field b": "value b",
+            "field c": "value c",
+            "field d": "value d",
+            "field e": "value e",
+        }
+
+        convert_list_to_dict = lambda list: {
+            list[i]: list[i + 1] for i in range(0, len(list), 2)
+        }
+
+        # Empty set
+        result = await redis_client.hscan(key1, initial_cursor)
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert result[result_collection_index] == []
+
+        # Negative cursor
+        result = await redis_client.hscan(key1, "-1")
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert result[result_collection_index] == []
+
+        # Result contains the whole set
+        assert await redis_client.hset(key1, char_map) == len(char_map)
+        result = await redis_client.hscan(key1, initial_cursor)
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert len(result_collection) == len(char_map) * 2
+        assert convert_list_to_dict(result_collection) == cast(
+            dict, convert_string_to_bytes_object(char_map)
+        )
+
+        result = await redis_client.hscan(key1, initial_cursor, match="field a")
+        result_collection = result[result_collection_index]
+        assert result[result_cursor_index] == initial_cursor.encode()
+        assert convert_list_to_dict(result_collection) == {b"field a": b"value a"}
+
+        # Result contains a subset of the key
+        assert await redis_client.hset(key1, num_map) == len(num_map)
+        full_result_map = {}
+        result = result = cast(
+            list,
+            convert_bytes_to_string_object(
+                await redis_client.hscan(key1, initial_cursor)
+            ),
+        )
+        result_cursor = str(result[result_cursor_index])
+        result_iteration_collection: dict[str, str] = convert_list_to_dict(
+            result[result_collection_index]
+        )
+        full_result_map.update(result_iteration_collection)
+
+        # 0 is returned for the cursor of the last iteration.
+        while result_cursor != "0":
+            next_result = cast(
+                list,
+                convert_bytes_to_string_object(
+                    await redis_client.hscan(key1, result_cursor)
+                ),
+            )
+            next_result_cursor = next_result[result_cursor_index]
+            assert next_result_cursor != result_cursor
+
+            next_result_collection = convert_list_to_dict(
+                next_result[result_collection_index]
+            )
+            assert result_iteration_collection != next_result_collection
+
+            full_result_map.update(next_result_collection)
+            result_iteration_collection = next_result_collection
+            result_cursor = next_result_cursor
+        assert (num_map | char_map) == full_result_map
+
+        # Test match pattern
+        result = await redis_client.hscan(key1, initial_cursor, match="*")
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= default_count
+
+        # Test count
+        result = await redis_client.hscan(key1, initial_cursor, count=20)
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= 20
+
+        # Test count with match returns a non-empty list
+        result = await redis_client.hscan(key1, initial_cursor, match="1*", count=20)
+        assert result[result_cursor_index] != b"0"
+        assert len(result[result_collection_index]) >= 0
+
+        # Exceptions
+        # Non-hash key
+        assert await redis_client.set(key2, "test") == OK
+        with pytest.raises(RequestError):
+            await redis_client.hscan(key2, initial_cursor)
+        with pytest.raises(RequestError):
+            await redis_client.hscan(key2, initial_cursor, match="test", count=20)
+
+        # Negative count
+        with pytest.raises(RequestError):
+            await redis_client.hscan(key2, initial_cursor, count=-1)
 
 
 @pytest.mark.asyncio

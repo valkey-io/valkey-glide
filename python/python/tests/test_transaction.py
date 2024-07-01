@@ -241,6 +241,10 @@ async def transaction_test(
     )
     transaction.hdel(key4, [key, key2])
     args.append(2)
+    transaction.hscan(key4, "0")
+    args.append([b"0", [key3.encode(), b"10.5"]])
+    transaction.hscan(key4, "0", match="*", count=10)
+    args.append([b"0", [key3.encode(), b"10.5"]])
     transaction.hrandfield(key4)
     args.append(key3_bytes)
     transaction.hrandfield_count(key4, 1)
@@ -389,6 +393,10 @@ async def transaction_test(
     args.append([b"three"])
     transaction.zrandmember_withscores(key8, 1)
     args.append([[b"three", 3.0]])
+    transaction.zscan(key8, "0")
+    args.append([b"0", [b"three", b"3"]])
+    transaction.zscan(key8, "0", match="*", count=20)
+    args.append([b"0", [b"three", b"3"]])
     transaction.zpopmax(key8)
     args.append({b"three": 3.0})
     transaction.zpopmin(key8)
@@ -550,6 +558,28 @@ async def transaction_test(
     args.append({key11.encode(): {b"0-2": [[b"foo", b"bar"]]}})
     transaction.xpending(key11, group_name1)
     args.append([1, b"0-2", b"0-2", [[consumer.encode(), b"1"]]])
+
+    min_version = "6.2.0"
+    if not await check_if_server_version_lt(redis_client, min_version):
+        transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
+        transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
+        # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # Entries List because they no longer exist in the stream
+        if await check_if_server_version_lt(redis_client, "7.0.0"):
+            args.append(
+                [b"0-0", {b"0-2": [[b"foo", b"bar"]]}]
+            )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
+            args.append(
+                [b"0-0", [b"0-2"]]
+            )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
+        else:
+            args.append(
+                [b"0-0", {b"0-2": [[b"foo", b"bar"]]}, []]
+            )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
+            args.append(
+                [b"0-0", [b"0-2"], []]
+            )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
+
     transaction.xack(key11, group_name1, ["0-2"])
     args.append(1)
     transaction.xpending_range(key11, group_name1, MinId(), MaxId(), 1)
@@ -589,6 +619,8 @@ async def transaction_test(
     args.append(b"one")
     transaction.srandmember_count(key7, 1)
     args.append([b"one"])
+    transaction.wait(1, 1000)
+    args.append(0)
     transaction.flushall(FlushMode.ASYNC)
     args.append(OK)
     transaction.flushall()
