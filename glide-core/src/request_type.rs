@@ -211,7 +211,9 @@ pub enum RequestType {
     SScan = 200,
     ZScan = 201,
     HScan = 202,
+    XAutoClaim = 203,
     Wait = 208,
+    XClaim = 209,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
@@ -426,7 +428,9 @@ impl From<::protobuf::EnumOrUnknown<ProtobufRequestType>> for RequestType {
             ProtobufRequestType::SScan => RequestType::SScan,
             ProtobufRequestType::ZScan => RequestType::ZScan,
             ProtobufRequestType::HScan => RequestType::HScan,
+            ProtobufRequestType::XAutoClaim => RequestType::XAutoClaim,
             ProtobufRequestType::Wait => RequestType::Wait,
+            ProtobufRequestType::XClaim => RequestType::XClaim,
         }
     }
 }
@@ -639,7 +643,9 @@ impl RequestType {
             RequestType::SScan => Some(cmd("SSCAN")),
             RequestType::ZScan => Some(cmd("ZSCAN")),
             RequestType::HScan => Some(cmd("HSCAN")),
+            RequestType::XAutoClaim => Some(cmd("XAUTOCLAIM")),
             RequestType::Wait => Some(cmd("WAIT")),
+            RequestType::XClaim => Some(cmd("XCLAIM")),
         }
     }
 }

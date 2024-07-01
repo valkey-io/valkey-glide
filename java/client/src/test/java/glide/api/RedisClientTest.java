@@ -43,8 +43,13 @@ import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VA
 import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
 import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.TIME_REDIS_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
 import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
@@ -180,6 +185,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.Publish;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
@@ -220,11 +226,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -315,6 +323,7 @@ import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
@@ -326,7 +335,6 @@ import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.commands.stream.StreamTrimOptions.MaxLen;
 import glide.api.models.commands.stream.StreamTrimOptions.MinId;
 import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -351,15 +359,12 @@ public class RedisClientTest {
 
     RedisClient service;
 
-    ConnectionManager connectionManager;
-
     CommandManager commandManager;
 
     @BeforeEach
     public void setUp() {
-        connectionManager = mock(ConnectionManager.class);
         commandManager = mock(CommandManager.class);
-        service = new RedisClient(connectionManager, commandManager);
+        service = new RedisClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
     }
 
     @SneakyThrows
@@ -522,6 +527,25 @@ public class RedisClientTest {
     public void del_returns_long_success() {
         // setup
         String[] keys = new String[] {"testKey1", "testKey2"};
+        Long numberDeleted = 1L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(numberDeleted);
+        when(commandManager.<Long>submitNewCommand(eq(Del), eq(keys), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.del(keys);
+        Long result = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(numberDeleted, result);
+    }
+
+    @SneakyThrows
+    @Test
+    public void del_returns_long_success_binary() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("testKey1"), gs("testKey2")};
         Long numberDeleted = 1L;
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
         testResponse.complete(numberDeleted);
@@ -1740,6 +1764,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void decr_returns_success_binary() {
+        // setup
+        String key = "testKey";
+        Long value = 10L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Decr), eq(new GlideString[] {gs(key)}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.decr(gs(key));
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void decrBy_returns_success() {
         // setup
         String key = "testKey";
@@ -1756,6 +1803,31 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.decrBy(key, amount);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void decrBy_returns_success_binary() {
+        // setup
+        String key = "testKey";
+        long amount = 1L;
+        Long value = 10L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(
+                        eq(DecrBy), eq(new GlideString[] {gs(key), gs(Long.toString(amount))}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.decrBy(gs(key), amount);
         Long payload = response.get();
 
         // verify
@@ -1990,6 +2062,30 @@ public class RedisClientTest {
         String key = "testKey";
         String[] fields = {"testField1", "testField2"};
         String[] args = {key, "testField1", "testField2"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(HDel), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.hdel(key, fields);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hdel_success_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] fields = {gs("testField1"), gs("testField2")};
+        GlideString[] args = {key, gs("testField1"), gs("testField2")};
         Long value = 2L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -5785,7 +5881,9 @@ public class RedisClientTest {
         StreamGroupOptions options =
                 StreamGroupOptions.builder().makeStream().entriesRead(testEntry).build();
         String[] arguments =
-                new String[] {key, groupName, id, MAKE_STREAM_REDIS_API, ENTRIES_READ_REDIS_API, testEntry};
+                new String[] {
+                    key, groupName, id, MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, testEntry
+                };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -5877,6 +5975,57 @@ public class RedisClientTest {
         // verify
         assertEquals(testResponse, response);
         assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupSetid() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String id = "testId";
+        String[] arguments = new String[] {key, groupName, id};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupSetId), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupSetId(key, groupName, id);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xgroupSetidWithEntriesRead() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String id = "testId";
+        String entriesRead = "1-1";
+        String[] arguments = new String[] {key, groupName, id, "ENTRIESREAD", entriesRead};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(XGroupSetId), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.xgroupSetId(key, groupName, id, entriesRead);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows
@@ -5996,6 +6145,155 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Long> response = service.xack(key, groupName, ids);
         Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xclaim_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String[] ids = new String[] {"testId"};
+        String[] arguments = concatenateArrays(new String[] {key, groupName, consumer, "18"}, ids);
+        Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
+
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[][]>> response =
+                service.xclaim(key, groupName, consumer, minIdleTime, ids);
+        Map<String, String[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xclaim_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String[] ids = new String[] {"testId"};
+        StreamClaimOptions options =
+                StreamClaimOptions.builder().force().idle(11L).idleUnixTime(12L).retryCount(5L).build();
+        String[] arguments =
+                new String[] {
+                    key,
+                    groupName,
+                    consumer,
+                    "18",
+                    "testId",
+                    IDLE_REDIS_API,
+                    "11",
+                    TIME_REDIS_API,
+                    "12",
+                    RETRY_COUNT_REDIS_API,
+                    "5",
+                    FORCE_REDIS_API
+                };
+        Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
+
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[][]>> response =
+                service.xclaim(key, groupName, consumer, minIdleTime, ids, options);
+        Map<String, String[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xclaimJustId_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String[] ids = new String[] {"testId"};
+        String[] arguments = new String[] {key, groupName, consumer, "18", "testId", JUST_ID_REDIS_API};
+        String[] mockResult = {"message", "log"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.xclaimJustId(key, groupName, consumer, minIdleTime, ids);
+        String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xclaimJustId_with_options_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "testGroupName";
+        String consumer = "testConsumer";
+        Long minIdleTime = 18L;
+        String[] ids = new String[] {"testId"};
+        StreamClaimOptions options =
+                StreamClaimOptions.builder().force().idle(11L).idleUnixTime(12L).retryCount(5L).build();
+        String[] arguments =
+                new String[] {
+                    key,
+                    groupName,
+                    consumer,
+                    "18",
+                    "testId",
+                    IDLE_REDIS_API,
+                    "11",
+                    TIME_REDIS_API,
+                    "12",
+                    RETRY_COUNT_REDIS_API,
+                    "5",
+                    FORCE_REDIS_API,
+                    JUST_ID_REDIS_API
+                };
+        String[] mockResult = {"message", "log"};
+
+        CompletableFuture<String[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<String[]>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String[]> response =
+                service.xclaimJustId(key, groupName, consumer, minIdleTime, ids, options);
+        String[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -6737,9 +7035,58 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void pfadd_returns_success_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] elements = new GlideString[] {gs("a"), gs("b"), gs("c")};
+        GlideString[] arguments = new GlideString[] {key, gs("a"), gs("b"), gs("c")};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(PfAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.pfadd(key, elements);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void pfcount_returns_success() {
         // setup
         String[] keys = new String[] {"a", "b", "c"};
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(PfCount), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.pfcount(keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+        assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void pfcount_returns_success_binary() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("a"), gs("b"), gs("c")};
         Long value = 1L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -6766,6 +7113,29 @@ public class RedisClientTest {
         String destKey = "testKey";
         String[] sourceKeys = new String[] {"a", "b", "c"};
         String[] arguments = new String[] {destKey, "a", "b", "c"};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(PfMerge), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.pfmerge(destKey, sourceKeys);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void pfmerge_returns_success_binary() {
+        // setup
+        GlideString destKey = gs("testKey");
+        GlideString[] sourceKeys = new GlideString[] {gs("a"), gs("b"), gs("c")};
+        GlideString[] arguments = new GlideString[] {destKey, gs("a"), gs("b"), gs("c")};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);
@@ -9006,6 +9376,30 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String> response = service.unwatch();
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void publish_returns_success() {
+        // setup
+        String channel = "channel";
+        String message = "message";
+        String[] arguments = new String[] {channel, message};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(Publish), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.publish(channel, message);
         String payload = response.get();
 
         // verify

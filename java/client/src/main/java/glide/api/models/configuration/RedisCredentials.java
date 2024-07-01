@@ -5,7 +5,22 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NonNull;
 
-/** Represents the credentials for connecting to a Redis server. */
+/**
+ * Represents the credentials for connecting to a Redis server.
+ *
+ * @example
+ *     <pre>{@code
+ * // credentials with username:
+ * RedisCredentials credentials1 = RedisCredentials.builder()
+ *     .username("GLIDE")
+ *     .build();
+ * // credentials with username and password:
+ * RedisCredentials credentials2 = RedisCredentials.builder()
+ *     .username("GLIDE")
+ *     .password(pwd)
+ *     .build();
+ * }</pre>
+ */
 @Getter
 @Builder
 public class RedisCredentials {
