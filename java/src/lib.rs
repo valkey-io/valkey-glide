@@ -420,7 +420,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'loc
 }
 
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_NativeClusterScanCursor_releaseNativeCursor<'local>(
+pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releaseNativeCursor<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
     cursor: JString,
