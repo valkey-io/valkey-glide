@@ -6498,7 +6498,8 @@ public class RedisClientTest {
         testResponse.complete(key1);
 
         // match on protobuf request
-        when(commandManager.<GlideString>submitNewCommand(eq(randomKeyBinary), eq(new GlideString[0]), any()))
+        when(commandManager.<GlideString>submitNewCommand(
+                        eq(randomKeyBinary), eq(new GlideString[0]), any()))
                 .thenReturn(testResponse);
         CompletableFuture<GlideString> response = service.randomKeyBinary();
 
