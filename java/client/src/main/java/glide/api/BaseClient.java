@@ -659,6 +659,11 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> del(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(Del, keys, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<String> get(@NonNull String key) {
         return commandManager.submitNewCommand(
                 Get, new String[] {key}, this::handleStringOrNullResponse);
@@ -860,7 +865,7 @@ public abstract class BaseClient
     public CompletableFuture<Double> incrByFloat(@NonNull GlideString key, double amount) {
         return commandManager.submitNewCommand(
                 IncrByFloat,
-                new GlideString[] {key, gs(Double.toString(amount).getBytes())},
+                new GlideString[] {key, gs(Double.toString(amount))},
                 this::handleDoubleResponse);
     }
 
@@ -870,9 +875,20 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> decr(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(Decr, new GlideString[] {key}, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> decrBy(@NonNull String key, long amount) {
         return commandManager.submitNewCommand(
                 DecrBy, new String[] {key, Long.toString(amount)}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> decrBy(@NonNull GlideString key, long amount) {
+        return commandManager.submitNewCommand(
+                DecrBy, new GlideString[] {key, gs(Long.toString(amount))}, this::handleLongResponse);
     }
 
     @Override
@@ -942,6 +958,12 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> hdel(@NonNull String key, @NonNull String[] fields) {
         String[] args = ArrayUtils.addFirst(fields, key);
+        return commandManager.submitNewCommand(HDel, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hdel(@NonNull GlideString key, @NonNull GlideString[] fields) {
+        GlideString[] args = ArrayUtils.addFirst(fields, key);
         return commandManager.submitNewCommand(HDel, args, this::handleLongResponse);
     }
 
@@ -2445,7 +2467,18 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> pfadd(@NonNull GlideString key, @NonNull GlideString[] elements) {
+        GlideString[] arguments = ArrayUtils.addFirst(elements, key);
+        return commandManager.submitNewCommand(PfAdd, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> pfcount(@NonNull String[] keys) {
+        return commandManager.submitNewCommand(PfCount, keys, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> pfcount(@NonNull GlideString[] keys) {
         return commandManager.submitNewCommand(PfCount, keys, this::handleLongResponse);
     }
 
@@ -2453,6 +2486,13 @@ public abstract class BaseClient
     public CompletableFuture<String> pfmerge(
             @NonNull String destination, @NonNull String[] sourceKeys) {
         String[] arguments = ArrayUtils.addFirst(sourceKeys, destination);
+        return commandManager.submitNewCommand(PfMerge, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> pfmerge(
+            @NonNull GlideString destination, @NonNull GlideString[] sourceKeys) {
+        GlideString[] arguments = ArrayUtils.addFirst(sourceKeys, destination);
         return commandManager.submitNewCommand(PfMerge, arguments, this::handleStringResponse);
     }
 

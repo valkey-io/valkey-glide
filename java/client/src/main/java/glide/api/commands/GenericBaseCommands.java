@@ -38,6 +38,23 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> del(String[] keys);
 
     /**
+     * Removes the specified <code>keys</code> from the database. A key is ignored if it does not
+     * exist.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
+     * @see <a href="https://redis.io/commands/del/">redis.io</a> for details.
+     * @param keys The keys we wanted to remove.
+     * @return The number of keys that were removed.
+     * @example
+     *     <pre>{@code
+     * Long num = client.del(new GlideString[] {gs("key1"), gs("key2")}).get();
+     * assert num == 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> del(GlideString[] keys);
+
+    /**
      * Returns the number of keys in <code>keys</code> that exist in the database.
      *
      * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
