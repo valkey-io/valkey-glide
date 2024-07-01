@@ -2125,10 +2125,26 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> xgroupCreateConsumer(
+            @NonNull GlideString key, @NonNull GlideString group, @NonNull GlideString consumer) {
+        return commandManager.submitNewCommand(
+                XGroupCreateConsumer,
+                new GlideString[] {key, group, consumer},
+                this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> xgroupDelConsumer(
             @NonNull String key, @NonNull String group, @NonNull String consumer) {
         return commandManager.submitNewCommand(
                 XGroupDelConsumer, new String[] {key, group, consumer}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> xgroupDelConsumer(
+            @NonNull GlideString key, @NonNull GlideString group, @NonNull GlideString consumer) {
+        return commandManager.submitNewCommand(
+                XGroupDelConsumer, new GlideString[] {key, group, consumer}, this::handleLongResponse);
     }
 
     @Override
@@ -2140,11 +2156,29 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xgroupSetId(
+            @NonNull GlideString key, @NonNull GlideString groupName, @NonNull GlideString id) {
+        return commandManager.submitNewCommand(
+                XGroupSetId, new GlideString[] {key, groupName, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
             @NonNull String key,
             @NonNull String groupName,
             @NonNull String id,
             @NonNull String entriesReadId) {
         String[] arguments = new String[] {key, groupName, id, "ENTRIESREAD", entriesReadId};
+        return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
+            @NonNull GlideString key,
+            @NonNull GlideString groupName,
+            @NonNull GlideString id,
+            @NonNull GlideString entriesReadId) {
+        GlideString[] arguments =
+                new GlideString[] {key, groupName, id, gs("ENTRIESREAD"), entriesReadId};
         return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
     }
 

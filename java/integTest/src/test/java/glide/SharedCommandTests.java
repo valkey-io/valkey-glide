@@ -4325,7 +4325,7 @@ public class SharedCommandTests {
                         ExecutionException.class, () -> client.xgroupDestroy(stringKey, groupName).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
-
+//TODO: Add binary versions of xgroup operations once xadd xreadgroup xdel have binary versions
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -4426,6 +4426,7 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
+//TODO: Add binary versions of xgroup operations once xadd xreadgroup xdel have binary versions
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")

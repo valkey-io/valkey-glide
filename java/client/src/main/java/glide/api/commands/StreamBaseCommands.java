@@ -483,6 +483,24 @@ public interface StreamBaseCommands {
     CompletableFuture<Boolean> xgroupCreateConsumer(String key, String group, String consumer);
 
     /**
+     * Creates a consumer named <code>consumer</code> in the consumer group <code>group</code> for the
+     * stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-createconsumer/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The newly created consumer.
+     * @return <code>true</code> if the consumer is created. Otherwise, <code>false</code>.
+     * @example
+     *     <pre>{@code
+     * // Creates the consumer "myconsumer" in consumer group "mygroup"
+     * assert client.xgroupCreateConsumer(gs("mystream"), gs("mygroup"), gs("myconsumer")).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> xgroupCreateConsumer(
+            GlideString key, GlideString group, GlideString consumer);
+
+    /**
      * Deletes a consumer named <code>consumer</code> in the consumer group <code>group</code>.
      *
      * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
@@ -501,6 +519,25 @@ public interface StreamBaseCommands {
     CompletableFuture<Long> xgroupDelConsumer(String key, String group, String consumer);
 
     /**
+     * Deletes a consumer named <code>consumer</code> in the consumer group <code>group</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-delconsumer/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param group The consumer group name.
+     * @param consumer The consumer to delete.
+     * @return The number of pending messages the <code>consumer</code> had before it was deleted.
+     * @example
+     *     <pre>{@code
+     * // Deletes the consumer "myconsumer" in consumer group "mygroup"
+     * Long pendingMsgCount = client.xgroupDelConsumer(gs("mystream"), gs("mygroup"), gs("myconsumer")).get();
+     * System.out.println("Consumer 'myconsumer' had " +
+     *     + pendingMsgCount + " pending messages unclaimed.");
+     * }</pre>
+     */
+    CompletableFuture<Long> xgroupDelConsumer(
+            GlideString key, GlideString group, GlideString consumer);
+
+    /**
      * Sets the last delivered ID for a consumer group.
      *
      * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
@@ -516,6 +553,23 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> xgroupSetId(String key, String groupName, String id);
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The consumer group name.
+     * @param id The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Update consumer group "mygroup", to set the last delivered entry ID.
+     * assert client.xgroupSetId(gs("mystream"), gs("mygroup"), gs("0")).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupSetId(GlideString key, GlideString groupName, GlideString id);
 
     /**
      * Sets the last delivered ID for a consumer group.
@@ -538,6 +592,28 @@ public interface StreamBaseCommands {
      */
     CompletableFuture<String> xgroupSetId(
             String key, String groupName, String id, String entriesReadId);
+
+    /**
+     * Sets the last delivered ID for a consumer group.
+     *
+     * @since Redis 7.0 and above
+     * @see <a href="https://valkey.io/commands/xgroup-setid/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The consumer group name.
+     * @param id The stream entry ID that should be set as the last delivered ID for the consumer
+     *     group.
+     * @param entriesReadId An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
+     *     "0-0"</code>)) used to find out how many entries are between the arbitrary ID (excluding
+     *     it) and the stream's last entry.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * // Update consumer group "mygroup", to set the last delivered entry ID.
+     * assert client.xgroupSetId(gs("mystream"), gs("mygroup"), gs("0"), gs("1-1")).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> xgroupSetId(
+            GlideString key, GlideString groupName, GlideString id, GlideString entriesReadId);
 
     /**
      * Reads entries from the given streams owned by a consumer group.
