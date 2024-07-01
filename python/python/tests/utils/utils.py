@@ -240,10 +240,10 @@ def check_function_list_response(
     for lib in response:
         has_lib = lib.get("library_name") == lib_name
         if has_lib:
-            functions: List[Dict[str, Any]] = lib.get("functions")
+            functions: List[Dict[str, Any]] = cast(List[Dict[str, Any]], lib.get("functions"))
             assert len(functions) == len(function_descriptions)
             for function in functions:
-                function_name = function.get("name")
+                function_name: str = str(function.get("name"))
                 assert function.get("description") == function_descriptions.get(
                     function_name
                 )

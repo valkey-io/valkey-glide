@@ -264,7 +264,7 @@ class StandaloneCommands(CoreCommands):
 
     async def function_list(
         self, library_name: str = "", with_code: bool = False
-    ) -> list[dict[str, Any]]:
+    ) -> List[Dict[str, Any]]:
         # TODO Doc comment
         args = []
         if library_name:
@@ -272,7 +272,7 @@ class StandaloneCommands(CoreCommands):
         if with_code:
             args.append("WITHCODE")
         return cast(
-            list[dict[str, Any]],
+            List[Dict[str, Any]],
             await self._execute_command(
                 RequestType.FunctionList,
                 args,
