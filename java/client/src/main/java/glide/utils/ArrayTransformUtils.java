@@ -28,7 +28,6 @@ public class ArrayTransformUtils {
     }
 
     /**
-
      * Converts a map of GlideString keys and values of any type in to an array of GlideStrings with
      * alternating keys and values.
      *
