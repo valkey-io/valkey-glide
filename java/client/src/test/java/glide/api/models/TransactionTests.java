@@ -31,6 +31,11 @@ import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_R
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.TIME_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
 import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
@@ -184,6 +189,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
@@ -268,6 +274,7 @@ import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
@@ -895,6 +902,58 @@ public class TransactionTests {
                                 EXCLUSIVE_RANGE_REDIS_API + "1234-0",
                                 "99",
                                 "consumer")));
+
+        transaction.xclaim("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
+        results.add(Pair.of(XClaim, buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4")));
+
+        StreamClaimOptions claimOptions =
+                StreamClaimOptions.builder().force().idle(11L).idleUnixTime(12L).retryCount(5L).build();
+        transaction.xclaim(
+                "key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"}, claimOptions);
+        results.add(
+                Pair.of(
+                        XClaim,
+                        buildArgs(
+                                "key",
+                                "group",
+                                "consumer",
+                                "99",
+                                "12345-1",
+                                "98765-4",
+                                IDLE_REDIS_API,
+                                "11",
+                                TIME_REDIS_API,
+                                "12",
+                                RETRY_COUNT_REDIS_API,
+                                "5",
+                                FORCE_REDIS_API)));
+
+        transaction.xclaimJustId("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
+        results.add(
+                Pair.of(
+                        XClaim,
+                        buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4", JUST_ID_REDIS_API)));
+
+        transaction.xclaimJustId(
+                "key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"}, claimOptions);
+        results.add(
+                Pair.of(
+                        XClaim,
+                        buildArgs(
+                                "key",
+                                "group",
+                                "consumer",
+                                "99",
+                                "12345-1",
+                                "98765-4",
+                                IDLE_REDIS_API,
+                                "11",
+                                TIME_REDIS_API,
+                                "12",
+                                RETRY_COUNT_REDIS_API,
+                                "5",
+                                FORCE_REDIS_API,
+                                JUST_ID_REDIS_API)));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
