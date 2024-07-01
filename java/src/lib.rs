@@ -284,9 +284,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'loca
                 env: &mut JNIEnv<'a>,
                 code: JByteArray,
             ) -> Result<JObject<'a>, FFIError> {
-                // convert to byte[u8]
-                let code_byte_array = env.convert_byte_array(&code)?;
-                // let code_str: String = env.get_string(&code)?.into();
+                let code_byte_array = env.convert_byte_array(code)?;
                 let hash = glide_core::scripts_container::add_script(&code_byte_array);
                 Ok(JObject::from(env.new_string(hash)?))
             }

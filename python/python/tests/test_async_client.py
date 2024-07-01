@@ -8632,3 +8632,30 @@ class TestScripts:
         assert (
             await redis_client.invoke_script(script, keys=[key2]) == "value2".encode()
         )
+
+    @pytest.mark.smoke_test
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_binary(self, redis_client: TGlideClient):
+        key1 = bytes(get_random_string(10), 'utf-8')
+        key2 = bytes(get_random_string(10), 'utf-8')
+        script = Script(bytes("return 'Hello'", 'utf-8'))
+        assert await redis_client.invoke_script(script) == "Hello".encode()
+
+        script = Script(bytes("return redis.call('SET', KEYS[1], ARGV[1])", 'utf-8'))
+        assert (
+            await redis_client.invoke_script(script, keys=[key1], args=[bytes("value1", 'utf-8')])
+            == "OK"
+        )
+        # Reuse the same script with different parameters.
+        assert (
+            await redis_client.invoke_script(script, keys=[key2], args=[bytes("value2", 'utf-8')])
+            == "OK"
+        )
+        script = Script(bytes("return redis.call('GET', KEYS[1])", 'utf-8'))
+        assert (
+            await redis_client.invoke_script(script, keys=[key1]) == "value1".encode()
+        )
+        assert (
+            await redis_client.invoke_script(script, keys=[key2]) == "value2".encode()
+        )
