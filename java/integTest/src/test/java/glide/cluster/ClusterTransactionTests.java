@@ -101,6 +101,27 @@ public class ClusterTransactionTests {
         assertDeepEquals(expectedResult, results);
     }
 
+    @SneakyThrows
+    @Test
+    public void test_transaction_large_values() {
+        int length = 1 << 25; // 33mb
+        String key = "0".repeat(length);
+        String value = "0".repeat(length);
+
+        ClusterTransaction transaction = new ClusterTransaction();
+        transaction.set(key, value);
+        transaction.get(key);
+
+        Object[] expectedResult =
+                new Object[] {
+                    OK, // transaction.set(key, value);
+                    value, // transaction.get(key);
+                };
+
+        Object[] result = clusterClient.exec(transaction).get();
+        assertArrayEquals(expectedResult, result);
+    }
+
     @Test
     @SneakyThrows
     public void lastsave() {
@@ -254,6 +275,15 @@ public class ClusterTransactionTests {
 
     @Test
     @SneakyThrows
+    public void spublish() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        ClusterTransaction transaction = new ClusterTransaction().spublish("Schannel", "message");
+
+        assertArrayEquals(new Object[] {0L}, clusterClient.exec(transaction).get());
+    }
+
+    @Test
+    @SneakyThrows
     public void sort() {
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
@@ -286,5 +316,25 @@ public class ClusterTransactionTests {
         }
 
         assertDeepEquals(expectedResult, results);
+    }
+
+    @SneakyThrows
+    @Test
+    public void waitTest() {
+        // setup
+        String key = UUID.randomUUID().toString();
+        long numreplicas = 1L;
+        long timeout = 1000L;
+        ClusterTransaction transaction = new ClusterTransaction();
+
+        transaction.set(key, "value").wait(numreplicas, timeout);
+        Object[] results = clusterClient.exec(transaction).get();
+        Object[] expectedResult =
+                new Object[] {
+                    OK, // set(key,  "value")
+                    0L, // wait(numreplicas, timeout)
+                };
+        assertEquals(expectedResult[0], results[0]);
+        assertTrue((Long) expectedResult[1] <= (Long) results[1]);
     }
 }

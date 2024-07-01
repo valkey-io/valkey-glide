@@ -60,6 +60,17 @@
 * Python: Added FLUSHDB command ([#1680](https://github.com/aws/glide-for-redis/pull/1680))
 * Python: Added XGROUP SETID command ([#1683](https://github.com/aws/glide-for-redis/pull/1683))
 * Python: Added FUNCTION LOAD command ([#1699](https://github.com/aws/glide-for-redis/pull/1699))
+* Python: Added XPENDING command ([#1704](https://github.com/aws/glide-for-redis/pull/1704))
+* Python: Added RANDOMKEY command ([#1701](https://github.com/aws/glide-for-redis/pull/1701))
+* Python: Added FUNCTION FLUSH command ([#1700](https://github.com/aws/glide-for-redis/pull/1700))
+* Python: Added FUNCTION DELETE command ([#1714](https://github.com/aws/glide-for-redis/pull/1714))
+* Python: Added SSCAN command ([#1709](https://github.com/aws/glide-for-redis/pull/1709))
+* Python: Added LCS command ([#1716](https://github.com/aws/glide-for-redis/pull/1716))
+* Python: Added WAIT command ([#1710](https://github.com/aws/glide-for-redis/pull/1710))
+* Python: Added XAUTOCLAIM command ([#1718](https://github.com/aws/glide-for-redis/pull/1718))
+* Python: Add ZSCAN and HSCAN commands ([#1732](https://github.com/aws/glide-for-redis/pull/1732))
+* Python: Added FCALL_RO command ([#1721](https://github.com/aws/glide-for-redis/pull/1721))
+* Python: Added WATCH and UNWATCH command ([#1736](https://github.com/aws/glide-for-redis/pull/1736))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

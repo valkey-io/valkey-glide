@@ -78,7 +78,7 @@ class ClusterCommands(CoreCommands):
         self,
         sections: Optional[List[InfoSection]] = None,
         route: Optional[Route] = None,
-    ) -> TClusterResponse[str]:
+    ) -> TClusterResponse[bytes]:
         """
         Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
@@ -97,7 +97,7 @@ class ClusterCommands(CoreCommands):
         args = [section.value for section in sections] if sections else []
 
         return cast(
-            TClusterResponse[str],
+            TClusterResponse[bytes],
             await self._execute_command(RequestType.Info, args, route),
         )
 
@@ -383,6 +383,103 @@ class ClusterCommands(CoreCommands):
                 ["REPLACE", library_code] if replace else [library_code],
                 route,
             ),
+        )
+
+    async def function_flush(
+        self, mode: Optional[FlushMode] = None, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_flush(FlushMode.SYNC)
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionFlush,
+                [mode.value] if mode else [],
+                route,
+            ),
+        )
+
+    async def function_delete(
+        self, library_name: str, route: Optional[Route] = None
+    ) -> TOK:
+        """
+        Deletes a library and all its functions.
+
+        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+
+        Args:
+            library_code (str): The libary name to delete
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_delete("my_lib")
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionDelete,
+                [library_name],
+                route,
+            ),
+        )
+
+    async def fcall_ro_route(
+        self,
+        function: str,
+        arguments: Optional[List[str]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a previously loaded read-only function.
+
+        See https://valkey.io/commands/fcall_ro for more details.
+
+        Args:
+            function (str): The function name.
+            arguments (List[str]): An `array` of `function` arguments. `arguments` should not
+                represent names of keys.
+            route (Optional[Route]): Specifies the routing configuration of the command. The client
+                will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[TResult]: The return value depends on the function that was executed.
+
+        Examples:
+            >>> await client.fcall_ro_route("Deep_Thought", ALL_NODES)
+                42 # The return value on the function that was executed
+
+        Since: Redis version 7.0.0.
+        """
+        args = [function, "0"]
+        if arguments is not None:
+            args.extend(arguments)
+        return cast(
+            TClusterResponse[TResult],
+            await self._execute_command(RequestType.FCallReadOnly, args, route),
         )
 
     async def time(self, route: Optional[Route] = None) -> TClusterResponse[List[str]]:
@@ -689,4 +786,81 @@ class ClusterCommands(CoreCommands):
         return cast(
             TClusterResponse[str],
             await self._execute_command(RequestType.Lolwut, args, route),
+        )
+
+    async def random_key(self, route: Optional[Route] = None) -> Optional[str]:
+        """
+        Returns a random existing key name.
+
+        See https://valkey.io/commands/randomkey for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            Optional[str]: A random existing key name.
+
+        Examples:
+            >>> await client.random_key()
+            "random_key_name"  # "random_key_name" is a random existing key name.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.RandomKey, [], route),
+        )
+
+    async def wait(
+        self,
+        numreplicas: int,
+        timeout: int,
+        route: Optional[Route] = None,
+    ) -> int:
+        """
+        Blocks the current client until all the previous write commands are successfully transferred
+        and acknowledged by at least `numreplicas` of replicas. If `timeout` is
+        reached, the command returns even if the specified number of replicas were not yet reached.
+
+        See https://valkey.io/commands/wait for more details.
+
+        Args:
+            numreplicas (int): The number of replicas to reach.
+            timeout (int): The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+            in which case the client will route the command to the nodes defined by `route`.
+        Returns:
+            int: The number of replicas reached by all the writes performed in the context of the current connection.
+
+        Examples:
+            >>> await client.set("key", "value");
+            >>> await client.wait(1, 1000);
+            // return 1 when a replica is reached or 0 if 1000ms is reached.
+        """
+        args = [str(numreplicas), str(timeout)]
+        return cast(
+            int,
+            await self._execute_command(RequestType.Wait, args, route),
+        )
+
+    async def unwatch(self, route: Optional[Route] = None) -> TOK:
+        """
+        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        automatically flush all previously watched keys.
+
+        See https://valkey.io/commands/unwatch for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.unwatch()
+                'OK'
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.UnWatch, [], route),
         )

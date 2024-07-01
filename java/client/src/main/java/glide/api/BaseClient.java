@@ -3,10 +3,10 @@ package glide.api;
 
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
@@ -14,6 +14,7 @@ import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
@@ -45,6 +46,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.GeoAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoDist;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoHash;
 import static redis_request.RedisRequestOuterClass.RequestType.GeoPos;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoSearch;
+import static redis_request.RedisRequestOuterClass.RequestType.GeoSearchStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Get;
 import static redis_request.RedisRequestOuterClass.RequestType.GetBit;
 import static redis_request.RedisRequestOuterClass.RequestType.GetDel;
@@ -60,6 +63,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.HKeys;
 import static redis_request.RedisRequestOuterClass.RequestType.HLen;
 import static redis_request.RedisRequestOuterClass.RequestType.HMGet;
 import static redis_request.RedisRequestOuterClass.RequestType.HRandField;
+import static redis_request.RedisRequestOuterClass.RequestType.HScan;
 import static redis_request.RedisRequestOuterClass.RequestType.HSet;
 import static redis_request.RedisRequestOuterClass.RequestType.HSetNX;
 import static redis_request.RedisRequestOuterClass.RequestType.HStrlen;
@@ -96,6 +100,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.Persist;
 import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
+import static redis_request.RedisRequestOuterClass.RequestType.Publish;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
@@ -116,6 +121,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.SMove;
 import static redis_request.RedisRequestOuterClass.RequestType.SPop;
 import static redis_request.RedisRequestOuterClass.RequestType.SRandMember;
 import static redis_request.RedisRequestOuterClass.RequestType.SRem;
+import static redis_request.RedisRequestOuterClass.RequestType.SScan;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.SUnionStore;
 import static redis_request.RedisRequestOuterClass.RequestType.Set;
@@ -128,14 +134,17 @@ import static redis_request.RedisRequestOuterClass.RequestType.TTL;
 import static redis_request.RedisRequestOuterClass.RequestType.Touch;
 import static redis_request.RedisRequestOuterClass.RequestType.Type;
 import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
+import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.Watch;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -166,6 +175,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByLex;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByRank;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRemRangeByScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZRevRank;
+import static redis_request.RedisRequestOuterClass.RequestType.ZScan;
 import static redis_request.RedisRequestOuterClass.RequestType.ZScore;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnion;
 import static redis_request.RedisRequestOuterClass.RequestType.ZUnionStore;
@@ -176,6 +186,7 @@ import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.commands.HashBaseCommands;
 import glide.api.commands.HyperLogLogBaseCommands;
 import glide.api.commands.ListBaseCommands;
+import glide.api.commands.PubSubBaseCommands;
 import glide.api.commands.ScriptingAndFunctionsBaseCommands;
 import glide.api.commands.SetBaseCommands;
 import glide.api.commands.SortedSetBaseCommands;
@@ -183,6 +194,7 @@ import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
 import glide.api.models.GlideString;
+import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
 import glide.api.models.commands.ExpireOptions;
 import glide.api.models.commands.GetExOptions;
@@ -205,9 +217,18 @@ import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitmapIndexType;
 import glide.api.models.commands.bitmap.BitwiseOperation;
 import glide.api.models.commands.geospatial.GeoAddOptions;
+import glide.api.models.commands.geospatial.GeoSearchOptions;
+import glide.api.models.commands.geospatial.GeoSearchOrigin;
+import glide.api.models.commands.geospatial.GeoSearchResultOptions;
+import glide.api.models.commands.geospatial.GeoSearchShape;
+import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
+import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
@@ -215,33 +236,38 @@ import glide.api.models.commands.stream.StreamReadGroupOptions;
 import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import glide.api.models.configuration.BaseClientConfiguration;
+import glide.api.models.configuration.BaseSubscriptionConfiguration;
+import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
+import glide.connectors.handlers.MessageHandler;
 import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolResource;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
 import glide.ffi.resolvers.RedisValueResolver;
-import glide.managers.BaseCommandResponseResolver;
+import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
-import java.util.function.BiFunction;
+import java.util.function.Function;
 import java.util.stream.Collectors;
-import lombok.AllArgsConstructor;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
+import org.apache.commons.lang3.NotImplementedException;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
 /** Base Client class for Redis */
-@AllArgsConstructor
 public abstract class BaseClient
         implements AutoCloseable,
                 BitmapBaseCommands,
@@ -255,13 +281,41 @@ public abstract class BaseClient
                 HyperLogLogBaseCommands,
                 GeospatialIndicesBaseCommands,
                 ScriptingAndFunctionsBaseCommands,
-                TransactionsBaseCommands {
+                TransactionsBaseCommands,
+                PubSubBaseCommands {
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
-    protected final ConnectionManager connectionManager;
     protected final CommandManager commandManager;
+    protected final ConnectionManager connectionManager;
+    protected final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+    protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
+
+    /** Helper which extracts data from received {@link Response}s from GLIDE. */
+    private static final BaseResponseResolver responseResolver =
+            new BaseResponseResolver(RedisValueResolver::valueFromPointer);
+
+    /** Helper which extracts data with binary strings from received {@link Response}s from GLIDE. */
+    private static final BaseResponseResolver binaryResponseResolver =
+            new BaseResponseResolver(RedisValueResolver::valueFromPointerBinary);
+
+    /** A constructor. */
+    protected BaseClient(ClientBuilder builder) {
+        this.connectionManager = builder.connectionManager;
+        this.commandManager = builder.commandManager;
+        this.messageQueue = builder.messageQueue;
+        this.subscriptionConfiguration = builder.subscriptionConfiguration;
+    }
+
+    /** Auxiliary builder which wraps all fields to be initialized in the constructor. */
+    @RequiredArgsConstructor
+    protected static class ClientBuilder {
+        private final ConnectionManager connectionManager;
+        private final CommandManager commandManager;
+        private final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+        private final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
+    }
 
     /**
      * Async request for an async (non-blocking) Redis client.
@@ -271,29 +325,79 @@ public abstract class BaseClient
      * @param <T> Client type.
      * @return a Future to connect and return a RedisClient.
      */
-    protected static <T> CompletableFuture<T> CreateClient(
-            BaseClientConfiguration config,
-            BiFunction<ConnectionManager, CommandManager, T> constructor) {
+    protected static <T extends BaseClient> CompletableFuture<T> CreateClient(
+            @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         try {
             ThreadPoolResource threadPoolResource = config.getThreadPoolResource();
             if (threadPoolResource == null) {
                 threadPoolResource =
                         ThreadPoolResourceAllocator.getOrCreate(Platform.getThreadPoolResourceSupplier());
             }
-            ChannelHandler channelHandler = buildChannelHandler(threadPoolResource);
+            MessageHandler messageHandler = buildMessageHandler(config);
+            ChannelHandler channelHandler = buildChannelHandler(threadPoolResource, messageHandler);
             ConnectionManager connectionManager = buildConnectionManager(channelHandler);
             CommandManager commandManager = buildCommandManager(channelHandler);
             // TODO: Support exception throwing, including interrupted exceptions
             return connectionManager
                     .connectToRedis(config)
-                    .thenApply(ignore -> constructor.apply(connectionManager, commandManager));
+                    .thenApply(
+                            ignored ->
+                                    constructor.apply(
+                                            new ClientBuilder(
+                                                    connectionManager,
+                                                    commandManager,
+                                                    messageHandler.getQueue(),
+                                                    Optional.ofNullable(config.getSubscriptionConfiguration()))));
         } catch (InterruptedException e) {
-            // Something bad happened while we were establishing netty connection to
-            // UDS
+            // Something bad happened while we were establishing netty connection to UDS
             var future = new CompletableFuture<T>();
             future.completeExceptionally(e);
             return future;
         }
+    }
+
+    /**
+     * Tries to return a next pubsub message.
+     *
+     * @throws ConfigurationError If client is not subscribed to any channel or if client configured
+     *     with a callback.
+     * @return A message if any or <code>null</code> if there are no unread messages.
+     */
+    public PubSubMessage tryGetPubSubMessage() {
+        if (subscriptionConfiguration.isEmpty()) {
+            throw new ConfigurationError(
+                    "The operation will never complete since there was no pubsub subscriptions applied to the"
+                            + " client.");
+        }
+        if (subscriptionConfiguration.get().getCallback().isPresent()) {
+            throw new ConfigurationError(
+                    "The operation will never complete since messages will be passed to the configured"
+                            + " callback.");
+        }
+        return messageQueue.poll();
+    }
+
+    /**
+     * Returns a promise for a next pubsub message.
+     *
+     * @apiNote <b>Not implemented!</b>
+     * @throws ConfigurationError If client is not subscribed to any channel or if client configured
+     *     with a callback.
+     * @return A <code>Future</code> which resolved with the next incoming message.
+     */
+    public CompletableFuture<PubSubMessage> getPubSubMessage() {
+        if (subscriptionConfiguration.isEmpty()) {
+            throw new ConfigurationError(
+                    "The operation will never complete since there was no pubsub subscriptions applied to the"
+                            + " client.");
+        }
+        if (subscriptionConfiguration.get().getCallback().isPresent()) {
+            throw new ConfigurationError(
+                    "The operation will never complete since messages will be passed to the configured"
+                            + " callback.");
+        }
+        throw new NotImplementedException(
+                "This feature will be supported in a future release of the GLIDE java client");
     }
 
     /**
@@ -308,15 +412,25 @@ public abstract class BaseClient
         try {
             connectionManager.closeConnection().get();
         } catch (InterruptedException e) {
-            // suppressing the interrupted exception - it is already suppressed in the
-            // future
+            // suppressing the interrupted exception - it is already suppressed in the future
             throw new RuntimeException(e);
         }
     }
 
-    protected static ChannelHandler buildChannelHandler(ThreadPoolResource threadPoolResource)
+    protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
+        if (config.getSubscriptionConfiguration() == null) {
+            return new MessageHandler(Optional.empty(), Optional.empty(), responseResolver);
+        }
+        return new MessageHandler(
+                config.getSubscriptionConfiguration().getCallback(),
+                config.getSubscriptionConfiguration().getContext(),
+                responseResolver);
+    }
+
+    protected static ChannelHandler buildChannelHandler(
+            ThreadPoolResource threadPoolResource, MessageHandler messageHandler)
             throws InterruptedException {
-        CallbackDispatcher callbackDispatcher = new CallbackDispatcher();
+        CallbackDispatcher callbackDispatcher = new CallbackDispatcher(messageHandler);
         return new ChannelHandler(callbackDispatcher, getSocket(), threadPoolResource);
     }
 
@@ -352,10 +466,7 @@ public abstract class BaseClient
         boolean encodingUtf8 = flags.contains(ResponseFlags.ENCODING_UTF8);
         boolean isNullable = flags.contains(ResponseFlags.IS_NULLABLE);
         Object value =
-                encodingUtf8
-                        ? new BaseCommandResponseResolver(RedisValueResolver::valueFromPointer).apply(response)
-                        : new BaseCommandResponseResolver(RedisValueResolver::valueFromPointerBinary)
-                                .apply(response);
+                encodingUtf8 ? responseResolver.apply(response) : binaryResponseResolver.apply(response);
         if (isNullable && (value == null)) {
             return null;
         }
@@ -716,6 +827,11 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> incr(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(Incr, new GlideString[] {key}, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> incrBy(@NonNull String key, long amount) {
         return commandManager.submitNewCommand(
                 IncrBy, new String[] {key, Long.toString(amount)}, this::handleLongResponse);
@@ -784,9 +900,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> hget(@NonNull GlideString key, @NonNull GlideString field) {
+        return commandManager.submitNewCommand(
+                HGet, new GlideString[] {key, field}, this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> hset(
             @NonNull String key, @NonNull Map<String, String> fieldValueMap) {
         String[] args = ArrayUtils.addFirst(convertMapToKeyValueStringArray(fieldValueMap), key);
+        return commandManager.submitNewCommand(HSet, args, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hset(
+            @NonNull GlideString key, @NonNull Map<GlideString, GlideString> fieldValueMap) {
+        GlideString[] args =
+                ArrayUtils.addFirst(convertMapToKeyValueGlideStringArray(fieldValueMap), key);
         return commandManager.submitNewCommand(HSet, args, this::handleLongResponse);
     }
 
@@ -813,6 +943,11 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Long> hlen(@NonNull String key) {
         return commandManager.submitNewCommand(HLen, new String[] {key}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> hlen(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(HLen, new GlideString[] {key}, this::handleLongResponse);
     }
 
     @Override
@@ -1003,6 +1138,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> lindex(@NonNull GlideString key, long index) {
+        return commandManager.submitNewCommand(
+                LIndex,
+                new GlideString[] {key, gs(Long.toString(index))},
+                this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<String> ltrim(@NonNull String key, long start, long end) {
         return commandManager.submitNewCommand(
                 LTrim,
@@ -1134,6 +1277,11 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Set<GlideString>> sdiff(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(SDiff, keys, this::handleSetBinaryResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean[]> smismember(@NonNull String key, @NonNull String[] members) {
         String[] arguments = ArrayUtils.addFirst(members, key);
         return commandManager.submitNewCommand(
@@ -1141,8 +1289,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean[]> smismember(
+            @NonNull GlideString key, @NonNull GlideString[] members) {
+        GlideString[] arguments = ArrayUtils.addFirst(members, key);
+        return commandManager.submitNewCommand(
+                SMIsMember, arguments, response -> castArray(handleArrayResponse(response), Boolean.class));
+    }
+
+    @Override
     public CompletableFuture<Long> sdiffstore(@NonNull String destination, @NonNull String[] keys) {
         String[] arguments = ArrayUtils.addFirst(keys, destination);
+        return commandManager.submitNewCommand(SDiffStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sdiffstore(
+            @NonNull GlideString destination, @NonNull GlideString[] keys) {
+        GlideString[] arguments = ArrayUtils.addFirst(keys, destination);
         return commandManager.submitNewCommand(SDiffStore, arguments, this::handleLongResponse);
     }
 
@@ -1907,18 +2070,18 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xgroupCreate(
-            @NonNull String key, @NonNull String groupname, @NonNull String id) {
+            @NonNull String key, @NonNull String groupName, @NonNull String id) {
         return commandManager.submitNewCommand(
-                XGroupCreate, new String[] {key, groupname, id}, this::handleStringResponse);
+                XGroupCreate, new String[] {key, groupName, id}, this::handleStringResponse);
     }
 
     @Override
     public CompletableFuture<String> xgroupCreate(
             @NonNull String key,
-            @NonNull String groupname,
+            @NonNull String groupName,
             @NonNull String id,
             @NonNull StreamGroupOptions options) {
-        String[] arguments = concatenateArrays(new String[] {key, groupname, id}, options.toArgs());
+        String[] arguments = concatenateArrays(new String[] {key, groupName, id}, options.toArgs());
         return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
     }
 
@@ -1940,6 +2103,23 @@ public abstract class BaseClient
             @NonNull String key, @NonNull String group, @NonNull String consumer) {
         return commandManager.submitNewCommand(
                 XGroupDelConsumer, new String[] {key, group, consumer}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
+            @NonNull String key, @NonNull String groupName, @NonNull String id) {
+        return commandManager.submitNewCommand(
+                XGroupSetId, new String[] {key, groupName, id}, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> xgroupSetId(
+            @NonNull String key,
+            @NonNull String groupName,
+            @NonNull String id,
+            @NonNull String entriesReadId) {
+        String[] arguments = new String[] {key, groupName, id, "ENTRIESREAD", entriesReadId};
+        return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
     }
 
     @Override
@@ -2002,6 +2182,66 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<String, String[][]>> xclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String[] ids) {
+        String[] args =
+                concatenateArrays(new String[] {key, group, consumer, Long.toString(minIdleTime)}, ids);
+        return commandManager.submitNewCommand(XClaim, args, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, String[][]>> xclaim(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String[] ids,
+            @NonNull StreamClaimOptions options) {
+        String[] args =
+                concatenateArrays(
+                        new String[] {key, group, consumer, Long.toString(minIdleTime)}, ids, options.toArgs());
+        return commandManager.submitNewCommand(XClaim, args, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> xclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String[] ids) {
+        String[] args =
+                concatenateArrays(
+                        new String[] {key, group, consumer, Long.toString(minIdleTime)},
+                        ids,
+                        new String[] {JUST_ID_REDIS_API});
+        return commandManager.submitNewCommand(
+                XClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> xclaimJustId(
+            @NonNull String key,
+            @NonNull String group,
+            @NonNull String consumer,
+            long minIdleTime,
+            @NonNull String[] ids,
+            @NonNull StreamClaimOptions options) {
+        String[] args =
+                concatenateArrays(
+                        new String[] {key, group, consumer, Long.toString(minIdleTime)},
+                        ids,
+                        options.toArgs(),
+                        new String[] {JUST_ID_REDIS_API});
+        return commandManager.submitNewCommand(
+                XClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
@@ -2042,6 +2282,18 @@ public abstract class BaseClient
             @NonNull String element) {
         return commandManager.submitNewCommand(
                 LInsert, new String[] {key, position.toString(), pivot, element}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> linsert(
+            @NonNull GlideString key,
+            @NonNull InsertPosition position,
+            @NonNull GlideString pivot,
+            @NonNull GlideString element) {
+        return commandManager.submitNewCommand(
+                LInsert,
+                new GlideString[] {key, gs(position.toString()), pivot, element},
+                this::handleLongResponse);
     }
 
     @Override
@@ -2218,7 +2470,7 @@ public abstract class BaseClient
             @NonNull String member1,
             @NonNull String member2,
             @NonNull GeoUnit geoUnit) {
-        String[] arguments = new String[] {key, member1, member2, geoUnit.getRedisApi()};
+        String[] arguments = new String[] {key, member1, member2, geoUnit.getValkeyAPI()};
         return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
     }
 
@@ -2228,7 +2480,7 @@ public abstract class BaseClient
             @NonNull GlideString member1,
             @NonNull GlideString member2,
             @NonNull GeoUnit geoUnit) {
-        GlideString[] arguments = new GlideString[] {key, member1, member2, gs(geoUnit.getRedisApi())};
+        GlideString[] arguments = new GlideString[] {key, member1, member2, gs(geoUnit.getValkeyAPI())};
         return commandManager.submitNewCommand(GeoDist, arguments, this::handleDoubleOrNullResponse);
     }
 
@@ -2498,6 +2750,17 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> lmove(
+            @NonNull GlideString source,
+            @NonNull GlideString destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto) {
+        GlideString[] arguments =
+                new GlideString[] {source, destination, gs(wherefrom.toString()), gs(whereto.toString())};
+        return commandManager.submitNewCommand(LMove, arguments, this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<String> blmove(
             @NonNull String source,
             @NonNull String destination,
@@ -2509,6 +2772,25 @@ public abstract class BaseClient
                     source, destination, wherefrom.toString(), whereto.toString(), Double.toString(timeout)
                 };
         return commandManager.submitNewCommand(BLMove, arguments, this::handleStringOrNullResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> blmove(
+            @NonNull GlideString source,
+            @NonNull GlideString destination,
+            @NonNull ListDirection wherefrom,
+            @NonNull ListDirection whereto,
+            double timeout) {
+        GlideString[] arguments =
+                new GlideString[] {
+                    source,
+                    destination,
+                    gs(wherefrom.toString()),
+                    gs(whereto.toString()),
+                    gs(Double.toString(timeout))
+                };
+        return commandManager.submitNewCommand(
+                BLMove, arguments, this::handleGlideStringOrNullResponse);
     }
 
     @Override
@@ -2696,6 +2978,18 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<String> publish(@NonNull String channel, @NonNull String message) {
+        return commandManager.submitNewCommand(
+                Publish,
+                new String[] {channel, message},
+                response -> {
+                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                    handleLongResponse(response);
+                    return OK;
+                });
+    }
+
+    @Override
     public CompletableFuture<String> watch(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Watch, keys, this::handleStringResponse);
     }
@@ -2783,5 +3077,167 @@ public abstract class BaseClient
     public CompletableFuture<Long> sortStore(@NonNull String key, @NonNull String destination) {
         return commandManager.submitNewCommand(
                 Sort, new String[] {key, STORE_COMMAND_STRING, destination}, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<String[]> geosearch(
+            @NonNull String key,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy) {
+        String[] arguments =
+                concatenateArrays(new String[] {key}, searchFrom.toArgs(), searchBy.toArgs());
+        return commandManager.submitNewCommand(
+                GeoSearch, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<String[]> geosearch(
+            @NonNull String key,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchResultOptions resultOptions) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, searchFrom.toArgs(), searchBy.toArgs(), resultOptions.toArgs());
+        return commandManager.submitNewCommand(
+                GeoSearch, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<Object[]> geosearch(
+            @NonNull String key,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key}, searchFrom.toArgs(), searchBy.toArgs(), options.toArgs());
+        return commandManager.submitNewCommand(GeoSearch, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> geosearch(
+            @NonNull String key,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchOptions options,
+            @NonNull GeoSearchResultOptions resultOptions) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {key},
+                        searchFrom.toArgs(),
+                        searchBy.toArgs(),
+                        options.toArgs(),
+                        resultOptions.toArgs());
+        return commandManager.submitNewCommand(GeoSearch, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geosearchstore(
+            @NonNull String destination,
+            @NonNull String source,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {destination, source}, searchFrom.toArgs(), searchBy.toArgs());
+        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geosearchstore(
+            @NonNull String destination,
+            @NonNull String source,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchResultOptions resultOptions) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {destination, source},
+                        searchFrom.toArgs(),
+                        searchBy.toArgs(),
+                        resultOptions.toArgs());
+        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geosearchstore(
+            @NonNull String destination,
+            @NonNull String source,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchStoreOptions options) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {destination, source},
+                        searchFrom.toArgs(),
+                        searchBy.toArgs(),
+                        options.toArgs());
+        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geosearchstore(
+            @NonNull String destination,
+            @NonNull String source,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchStoreOptions options,
+            @NonNull GeoSearchResultOptions resultOptions) {
+        String[] arguments =
+                concatenateArrays(
+                        new String[] {destination, source},
+                        searchFrom.toArgs(),
+                        searchBy.toArgs(),
+                        options.toArgs(),
+                        resultOptions.toArgs());
+        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> sscan(@NonNull String key, @NonNull String cursor) {
+        String[] arguments = new String[] {key, cursor};
+        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> sscan(
+            @NonNull String key, @NonNull String cursor, @NonNull SScanOptions sScanOptions) {
+        String[] arguments = concatenateArrays(new String[] {key, cursor}, sScanOptions.toArgs());
+        return commandManager.submitNewCommand(SScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zscan(@NonNull String key, @NonNull String cursor) {
+        String[] arguments = new String[] {key, cursor};
+        return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> zscan(
+            @NonNull String key, @NonNull String cursor, @NonNull ZScanOptions zScanOptions) {
+        String[] arguments = concatenateArrays(new String[] {key, cursor}, zScanOptions.toArgs());
+        return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> hscan(@NonNull String key, @NonNull String cursor) {
+        String[] arguments = new String[] {key, cursor};
+        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> hscan(
+            @NonNull String key, @NonNull String cursor, @NonNull HScanOptions hScanOptions) {
+        String[] arguments = concatenateArrays(new String[] {key, cursor}, hScanOptions.toArgs());
+        return commandManager.submitNewCommand(HScan, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> wait(long numreplicas, long timeout) {
+        return commandManager.submitNewCommand(
+                Wait,
+                new String[] {Long.toString(numreplicas), Long.toString(timeout)},
+                this::handleLongResponse);
     }
 }

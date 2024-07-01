@@ -38,7 +38,7 @@ class StandaloneCommands(CoreCommands):
     async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
-    ) -> str:
+    ) -> bytes:
         """
         Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
@@ -49,10 +49,10 @@ class StandaloneCommands(CoreCommands):
 
 
         Returns:
-            str: Returns a string containing the information for the sections requested.
+            bytes: Returns bytes containing the information for the sections requested.
         """
         args = [section.value for section in sections] if sections else []
-        return cast(str, await self._execute_command(RequestType.Info, args))
+        return cast(bytes, await self._execute_command(RequestType.Info, args))
 
     async def exec(
         self,
@@ -259,6 +259,58 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(
                 RequestType.FunctionLoad,
                 ["REPLACE", library_code] if replace else [library_code],
+            ),
+        )
+
+    async def function_flush(self, mode: Optional[FlushMode] = None) -> TOK:
+        """
+        Deletes all function libraries.
+
+        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+
+        Args:
+            mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_flush(FlushMode.SYNC)
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionFlush,
+                [mode.value] if mode else [],
+            ),
+        )
+
+    async def function_delete(self, library_name: str) -> TOK:
+        """
+        Deletes a library and all its functions.
+
+        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+
+        Args:
+            library_code (str): The libary name to delete
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_delete("my_lib")
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionDelete,
+                [library_name],
             ),
         )
 
@@ -594,4 +646,73 @@ class StandaloneCommands(CoreCommands):
         return cast(
             str,
             await self._execute_command(RequestType.Lolwut, args),
+        )
+
+    async def random_key(self) -> Optional[str]:
+        """
+        Returns a random existing key name from the currently selected database.
+
+        See https://valkey.io/commands/randomkey for more details.
+
+        Returns:
+            Optional[str]: A random existing key name from the currently selected database.
+
+        Examples:
+            >>> await client.random_key()
+            "random_key_name"  # "random_key_name" is a random existing key name from the currently selected database.
+        """
+        return cast(
+            Optional[str],
+            await self._execute_command(RequestType.RandomKey, []),
+        )
+
+    async def wait(
+        self,
+        numreplicas: int,
+        timeout: int,
+    ) -> int:
+        """
+        Blocks the current client until all the previous write commands are successfully transferred
+        and acknowledged by at least `numreplicas` of replicas. If `timeout` is
+        reached, the command returns even if the specified number of replicas were not yet reached.
+
+        See https://valkey.io/commands/wait for more details.
+
+        Args:
+            numreplicas (int): The number of replicas to reach.
+            timeout (int): The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+
+        Returns:
+            int: The number of replicas reached by all the writes performed in the context of the current connection.
+
+        Examples:
+            >>> await client.set("key", "value");
+            >>> await client.wait(1, 1000);
+            // return 1 when a replica is reached or 0 if 1000ms is reached.
+        """
+        args = [str(numreplicas), str(timeout)]
+        return cast(
+            int,
+            await self._execute_command(RequestType.Wait, args),
+        )
+
+    async def unwatch(self) -> TOK:
+        """
+        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        automatically flush all previously watched keys.
+
+        See https://valkey.io/commands/unwatch for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.watch("sampleKey")
+                'OK'
+            >>> await client.unwatch()
+                'OK'
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.UnWatch, []),
         )
