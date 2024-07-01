@@ -420,7 +420,7 @@ class ClusterCommands(CoreCommands):
         function: str,
         arguments: Optional[List[str]] = None,
         route: Optional[Route] = None,
-    ) -> TClusterResponse[TResult]:
+    ) -> Optional[TClusterResponse[TResult]]:
         """
         Invokes a previously loaded read-only function.
 
@@ -434,7 +434,7 @@ class ClusterCommands(CoreCommands):
                 will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[TResult]: The return value depends on the function that was executed.
+            Optional[TClusterResponse[TResult]]: The return value depends on the function that was executed.
 
         Examples:
             >>> await client.fcall_ro_route("Deep_Thought", ALL_NODES)
@@ -446,7 +446,7 @@ class ClusterCommands(CoreCommands):
         if arguments is not None:
             args.extend(arguments)
         return cast(
-            TClusterResponse[TResult],
+            Optional[TClusterResponse[TResult]],
             await self._execute_command(RequestType.FCallReadOnly, args, route),
         )
 

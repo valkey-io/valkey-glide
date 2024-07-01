@@ -5445,7 +5445,7 @@ class CoreCommands(Protocol):
         function: str,
         keys: Optional[List[str]] = None,
         arguments: Optional[List[str]] = None,
-    ) -> TResult:
+    ) -> Optional[TResult]:
         """
         Invokes a previously loaded read-only function.
 
@@ -5462,7 +5462,7 @@ class CoreCommands(Protocol):
                 represent names of keys.
 
         Returns:
-            TResult: The return value depends on the function that was executed.
+            Optional[TResult]: The return value depends on the function that was executed.
 
         Examples:
             >>> await client.fcall_ro("Deep_Thought", ["key1"], ["Answer", "to", "the",
@@ -5479,7 +5479,7 @@ class CoreCommands(Protocol):
         if arguments is not None:
             args.extend(arguments)
         return cast(
-            TResult,
+            Optional[TResult],
             await self._execute_command(RequestType.FCallReadOnly, args),
         )
 
