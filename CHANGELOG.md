@@ -69,6 +69,7 @@
 * Python: Added WAIT command ([#1710](https://github.com/aws/glide-for-redis/pull/1710))
 * Python: Added XAUTOCLAIM command ([#1718](https://github.com/aws/glide-for-redis/pull/1718))
 * Python: Add ZSCAN and HSCAN commands ([#1732](https://github.com/aws/glide-for-redis/pull/1732))
+* Python: Added FCALL_RO command ([#1721](https://github.com/aws/glide-for-redis/pull/1721))
 * Python: Added WATCH and UNWATCH command ([#1736](https://github.com/aws/glide-for-redis/pull/1736))
 
 ### Breaking Changes

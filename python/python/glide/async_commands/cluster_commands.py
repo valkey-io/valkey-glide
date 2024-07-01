@@ -415,6 +415,41 @@ class ClusterCommands(CoreCommands):
             ),
         )
 
+    async def fcall_ro_route(
+        self,
+        function: str,
+        arguments: Optional[List[str]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a previously loaded read-only function.
+
+        See https://valkey.io/commands/fcall_ro for more details.
+
+        Args:
+            function (str): The function name.
+            arguments (List[str]): An `array` of `function` arguments. `arguments` should not
+                represent names of keys.
+            route (Optional[Route]): Specifies the routing configuration of the command. The client
+                will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[TResult]: The return value depends on the function that was executed.
+
+        Examples:
+            >>> await client.fcall_ro_route("Deep_Thought", ALL_NODES)
+                42 # The return value on the function that was executed
+
+        Since: Redis version 7.0.0.
+        """
+        args = [function, "0"]
+        if arguments is not None:
+            args.extend(arguments)
+        return cast(
+            TClusterResponse[TResult],
+            await self._execute_command(RequestType.FCallReadOnly, args, route),
+        )
+
     async def time(self, route: Optional[Route] = None) -> TClusterResponse[List[str]]:
         """
         Returns the server time.
