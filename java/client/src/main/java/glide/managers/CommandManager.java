@@ -17,7 +17,6 @@ import glide.api.models.exceptions.RequestException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.ffi.resolvers.RedisValueResolver;
-import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
@@ -379,10 +378,11 @@ public class CommandManager {
      * @param arguments The arguments to add to the builder.
      * @param outputBuilder The builder to populate with arguments.
      */
-    public static void populateCommandWithArgs(String[] arguments, Command.Builder outputBuilder) {
+    public static <ArgType> void populateCommandWithArgs(
+            ArgType[] arguments, Command.Builder outputBuilder) {
         populateCommandWithArgs(
                 Arrays.stream(arguments)
-                        .map(value -> value.getBytes(StandardCharsets.UTF_8))
+                        .map(value -> GlideString.of(value).getBytes())
                         .collect(Collectors.toList()),
                 outputBuilder);
     }
