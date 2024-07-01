@@ -4729,7 +4729,7 @@ public class SharedCommandTests {
 
         // add one more stream
         String streamid_6 = client.xadd(key, Map.of("field6", "value6")).get();
-        assertNotNull(streamid_5);
+        assertNotNull(streamid_6);
 
         // using force, we can xclaim the message without reading it
         var claimForceResults =
@@ -4783,7 +4783,7 @@ public class SharedCommandTests {
                                 10L,
                                 StreamPendingOptions.builder().minIdleTime(1L).consumer(consumer1).build())
                         .get();
-        // note: consumer claimed all remaining messages
+        // note: streams ID 1 and 5 are still pending, all others were acknowledged
         assertEquals(2, pending_results_extended.length);
     }
 
@@ -4967,7 +4967,7 @@ public class SharedCommandTests {
                         .get());
         assertTrue(client.xgroupCreateConsumer(key, groupName, consumer1).get());
 
-        // Add two stream entries and mark as pending:
+        // Add stream entry and mark as pending:
         String streamid_1 = client.xadd(key, Map.of("field1", "value1")).get();
         assertNotNull(streamid_1);
         assertNotNull(client.xreadgroup(Map.of(key, ">"), groupName, consumer1).get());
