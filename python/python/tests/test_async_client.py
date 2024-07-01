@@ -6802,7 +6802,6 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_load(self, redis_client: TGlideClient):
         # TODO: Test function with FCALL
-        # TODO: Test with FUNCTION LIST
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -6810,6 +6809,9 @@ class TestCommands:
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+
+        # verify function does not yet exist
+        assert await redis_client.function_list(lib_name) == []
 
         assert await redis_client.function_load(code) == lib_name.encode()
 
@@ -6825,7 +6827,14 @@ class TestCommands:
             == b"one"
         )
 
-        # TODO: add FUNCTION LIST once implemented
+        # verify with FUNCTION LIST
+        check_function_list_response(
+            await redis_client.function_list(lib_name),
+            lib_name,
+            {func_name: None},
+            {func_name: {'no-writes'}},
+            code
+        )
 
         # re-load library without replace
         with pytest.raises(RequestError) as e:
@@ -6850,7 +6859,6 @@ class TestCommands:
         self, redis_client: GlideClusterClient, single_route: bool
     ):
         # TODO: Test function with FCALL
-        # TODO: Test with FUNCTION LIST
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -6859,6 +6867,9 @@ class TestCommands:
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        # verify function does not yet exist
+        assert await redis_client.function_list(lib_name) == []
 
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
@@ -6878,7 +6889,14 @@ class TestCommands:
             == b"one"
         )
 
-        # TODO: add FUNCTION LIST once implemented
+        # verify with FUNCTION LIST
+        check_function_list_response(
+            await redis_client.function_list(lib_name),
+            lib_name,
+            {func_name: None},
+            {func_name: {'no-writes'}},
+            code
+        )
 
         # re-load library without replace
         with pytest.raises(RequestError) as e:
@@ -6897,23 +6915,6 @@ class TestCommands:
         assert (
             await redis_client.function_load(new_code, True, route) == lib_name.encode()
         )
-
-    @staticmethod
-    def __get_function_description(lib_name: str, func_names: list[str], code: str = ""):
-        description = {
-            'library_name': lib_name,
-            'engine': 'LUA',
-            'functions': [{
-                'name': func_name,
-                'description': None,
-                'flags': {'no-writes'}
-            } for func_name in func_names]
-        }
-
-        if code:
-            description['library_code'] = code
-
-        return description
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7027,16 +7028,21 @@ class TestCommands:
         # Load the function
         assert await redis_client.function_load(code) == lib_name.encode()
 
-        # TODO: Ensure the function exists with FUNCTION LIST
+        # verify function exists
+        assert len(await redis_client.function_list(lib_name)) == 1
 
         # Flush functions
         assert await redis_client.function_flush(FlushMode.SYNC) == OK
         assert await redis_client.function_flush(FlushMode.ASYNC) == OK
 
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
+        # verify function is removed
+        assert len(await redis_client.function_list(lib_name)) == 0
 
         # Attempt to re-load library without overwriting to ensure FLUSH was effective
         assert await redis_client.function_load(code) == lib_name.encode()
+
+        # verify function exists
+        assert len(await redis_client.function_list(lib_name)) == 1
 
         # Clean up by flushing functions again
         await redis_client.function_flush()
@@ -7059,16 +7065,21 @@ class TestCommands:
         # Load the function
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
-        # TODO: Ensure the function exists with FUNCTION LIST
+        # verify function exists
+        assert len(await redis_client.function_list(lib_name)) == 1
 
         # Flush functions
         assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
         assert await redis_client.function_flush(FlushMode.ASYNC, route) == OK
 
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
+        # verify function is removed
+        assert len(await redis_client.function_list(lib_name)) == 0
 
         # Attempt to re-load library without overwriting to ensure FLUSH was effective
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
+
+        # verify function exists
+        assert len(await redis_client.function_list(lib_name)) == 1
 
         # Clean up by flushing functions again
         assert await redis_client.function_flush(route=route) == OK
@@ -7087,12 +7098,14 @@ class TestCommands:
         # Load the function
         assert await redis_client.function_load(code) == lib_name.encode()
 
-        # TODO: Ensure the library exists with FUNCTION LIST
+        # verify function exists
+        assert len(await redis_client.function_list(lib_name)) == 1
 
         # Delete the function
         assert await redis_client.function_delete(lib_name) == OK
 
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
+        # verify function is removed
+        assert len(await redis_client.function_list(lib_name)) == 0
 
         # deleting a non-existing library
         with pytest.raises(RequestError) as e:
@@ -7117,12 +7130,14 @@ class TestCommands:
         # Load the function
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
-        # TODO: Ensure the library exists with FUNCTION LIST
+        # verify function exists
+        assert len(await redis_client.function_list(lib_name)) == 1
 
         # Delete the function
         assert await redis_client.function_delete(lib_name, route) == OK
 
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
+        # verify function is removed
+        assert len(await redis_client.function_list(lib_name)) == 0
 
         # deleting a non-existing library
         with pytest.raises(RequestError) as e:
