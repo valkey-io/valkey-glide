@@ -187,12 +187,29 @@ public class ArrayTransformUtils {
      * keys and values.
      *
      * @param args Map of keys to values of any type to convert.
-     * @return Array of strings [key1, value1, key2, value2, ...].
+     * @return Array of GlideString [key1, value1, key2, value2, ...].
      */
     public static GlideString[] flattenMapToGlideStringArray(Map<?, ?> args) {
         return args.entrySet().stream()
                 .flatMap(
                         entry -> Stream.of(GlideString.of(entry.getKey()), GlideString.of(entry.getValue())))
+                .toArray(GlideString[]::new);
+    }
+
+    /**
+     * Converts a map of any type of keys and values in to an array of GlideString with alternating
+     * values and keys.
+     *
+     * <p>This method is similar to flattenMapToGlideStringArray, but it places the value before the
+     * key
+     *
+     * @param args Map of keys to values of any type to convert.
+     * @return Array of GlideString [value1, key1, value2, key2...].
+     */
+    public static GlideString[] flattenMapToGlideStringArrayValueFirst(Map<?, ?> args) {
+        return args.entrySet().stream()
+                .flatMap(
+                        entry -> Stream.of(GlideString.of(entry.getValue()), GlideString.of(entry.getKey())))
                 .toArray(GlideString[]::new);
     }
 
