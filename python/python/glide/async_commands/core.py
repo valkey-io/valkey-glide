@@ -5710,6 +5710,8 @@ class CoreCommands(Protocol):
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.
 
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+
         Args:
             function (str): The function name.
             keys (Optional[List[str]]): A list of keys accessed by the function. To ensure the correct
