@@ -48,8 +48,6 @@ import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
 import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_REDIS_API;
 import static glide.api.models.commands.stream.StreamClaimOptions.TIME_REDIS_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
 import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
@@ -325,6 +323,7 @@ import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamGroupOptionsBinary;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
@@ -5785,7 +5784,7 @@ public class RedisClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString groupName = gs("testGroupName");
-        GlideString id =gs("testId");
+        GlideString id = gs("testId");
         GlideString[] arguments = new GlideString[] {key, groupName, id};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
@@ -5816,7 +5815,12 @@ public class RedisClientTest {
                 StreamGroupOptions.builder().makeStream().entriesRead(testEntry).build();
         String[] arguments =
                 new String[] {
-                    key, groupName, id, MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, testEntry
+                    key,
+                    groupName,
+                    id,
+                    StreamGroupOptions.MAKE_STREAM_VALKEY_API,
+                    StreamGroupOptions.ENTRIES_READ_VALKEY_API,
+                    testEntry
                 };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
@@ -5847,7 +5851,12 @@ public class RedisClientTest {
                 StreamGroupOptionsBinary.builder().makeStream().entriesRead(testEntry).build();
         GlideString[] arguments =
                 new GlideString[] {
-                    key, groupName, id, MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, testEntry
+                    key,
+                    groupName,
+                    id,
+                    StreamGroupOptionsBinary.MAKE_STREAM_VALKEY_API,
+                    StreamGroupOptionsBinary.ENTRIES_READ_VALKEY_API,
+                    testEntry
                 };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();

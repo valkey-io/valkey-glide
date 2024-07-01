@@ -2099,7 +2099,8 @@ public abstract class BaseClient
             @NonNull GlideString groupName,
             @NonNull GlideString id,
             @NonNull StreamGroupOptionsBinary options) {
-        GlideString[] arguments = concatenateArrays(new GlideString[] {key, groupName, id}, options.toArgs());
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {key, groupName, id}, options.toArgs());
         return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
     }
 
@@ -2110,7 +2111,8 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<Boolean> xgroupDestroy(@NonNull GlideString key, @NonNull GlideString groupname) {
+    public CompletableFuture<Boolean> xgroupDestroy(
+            @NonNull GlideString key, @NonNull GlideString groupname) {
         return commandManager.submitNewCommand(
                 XGroupDestroy, new GlideString[] {key, groupname}, this::handleBooleanResponse);
     }

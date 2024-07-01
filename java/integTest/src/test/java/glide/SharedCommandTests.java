@@ -84,6 +84,7 @@ import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamGroupOptionsBinary;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange.IdBound;
 import glide.api.models.commands.stream.StreamRange.InfRangeBound;
@@ -4292,7 +4293,8 @@ public class SharedCommandTests {
         assertEquals(false, client.xgroupDestroy(key, groupName).get());
 
         // ENTRIESREAD option was added in redis 7.0.0
-        StreamGroupOptionsBinary entriesReadOption = StreamGroupOptions.builder().entriesRead(gs("10")).build();
+        StreamGroupOptionsBinary entriesReadOption =
+                StreamGroupOptionsBinary.builder().entriesRead(gs("10")).build();
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(OK, client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
         } else {

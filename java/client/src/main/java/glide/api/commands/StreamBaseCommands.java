@@ -6,6 +6,7 @@ import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamAddOptions.StreamAddOptionsBuilder;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
+import glide.api.models.commands.stream.StreamGroupOptionsBinary;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
 import glide.api.models.commands.stream.StreamRange.IdBound;
@@ -413,7 +414,6 @@ public interface StreamBaseCommands {
     CompletableFuture<String> xgroupCreate(
             String key, String groupName, String id, StreamGroupOptions options);
 
-  
     /**
      * Creates a new consumer group uniquely identified by <code>groupname</code> for the stream
      * stored at <code>key</code>.

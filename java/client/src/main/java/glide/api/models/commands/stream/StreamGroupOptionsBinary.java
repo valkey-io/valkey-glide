@@ -1,15 +1,17 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
+
 import static glide.api.models.GlideString.gs;
-import glide.api.models.GlideString;
+
 import glide.api.commands.StreamBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import lombok.Builder;
 
 /**
- * Optional arguments for {@link StreamBaseCommands#xgroupCreate(GlideString, GlideString, GlideString,
- * StreamGroupOptionsBinary)}
+ * Optional arguments for {@link StreamBaseCommands#xgroupCreate(GlideString, GlideString,
+ * GlideString, StreamGroupOptionsBinary)}
  *
  * @see <a href="https://valkey.io/commands/xgroup-create/">valkey.io</a>
  */
@@ -46,8 +48,9 @@ public final class StreamGroupOptionsBinary {
     private GlideString entriesRead;
 
     /**
-     * Converts options and the key-to-id input for {@link StreamBaseCommands#xgroupCreate(GlideString,
-     * GlideString, GlideString, StreamGroupOptionsBinary)} into a GlideString[].
+     * Converts options and the key-to-id input for {@link
+     * StreamBaseCommands#xgroupCreate(GlideString, GlideString, GlideString,
+     * StreamGroupOptionsBinary)} into a GlideString[].
      *
      * @return GlideString[]
      */
@@ -63,6 +66,6 @@ public final class StreamGroupOptionsBinary {
             optionArgs.add(this.entriesRead);
         }
 
-        return Arrays.stream(toArgs()).map(GlideString::gs).toArray(GlideString[]::new);
+        return optionArgs.toArray(new GlideString[0]);
     }
 }
