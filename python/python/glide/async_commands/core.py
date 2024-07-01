@@ -6023,8 +6023,8 @@ class CoreCommands(Protocol):
                                      in the list. A `max_len` of 0 means unlimited amount of comparisons.
 
         Returns:
-            Union[int, list[int], None]: If the element is found, its index (the zero-based position in the list) is
-            returned. Otherwise, if no match is found, None is returned.
+            Union[int, list[int], None]: The index of the first occurrence of `element`,
+            or None if `element` is not in the list.
             With the `count` option, a list of indices of matching elements will be returned.
 
         Examples:
