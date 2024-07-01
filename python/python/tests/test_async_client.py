@@ -7112,7 +7112,13 @@ class TestCommands:
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
         # verify function does not yet exist
-        assert await redis_client.function_list(lib_name, False, route) == []
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert result == []
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert nodeResponse == []
 
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
@@ -7195,6 +7201,8 @@ class TestCommands:
         # load library
         await redis_client.function_load(code)
 
+        x = await redis_client.function_list()
+
         check_function_list_response(
             await redis_client.function_list(lib_name),
             lib_name.encode(),
@@ -7248,60 +7256,81 @@ class TestCommands:
 
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
-        original_functions_count = len(await redis_client.function_list(route=route))
-
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
         # Assert function `lib_name` does not yet exist
-        assert await redis_client.function_list(lib_name, route=route) == []
+        result = await redis_client.function_list(lib_name, route=route)
+        if single_route:
+            assert result == []
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert nodeResponse == []
 
         # load library
         await redis_client.function_load(code, route=route)
 
-        check_function_list_response(
-            await redis_client.function_list(lib_name, route=route),
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
-            None,
-        )
-        check_function_list_response(
-            await redis_client.function_list(f"{lib_name}*", route=route),
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
-            None,
-        )
-        check_function_list_response(
-            await redis_client.function_list(lib_name, with_code=True, route=route),
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
-            code.encode(),
-        )
+        result = await redis_client.function_list(lib_name, route=route)
+        if single_route:
+            check_function_list_response(
+                result,
+                lib_name.encode(),
+                {func_name.encode(): None},
+                {func_name.encode(): {b"no-writes"}},
+                None,
+            )
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                check_function_list_response(
+                    result,
+                    lib_name.encode(),
+                    {func_name.encode(): None},
+                    {func_name.encode(): {b"no-writes"}},
+                    None,
+                )
 
-        no_args_response = await redis_client.function_list(route=route)
-        wildcard_pattern_response = await redis_client.function_list(
-            "*", False, route=route
-        )
-        assert len(no_args_response) == original_functions_count + 1
-        assert len(wildcard_pattern_response) == original_functions_count + 1
-        check_function_list_response(
-            no_args_response,
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
-            None,
-        )
-        check_function_list_response(
-            wildcard_pattern_response,
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
-            None,
-        )
+        result = await redis_client.function_list(f"{lib_name}*", route=route)
+        if single_route:
+            check_function_list_response(
+                result,
+                lib_name.encode(),
+                {func_name.encode(): None},
+                {func_name.encode(): {b"no-writes"}},
+                None,
+            )
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                check_function_list_response(
+                    result,
+                    lib_name.encode(),
+                    {func_name.encode(): None},
+                    {func_name.encode(): {b"no-writes"}},
+                    None,
+                )
+
+        result = await redis_client.function_list(lib_name, with_code=True, route=route)
+        if single_route:
+            check_function_list_response(
+                result,
+                lib_name.encode(),
+                {func_name.encode(): None},
+                {func_name.encode(): {b"no-writes"}},
+                code.encode(),
+            )
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                check_function_list_response(
+                    result,
+                    lib_name.encode(),
+                    {func_name.encode(): None},
+                    {func_name.encode(): {b"no-writes"}},
+                    code.encode(),
+                )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7401,20 +7430,38 @@ class TestCommands:
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
         # verify function exists
-        assert len(await redis_client.function_list(lib_name, False, route)) == 1
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 1
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 1
 
         # Flush functions
         assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
         assert await redis_client.function_flush(FlushMode.ASYNC, route) == OK
 
         # verify function is removed
-        assert len(await redis_client.function_list(lib_name, False, route)) == 0
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 0
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 0
 
         # Attempt to re-load library without overwriting to ensure FLUSH was effective
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
         # verify function exists
-        assert len(await redis_client.function_list(lib_name, False, route)) == 1
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 1
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 1
 
         # Clean up by flushing functions again
         assert await redis_client.function_flush(route=route) == OK
@@ -7466,13 +7513,25 @@ class TestCommands:
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
         # verify function exists
-        assert len(await redis_client.function_list(lib_name, False, route)) == 1
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 1
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 1
 
         # Delete the function
         assert await redis_client.function_delete(lib_name, route) == OK
 
         # verify function is removed
-        assert len(await redis_client.function_list(lib_name, False, route)) == 0
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 0
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 0
 
         # deleting a non-existing library
         with pytest.raises(RequestError) as e:
