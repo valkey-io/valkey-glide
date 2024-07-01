@@ -757,7 +757,7 @@ public interface StreamBaseCommands {
      *     <pre>
      * // assign (force) unread and unclaimed messages to consumer2
      * StreamClaimOptions options = StreamClaimOptions.builder().force().build();
-     * Map<String, String[]> results = client.xclaim("mystream", "mygroup", "consumer2", 0L, new String[] {entryId}, options).get();
+     * Map<String, String[][]> results = client.xclaim("mystream", "mygroup", "consumer2", 0L, new String[] {entryId}, options).get();
      * for (String key: results.keySet()) {
      *     System.out.println(key);
      *     for (String[] entry: results.get(key)) {
