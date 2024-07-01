@@ -1841,7 +1841,12 @@ class BaseTransaction:
             [library_name],
         )
 
-    def fcall(self: TTransaction, function: str, keys: Optional[List[str]] = None, arguments: Optional[List[str]] = None) -> TTransaction:
+    def fcall(
+        self: TTransaction,
+        function: str,
+        keys: Optional[List[str]] = None,
+        arguments: Optional[List[str]] = None,
+    ) -> TTransaction:
         """
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.

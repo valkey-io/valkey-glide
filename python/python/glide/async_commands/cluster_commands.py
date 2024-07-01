@@ -415,11 +415,16 @@ class ClusterCommands(CoreCommands):
             ),
         )
 
-    async def fcall_route(self, function: str, arguments: Optional[List[str]] = None, route: Optional[Route] = None) -> TClusterResponse[TResult]:
+    async def fcall_route(
+        self,
+        function: str,
+        arguments: Optional[List[str]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
         """
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.
-        
+
         Args:
             function (str): The function name.
             arguments (Optional[List[str]]): A list of `function` arguments. `Arguments`

@@ -7052,9 +7052,7 @@ class TestCommands:
 
         assert await redis_client.function_load(code) == lib_name.encode()
 
-        assert (
-            await redis_client.fcall(func_name, arguments=["one", "two"]) == b"one"
-        )
+        assert await redis_client.fcall(func_name, arguments=["one", "two"]) == b"one"
         assert (
             await redis_client.fcall_ro(func_name, arguments=["one", "two"]) == b"one"
         )

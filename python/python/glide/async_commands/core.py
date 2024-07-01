@@ -5704,7 +5704,7 @@ class CoreCommands(Protocol):
         self,
         function: str,
         keys: Optional[List[str]] = None,
-        arguments: Optional[List[str]] = None
+        arguments: Optional[List[str]] = None,
     ) -> TResult:
         """
         Invokes a previously loaded function.
