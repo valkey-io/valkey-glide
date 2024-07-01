@@ -4244,7 +4244,7 @@ class TestCommands:
             await redis_client.zrevrank(non_existing_key, "non_existing_member") is None
         )
 
-        if not check_if_server_version_lt(redis_client, "7.2.0"):
+        if not await check_if_server_version_lt(redis_client, "7.2.0"):
             assert await redis_client.zrevrank_withscore(key, "one") == [2, 1.0]
             assert (
                 await redis_client.zrevrank_withscore(key, "non_existing_member")
