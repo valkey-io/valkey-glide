@@ -75,7 +75,7 @@ public class MessageHandler {
                 Logger.log(
                         Logger.Level.INFO,
                         "subscribe/unsubscribe notification",
-                        String.format(
+                        () -> String.format(
                                 "Received push notification of type '%s': %s",
                                 pushType,
                                 Arrays.stream(values)
@@ -86,7 +86,7 @@ public class MessageHandler {
                 Logger.log(
                         Logger.Level.WARN,
                         "unknown notification",
-                        String.format("Unknown notification message: '%s'", pushType));
+                        () -> String.format("Unknown notification message: '%s'", pushType));
         }
     }
 
