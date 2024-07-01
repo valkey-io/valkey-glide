@@ -241,6 +241,7 @@ enum RequestType {
     SScan = 200;
     ZScan = 201;
     HScan = 202;
+    XInfoStream = 205;
 }
 
 message Command {

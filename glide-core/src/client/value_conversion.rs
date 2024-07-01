@@ -25,7 +25,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     Lolwut,
     ArrayOfStringAndArrays,
     ArrayOfArraysOfDoubleOrNull,
-    ArrayOfMaps(&'a ExpectedReturnType<'a>),
+    ArrayOfMaps(&'a Option<ExpectedReturnType<'a>>),
     StringOrSet,
     ArrayOfPairs,
     ArrayOfMemberScorePairs,
@@ -34,6 +34,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     FunctionStatsReturnType,
     GeoSearchReturnType,
     SimpleString,
+    XInfoStreamReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -142,9 +143,11 @@ pub(crate) fn convert_to_expected_type(
         ExpectedReturnType::BulkString => Ok(Value::BulkString(
             from_owned_redis_value::<String>(value)?.into(),
         )),
-        ExpectedReturnType::SimpleString => Ok(Value::SimpleString(
+        ExpectedReturnType::SimpleString => {
+            dbg!(value.clone());
+            Ok(Value::SimpleString(
             from_owned_redis_value::<String>(value)?,
-        )),
+        ))},
         ExpectedReturnType::JsonToggleReturnType => match value {
             Value::Array(array) => {
                 let converted_array: RedisResult<Vec<_>> = array
@@ -492,7 +495,7 @@ pub(crate) fn convert_to_expected_type(
             Value::Array(ref array) if array.is_empty() || matches!(array[0], Value::Map(_)) => {
                 Ok(value)
             }
-            Value::Array(array) => convert_array_of_flat_maps(array, Some(*type_of_map_values)),
+            Value::Array(array) => convert_array_of_flat_maps(array, *type_of_map_values),
             // cluster (multi-node) response - go recursive
             Value::Map(map) => convert_map_entries(
                 map,
@@ -607,6 +610,231 @@ pub(crate) fn convert_to_expected_type(
             }
             _ => Err((ErrorKind::TypeError, "Response couldn't be converted").into()),
         },
+        // `XINFO STREAM` returns nested maps with different types of data
+        /* RESP2 response example
+        1) "length"
+        2) (integer) 2
+        ...
+        13) "recorded-first-entry-id"
+        14) "1719710679916-0"
+        15) "entries"
+        16) 1) 1) "1719710679916-0"
+               2) 1) "foo"
+                  2) "bar"
+                  3) "foo"
+                  4) "bar2"
+                  5) "some"
+                  6) "value"
+            2) 1) "1719710688676-0"
+               2) 1) "foo"
+                  2) "bar2"
+        17) "groups"
+        18) 1)  1) "name"
+                2) "mygroup"
+                ...
+                9) "pel-count"
+               10) (integer) 2
+               11) "pending"
+               12) 1) 1) "1719710679916-0"
+                      2) "Alice"
+                      3) (integer) 1719710707260
+                      4) (integer) 1
+                   2) 1) "1719710688676-0"
+                      2) "Alice"
+                      3) (integer) 1719710718373
+                      4) (integer) 1
+               13) "consumers"
+               14) 1) 1) "name"
+                      2) "Alice"
+                      ...
+                      7) "pel-count"
+                      8) (integer) 2
+                      9) "pending"
+                      10) 1) 1) "1719710679916-0"
+                             2) (integer) 1719710707260
+                             3) (integer) 1
+                          2) 1) "1719710688676-0"
+                             2) (integer) 1719710718373
+                             3) (integer) 1
+        
+        RESP3 response example
+        1# "length" => (integer) 2
+        ...
+        8# "entries" =>
+           1) 1) "1719710679916-0"
+              2) 1) "foo"
+                 2) "bar"
+                 3) "foo"
+                 4) "bar2"
+                 5) "some"
+                 6) "value"
+           2) 1) "1719710688676-0"
+              2) 1) "foo"
+                 2) "bar2"
+        9# "groups" =>
+           1) 1# "name" => "mygroup"
+              ...
+              6# "pending" =>
+                 1) 1) "1719710679916-0"
+                    2) "Alice"
+                    3) (integer) 1719710707260
+                    4) (integer) 1
+                 2) 1) "1719710688676-0"
+                    2) "Alice"
+                    3) (integer) 1719710718373
+                    4) (integer) 1
+              7# "consumers" =>
+                 1) 1# "name" => "Alice"
+                    ...
+                    5# "pending" =>
+                       1) 1) "1719710679916-0"
+                          2) (integer) 1719710707260
+                          3) (integer) 1
+                       2) 1) "1719710688676-0"
+                          2) (integer) 1719710718373
+                          3) (integer) 1
+        
+        Without `FULL` keyword, command returns "first-entry" and "last-entry" instead of "entries" in the same format.
+
+        So we convert:
+        - Arrays to maps, accroding to RESP2->RESP3 conversion done by the server:
+          - Top level array - unflat to a map
+          - "groups" value - to a `Map<str, obj>[]`
+          - "consumers" value - to `Map<str, obj>[]`
+        - Additionally we convert some map's values:
+          - "entries", "first-entry" and "last-entry" value - to a `Map<str, str[][]>` (similar to `XREAD`)
+              no nested maps due to duplicating keys - see example
+        Using `XInfoStreamReturnType` recursively for maps' value type.
+        */
+        ExpectedReturnType::XInfoStreamReturnType => {
+            dbg!(value.clone());
+            match value {
+                // a RESP3 response
+                Value::Map(map) => {
+                    dbg!("map");
+                    let result = map
+                    .into_iter()
+                    .map(|(key, inner_value)| {
+                        dbg!(key.clone());
+                        dbg!(inner_value.clone());
+
+                        let converted_key = convert_to_expected_type(key, Some(ExpectedReturnType::SimpleString))?;
+                        if converted_key == Value::SimpleString("groups".into())
+                        || converted_key == Value::SimpleString("consumers".into()) {
+                            let Value::Array(nested_array) = inner_value.clone() else {
+                                return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                            };
+                            // already converted (a RESP3 response) - do nothing
+                            if matches!(nested_array[0], Value::Map(_)) {
+                                Ok((converted_key, inner_value))
+                            } else {
+                                let converted_value = convert_to_expected_type(
+                                    inner_value,
+                                    Some(ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::XInfoStreamReturnType))))?;
+                                Ok((converted_key, converted_value))
+                            }
+                        } else if converted_key == Value::SimpleString("entries".into()) {
+                            dbg!("entries");
+                            dbg!(inner_value.clone());
+                            /*/
+                            let Value::Array(nested_array) = inner_value.clone() else {
+                                return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                            };
+                            let map : Vec<(Value, Value)> = Vec::with_capacity(nested_array.len());
+
+                            for entry in nested_array {
+                                let Value::Array(entry_as_array) = entry else {
+                                    return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                                };
+
+                            }
+                            // */
+                            /*
+                            // resuing existing function, but it creates Map<str, Map<str, pair[]>>
+                            // where top-level map has only 1 entry and we need the inner map only
+                            let Value::Map(mut converted_map) = convert_to_expected_type(
+                                    Value::Map(vec![(converted_key.clone(), inner_value)])
+                                    ,
+                                    Some(ExpectedReturnType::Map {
+                                        key_type: &Some(ExpectedReturnType::SimpleString),
+                                        value_type: &Some(ExpectedReturnType::Map {
+                                            key_type: &Some(ExpectedReturnType::SimpleString),
+                                            value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+                                        }),
+                                    })
+                                )? else {
+                                return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                            };
+                            let converted_value = converted_map.remove(0).1;
+                            // */
+                            //*
+                            let converted_value = convert_to_expected_type(
+                                inner_value,
+                                Some(ExpectedReturnType::Map {
+                                    key_type: &Some(ExpectedReturnType::SimpleString),
+                                    value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+                            }))?;
+                            // */
+                            Ok((converted_key, converted_value))
+                        } else {
+                            Ok((converted_key, inner_value))
+                        }
+                    })
+                    .collect::<RedisResult<_>>();
+            
+                    result.map(Value::Map)
+                },
+                Value::Array(ref array) => {
+                    dbg!("array");
+                    //if array.len() == 0 { return Ok(value); } // todo maybe remove
+                    /*
+                    convert_to_expected_type(
+                        convert_array_to_map_by_type(
+                            array,
+                            Some(ExpectedReturnType::SimpleString),
+                            Some(ExpectedReturnType::XInfoStreamReturnType))?,
+                        Some(ExpectedReturnType::XInfoStreamReturnType))
+                    */
+                    
+                    let map = match array.get(0) {
+                        //Some(Value::Array(_)) => convert_to_expected_type(value.clone(), Some(ExpectedReturnType::ArrayOfMaps(&None))),
+                        Some(Value::Array(inner_array)) if inner_array.len() == 2 => {
+                            dbg!("arr of 2");
+
+                            Ok(value)
+                        },
+                        Some(Value::Array(_)) => {
+                            dbg!("do nothing");
+                            Ok(value)
+                        },
+                        _ => convert_array_to_map_by_type(
+                            (*array).clone(),
+                            Some(ExpectedReturnType::SimpleString),
+                            Some(ExpectedReturnType::XInfoStreamReturnType))
+                    }?;
+                    dbg!(map.clone());
+                    Ok(map)
+                    // convert_to_expected_type(map, Some(ExpectedReturnType::XInfoStreamReturnType))
+                    //dbg!(map.clone());
+                    //Ok(map)
+                    
+                    /*
+                    convert_array_to_map_by_type(
+                        array,
+                        Some(ExpectedReturnType::SimpleString),
+                        Some(ExpectedReturnType::XInfoStreamReturnType))
+                    */
+                },
+                Value::Int(_) | Value::BulkString(_) | Value::SimpleString(_)
+                | Value::VerbatimString { .. } => Ok(value),
+                _ => Err((
+                    ErrorKind::TypeError,
+                    "Response couldn't be converted============",
+                    format!("(response was {:?})", get_value_type(&value)),
+                )
+                    .into()),
+            }
+        }
     }
 }
 
@@ -744,6 +972,8 @@ fn convert_array_to_map_by_type(
         match key {
             Value::Array(inner_array) => {
                 if inner_array.len() != 2 {
+                    dbg!(inner_array.len());
+                    //panic!();
                     return Err((
                         ErrorKind::TypeError,
                         "Array inside map must contain exactly two elements",
@@ -919,7 +1149,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
         }
         b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
         b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMaps(
-            &ExpectedReturnType::ArrayOfMaps(&ExpectedReturnType::StringOrSet),
+            &Some(ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::StringOrSet))),
         )),
         b"FUNCTION STATS" => Some(ExpectedReturnType::FunctionStatsReturnType),
         b"GEOSEARCH" => {
@@ -931,7 +1161,8 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             } else {
                 None
             }
-        }
+        },
+        b"XINFO STREAM" => Some(ExpectedReturnType::XInfoStreamReturnType),
         _ => None,
     }
 }
