@@ -996,7 +996,7 @@ public interface SortedSetBaseCommands {
      * @return The number of elements in the resulting sorted set stored at <code>destination</code>.
      * @example
      *     <pre>{@code
-     * WeightedKeysBinary weightedKeys = new WeightedKeys(List.of(Pair.of(gs("mySortedSet1"), 1.0), Pair.of(gs("mySortedSet2"), 2.0)));
+     * WeightedKeysBinary weightedKeys = new WeightedKeysBinary(List.of(Pair.of(gs("mySortedSet1"), 1.0), Pair.of(gs("mySortedSet2"), 2.0)));
      * Long payload = client.zunionstore(gs("newSortedSet"), weightedKeys, Aggregate.MAX).get()
      * assert payload == 3L; // Indicates the new sorted set contains three members from the union of gs("mySortedSet1") and gs("mySortedSet2").
      * }</pre>
