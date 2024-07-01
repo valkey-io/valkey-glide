@@ -5528,14 +5528,15 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/dump for more details.
 
         Args:
-            key (str): The `key` of the set.
+            key (str): The `key` to serialize.
 
         Returns:
-            Optional[bytes]: The serialized value of a set. If `key` does not exist, `None` will be returned.
+            Optional[bytes]: The serialized value of the data stored at `key`.
+                If `key` does not exist, `None` will be returned.
 
         Examples:
             >>> await client.dump("key")
-                `value` # The serialized value stored at `key`.
+                b"value" # The serialized value stored at `key`.
             >>> await client.dump("nonExistingKey")
                 None # Non-existing key will return `None`.
         """
@@ -5561,9 +5562,9 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/restore for more details.
 
         Args:
-            key (str): The `key` of the set.
+            key (str): The `key` to create.
             ttl (int): The expiry time (in milliseconds). If `0`, the `key` will persist.
-            value (bytes) The serialized value.
+            value (bytes) The serialized value to deserialiez and assign to `key`.
             replace (Optional[str]): Set the `REPLACE` option to the given key.
             absttl (Optional[str]): Set the `ABSTTL` option to the given key.
             idletime (Optional[int]): Set the `IDLETIME` option with object idletime to the given key.
