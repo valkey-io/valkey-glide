@@ -4,10 +4,10 @@ use bytes::Bytes;
  */
 use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
-use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyBytes, PyDict, PyFloat, PyList, PySet, PyAny};
-use pyo3::Python;
 use pyo3::exceptions::PyTypeError;
+use pyo3::prelude::*;
+use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet};
+use pyo3::Python;
 
 use redis::Value;
 
@@ -47,7 +47,9 @@ impl Script {
         } else if let Ok(code_bytes) = code.extract::<&PyBytes>() {
             glide_core::scripts_container::add_script(code_bytes.as_bytes())
         } else {
-            return Err(PyTypeError::new_err("code must be either a String or PyBytes"));
+            return Err(PyTypeError::new_err(
+                "code must be either a String or PyBytes",
+            ));
         };
 
         Ok(Script { hash })
