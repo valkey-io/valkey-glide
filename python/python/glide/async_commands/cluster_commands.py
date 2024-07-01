@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Union, cast, Any
+from typing import Any, Dict, List, Mapping, Optional, Union, cast
 
 from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
