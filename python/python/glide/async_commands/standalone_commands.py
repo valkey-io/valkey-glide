@@ -262,6 +262,23 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
+    async def function_list(
+        self, library_name: str = None, with_code: bool = None
+    ) -> [dict]:
+        # TODO Doc comment
+        args = []
+        if library_name:
+            args.extend(["LIBRARYNAME", library_name])
+        if with_code:
+            args.append("WITHCODE")
+        return cast(
+            [dict],
+            await self._execute_command(
+                RequestType.FunctionList,
+                args,
+            ),
+        )
+
     async def function_flush(self, mode: Optional[FlushMode] = None) -> TOK:
         """
         Deletes all function libraries.

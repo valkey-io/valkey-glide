@@ -1801,6 +1801,20 @@ class BaseTransaction:
             ["REPLACE", library_code] if replace else [library_code],
         )
 
+    async def function_list(
+        self, library_name: str = None, with_code: bool = None
+    ) -> TTransaction:
+        # TODO Doc comment
+        args = []
+        if library_name:
+            args.extend(["LIBRARYNAME", library_name])
+        if with_code:
+            args.append("WITHCODE")
+        return self.append_command(
+            RequestType.FunctionList,
+            args,
+        )
+
     def function_flush(
         self: TTransaction, mode: Optional[FlushMode] = None
     ) -> TTransaction:
