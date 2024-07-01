@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast
+from typing import Dict, List, Mapping, Optional, cast, Any
 
 from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
@@ -264,7 +264,7 @@ class StandaloneCommands(CoreCommands):
 
     async def function_list(
         self, library_name: str = "", with_code: bool = False
-    ) -> list[dict[str, any]]:
+    ) -> list[dict[str, Any]]:
         # TODO Doc comment
         args = []
         if library_name:
@@ -272,7 +272,7 @@ class StandaloneCommands(CoreCommands):
         if with_code:
             args.append("WITHCODE")
         return cast(
-            list[dict[str, any]],
+            list[dict[str, Any]],
             await self._execute_command(
                 RequestType.FunctionList,
                 args,

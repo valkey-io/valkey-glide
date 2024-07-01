@@ -1802,7 +1802,7 @@ class BaseTransaction:
         )
 
     async def function_list(
-        self, library_name: str = "", with_code: bool = False
+        self: TTransaction, library_name: str = "", with_code: bool = False
     ) -> TTransaction:
         # TODO Doc comment
         args = []
