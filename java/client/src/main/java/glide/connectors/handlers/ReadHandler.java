@@ -31,6 +31,7 @@ public class ReadHandler extends ChannelInboundHandlerAdapter {
     public void exceptionCaught(ChannelHandlerContext ctx, Throwable cause) throws Exception {
         // TODO: log thru logger
         System.out.printf("=== exceptionCaught %s %s %n", ctx, cause);
+        cause.printStackTrace();
 
         callbackDispatcher.distributeClosingException(
                 "An unhandled error while reading from UDS channel: " + cause);
