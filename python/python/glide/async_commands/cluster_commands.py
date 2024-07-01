@@ -42,7 +42,7 @@ class ClusterCommands(CoreCommands):
             RequestType.CustomCommand, command_args, route
         )
 
-    async def fcall_route(self, function: str, arguments: Optional[List[str]] = None, route: Optional[Route] = None) -> TClusterResponse[Optional[TResult]]:
+    async def fcall_route(self, function: str, arguments: Optional[List[str]] = None, route: Optional[Route] = None) -> TClusterResponse[TResult]:
         """
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.
@@ -55,7 +55,7 @@ class ClusterCommands(CoreCommands):
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
-            TClusterResponse[Optional[TResult]]:
+            TClusterResponse[TResult]:
                 If a single node route is requested, returns a Optional[TResult] representing the function's return value.
                 Otherwise, returns a dict of [str , Optional[TResult]] where each key contains the address of
                 the queried node and the value contains the function's return value.
@@ -70,7 +70,7 @@ class ClusterCommands(CoreCommands):
         if arguments is not None:
             args.extend(arguments)
         return cast(
-            TClusterResponse[Optional[TResult]],
+            TClusterResponse[TResult],
             await self._execute_command(RequestType.FCall, args, route),
         )
 

@@ -5300,7 +5300,7 @@ class CoreCommands(Protocol):
         function: str,
         keys: Optional[List[str]] = None,
         arguments: Optional[List[str]] = None
-    ) -> Optional[TResult]:
+    ) -> TResult:
         """
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.
@@ -5314,7 +5314,7 @@ class CoreCommands(Protocol):
                 should not represent names of keys.
 
         Returns:
-            Optional[TResult]:
+            TResult:
                 The invoked function's return value.
 
         Example:
