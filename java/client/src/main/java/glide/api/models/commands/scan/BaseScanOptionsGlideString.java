@@ -2,6 +2,7 @@
 package glide.api.models.commands.scan;
 
 import glide.api.models.GlideString;
+import static glide.api.models.GlideString.gs;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -13,12 +14,12 @@ import lombok.experimental.SuperBuilder;
  * and ZSCAN).
  */
 @SuperBuilder
-public abstract class BaseScanOptions {
+public abstract class BaseScanOptionsGlideString {
     /** <code>MATCH</code> option string to include in the <code>SCAN</code> commands. */
-    public static final String MATCH_OPTION_STRING = "MATCH";
+    public static final GlideString MATCH_OPTION_GLIDE_STRING = gs("MATCH");
 
     /** <code>COUNT</code> option string to include in the <code>SCAN</code> commands. */
-    public static final String COUNT_OPTION_STRING = "COUNT";
+    public static final GlideString COUNT_OPTION_GLIDE_STRING = gs("COUNT");
 
     /**
      * The match filter is applied to the result of the command and will only include strings that
@@ -28,7 +29,7 @@ public abstract class BaseScanOptions {
      * <code>COUNT</code> being <code>10</code> which indicates that it will only fetch and match
      * <code>10</code> items from the list.
      */
-    private final String matchPattern;
+    private final GlideString matchPattern;
 
     /**
      * <code>COUNT</code> is a just a hint for the command for how many elements to fetch from the
@@ -43,19 +44,28 @@ public abstract class BaseScanOptions {
      *
      * @return a String array that holds the options and their arguments.
      */
-    public String[] toArgs() {
+    public String[] toStringArgs() {
         List<String> optionArgs = new ArrayList<>();
 
         if (matchPattern != null) {
-            optionArgs.add(MATCH_OPTION_STRING);
+            optionArgs.add(MATCH_OPTION_GLIDE_STRING.toString());
             optionArgs.add(matchPattern.toString());
         }
 
         if (count != null) {
-            optionArgs.add(COUNT_OPTION_STRING);
+            optionArgs.add(COUNT_OPTION_GLIDE_STRING.toString());
             optionArgs.add(count.toString());
         }
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Creates the arguments to be used in <code>SCAN</code> commands.
+     *
+     * @return a GlideString array that holds the options and their arguments.
+     */
+    public GlideString[] toGlideStringArgs() {
+        return Arrays.stream(toStringArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }

@@ -20,6 +20,7 @@ import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.scan.ZScanOptions;
+import glide.api.models.commands.scan.ZScanOptionsGlideString;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -1709,7 +1710,7 @@ public interface SortedSetBaseCommands {
      * GlideString cursor = gs("0");
      * Object[] result;
      * do {
-     *   result = client.zscan(key1, cursor, ZScanOptions.builder().matchPattern(gs("*")).count(20L).build()).get();
+     *   result = client.zscan(key1, cursor, ZScanOptionsGlideString.builder().matchPattern(gs("*")).count(20L).build()).get();
      *   cursor = gs(result[0].toString());
      *   Object[] glideStringResults = (Object[]) result[1];
      *
@@ -1723,5 +1724,5 @@ public interface SortedSetBaseCommands {
      * } while (!cursor.equals(gs("0")));
      * }</pre>
      */
-    CompletableFuture<Object[]> zscan(GlideString key, GlideString cursor, ZScanOptions zScanOptions);
+    CompletableFuture<Object[]> zscan(GlideString key, GlideString cursor, ZScanOptionsGlideString zScanOptions);
 }

@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.SScanOptionsGlideString;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
@@ -708,7 +709,7 @@ public interface SetBaseCommands {
      * GlideString cursor = gs("0");
      * Object[] result;
      * do {
-     *   result = client.sscan(key1, cursor, SScanOptions.builder().matchPattern(gs("*")).count(20L).build()).get();
+     *   result = client.sscan(key1, cursor, SScanOptionsGlideString.builder().matchPattern(gs("*")).count(20L).build()).get();
      *   cursor = gs(result[0].toString());
      *   Object[] glideStringResults = (Object[]) result[1];
      *
@@ -717,5 +718,5 @@ public interface SetBaseCommands {
      * } while (!cursor.equals(gs("0")));
      * }</pre>
      */
-    CompletableFuture<Object[]> sscan(GlideString key, GlideString cursor, SScanOptions sScanOptions);
+    CompletableFuture<Object[]> sscan(GlideString key, GlideString cursor, SScanOptionsGlideString sScanOptions);
 }

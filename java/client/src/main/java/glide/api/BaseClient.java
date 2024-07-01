@@ -221,6 +221,9 @@ import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
+import glide.api.models.commands.scan.HScanOptionsGlideString;
+import glide.api.models.commands.scan.SScanOptionsGlideString;
+import glide.api.models.commands.scan.ZScanOptionsGlideString;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -3029,7 +3032,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Object[]> sscan(
-            @NonNull GlideString key, @NonNull GlideString cursor, @NonNull SScanOptions sScanOptions) {
+            @NonNull GlideString key, @NonNull GlideString cursor, @NonNull SScanOptionsGlideString sScanOptions) {
         GlideString[] arguments =
                 concatenateArrays(new GlideString[] {key, cursor}, sScanOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(SScan, arguments, this::handleArrayOrNullResponseBinary);
@@ -3056,7 +3059,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Object[]> zscan(
-            @NonNull GlideString key, @NonNull GlideString cursor, @NonNull ZScanOptions zScanOptions) {
+            @NonNull GlideString key, @NonNull GlideString cursor, @NonNull ZScanOptionsGlideString zScanOptions) {
         GlideString[] arguments =
                 concatenateArrays(new GlideString[] {key, cursor}, zScanOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayOrNullResponseBinary);
@@ -3083,7 +3086,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Object[]> hscan(
-            @NonNull GlideString key, @NonNull GlideString cursor, @NonNull HScanOptions hScanOptions) {
+            @NonNull GlideString key, @NonNull GlideString cursor, @NonNull HScanOptionsGlideString hScanOptions) {
         GlideString[] arguments =
                 concatenateArrays(new GlideString[] {key, cursor}, hScanOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(HScan, arguments, this::handleArrayOrNullResponseBinary);

@@ -5,9 +5,9 @@ import glide.api.commands.HashBaseCommands;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Optional arguments for {@link HashBaseCommands#hscan(String, String, HScanOptions)}.
+ * Optional arguments for {@link HashBaseCommands#hscan(GlideString, GlideString, HScanOptionsGlideString)}.
  *
  * @see <a href="https://valkey.io/commands/hscan/">valkey.io</a>
  */
 @SuperBuilder
-public class HScanOptions extends BaseScanOptions {}
+public class HScanOptionsGlideString extends BaseScanOptionsGlideString {}

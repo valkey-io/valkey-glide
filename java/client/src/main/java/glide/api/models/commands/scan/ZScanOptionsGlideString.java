@@ -5,9 +5,9 @@ import glide.api.commands.SortedSetBaseCommands;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Optional arguments for {@link SortedSetBaseCommands#zscan(String, String, ZScanOptions)}.
+ * Optional arguments for {@link SortedSetBaseCommands#zscan(GlideString, GlideString, ZScanOptionsGlideString)}.
  *
  * @see <a href="https://valkey.io/commands/zscan/">valkey.io</a>
  */
 @SuperBuilder
-public class ZScanOptions extends BaseScanOptions {}
+public class ZScanOptionsGlideString extends BaseScanOptionsGlideString {}

@@ -5,9 +5,9 @@ import glide.api.commands.SetBaseCommands;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Optional arguments for {@link SetBaseCommands#sscan(String, String, SScanOptions)}.
+ * Optional arguments for {@link SetBaseCommands#sscan(GlideString, GlideString, SScanOptionsGlideString)}.
  *
  * @see <a href="https://valkey.io/commands/sscan/">valkey.io</a>
  */
 @SuperBuilder
-public class SScanOptions extends BaseScanOptions {}
+public class SScanOptionsGlideString extends BaseScanOptionsGlideString {}
