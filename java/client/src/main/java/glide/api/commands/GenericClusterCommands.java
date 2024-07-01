@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.configuration.ReadFrom;
