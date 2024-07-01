@@ -5,8 +5,9 @@ use glide_core::start_socket_listener as start_socket_listener_core;
 use glide_core::MAX_REQUEST_ARGS_LENGTH as MAX_REQUEST_ARGS_LENGTH_IN_BYTES;
 
 use bytes::Bytes;
+use jni::errors::Error as JniError;
 use jni::objects::{JByteArray, JClass, JObject, JObjectArray, JString};
-use jni::sys::{jlong, jsize};
+use jni::sys::{jint, jlong, jsize};
 use jni::JNIEnv;
 use redis::Value;
 use std::sync::mpsc;
@@ -293,7 +294,7 @@ impl From<logger_core::Level> for Level {
 }
 
 impl TryFrom<Level> for logger_core::Level {
-    type Error = String;
+    type Error = FFIError;
     fn try_from(level: Level) -> Result<Self, <logger_core::Level as TryFrom<Level>>::Error> {
         match level.0 {
             0 => Ok(logger_core::Level::Error),
@@ -301,7 +302,10 @@ impl TryFrom<Level> for logger_core::Level {
             2 => Ok(logger_core::Level::Info),
             3 => Ok(logger_core::Level::Debug),
             4 => Ok(logger_core::Level::Trace),
-            _ => Err(format!("Invalid log level: {:?}", level.0)),
+            _ => Err(FFIError::Logger(format!(
+                "Invalid log level: {:?}",
+                level.0
+            ))),
         }
     }
 }
@@ -348,20 +352,25 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'loc
 ) -> jint {
     handle_panics(
         move || {
-            fn init_internal(level: jint, file_name: JString<'_>) -> Result<jint, FFIError> {
+            fn init_internal(
+                env: &mut JNIEnv<'_>,
+                level: jint,
+                file_name: JString<'_>,
+            ) -> Result<jint, FFIError> {
                 let level = if level >= 0 { Some(level) } else { None };
                 let file_name: Option<String> = match env.get_string(&file_name) {
                     Ok(file_name) => Some(file_name.into()),
                     Err(JniError::NullPtr(_)) => None,
-                    Err(err) => return err,
+                    Err(err) => return Err(err.into()),
                 };
-                let logger_level = logger_core::init(
-                    level.map(|level| Level(level).try_into()?),
-                    file_name.as_deref(),
-                );
+                let level = match level {
+                    Some(lvl) => Some(Level(lvl).try_into()?),
+                    None => None,
+                };
+                let logger_level = logger_core::init(level, file_name.as_deref());
                 Ok(Level::from(logger_level).0)
             }
-            let result = init_internal(level, file_name);
+            let result = init_internal(&mut env, level, file_name);
             handle_errors(&mut env, result)
         },
         "initInternal",
