@@ -1841,6 +1841,39 @@ class BaseTransaction:
             [library_name],
         )
 
+    def fcall_ro(
+        self: TTransaction,
+        function: str,
+        keys: Optional[List[str]] = None,
+        arguments: Optional[List[str]] = None,
+    ) -> TTransaction:
+        """
+        Invokes a previously loaded read-only function.
+
+        See https://valkey.io/commands/fcall_ro for more details.
+
+        Args:
+            function (str): The function name.
+            keys (List[str]): An `array` of keys accessed by the function. To ensure the correct
+                execution of functions, all names of keys that a function accesses must be
+                explicitly provided as `keys`.
+            arguments (List[str]): An `array` of `function` arguments. `arguments` should not
+                represent names of keys.
+
+        Command Response:
+            TResult: The return value depends on the function that was executed.
+
+        Since: Redis version 7.0.0.
+        """
+        args = []
+        if keys is not None:
+            args.extend([function, str(len(keys))] + keys)
+        else:
+            args.extend([function, str(0)])
+        if arguments is not None:
+            args.extend(arguments)
+        return self.append_command(RequestType.FCallReadOnly, args)
+
     def xadd(
         self: TTransaction,
         key: str,
@@ -2259,6 +2292,93 @@ class BaseTransaction:
         """
         args = _create_xpending_range_args(key, group_name, start, end, count, options)
         return self.append_command(RequestType.XPending, args)
+
+    def xautoclaim(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        consumer_name: str,
+        min_idle_time_ms: int,
+        start: str,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Transfers ownership of pending stream entries that match the specified criteria.
+
+        See https://valkey.io/commands/xautoclaim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name.
+            min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
+                value.
+            start (str): Filters the claimed entries to those that have an ID equal or greater than the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value.
+
+        Command response:
+            List[Union[str, Mapping[str, List[List[str]]], List[str]]]: A list containing the following elements:
+                - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
+                to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
+                scanned.
+                - A mapping of the claimed entries, with the keys being the claimed entry IDs and the values being a
+                2D list of the field-value pairs in the format `[[field1, value1], [field2, value2], ...]`.
+                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
+                deleted from the Pending Entries List.
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return self.append_command(RequestType.XAutoClaim, args)
+
+    def xautoclaim_just_id(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        consumer_name: str,
+        min_idle_time_ms: int,
+        start: str,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Transfers ownership of pending stream entries that match the specified criteria. This command uses the JUSTID
+        argument to further specify that the return value should contain a list of claimed IDs without their
+        field-value info.
+
+        See https://valkey.io/commands/xautoclaim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name.
+            min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
+                value.
+            start (str): Filters the claimed entries to those that have an ID equal or greater than the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value.
+
+        Command response:
+            List[Union[str, List[str]]]: A list containing the following elements:
+                - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
+                to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
+                scanned.
+                - A list of the IDs for the claimed entries.
+                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
+                deleted from the Pending Entries List.
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        args.append("JUSTID")
+
+        return self.append_command(RequestType.XAutoClaim, args)
 
     def geoadd(
         self: TTransaction,
@@ -3949,6 +4069,86 @@ class BaseTransaction:
 
         return self.append_command(RequestType.SScan, args)
 
+    def zscan(
+        self: TTransaction,
+        key: str,
+        cursor: str,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Iterates incrementally over a sorted set.
+
+        See https://valkey.io/commands/zscan for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+                the search.
+            match (Optional[str]): The match filter is applied to the result of the command and will only include
+                strings that match the pattern specified. If the sorted set is large enough for scan commands to return
+                only a subset of the sorted set then there could be a case where the result is empty although there are
+                items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
+                that it will only fetch and match `10` items from the list.
+            count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the
+                sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
+                represent the results as compact single-allocation packed encoding.
+
+        Returns:
+            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the sorted set held by `key`.
+                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+                returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
+                of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+                `String` pairs, where the value is at even indices and the score is at odd indices.
+        """
+        args = [key, cursor]
+        if match is not None:
+            args += ["MATCH", match]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return self.append_command(RequestType.ZScan, args)
+
+    def hscan(
+        self: TTransaction,
+        key: str,
+        cursor: str,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Iterates incrementally over a hash.
+
+        See https://valkey.io/commands/hscan for more details.
+
+        Args:
+            key (str): The key of the set.
+            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+                the search.
+            match (Optional[str]): The match filter is applied to the result of the command and will only include
+                strings that match the pattern specified. If the hash is large enough for scan commands to return only a
+                subset of the hash then there could be a case where the result is empty although there are items that
+                match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
+                only fetch and match `10` items from the list.
+            count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the hash.
+                `COUNT` could be ignored until the hash is large enough for the `SCAN` commands to represent the results
+                as compact single-allocation packed encoding.
+
+        Returns:
+            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the hash held by `key`.
+                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+                returned on the last iteration of the hash. The second element is always an `Array` of the subset of the
+                hash held in `key`. The `Array` in the second element is always a flattened series of `String` pairs,
+                where the value is at even indices and the score is at odd indices.
+        """
+        args = [key, cursor]
+        if match is not None:
+            args += ["MATCH", match]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return self.append_command(RequestType.HScan, args)
+
     def lcs(
         self: TTransaction,
         key1: str,
@@ -4052,6 +4252,28 @@ class BaseTransaction:
             args.append("WITHMATCHLEN")
 
         return self.append_command(RequestType.LCS, args)
+
+    def wait(
+        self: TTransaction,
+        numreplicas: int,
+        timeout: int,
+    ) -> TTransaction:
+        """
+        Returns the number of replicas that acknowledged the write commands sent by the current client
+        before this command, both in the case where the specified number of replicas are reached, or
+        when the timeout is reached.
+
+        See https://valkey.io/commands/wait for more details.
+
+        Args:
+            numreplicas (int): The number of replicas to reach.
+            timeout (int): The timeout value specified in milliseconds.
+
+        Command Response:
+            str: The number of replicas reached by all the writes performed in the context of the current connection.
+        """
+        args = [str(numreplicas), str(timeout)]
+        return self.append_command(RequestType.Wait, args)
 
 
 class Transaction(BaseTransaction):
