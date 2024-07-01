@@ -74,9 +74,9 @@ public class MessageHandler {
                 // ignore for now
                 Logger.log(
                         Logger.Level.INFO,
-                        "SUnsubscribe notification",
+                        "subscribe/unsubscribe notification",
                         String.format(
-                                "Received push notification of type '%s': %s\n",
+                                "Received push notification of type '%s': %s",
                                 pushType,
                                 Arrays.stream(values)
                                         .map(v -> v instanceof Number ? v.toString() : String.format("'%s'", v))
