@@ -4284,7 +4284,8 @@ class BaseTransaction:
         max_len: Optional[int] = None,
     ) -> TTransaction:
         """
-        Returns the index or indexes of element(s) matching `element` in the `key` list.
+        Returns the index or indexes of element(s) matching `element` in the `key` list. If no match is found,
+        None is returned.
 
         See https://valkey.io/commands/lpos for more details.
 

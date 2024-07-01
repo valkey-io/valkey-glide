@@ -6009,7 +6009,8 @@ class CoreCommands(Protocol):
         max_len: Optional[int] = None,
     ) -> Union[int, list[int], None]:
         """
-        Returns the index or indexes of element(s) matching `element` in the `key` list.
+        Returns the index or indexes of element(s) matching `element` in the `key` list. If no match is found,
+        None is returned.
 
         See https://valkey.io/commands/lpos for more details.
 
