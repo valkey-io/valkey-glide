@@ -31,8 +31,13 @@ import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_R
 import static glide.api.models.commands.geospatial.GeoAddOptions.CHANGED_REDIS_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VALKEY_API;
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
-import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.RETRY_COUNT_REDIS_API;
+import static glide.api.models.commands.stream.StreamClaimOptions.TIME_REDIS_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_VALKEY_API;
+import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_VALKEY_API;
 import static glide.api.models.commands.stream.StreamPendingOptions.IDLE_TIME_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.EXCLUSIVE_RANGE_REDIS_API;
 import static glide.api.models.commands.stream.StreamRange.MAXIMUM_RANGE_REDIS_API;
@@ -146,6 +151,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.PfAdd;
 import static redis_request.RedisRequestOuterClass.RequestType.PfCount;
 import static redis_request.RedisRequestOuterClass.RequestType.PfMerge;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
+import static redis_request.RedisRequestOuterClass.RequestType.Publish;
 import static redis_request.RedisRequestOuterClass.RequestType.RPop;
 import static redis_request.RedisRequestOuterClass.RequestType.RPush;
 import static redis_request.RedisRequestOuterClass.RequestType.RPushX;
@@ -183,11 +189,13 @@ import static redis_request.RedisRequestOuterClass.RequestType.Unlink;
 import static redis_request.RedisRequestOuterClass.RequestType.Wait;
 import static redis_request.RedisRequestOuterClass.RequestType.XAck;
 import static redis_request.RedisRequestOuterClass.RequestType.XAdd;
+import static redis_request.RedisRequestOuterClass.RequestType.XClaim;
 import static redis_request.RedisRequestOuterClass.RequestType.XDel;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -266,6 +274,7 @@ import glide.api.models.commands.scan.HScanOptions;
 import glide.api.models.commands.scan.SScanOptions;
 import glide.api.models.commands.scan.ZScanOptions;
 import glide.api.models.commands.stream.StreamAddOptions;
+import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
 import glide.api.models.commands.stream.StreamRange;
@@ -817,7 +826,7 @@ public class TransactionTests {
                 Pair.of(
                         XGroupCreate,
                         buildArgs(
-                                "key", "group", "id", MAKE_STREAM_REDIS_API, ENTRIES_READ_REDIS_API, "entry")));
+                                "key", "group", "id", MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, "entry")));
 
         transaction.xgroupDestroy("key", "group");
         results.add(Pair.of(XGroupDestroy, buildArgs("key", "group")));
@@ -834,6 +843,12 @@ public class TransactionTests {
                         XReadGroup,
                         buildArgs(
                                 READ_GROUP_REDIS_API, "group", "consumer", READ_STREAMS_REDIS_API, "key", "id")));
+
+        transaction.xgroupSetId("key", "group", "id");
+        results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id")));
+
+        transaction.xgroupSetId("key", "group", "id", "1-1");
+        results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id", "ENTRIESREAD", "1-1")));
 
         transaction.xreadgroup(
                 Map.of("key", "id"),
@@ -887,6 +902,58 @@ public class TransactionTests {
                                 EXCLUSIVE_RANGE_REDIS_API + "1234-0",
                                 "99",
                                 "consumer")));
+
+        transaction.xclaim("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
+        results.add(Pair.of(XClaim, buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4")));
+
+        StreamClaimOptions claimOptions =
+                StreamClaimOptions.builder().force().idle(11L).idleUnixTime(12L).retryCount(5L).build();
+        transaction.xclaim(
+                "key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"}, claimOptions);
+        results.add(
+                Pair.of(
+                        XClaim,
+                        buildArgs(
+                                "key",
+                                "group",
+                                "consumer",
+                                "99",
+                                "12345-1",
+                                "98765-4",
+                                IDLE_REDIS_API,
+                                "11",
+                                TIME_REDIS_API,
+                                "12",
+                                RETRY_COUNT_REDIS_API,
+                                "5",
+                                FORCE_REDIS_API)));
+
+        transaction.xclaimJustId("key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"});
+        results.add(
+                Pair.of(
+                        XClaim,
+                        buildArgs("key", "group", "consumer", "99", "12345-1", "98765-4", JUST_ID_REDIS_API)));
+
+        transaction.xclaimJustId(
+                "key", "group", "consumer", 99L, new String[] {"12345-1", "98765-4"}, claimOptions);
+        results.add(
+                Pair.of(
+                        XClaim,
+                        buildArgs(
+                                "key",
+                                "group",
+                                "consumer",
+                                "99",
+                                "12345-1",
+                                "98765-4",
+                                IDLE_REDIS_API,
+                                "11",
+                                TIME_REDIS_API,
+                                "12",
+                                RETRY_COUNT_REDIS_API,
+                                "5",
+                                FORCE_REDIS_API,
+                                JUST_ID_REDIS_API)));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
@@ -1151,6 +1218,9 @@ public class TransactionTests {
 
         transaction.lcsLen("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2", "LEN")));
+
+        transaction.publish("ch1", "msg");
+        results.add(Pair.of(Publish, buildArgs("ch1", "msg")));
 
         transaction.lcsIdx("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2", IDX_COMMAND_STRING)));
