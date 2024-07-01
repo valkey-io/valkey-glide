@@ -12,15 +12,15 @@ import lombok.Singular;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Optional arguments to {@link GenericCommands#sort(GlideString, SortOptionsGlideString)}, {@link
- * GenericCommands#sortReadOnly(GlideString, SortOptionsGlideString)}, and {@link
- * GenericCommands#sortStore(GlideString, String, SortOptionsGlideString)}
+ * Optional arguments to {@link GenericCommands#sort(GlideString, SortOptionsBinary)}, {@link
+ * GenericCommands#sortReadOnly(GlideString, SortOptionsBinary)}, and {@link
+ * GenericCommands#sortStore(GlideString, String, SortOptionsBinary)}
  *
  * @see <a href="https://redis.io/commands/sort/">redis.io</a> and <a
  *     href="https://redis.io/docs/latest/commands/sort_ro/">redis.io</a>
  */
 @SuperBuilder
-public class SortOptionsGlideString extends SortBaseOptions {
+public class SortOptionsBinary extends SortBaseOptions {
     /**
      * <code>BY</code> subcommand string to include in the <code>SORT</code> and <code>SORT_RO</code>
      * commands.

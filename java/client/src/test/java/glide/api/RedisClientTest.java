@@ -30,8 +30,8 @@ import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.BY_COMMAND_STRING;
-import static glide.api.models.commands.SortOptionsGlideString.BY_COMMAND_GLIDE_STRING;
-import static glide.api.models.commands.SortOptionsGlideString.GET_COMMAND_GLIDE_STRING;
+import static glide.api.models.commands.SortOptionsBinary.BY_COMMAND_GLIDE_STRING;
+import static glide.api.models.commands.SortOptionsBinary.GET_COMMAND_GLIDE_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT;
 import static glide.api.models.commands.bitmap.BitFieldOptions.GET_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.INCRBY_COMMAND_STRING;
@@ -287,7 +287,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
-import glide.api.models.commands.SortOptionsGlideString;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
@@ -9184,7 +9184,7 @@ public class RedisClientTest {
         CompletableFuture<GlideString[]> response =
                 service.sort(
                         key,
-                        SortOptionsGlideString.builder()
+                        SortOptionsBinary.builder()
                                 .alpha()
                                 .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
@@ -9273,8 +9273,7 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<GlideString[]> response =
                 service.sortReadOnly(
-                        key,
-                        SortOptionsGlideString.builder().getPattern(getPattern).byPattern(byPattern).build());
+                        key, SortOptionsBinary.builder().getPattern(getPattern).byPattern(byPattern).build());
         GlideString[] payload = response.get();
 
         // verify
@@ -9370,7 +9369,7 @@ public class RedisClientTest {
                 service.sortStore(
                         key,
                         destKey,
-                        SortOptionsGlideString.builder()
+                        SortOptionsBinary.builder()
                                 .alpha()
                                 .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
