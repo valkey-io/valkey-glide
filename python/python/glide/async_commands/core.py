@@ -5578,6 +5578,128 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SScan, args),
         )
 
+    async def zscan(
+        self,
+        key: str,
+        cursor: str,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> List[Union[str, List[str]]]:
+        """
+        Iterates incrementally over a sorted set.
+
+        See https://valkey.io/commands/zscan for more details.
+
+        Args:
+            key (str): The key of the sorted set.
+            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+                the search.
+            match (Optional[str]): The match filter is applied to the result of the command and will only include
+                strings that match the pattern specified. If the sorted set is large enough for scan commands to return
+                only a subset of the sorted set then there could be a case where the result is empty although there are
+                items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
+                that it will only fetch and match `10` items from the list.
+            count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the
+                sorted set. `COUNT` could be ignored until the sorted set is large enough for the `SCAN` commands to
+                represent the results as compact single-allocation packed encoding.
+
+        Returns:
+            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the sorted set held by `key`.
+                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+                returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
+                of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
+                `String` pairs, where the value is at even indices and the score is at odd indices.
+
+        Examples:
+            # Assume "key" contains a sorted set with multiple members
+            >>> result_cursor = "0"
+            >>> while True:
+            ...     result = await redis_client.zscan("key", "0", match="*", count=5)
+            ...     new_cursor = str(result [0])
+            ...     print("Cursor: ", new_cursor)
+            ...     print("Members: ", result[1])
+            ...     if new_cursor == "0":
+            ...         break
+            ...     result_cursor = new_cursor
+            Cursor:  123
+            Members:  ['value 163', '163', 'value 114', '114', 'value 25', '25', 'value 82', '82', 'value 64', '64']
+            Cursor:  47
+            Members:  ['value 39', '39', 'value 127', '127', 'value 43', '43', 'value 139', '139', 'value 211', '211']
+            Cursor:  0
+            Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
+        """
+        args = [key, cursor]
+        if match is not None:
+            args += ["MATCH", match]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return cast(
+            List[Union[str, List[str]]],
+            await self._execute_command(RequestType.ZScan, args),
+        )
+
+    async def hscan(
+        self,
+        key: str,
+        cursor: str,
+        match: Optional[str] = None,
+        count: Optional[int] = None,
+    ) -> List[Union[str, List[str]]]:
+        """
+        Iterates incrementally over a hash.
+
+        See https://valkey.io/commands/hscan for more details.
+
+        Args:
+            key (str): The key of the set.
+            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+                the search.
+            match (Optional[str]): The match filter is applied to the result of the command and will only include
+                strings that match the pattern specified. If the hash is large enough for scan commands to return only a
+                subset of the hash then there could be a case where the result is empty although there are items that
+                match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
+                only fetch and match `10` items from the list.
+            count (Optional[int]): `COUNT` is a just a hint for the command for how many elements to fetch from the hash.
+                `COUNT` could be ignored until the hash is large enough for the `SCAN` commands to represent the results
+                as compact single-allocation packed encoding.
+
+        Returns:
+            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the hash held by `key`.
+                The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
+                returned on the last iteration of the hash. The second element is always an `Array` of the subset of the
+                hash held in `key`. The `Array` in the second element is always a flattened series of `String` pairs,
+                where the value is at even indices and the score is at odd indices.
+
+        Examples:
+            # Assume "key" contains a hash with multiple members
+            >>> result_cursor = "0"
+            >>> while True:
+            ...     result = await redis_client.hscan("key", "0", match="*", count=3)
+            ...     new_cursor = str(result [0])
+            ...     print("Cursor: ", new_cursor)
+            ...     print("Members: ", result[1])
+            ...     if new_cursor == "0":
+            ...         break
+            ...     result_cursor = new_cursor
+            Cursor:  31
+            Members:  ['field 79', 'value 79', 'field 20', 'value 20', 'field 115', 'value 115']
+            Cursor:  39
+            Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162']
+            Cursor:  0
+            Members:  ['field 420', 'value 420', 'field 221', 'value 221']
+        """
+        args = [key, cursor]
+        if match is not None:
+            args += ["MATCH", match]
+        if count is not None:
+            args += ["COUNT", str(count)]
+
+        return cast(
+            List[Union[str, List[str]]],
+            await self._execute_command(RequestType.HScan, args),
+        )
+
     @dataclass
     class PubSubMsg:
         """

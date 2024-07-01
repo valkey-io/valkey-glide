@@ -68,6 +68,7 @@
 * Python: Added LCS command ([#1716](https://github.com/aws/glide-for-redis/pull/1716))
 * Python: Added WAIT command ([#1710](https://github.com/aws/glide-for-redis/pull/1710))
 * Python: Added XAUTOCLAIM command ([#1718](https://github.com/aws/glide-for-redis/pull/1718))
+* Python: Add ZSCAN and HSCAN commands ([#1732](https://github.com/aws/glide-for-redis/pull/1732))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
