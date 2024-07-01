@@ -355,14 +355,32 @@ class ClusterCommands(CoreCommands):
 
     async def function_list(
         self,
-        library_name: Optional[str] = None,
+        library_name_pattern: Optional[str] = None,
         with_code: bool = False,
         route: Optional[Route] = None,
     ) -> List[Mapping[bytes, Any]]:
-        # TODO Doc comment
+        """
+        Returns information about the functions and libraries.
+
+        See https://valkey.io/commands/function-list/ for more details.
+
+        Args:
+            library_name_pattern (Optional[str]):  A wildcard pattern for matching library names.
+            with_code (bool): Specifies whether to request the library code from the server or not.
+            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            List[Mapping[bytes, Any]]: Info about all libraries and their functions.
+
+        Examples:
+
+
+        Since: Redis 7.0.0.
+        """
         args = []
-        if library_name is not None:
-            args.extend(["LIBRARYNAME", library_name])
+        if library_name_pattern is not None:
+            args.extend(["LIBRARYNAME", library_name_pattern])
         if with_code:
             args.append("WITHCODE")
         return cast(

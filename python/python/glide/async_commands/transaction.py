@@ -1802,12 +1802,12 @@ class BaseTransaction:
         )
 
     def function_list(
-        self: TTransaction, library_name: Optional[str] = None, with_code: bool = False
+        self: TTransaction, library_name_pattern: Optional[str] = None, with_code: bool = False
     ) -> TTransaction:
         # TODO Doc comment
         args = []
-        if library_name is not None:
-            args.extend(["LIBRARYNAME", library_name])
+        if library_name_pattern is not None:
+            args.extend(["LIBRARYNAME", library_name_pattern])
         if with_code:
             args.append("WITHCODE")
         return self.append_command(

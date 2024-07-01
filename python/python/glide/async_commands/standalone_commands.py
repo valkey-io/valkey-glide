@@ -263,12 +263,12 @@ class StandaloneCommands(CoreCommands):
         )
 
     async def function_list(
-        self, library_name: Optional[str] = None, with_code: bool = False
+        self, library_name_pattern: Optional[str] = None, with_code: bool = False
     ) -> List[Mapping[bytes, Any]]:
         # TODO Doc comment
         args = []
-        if library_name is not None:
-            args.extend(["LIBRARYNAME", library_name])
+        if library_name_pattern is not None:
+            args.extend(["LIBRARYNAME", library_name_pattern])
         if with_code:
             args.append("WITHCODE")
         return cast(

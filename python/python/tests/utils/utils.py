@@ -235,6 +235,17 @@ def check_function_list_response(
     function_flags: Mapping[bytes, Set[bytes]],
     lib_code: Optional[bytes] = None,
 ):
+    """
+    Validate whether `FUNCTION LIST` response contains required info.
+
+    Args:
+        response (List[Mapping[bytes, Any]]): The response from redis.
+        libName (bytes): Expected library name.
+        functionDescriptions (Mapping[bytes, Optional[bytes]]): Expected function descriptions. Key - function name, value -
+             description.
+        functionFlags (Mapping[bytes, Set[bytes]]): Expected function flags. Key - function name, value - flags set.
+        libCode (Optional[bytes]): Expected library to check if given.
+    """
     assert len(response) > 0
     has_lib = False
     for lib in response:

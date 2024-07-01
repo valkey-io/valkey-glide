@@ -7299,7 +7299,7 @@ class TestCommands:
             assert isinstance(result, dict)
             for nodeResponse in result.values():
                 check_function_list_response(
-                    result,
+                    nodeResponse,
                     lib_name.encode(),
                     {func_name.encode(): None},
                     {func_name.encode(): {b"no-writes"}},
@@ -7319,7 +7319,7 @@ class TestCommands:
             assert isinstance(result, dict)
             for nodeResponse in result.values():
                 check_function_list_response(
-                    result,
+                    nodeResponse,
                     lib_name.encode(),
                     {func_name.encode(): None},
                     {func_name.encode(): {b"no-writes"}},
@@ -7339,7 +7339,7 @@ class TestCommands:
             assert isinstance(result, dict)
             for nodeResponse in result.values():
                 check_function_list_response(
-                    result,
+                    nodeResponse,
                     lib_name.encode(),
                     {func_name.encode(): None},
                     {func_name.encode(): {b"no-writes"}},
@@ -7355,7 +7355,8 @@ class TestCommands:
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        original_functions_count = len(await redis_client.function_list())
+        await redis_client.flushall()
+        assert len(await redis_client.function_list()) == 0
 
         lib_name_1 = f"mylib1C{get_random_string(5)}"
         func_name_1 = f"myfunc1c{get_random_string(5)}"
@@ -7376,7 +7377,7 @@ class TestCommands:
 
         no_args_response = await redis_client.function_list()
 
-        assert len(no_args_response) == original_functions_count + 2
+        assert len(no_args_response) == 2
         check_function_list_response(
             no_args_response,
             lib_name_1.encode(),
