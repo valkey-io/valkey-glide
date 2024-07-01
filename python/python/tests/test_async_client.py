@@ -7077,7 +7077,7 @@ class TestCommands:
 
         assert await redis_client.function_load(new_code, True) == lib_name.encode()
 
-        # TODO: add when FCALL is implemented
+        assert await redis_client.fcall(func2_name, arguments=["one", "two"]) == 2
         assert await redis_client.fcall_ro(func2_name, arguments=["one", "two"]) == 2
 
         assert await redis_client.function_flush(FlushMode.SYNC) is OK
@@ -7300,25 +7300,32 @@ class TestCommands:
         assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
-        # TODO: add when FCALL is implemented.
+        assert (
+            await redis_client.fcall(func_name, keys=keys, arguments=[])
+            == key1.encode()
+        )
+
         assert (
             await redis_client.fcall_ro(func_name, keys=keys, arguments=[])
             == key1.encode()
         )
 
         transaction = ClusterTransaction()
-        # TODO: add when FCALL is implemented.
+
+        transaction.fcall(func_name, keys=keys, arguments=[])
         transaction.fcall_ro(func_name, keys=keys, arguments=[])
 
         # check response from a routed transaction request
         result = await redis_client.exec(transaction, route)
         assert result is not None
         assert result[0] == key1.encode()
+        assert result[1] == key1.encode()
 
         # if no route given, GLIDE should detect it automatically
         result = await redis_client.exec(transaction)
         assert result is not None
         assert result[0] == key1.encode()
+        assert result[1] == key1.encode()
 
         assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
 
@@ -7341,7 +7348,6 @@ class TestCommands:
         assert await redis_client.function_load(code, False) == lib_name.encode()
 
         # On a replica node should fail, because a function isn't guaranteed to be RO
-        # TODO: add when FCALL is implemented.
         with pytest.raises(RequestError) as e:
             assert await redis_client.fcall_ro_route(
                 func_name, arguments=[], route=replicaRoute
@@ -7366,19 +7372,6 @@ class TestCommands:
             )
             == 42
         )
-
-        result = await redis_client.fcall(
-            func2_name, arguments=["one", "two"], route=route
-        )
-
-        if single_route:
-            assert result == 2
-        else:
-            assert isinstance(result, dict)
-            for nodeResponse in result.values():
-                assert nodeResponse == 2
-
-        assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7434,7 +7427,6 @@ class TestCommands:
         assert await redis_client.function_load(code, False) == lib_name
 
         # On a replica node should fail, because a function isn't guaranteed to be RO
-        # TODO: add when FCALL is implemented.
         with pytest.raises(RequestError):
             assert await redis_client.fcall(
                 func_name, keys=[], arguments=[], route=replicaRoute
