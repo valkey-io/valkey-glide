@@ -722,22 +722,40 @@ pub(crate) fn convert_to_expected_type(
                         if converted_key == Value::SimpleString("groups".into())
                         || converted_key == Value::SimpleString("consumers".into()) {
                             let Value::Array(nested_array) = inner_value.clone() else {
-                                // TODO groups could be mapped to an integer (`XINFO STREAM str`)
-                                dbg!(converted_key.clone());
-                                dbg!(inner_value.clone());
-                                panic!("pewpew");
+                                // "groups" could mapped to an integer if command submitted without `FULL` keyword
+                                if matches!(inner_value.clone(), Value::Int(_)) {
+                                    return Ok((converted_key, inner_value));
+                                }
                                 return Err((ErrorKind::TypeError, "Incorrect value type received /////").into());
                             };
-                            // already converted (a RESP3 response) - do nothing
-                            if matches!(nested_array[0], Value::Map(_)) {
+                            // array is empty or already converted (a RESP3 response) - do nothing
+                            if nested_array.is_empty() || matches!(nested_array[0], Value::Map(_)) {
+                                dbg!("already converted (a RESP3 response) - do nothing");
                                 Ok((converted_key, inner_value))
                             } else {
+                                dbg!("else");
+                                //////////////
+                                let Value::Array(nested_array) = inner_value.clone() else {
+                                    return Err((ErrorKind::TypeError, "Incorrect value type received ----").into());
+                                };
+                                let converted_array: RedisResult<Vec<_>> = 
+                                nested_array
+                                    .into_iter()
+                                    .map(|item| convert_to_expected_type(item, Some(ExpectedReturnType::XInfoStreamReturnType)))
+                                    .collect();
+
+                                let converted_value = converted_array.map(Value::Array)?;
+
+                                /*
                                 let converted_value = convert_to_expected_type(
                                     inner_value,
                                     Some(ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::XInfoStreamReturnType))))?;
+                                */
                                 Ok((converted_key, converted_value))
                             }
-                        } else if converted_key == Value::SimpleString("entries".into()) {
+                        } else if converted_key == Value::SimpleString("entries".into()) 
+                        || converted_key == Value::SimpleString("first-entry".into())
+                        || converted_key == Value::SimpleString("last-entry".into()) {
                             dbg!("entries");
                             dbg!(inner_value.clone());
                             /*/
@@ -786,7 +804,8 @@ pub(crate) fn convert_to_expected_type(
                     })
                     .collect::<RedisResult<_>>();
             
-                    result.map(Value::Map)
+                    let res = result.map(Value::Map);
+                    dbg!(res)
                 },
                 Value::Array(ref array) => {
                     dbg!("array");
@@ -799,6 +818,17 @@ pub(crate) fn convert_to_expected_type(
                             Some(ExpectedReturnType::XInfoStreamReturnType))?,
                         Some(ExpectedReturnType::XInfoStreamReturnType))
                     */
+                    if (*array).len() == 2 {
+                        dbg!("arr of 2 - single entry");
+                        let converted = convert_to_expected_type(
+                            value,
+                            Some(ExpectedReturnType::Map {
+                                key_type: &Some(ExpectedReturnType::SimpleString),
+                                value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+                        }))?;
+                        dbg!(converted.clone());
+                        return Ok(converted);
+                    }
                     
                     let map = match array.get(0) {
                         //Some(Value::Array(_)) => convert_to_expected_type(value.clone(), Some(ExpectedReturnType::ArrayOfMaps(&None))),
