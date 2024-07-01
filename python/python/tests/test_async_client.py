@@ -8433,7 +8433,7 @@ class TestClusterRoutes:
         assert len(result[result_collection_index]) >= 0
 
         # Exceptions
-        # Non-set key
+        # Non-hash key
         assert await redis_client.set(key2, "test") == OK
         with pytest.raises(RequestError):
             await redis_client.hscan(key2, initial_cursor)
