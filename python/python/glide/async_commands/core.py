@@ -5575,14 +5575,14 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.restore("newKey", 0, value)
                 OK # Indicates restore `newKey` without any ttl expiry nor any option
-            >>> await client.restore("newKey", 0, value, "REPLACE")
+            >>> await client.restore("newKey", 0, value, replace="REPLACE")
                 OK # Indicates restore `newKey` with `REPLACE` option
-            >>> await client.restore("newKey", 0, value, "REPLACE", "ABSTTL")
-                OK # Indicates restore `newKey` with `REPLACE` and `ABSTTL` options
-            >>> await client.restore("newKey", 0, value, "REPLACE", idletime=10)
-                OK # Indicates restore `newKey` with `REPLACE` and `IDLETIME` options
-            >>> await client.restore("newKey", 0, value, "REPLACE", frequency=5)
-                OK # Indicates restore `newKey` with `REPLACE` and `FREQ` options
+            >>> await client.restore("newKey", 0, value, absttl="ABSTTL")
+                OK # Indicates restore `newKey` with `ABSTTL` option
+            >>> await client.restore("newKey", 0, value, idletime=10)
+                OK # Indicates restore `newKey` with `IDLETIME` option
+            >>> await client.restore("newKey", 0, value, frequency=5)
+                OK # Indicates restore `newKey` with `FREQ` option
         """
         args = [key, str(ttl), value]
         if replace is not None:
