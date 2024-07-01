@@ -722,7 +722,11 @@ pub(crate) fn convert_to_expected_type(
                         if converted_key == Value::SimpleString("groups".into())
                         || converted_key == Value::SimpleString("consumers".into()) {
                             let Value::Array(nested_array) = inner_value.clone() else {
-                                return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                                // TODO groups could be mapped to an integer (`XINFO STREAM str`)
+                                dbg!(converted_key.clone());
+                                dbg!(inner_value.clone());
+                                panic!("pewpew");
+                                return Err((ErrorKind::TypeError, "Incorrect value type received /////").into());
                             };
                             // already converted (a RESP3 response) - do nothing
                             if matches!(nested_array[0], Value::Map(_)) {
