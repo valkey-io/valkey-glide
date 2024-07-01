@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 mod utilities;
 
@@ -35,6 +35,7 @@ pub(crate) mod shared_client_tests {
                     Client::new(
                         create_connection_request(&[connection_addr.clone()], &configuration)
                             .into(),
+                        None,
                     )
                     .await
                     .ok()
@@ -61,6 +62,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_send_set_and_get(
         #[values(false, true)] use_tls: bool,
@@ -82,6 +84,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_pipeline_is_not_routed() {
         // This test checks that a transaction without user routing isn't routed to a random node before reaching its target.
@@ -164,6 +167,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_resp_support(#[values(false, true)] use_cluster: bool, #[values(2, 3)] protocol: i64) {
         let protocol_enum = match protocol {
@@ -222,6 +226,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_client_handle_concurrent_workload_without_dropping_or_changing_values(
         #[values(false, true)] use_tls: bool,
@@ -251,6 +256,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_report_closing_when_server_closes(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
@@ -276,6 +282,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_authenticate_with_password(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
@@ -297,6 +304,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_authenticate_with_password_and_username(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
@@ -319,6 +327,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_request_timeout(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
@@ -351,6 +360,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_blocking_command_doesnt_raise_timeout_error(#[values(false, true)] use_cluster: bool) {
         // We test that the request timeout is based on the value specified in the blocking command argument,
@@ -378,6 +388,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_blocking_command_with_negative_timeout_returns_error(
         #[values(false, true)] use_cluster: bool,
@@ -404,6 +415,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_blocking_command_with_zero_timeout_blocks_indefinitely(
         #[values(false, true)] use_cluster: bool,
@@ -430,6 +442,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_request_transaction_timeout(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {
@@ -468,6 +481,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_client_name_after_reconnection(#[values(false, true)] use_cluster: bool) {
         const CLIENT_NAME: &str = "TEST_CLIENT_NAME";
@@ -517,6 +531,7 @@ pub(crate) mod shared_client_tests {
     }
 
     #[rstest]
+    #[serial_test::serial]
     #[timeout(SHORT_CLUSTER_TEST_TIMEOUT)]
     fn test_request_transaction_and_convert_all_values(#[values(false, true)] use_cluster: bool) {
         block_on_all(async {

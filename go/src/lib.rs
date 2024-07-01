@@ -1,5 +1,5 @@
 /*
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 // TODO: Investigate using uniffi bindings for Go instead of cbindgen
@@ -81,7 +81,7 @@ fn create_client_internal(
             errors::error_message(&redis_error)
         })?;
     let client = runtime
-        .block_on(GlideClient::new(ConnectionRequest::from(request)))
+        .block_on(GlideClient::new(ConnectionRequest::from(request), None))
         .map_err(|err| err.to_string())?;
     Ok(ClientAdapter {
         client,

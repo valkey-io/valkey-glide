@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::client;
 use glide_core::client::Client as GlideClient;
@@ -59,7 +59,7 @@ fn create_client_internal(
         .thread_name("GLIDE for Redis C# thread")
         .build()?;
     let _runtime_handle = runtime.enter();
-    let client = runtime.block_on(GlideClient::new(request)).unwrap(); // TODO - handle errors.
+    let client = runtime.block_on(GlideClient::new(request, None)).unwrap(); // TODO - handle errors.
     Ok(Client {
         client,
         success_callback,

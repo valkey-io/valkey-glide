@@ -1,5 +1,5 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
-package glide.api.models.commands;
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
+package glide.api.models.commands.bitmap;
 
 import glide.api.commands.BitmapBaseCommands;
 

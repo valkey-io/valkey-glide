@@ -1,10 +1,21 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
+import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
+import static glide.api.commands.GenericCommands.DB_REDIS_API;
+import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
+import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
+import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static redis_request.RedisRequestOuterClass.RequestType.Copy;
+import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
+import static redis_request.RedisRequestOuterClass.RequestType.Sort;
+import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
+import glide.api.models.commands.SortOptions;
 import lombok.AllArgsConstructor;
-import redis_request.RedisRequestOuterClass;
+import lombok.NonNull;
+import org.apache.commons.lang3.ArrayUtils;
 
 /**
  * Extends BaseTransaction class for Redis standalone commands. Transactions allow the execution of
@@ -41,9 +52,118 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @return Command Response - A simple <code>OK</code> response.
      */
     public Transaction select(long index) {
-        RedisRequestOuterClass.Command.ArgsArray commandArgs = buildArgs(Long.toString(index));
+        protobufTransaction.addCommands(buildCommand(Select, Long.toString(index)));
+        return this;
+    }
 
-        protobufTransaction.addCommands(buildCommand(Select, commandArgs));
+    /**
+     * Move <code>key</code> from the currently selected database to the database specified by <code>
+     * dbIndex</code>.
+     *
+     * @see <a href="https://redis.io/commands/move/">redis.io</a> for more details.
+     * @param key The key to move.
+     * @param dbIndex The index of the database to move <code>key</code> to.
+     * @return Command Response - <code>true</code> if <code>key</code> was moved, or <code>false
+     *     </code> if the <code>key</code> already exists in the destination database or does not
+     *     exist in the source database.
+     */
+    public Transaction move(String key, long dbIndex) {
+        protobufTransaction.addCommands(buildCommand(Move, key, Long.toString(dbIndex)));
+        return this;
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public Transaction copy(@NonNull String source, @NonNull String destination, long destinationDB) {
+        return copy(source, destination, destinationDB, false);
+    }
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return Command Response - <code>true</code> if <code>source</code> was copied, <code>false
+     *     </code> if <code>source</code> was not copied.
+     */
+    public Transaction copy(
+            @NonNull String source, @NonNull String destination, long destinationDB, boolean replace) {
+        String[] args = new String[] {source, destination, DB_REDIS_API, Long.toString(destinationDB)};
+        if (replace) {
+            args = ArrayUtils.add(args, REPLACE_REDIS_API);
+        }
+        protobufTransaction.addCommands(buildCommand(Copy, args));
+        return this;
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sort</code> command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.<br>
+     * To store the result into a new key, see {@link #sortStore(String, String, SortOptions)}.
+     *
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @return Command Response - An <code>Array</code> of sorted elements.
+     */
+    public Transaction sort(@NonNull String key, @NonNull SortOptions sortOptions) {
+        protobufTransaction.addCommands(
+                buildCommand(Sort, ArrayUtils.addFirst(sortOptions.toArgs(), key)));
+        return this;
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
+     * and apply transformations on sorted elements.<br>
+     *
+     * @since Redis 7.0 and above.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @return Command Response - An <code>Array</code> of sorted elements.
+     */
+    public Transaction sortReadOnly(@NonNull String key, @NonNull SortOptions sortOptions) {
+        protobufTransaction.addCommands(
+                buildCommand(SortReadOnly, ArrayUtils.addFirst(sortOptions.toArgs(), key)));
+        return this;
+    }
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
+     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
+     * different criteria, apply transformations on sorted elements, and store the result in a new
+     * key.<br>
+     * To get the sort result without storing it into a key, see {@link #sort(String, SortOptions)}.
+     *
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @param destination The key where the sorted result will be stored.
+     * @return Command Response - The number of elements in the sorted key stored at <code>destination
+     *     </code>.
+     */
+    public Transaction sortStore(
+            @NonNull String key, @NonNull String destination, @NonNull SortOptions sortOptions) {
+        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
+        protobufTransaction.addCommands(
+                buildCommand(
+                        Sort, concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments)));
         return this;
     }
 }

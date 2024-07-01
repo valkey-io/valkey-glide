@@ -179,13 +179,75 @@ enum RequestType {
     BZPopMin = 137;
     FlushAll = 138;
     ZRandMember = 139;
-    Bitcount = 140;
+    BitCount = 140;
     BZMPop = 141;
+    SetBit = 142;
+    ZInterCard = 143;
+    ZMPop = 144;
+    GetBit = 145;
+    ZInter = 146;
+    BitPos = 147;
+    BitOp = 148;
+    HStrlen = 149;
+    FunctionLoad = 150;
+    FunctionList = 151;
+    FunctionDelete = 152;
+    FunctionFlush = 153;
+    FCall = 154;
+    LMPop = 155;
+    ExpireTime = 156;
+    PExpireTime = 157;
+    BLMPop = 158;
+    XLen = 159;
+    Sort = 160;
+    FunctionKill = 161;
+    FunctionStats = 162;
+    FCallReadOnly = 163;
+    FlushDB = 164;
+    LSet = 165;
+    XDel = 166;
+    XRange = 167;
+    LMove = 168;
+    BLMove = 169;
+    GetDel = 170;
+    SRandMember = 171;
+    BitField = 172;
+    BitFieldReadOnly = 173;
+    Move = 174;
+    SInterCard = 175;
+    XRevRange = 176;
+    Copy = 178;
+    MSetNX = 179;
+    LPos = 180;
+    LCS = 181;
+    GeoSearch = 182;
+    Watch = 183;
+    UnWatch = 184;
+    GeoSearchStore = 185;
+    SUnion = 186;
+    Publish = 187;
+    SPublish = 188;
+    XGroupCreateConsumer = 189;
+    XGroupDelConsumer = 190;
+    RandomKey = 191;
+    GetEx = 192;
+    Dump = 193;
+    Restore = 194;
+    SortReadOnly = 195;
+    FunctionDump = 196;
+    FunctionRestore = 197;
+    XPending = 198;
+    XGroupSetId = 199;
+    SScan = 200;
+    ZScan = 201;
+    HScan = 202;
+    XAutoClaim = 203;
+    Wait = 208;
 }
 
 message Command {
     message ArgsArray {
-        repeated string args = 1;
+        repeated bytes args = 1;
     }
 
     RequestType request_type = 1;

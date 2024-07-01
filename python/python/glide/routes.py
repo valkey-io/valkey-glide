@@ -1,4 +1,4 @@
-# Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+# Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
 
 from enum import Enum
 from typing import Optional
@@ -24,6 +24,12 @@ class Route:
 
 
 class AllNodes(Route):
+    """
+    Route request to all nodes.
+    Warning:
+        Don't use it with write commands, they could be routed to a replica (RO) node and fail.
+    """
+
     pass
 
 
@@ -32,6 +38,12 @@ class AllPrimaries(Route):
 
 
 class RandomNode(Route):
+    """
+    Route request to a random node.
+    Warning:
+        Don't use it with write commands, because they could be randomly routed to a replica (RO) node and fail.
+    """
+
     pass
 
 

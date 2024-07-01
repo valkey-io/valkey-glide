@@ -1,10 +1,12 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.utils;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -23,6 +25,19 @@ public class ArrayTransformUtils {
         return args.entrySet().stream()
                 .flatMap(entry -> Stream.of(entry.getKey(), entry.getValue().toString()))
                 .toArray(String[]::new);
+    }
+
+    /**
+     * Converts a map of GlideString keys and values of any type in to an array of GlideStrings with
+     * alternating keys and values.
+     *
+     * @param args Map of GlideString keys to values of any type to convert.
+     * @return Array of strings [key1, gs(value1.toString()), key2, gs(value2.toString()), ...].
+     */
+    public static GlideString[] convertMapToKeyValueGlideStringArray(Map<GlideString, ?> args) {
+        return args.entrySet().stream()
+                .flatMap(entry -> Stream.of(entry.getKey(), GlideString.gs(entry.getValue().toString())))
+                .toArray(GlideString[]::new);
     }
 
     /**
@@ -98,19 +113,61 @@ public class ArrayTransformUtils {
     }
 
     /**
+     * Casts an <code>Object[][][]</code> to <code>T[][][]</code> by casting each nested array and
+     * every array element.
+     *
+     * @param outerObjectArr 3D array of objects to cast.
+     * @param clazz The class of the array elements to cast to.
+     * @return An array of arrays of type U, containing the elements from the input array.
+     * @param <T> The base type from which the elements are being cast.
+     * @param <U> The subtype of T to which the elements are cast.
+     */
+    public static <T, U extends T> U[][][] cast3DArray(T[] outerObjectArr, Class<U> clazz) {
+        if (outerObjectArr == null) {
+            return null;
+        }
+        T[] convertedArr = (T[]) new Object[outerObjectArr.length];
+        for (int i = 0; i < outerObjectArr.length; i++) {
+            convertedArr[i] = (T) castArrayofArrays((T[]) outerObjectArr[i], clazz);
+        }
+        return (U[][][]) castArrayofArrays(convertedArr, Array.newInstance(clazz, 0).getClass());
+    }
+
+    /**
      * Maps a Map of Arrays with value type T[] to value of U[].
      *
      * @param mapOfArrays Map of Array values to cast.
      * @param clazz The class of the array values to cast to.
      * @return A Map of arrays of type U[], containing the key/values from the input Map.
-     * @param <T> The base type from which the elements are being cast.
-     * @param <U> The subtype of T to which the elements are cast.
+     * @param <T> The target type which the elements are cast.
      */
-    @SuppressWarnings("unchecked")
-    public static <T, U extends T> Map<String, U[]> castMapOfArrays(
-            Map<String, T[]> mapOfArrays, Class<U> clazz) {
+    public static <T> Map<String, T[]> castMapOfArrays(
+            Map<String, Object[]> mapOfArrays, Class<T> clazz) {
+        if (mapOfArrays == null) {
+            return null;
+        }
         return mapOfArrays.entrySet().stream()
-                .collect(Collectors.toMap(k -> k.getKey(), e -> castArray(e.getValue(), clazz)));
+                .collect(Collectors.toMap(Map.Entry::getKey, e -> castArray(e.getValue(), clazz)));
+    }
+
+    /**
+     * Maps a Map of Object[][] with value type T[][] to value of U[][].
+     *
+     * @param mapOfArrays Map of 2D Array values to cast.
+     * @param clazz The class of the array values to cast to.
+     * @return A Map of arrays of type U[][], containing the key/values from the input Map.
+     * @param <T> The target type which the elements are cast.
+     */
+    public static <T> Map<String, T[][]> castMapOf2DArray(
+            Map<String, Object[][]> mapOfArrays, Class<T> clazz) {
+        if (mapOfArrays == null) {
+            return null;
+        }
+        return mapOfArrays.entrySet().stream()
+                .collect(
+                        HashMap::new,
+                        (m, e) -> m.put(e.getKey(), castArrayofArrays(e.getValue(), clazz)),
+                        HashMap::putAll);
     }
 
     /**

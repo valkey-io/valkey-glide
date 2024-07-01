@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.commands.FlushMode;
@@ -181,6 +181,34 @@ public interface ServerManagementCommands {
     CompletableFuture<String> flushall(FlushMode mode);
 
     /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.flushdb().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushdb();
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.flushdb(ASYNC).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushdb(FlushMode mode);
+
+    /**
      * Displays a piece of generative computer art and the Redis version.
      *
      * @see <a href="https://redis.io/commands/lolwut/">redis.io</a> for details.
@@ -257,4 +285,17 @@ public interface ServerManagementCommands {
      * }</pre>
      */
     CompletableFuture<String> lolwut(int version, int[] parameters);
+
+    /**
+     * Returns the number of keys in the currently selected database.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @return The number of keys in the currently selected database.
+     * @example
+     *     <pre>{@code
+     * Long numKeys = client.dbsize().get();
+     * System.out.printf("Number of keys in the current database: %d%n", numKeys);
+     * }</pre>
+     */
+    CompletableFuture<Long> dbsize();
 }

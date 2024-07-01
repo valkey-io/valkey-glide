@@ -1,0 +1,21 @@
+{
+    "name": "release-candidate-testing-nodejs",
+    "version": "1.0.0",
+    "description": "A small amount of test cases to test wether release candidate in working fine",
+    "main": "index.ts",
+    "type": "module",
+    "scripts": {
+        "test": "node index.js",
+        "build-utils": "cd ../../ && npm run build",
+        "prettier:check:ci": "./node_modules/.bin/prettier --check .",
+        "prettier:format": "./node_modules/.bin/prettier --write . "
+    },
+    "author": "",
+    "license": "Apache-2.0",
+    "dependencies": {
+        "@aws/glide-for-redis": "latest"
+    },
+    "devDependencies": {
+        "prettier": "^2.8.8"
+    }
+}

@@ -29,6 +29,10 @@ inputs:
         description: "Specified target for rust toolchain, ex. x86_64-apple-darwin"
         type: string
         required: true
+    engine-version:
+        description: "Engine version to install"
+        required: true
+        type: string
     publish:
         description: "Enable building the wrapper in release mode"
         required: false
@@ -56,6 +60,7 @@ runs:
               os: ${{ inputs.os }}
               target: ${{ inputs.target }}
               github-token: ${{ inputs.github-token }}
+              engine-version: ${{ inputs.engine-version }}
 
         - name: Create package.json file
           uses: ./.github/workflows/node-create-package-file
@@ -65,14 +70,15 @@ runs:
             named_os: ${{ inputs.named_os }}
             arch: ${{ inputs.arch }}
             npm_scope: ${{ inputs.npm_scope }}
-
+            target: ${{ inputs.target }}
+    
         - name: npm install
           shell: bash
           working-directory: ./node
           run: |
               rm -rf node_modules && npm install --frozen-lockfile
               cd rust-client
-              npm install
+              npm install --frozen-lockfile
 
         - name: Build
           shell: bash

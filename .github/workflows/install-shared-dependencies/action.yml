@@ -19,10 +19,18 @@ inputs:
             - aarch64-unknown-linux-gnu
             - x86_64-apple-darwin
             - aarch64-apple-darwin
+            - aarch64-unknown-linux-musl
+            - x86_64-unknown-linux-musl
+    engine-version:
+      description: "Engine version to install"
+      required: true
+      type: string
+
     github-token:
         description: "GITHUB_TOKEN, GitHub App installation access token"
         required: true
         type: string
+
 
 runs:
     using: "composite"
@@ -33,28 +41,39 @@ runs:
           run: |
               brew update
               brew upgrade || true
-              brew install git gcc pkgconfig openssl redis coreutils
+              brew install git gcc pkgconfig openssl coreutils
 
-        - name: Install software dependencies for Ubuntu
+        - name: Install software dependencies for Ubuntu GNU
           shell: bash
-          if: "${{ inputs.os == 'ubuntu' }}"
+          if: "${{ inputs.os == 'ubuntu' && !contains(inputs.target, 'musl')}}"
           run: |
               sudo apt update -y
               sudo apt install -y git gcc pkg-config openssl libssl-dev
+          
+        - name: Install software dependencies for Ubuntu MUSL
+          shell: bash
+          if: "${{ contains(inputs.target, 'musl') }}"
+          run: |
+              apk update
+              wget -O - https://sh.rustup.rs | sh -s -- -y
+              source "$HOME/.cargo/env"
+              apk add protobuf-dev musl-dev make gcc envsubst openssl libressl-dev
 
         - name: Install software dependencies for Amazon-Linux
           shell: bash
           if: "${{ inputs.os == 'amazon-linux' }}"
           run: |
-              yum install -y gcc pkgconfig openssl openssl-devel which curl redis6 gettext --allowerasing
+              yum install -y gcc pkgconfig openssl openssl-devel which curl gettext --allowerasing
 
-        - name: Install Rust toolchain
-          uses: dtolnay/rust-toolchain@stable
+        - name: Install Rust toolchain and protoc
+          if: "${{ !contains(inputs.target, 'musl') }}"
+          uses: ./.github/workflows/install-rust-and-protoc
           with:
-              targets: ${{ inputs.target }}
+            target: ${{ inputs.target }}
+            github-token: ${{ inputs.github-token }}
 
-        - name: Install protoc (protobuf)
-          uses: arduino/setup-protoc@v3
+        - name: Install Valkey
+          uses: ./.github/workflows/install-valkey
           with:
-              version: "25.1"
-              repo-token: ${{ inputs.github-token }}
+              engine-version: ${{ inputs.engine-version }}
+              target: ${{ inputs.target }}

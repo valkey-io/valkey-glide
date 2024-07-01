@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.ClusterValue;
@@ -6,7 +6,6 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.InfoOptions.Section;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
-import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -362,7 +361,7 @@ public interface ServerManagementClusterCommands {
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> flushall(SingleNodeRoute route);
+    CompletableFuture<String> flushall(Route route);
 
     /**
      * Deletes all the keys of all the existing databases. This command never fails.
@@ -380,7 +379,71 @@ public interface ServerManagementClusterCommands {
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> flushall(FlushMode mode, SingleNodeRoute route);
+    CompletableFuture<String> flushall(FlushMode mode, Route route);
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.flushdb().get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushdb();
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.flushdb(ASYNC).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushdb(FlushMode mode);
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * Route route = new SlotKeyRoute("key", PRIMARY);
+     * String response = client.flushdb(route).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushdb(Route route);
+
+    /**
+     * Deletes all the keys of the currently selected database. This command never fails.
+     *
+     * @see <a href="https://valkey.io/commands/flushdb/">valkey.io</a> for details.
+     * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
+     *     FlushMode#ASYNC}.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * Route route = new SlotKeyRoute("key", PRIMARY);
+     * String response = client.flushdb(SYNC, route).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> flushdb(FlushMode mode, Route route);
 
     /**
      * Displays a piece of generative computer art and the Redis version.<br>
@@ -560,4 +623,36 @@ public interface ServerManagementClusterCommands {
      * }</pre>
      */
     CompletableFuture<ClusterValue<String>> lolwut(int version, int[] parameters, Route route);
+
+    /**
+     * Returns the number of keys in the database.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @return The total number of keys across the primary nodes.
+     * @example
+     *     <pre>{@code
+     * Long numKeys = client.dbsize().get();
+     * System.out.printf("Number of keys across the primary nodes: %d%n", numKeys);
+     * }</pre>
+     */
+    CompletableFuture<Long> dbsize();
+
+    /**
+     * Returns the number of keys in the database.
+     *
+     * @see <a href="https://valkey.io/commands/dbsize/">valkey.io</a> for details.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The number of keys in the database.<br>
+     *     If the query is routed to multiple nodes, returns the sum of the number of keys across all
+     *     routed nodes.
+     * @example
+     *     <pre>{@code
+     * Route route = new ByAddressRoute("localhost", 8000);
+     * Long numKeys = client.dbsize(route).get();
+     * System.out.printf("Number of keys for node at port 8000: %d%n", numKeys);
+     * }</pre>
+     */
+    CompletableFuture<Long> dbsize(Route route);
 }
