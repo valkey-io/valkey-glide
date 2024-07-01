@@ -7347,6 +7347,12 @@ class TestCommands:
 
         # On a replica node should fail, because a function isn't guaranteed to be RO
         with pytest.raises(RequestError) as e:
+            assert await redis_client.fcall_route(
+                func_name, arguments=[], route=replicaRoute
+            )
+        assert "You can't write against a read only replica." in str(e)
+
+        with pytest.raises(RequestError) as e:
             assert await redis_client.fcall_ro_route(
                 func_name, arguments=[], route=replicaRoute
             )
@@ -7367,83 +7373,6 @@ class TestCommands:
         assert (
             await redis_client.fcall_ro_route(
                 func_name, arguments=[], route=replicaRoute
-            )
-            == 42
-        )
-
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_fcall_with_key(self, redis_client: GlideClusterClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
-
-        key1 = f"{{testKey}}:1-{get_random_string(10)}"
-        key2 = f"{{testKey}}:2-{get_random_string(10)}"
-        keys = [key1, key2]
-        route = SlotKeyRoute(SlotType.PRIMARY, key1)
-        lib_name = f"mylib1C{get_random_string(5)}"
-        func_name = f"myfunc1c{get_random_string(5)}"
-        code = generate_lua_lib_code(lib_name, {func_name: "return keys[1]"}, True)
-
-        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
-        assert await redis_client.function_load(code, False, route) == lib_name
-
-        assert await redis_client.fcall(func_name, keys=keys, arguments=[]) == key1
-
-        transaction = ClusterTransaction()
-        transaction.fcall(func_name, keys=keys, arguments=[])
-
-        # check response from a routed transaction request
-        result = await redis_client.exec(transaction, route)
-        assert result is not None
-        assert result[0] == key1
-
-        # if no route given, GLIDE should detect it automatically
-        result = await redis_client.exec(transaction)
-        assert result is not None
-        assert result[0] == key1
-
-        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
-
-    @pytest.mark.parametrize("cluster_mode", [True])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_fcall_function(self, redis_client: GlideClusterClient):
-        min_version = "7.0.0"
-        if await check_if_server_version_lt(redis_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
-
-        lib_name = f"fcall_function{get_random_string(5)}"
-        # intentionally using a REPLICA route
-        replicaRoute = SlotKeyRoute(SlotType.REPLICA, lib_name)
-        primaryRoute = SlotKeyRoute(SlotType.PRIMARY, lib_name)
-        func_name = f"fcall_function{get_random_string(5)}"
-
-        # function $funcName returns a magic number
-        code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, False)
-
-        assert await redis_client.function_load(code, False) == lib_name
-
-        # On a replica node should fail, because a function isn't guaranteed to be RO
-        with pytest.raises(RequestError):
-            assert await redis_client.fcall(
-                func_name, keys=[], arguments=[], route=replicaRoute
-            )
-
-        # fcall also fails to run it even on primary - another error
-        with pytest.raises(RequestError):
-            assert await redis_client.fcall(
-                func_name, keys=[], arguments=[], route=primaryRoute
-            )
-
-        # create the same function, but with RO flag
-        code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, True)
-        assert await redis_client.function_load(code, True) == lib_name
-
-        # fcall should succeed now
-        assert (
-            await redis_client.fcall(
-                func_name, keys=[], arguments=[], route=replicaRoute
             )
             == 42
         )
