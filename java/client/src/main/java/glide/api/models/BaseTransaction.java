@@ -298,10 +298,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /** Command class to send a single request to Redis. */
     protected final Transaction.Builder protobufTransaction = Transaction.newBuilder();
 
-    protected static final GlideString GLIDE_STRING = GlideString.of("gs");
-
-    protected static final String STRING = "string";
-
     protected boolean binarySafeOutput = false;
 
     protected abstract T getThis();
@@ -336,8 +332,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * }</pre>
      */
     public <ArgType> T customCommand(ArgType[] args) {
-        ArgsArray commandArgs = buildArgs(args);
-        protobufTransaction.addCommands(buildCommand(CustomCommand, commandArgs));
+        protobufTransaction.addCommands(buildCommand(CustomCommand, newArgsBuilder().add(args)));
         return getThis();
     }
 
@@ -349,8 +344,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The provided <code>message</code>.
      */
     public <ArgType> T echo(@NonNull ArgType message) {
-        ArgsArray commandArgs = buildArgs(message);
-        protobufTransaction.addCommands(buildCommand(Echo, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Echo, newArgsBuilder().add(message)));
         return getThis();
     }
 
@@ -373,8 +367,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A response from Redis with a <code>String</code>.
      */
     public <ArgType> T ping(@NonNull ArgType msg) {
-        ArgsArray commandArgs = buildArgs(msg);
-        protobufTransaction.addCommands(buildCommand(Ping, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Ping, newArgsBuilder().add(msg)));
         return getThis();
     }
 
@@ -399,8 +392,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A <code>String</code> containing the requested {@link Section}s.
      */
     public T info(@NonNull InfoOptions options) {
-        ArgsArray commandArgs = buildArgs(options.toArgs());
-        protobufTransaction.addCommands(buildCommand(Info, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Info, newArgsBuilder().add(options.toArgs())));
         return getThis();
     }
 
@@ -413,8 +405,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of keys that were removed.
      */
     public <ArgType> T del(@NonNull ArgType[] keys) {
-        ArgsArray commandArgs = buildArgs(keys);
-        protobufTransaction.addCommands(buildCommand(Del, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Del, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -440,8 +431,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     key</code>. Otherwise, return <code>null</code>.
      */
     public <ArgType> T getdel(@NonNull ArgType key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(GetDel, commandArgs));
+        protobufTransaction.addCommands(buildCommand(GetDel, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -455,8 +445,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>key</code>. Otherwise, return <code>null</code>.
      */
     public <ArgType> T getex(@NonNull ArgType key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(GetEx, commandArgs));
+        protobufTransaction.addCommands(buildCommand(GetEx, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -471,8 +460,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     <code>key</code>. Otherwise, return <code>null</code>.
      */
     public <ArgType> T getex(@NonNull ArgType key, @NonNull GetExOptions options) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(options.toArgs(), key));
-        protobufTransaction.addCommands(buildCommand(GetEx, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(GetEx, newArgsBuilder().add(key).add(options.toArgs())));
         return getThis();
     }
 
@@ -520,8 +509,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The length of the string after appending the value.
      */
     public <ArgType> T append(@NonNull ArgType key, @NonNull ArgType value) {
-        ArgsArray commandArgs = buildArgs(key, value);
-        protobufTransaction.addCommands(buildCommand(Append, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Append, newArgsBuilder().add(key).add(value)));
         return getThis();
     }
 
@@ -536,8 +524,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code>.
      */
     public <ArgType> T mget(@NonNull ArgType[] keys) {
-        ArgsArray commandArgs = buildArgs(keys);
-        protobufTransaction.addCommands(buildCommand(MGet, commandArgs));
+        protobufTransaction.addCommands(buildCommand(MGet, newArgsBuilder().add(keys)));
         return getThis();
     }
 
@@ -550,9 +537,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T mset(@NonNull Map<?, ?> keyValueMap) {
         GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
-        ArgsArray commandArgs = buildArgs(args);
-
-        protobufTransaction.addCommands(buildCommand(MSet, commandArgs));
+        protobufTransaction.addCommands(buildCommand(MSet, newArgsBuilder().add(args)));
         return getThis();
     }
 
@@ -567,9 +552,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      */
     public T msetnx(@NonNull Map<?, ?> keyValueMap) {
         GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
-        ArgsArray commandArgs = buildArgs(args);
-
-        protobufTransaction.addCommands(buildCommand(MSetNX, commandArgs));
+        protobufTransaction.addCommands(buildCommand(MSetNX, newArgsBuilder().add(args)));
         return getThis();
     }
 
@@ -582,8 +565,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The value of <code>key</code> after the increment.
      */
     public <ArgType> T incr(@NonNull ArgType key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Incr, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Incr, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -597,8 +579,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The value of <code>key</code> after the increment.
      */
     public <ArgType> T incrBy(@NonNull ArgType key, long amount) {
-        ArgsArray commandArgs = buildArgs(key, this.convertTo(key.getClass(), amount));
-        protobufTransaction.addCommands(buildCommand(IncrBy, commandArgs));
+        protobufTransaction.addCommands(buildCommand(IncrBy, newArgsBuilder().add(key).add(amount)));
         return getThis();
     }
 
@@ -614,8 +595,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The value of <code>key</code> after the increment.
      */
     public <ArgType> T incrByFloat(@NonNull ArgType key, double amount) {
-        ArgsArray commandArgs = buildArgs(key, this.convertTo(key.getClass(), amount));
-        protobufTransaction.addCommands(buildCommand(IncrByFloat, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(IncrByFloat, newArgsBuilder().add(key).add(amount)));
         return getThis();
     }
 
@@ -628,8 +609,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The value of <code>key</code> after the decrement.
      */
     public <ArgType> T decr(@NonNull ArgType key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Decr, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Decr, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -643,8 +623,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The value of <code>key</code> after the decrement.
      */
     public <ArgType> T decrBy(@NonNull ArgType key, long amount) {
-        ArgsArray commandArgs = buildArgs(key, this.convertTo(key.getClass(), amount));
-        protobufTransaction.addCommands(buildCommand(DecrBy, commandArgs));
+        protobufTransaction.addCommands(buildCommand(DecrBy, newArgsBuilder().add(key).add(amount)));
         return getThis();
     }
 
@@ -658,8 +637,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     returns <code>0</code>.
      */
     public <ArgType> T strlen(@NonNull ArgType key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(Strlen, commandArgs));
+        protobufTransaction.addCommands(buildCommand(Strlen, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -678,8 +656,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     modified.
      */
     public <ArgType> T setrange(@NonNull ArgType key, int offset, @NonNull ArgType value) {
-        ArgsArray commandArgs = buildArgs(key, this.convertTo(key.getClass(), offset), value);
-        protobufTransaction.addCommands(buildCommand(SetRange, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(SetRange, newArgsBuilder().add(key).add(offset).add(value)));
         return getThis();
     }
 
@@ -696,9 +674,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A substring extracted from the value stored at <code>key</code>.
      */
     public <ArgType> T getrange(@NonNull ArgType key, int start, int end) {
-        ArgsArray commandArgs =
-                buildArgs(key, this.convertTo(key.getClass(), start), this.convertTo(key.getClass(), end));
-        protobufTransaction.addCommands(buildCommand(GetRange, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(GetRange, newArgsBuilder().add(key).add(start).add(end)));
         return getThis();
     }
 
@@ -712,8 +689,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     when <code>field</code> is not present in the hash or <code>key</code> does not exist.
      */
     public <ArgType> T hget(@NonNull ArgType key, @NonNull ArgType field) {
-        ArgsArray commandArgs = buildArgs(key, field);
-        protobufTransaction.addCommands(buildCommand(HGet, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HGet, newArgsBuilder().add(key).add(field)));
         return getThis();
     }
 
@@ -727,13 +703,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of fields that were added.
      */
     public <ArgType> T hset(@NonNull ArgType key, @NonNull Map<ArgType, ArgType> fieldValueMap) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        ArrayUtils.addFirst(
-                                flattenMapToGlideStringArray(fieldValueMap),
-                                this.convertTo(GlideString.class, key)));
-
-        protobufTransaction.addCommands(buildCommand(HSet, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        HSet, newArgsBuilder().add(key).add(flattenMapToGlideStringArray(fieldValueMap))));
         return getThis();
     }
 
@@ -751,8 +723,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     field already existed and was not set.
      */
     public <ArgType> T hsetnx(@NonNull ArgType key, @NonNull ArgType field, @NonNull ArgType value) {
-        ArgsArray commandArgs = buildArgs(key, field, value);
-        protobufTransaction.addCommands(buildCommand(HSetNX, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(HSetNX, newArgsBuilder().add(key).add(field).add(value)));
         return getThis();
     }
 
@@ -768,8 +740,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>key</code> does not exist, it is treated as an empty hash and it returns 0.<br>
      */
     public <ArgType> T hdel(@NonNull ArgType key, @NonNull ArgType[] fields) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
-        protobufTransaction.addCommands(buildCommand(HDel, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HDel, newArgsBuilder().add(key).add(fields)));
         return getThis();
     }
 
@@ -783,8 +754,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>key</code> holds a value that is not a hash, an error is returned.
      */
     public <ArgType> T hlen(@NonNull ArgType key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(HLen, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HLen, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -797,8 +767,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     </code> when the key does not exist.
      */
     public <ArgType> T hvals(@NonNull ArgType key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(HVals, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HVals, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -815,8 +784,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     of null values.<br>
      */
     public <ArgType> T hmget(@NonNull ArgType key, @NonNull ArgType[] fields) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(fields, key));
-        protobufTransaction.addCommands(buildCommand(HMGet, commandArgs));
+        protobufTransaction.addCommands(buildCommand(HMGet, newArgsBuilder().add(key).add(fields)));
         return getThis();
     }
 
@@ -826,13 +794,12 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
      * @param key The key of the hash.
      * @param field The field to check in the hash stored at <code>key</code>.
-     * @return Command Response - <code>True</code> if the hash contains the specified field. If the
+     * @return Command Response - <code>True</co de> if the hash contains the specified field. If the
      *     hash does not contain the field, or if the key does not exist, it returns <code>False
      *     </code>.
      */
-    public T hexists(@NonNull String key, @NonNull String field) {
-        ArgsArray commandArgs = buildArgs(key, field);
-        protobufTransaction.addCommands(buildCommand(HExists, commandArgs));
+    public <ArgType> T hexists(@NonNull ArgType key, @NonNull ArgType field) {
+        protobufTransaction.addCommands(buildCommand(HExists, newArgsBuilder().add(key).add(field)));
         return getThis();
     }
 
@@ -845,9 +812,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     Every field name in the map is associated with its corresponding value.<br>
      *     If <code>key</code> does not exist, it returns an empty map.
      */
-    public T hgetall(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(HGetAll, commandArgs));
+    public <ArgType> T hgetall(@NonNull ArgType key) {
+        protobufTransaction.addCommands(buildCommand(HGetAll, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -866,9 +832,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The value of <code>field</code> in the hash stored at <code>key
      *     </code> after the increment or decrement.
      */
-    public T hincrBy(@NonNull String key, @NonNull String field, long amount) {
-        ArgsArray commandArgs = buildArgs(key, field, Long.toString(amount));
-        protobufTransaction.addCommands(buildCommand(HIncrBy, commandArgs));
+    public <ArgType> T hincrBy(@NonNull ArgType key, @NonNull ArgType field, long amount) {
+        protobufTransaction.addCommands(
+                buildCommand(HIncrBy, newArgsBuilder().add(key).add(field).add(amount)));
         return getThis();
     }
 
@@ -888,9 +854,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The value of <code>field</code> in the hash stored at <code>key
      *     </code> after the increment or decrement.
      */
-    public T hincrByFloat(@NonNull String key, @NonNull String field, double amount) {
-        ArgsArray commandArgs = buildArgs(key, field, Double.toString(amount));
-        protobufTransaction.addCommands(buildCommand(HIncrByFloat, commandArgs));
+    public <ArgType> T hincrByFloat(@NonNull ArgType key, @NonNull ArgType field, double amount) {
+        protobufTransaction.addCommands(
+                buildCommand(HIncrByFloat, newArgsBuilder().add(key).add(field).add(amount)));
         return getThis();
     }
 
@@ -902,8 +868,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - An <code>array</code> of field names in the hash, or an <code>
      *     empty array</code> when the key does not exist.
      */
-    public T hkeys(@NonNull String key) {
-        protobufTransaction.addCommands(buildCommand(HKeys, buildArgs(key)));
+    public <ArgType> T hkeys(@NonNull ArgType key) {
+        protobufTransaction.addCommands(buildCommand(HKeys, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -917,8 +883,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The string length or <code>0</code> if <code>field</code> or <code>
      *     key</code> does not exist.
      */
-    public T hstrlen(@NonNull String key, @NonNull String field) {
-        protobufTransaction.addCommands(buildCommand(HStrlen, buildArgs(key, field)));
+    public <ArgType> T hstrlen(@NonNull ArgType key, @NonNull ArgType field) {
+        protobufTransaction.addCommands(buildCommand(HStrlen, newArgsBuilder().add(key).add(field)));
         return getThis();
     }
 
@@ -931,8 +897,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A random field name from the hash stored at <code>key</code>, or
      *     <code>null</code> when the key does not exist.
      */
-    public T hrandfield(@NonNull String key) {
-        protobufTransaction.addCommands(buildCommand(HRandField, buildArgs(key)));
+    public <ArgType> T hrandfield(@NonNull ArgType key) {
+        protobufTransaction.addCommands(buildCommand(HRandField, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -949,8 +915,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - An <code>array</code> of random field names from the hash stored at
      *     <code>key</code>, or an <code>empty array</code> when the key does not exist.
      */
-    public T hrandfieldWithCount(@NonNull String key, long count) {
-        protobufTransaction.addCommands(buildCommand(HRandField, buildArgs(key, Long.toString(count))));
+    public <ArgType> T hrandfieldWithCount(@NonNull ArgType key, long count) {
+        protobufTransaction.addCommands(buildCommand(HRandField, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -969,9 +935,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     value</code> is the associated value of the field name.<br>
      *     If the hash does not exist or is empty, the response will be an empty <code>array</code>.
      */
-    public T hrandfieldWithCountWithValues(@NonNull String key, long count) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(count), WITH_VALUES_REDIS_API);
-        protobufTransaction.addCommands(buildCommand(HRandField, commandArgs));
+    public <ArgType> T hrandfieldWithCountWithValues(@NonNull ArgType key, long count) {
+        protobufTransaction.addCommands(
+                buildCommand(HRandField, newArgsBuilder().add(key).add(count).add(WITH_VALUES_REDIS_API)));
         return getThis();
     }
 
@@ -986,9 +952,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param elements The elements to insert at the head of the list stored at <code>key</code>.
      * @return Command Response - The length of the list after the push operations.
      */
-    public T lpush(@NonNull String key, @NonNull String[] elements) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-        protobufTransaction.addCommands(buildCommand(LPush, commandArgs));
+    public <ArgType> T lpush(@NonNull ArgType key, @NonNull ArgType[] elements) {
+        protobufTransaction.addCommands(buildCommand(LPush, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -1001,9 +966,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The value of the first element.<br>
      *     If <code>key</code> does not exist, null will be returned.
      */
-    public T lpop(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+    public <ArgType> T lpop(@NonNull ArgType key) {
+        protobufTransaction.addCommands(buildCommand(LPop, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1018,9 +982,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The index of the first occurrence of <code>element</code>, or <code>
      *     null</code> if <code>element</code> is not in the list.
      */
-    public T lpos(@NonNull String key, @NonNull String element) {
-        ArgsArray commandArgs = buildArgs(key, element);
-        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+    public <ArgType> T lpos(@NonNull ArgType key, @NonNull ArgType element) {
+        protobufTransaction.addCommands(buildCommand(LPos, newArgsBuilder().add(key).add(element)));
         return getThis();
     }
 
@@ -1036,10 +999,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The index of <code>element</code>, or <code>null</code> if <code>
      *     element</code> is not in the list.
      */
-    public T lpos(@NonNull String key, @NonNull String element, @NonNull LPosOptions options) {
-        ArgsArray commandArgs =
-                buildArgs(ArrayUtils.addAll(new String[] {key, element}, options.toArgs()));
-        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+    public <ArgType> T lpos(
+            @NonNull ArgType key, @NonNull ArgType element, @NonNull LPosOptions options) {
+        protobufTransaction.addCommands(
+                buildCommand(LPos, newArgsBuilder().add(key).add(element).add(options.toArgs())));
         return getThis();
     }
 
@@ -1054,9 +1017,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - An <code>array</code> that holds the indices of the matching
      *     elements within the list.
      */
-    public T lposCount(@NonNull String key, @NonNull String element, long count) {
-        ArgsArray commandArgs = buildArgs(key, element, COUNT_REDIS_API, Long.toString(count));
-        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+    public <ArgType> T lposCount(@NonNull ArgType key, @NonNull ArgType element, long count) {
+        protobufTransaction.addCommands(
+                buildCommand(LPos, newArgsBuilder().add(key).add(element).add(COUNT_REDIS_API).add(count)));
         return getThis();
     }
 
@@ -1073,14 +1036,17 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - An <code>array</code> that holds the indices of the matching
      *     elements within the list.
      */
-    public T lposCount(
-            @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options) {
-        ArgsArray commandArgs =
-                buildArgs(
-                        ArrayUtils.addAll(
-                                new String[] {key, element, COUNT_REDIS_API, Long.toString(count)},
-                                options.toArgs()));
-        protobufTransaction.addCommands(buildCommand(LPos, commandArgs));
+    public <ArgType> T lposCount(
+            @NonNull ArgType key, @NonNull ArgType element, long count, @NonNull LPosOptions options) {
+        protobufTransaction.addCommands(
+                buildCommand(
+                        LPos,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(element)
+                                .add(COUNT_REDIS_API)
+                                .add(count)
+                                .add(options.toArgs())));
         return getThis();
     }
 
@@ -1095,9 +1061,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     list's length.<br>
      *     If <code>key</code> does not exist, null will be returned.
      */
-    public T lpopCount(@NonNull String key, long count) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
-        protobufTransaction.addCommands(buildCommand(LPop, commandArgs));
+    public <ArgType> T lpopCount(@NonNull ArgType key, long count) {
+        protobufTransaction.addCommands(buildCommand(LPop, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -1120,9 +1085,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     end of the list.<br>
      *     If <code>key</code> does not exist an empty array will be returned.
      */
-    public T lrange(@NonNull String key, long start, long end) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
-        protobufTransaction.addCommands(buildCommand(LRange, commandArgs));
+    public <ArgType> T lrange(@NonNull ArgType key, long start, long end) {
+        protobufTransaction.addCommands(
+                buildCommand(LRange, newArgsBuilder().add(key).add(start).add(end)));
         return getThis();
     }
 
@@ -1141,10 +1106,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>index</code> is out of range or if <code>key</code> does not exist, <code>null
      *     </code> is returned.
      */
-    public T lindex(@NonNull String key, long index) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(index));
-
-        protobufTransaction.addCommands(buildCommand(LIndex, commandArgs));
+    public <ArgType> T lindex(@NonNull ArgType key, long index) {
+        protobufTransaction.addCommands(buildCommand(LIndex, newArgsBuilder().add(key).add(index)));
         return getThis();
     }
 
@@ -1168,9 +1131,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     element of the list.<br>
      *     If <code>key</code> does not exist, OK will be returned without changes to the database.
      */
-    public T ltrim(@NonNull String key, long start, long end) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(start), Long.toString(end));
-        protobufTransaction.addCommands(buildCommand(LTrim, commandArgs));
+    public <ArgType> T ltrim(@NonNull ArgType key, long start, long end) {
+        protobufTransaction.addCommands(
+                buildCommand(LTrim, newArgsBuilder().add(key).add(start).add(end)));
         return getThis();
     }
 
@@ -1183,10 +1146,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>key</code> does not exist, it is interpreted as an empty list and <code>0</code>
      *     is returned.
      */
-    public T llen(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-
-        protobufTransaction.addCommands(buildCommand(LLen, commandArgs));
+    public <ArgType> T llen(@NonNull ArgType key) {
+        protobufTransaction.addCommands(buildCommand(LLen, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1207,9 +1168,9 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The number of the removed elements.<br>
      *     If <code>key</code> does not exist, <code>0</code> is returned.
      */
-    public T lrem(@NonNull String key, long count, @NonNull String element) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(count), element);
-        protobufTransaction.addCommands(buildCommand(LRem, commandArgs));
+    public <ArgType> T lrem(@NonNull ArgType key, long count, @NonNull ArgType element) {
+        protobufTransaction.addCommands(
+                buildCommand(LRem, newArgsBuilder().add(key).add(count).add(element)));
         return getThis();
     }
 
@@ -1224,9 +1185,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
      * @return Command Response - The length of the list after the push operations.
      */
-    public T rpush(@NonNull String key, @NonNull String[] elements) {
-        ArgsArray commandArgs = buildArgs(ArrayUtils.addFirst(elements, key));
-        protobufTransaction.addCommands(buildCommand(RPush, commandArgs));
+    public <ArgType> T rpush(@NonNull ArgType key, @NonNull ArgType[] elements) {
+        protobufTransaction.addCommands(buildCommand(RPush, newArgsBuilder().add(key).add(elements)));
         return getThis();
     }
 
@@ -1239,9 +1199,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - The value of the last element.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
      */
-    public T rpop(@NonNull String key) {
-        ArgsArray commandArgs = buildArgs(key);
-        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
+    public <ArgType> T rpop(@NonNull ArgType key) {
+        protobufTransaction.addCommands(buildCommand(RPop, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -1255,9 +1214,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     length.<br>
      *     If <code>key</code> does not exist, <code>null</code> will be returned.
      */
-    public T rpopCount(@NonNull String key, long count) {
-        ArgsArray commandArgs = buildArgs(key, Long.toString(count));
-        protobufTransaction.addCommands(buildCommand(RPop, commandArgs));
+    public <ArgType> T rpopCount(@NonNull ArgType key, long count) {
+        protobufTransaction.addCommands(buildCommand(RPop, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -4343,9 +4301,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType member1,
             @NonNull ArgType member2,
             @NonNull GeoUnit geoUnit) {
-        ArgsArray commandArgs =
-                buildArgs(key, member1, member2, this.convertTo(key.getClass(), geoUnit.getValkeyAPI()));
-        protobufTransaction.addCommands(buildCommand(GeoDist, commandArgs));
+        protobufTransaction.addCommands(
+                buildCommand(
+                        GeoDist,
+                        newArgsBuilder().add(key).add(member1).add(member2).add(geoUnit.getValkeyAPI())));
         return getThis();
     }
 
@@ -4931,8 +4890,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     If <code>key</code> does not exist, an empty <code>Set</code> will be returned.
      */
     public <ArgType> T spopCount(@NonNull ArgType key, long count) {
-        ArgsArray commandArgs = buildArgs(key, this.convertTo(key.getClass(), count));
-        protobufTransaction.addCommands(buildCommand(SPop, commandArgs));
+        protobufTransaction.addCommands(buildCommand(SPop, newArgsBuilder().add(key).add(count)));
         return getThis();
     }
 
@@ -5891,20 +5849,6 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
     /** Build protobuf {@link ArgsArray} object for given arguments. */
     protected <ArgType> ArgsArray buildArgs(ArgType... args) {
         return this.newArgsArrayBuilder(args).build();
-    }
-
-    /** Convert value to either String or GlideString. If cls is neither, throw an exception */
-    protected <StringType, ValueType> StringType convertTo(Class cls, ValueType value) {
-        if (cls.isInstance(this.GLIDE_STRING)) {
-            return (StringType) GlideString.of(value.toString());
-        } else if (cls.isInstance(this.STRING)) {
-            return (StringType) value.toString();
-        } else {
-            // arguments can be of type String or GlideString
-            throw new IllegalArgumentException(
-                    "Arguments can only be of type String or GlideString. Got: "
-                            + cls.getClass().getSimpleName());
-        }
     }
 
     protected ArgsBuilder newArgsBuilder() {
