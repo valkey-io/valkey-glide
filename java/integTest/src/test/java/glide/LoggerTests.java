@@ -49,6 +49,13 @@ public class LoggerTests {
         String traceMessage = "squawk";
 
         Logger.setLoggerConfig(Logger.Level.INFO, "log.txt");
+        Logger.log(Logger.Level.INFO, infoIdentifier, infoMessage);
+        Logger.log(Logger.Level.WARN, warnIdentifier, warnMessage);
+        Logger.log(Logger.Level.ERROR, errorIdentifier, errorMessage);
+        Logger.log(Logger.Level.DEBUG, debugIdentifier, debugMessage);
+        Logger.log(Logger.Level.TRACE, traceIdentifier, traceMessage);
+
+        // Test logging with lazily constructed messages
         Logger.log(Logger.Level.INFO, infoIdentifier, () -> infoMessage);
         Logger.log(Logger.Level.WARN, warnIdentifier, () -> warnMessage);
         Logger.log(Logger.Level.ERROR, errorIdentifier, () -> errorMessage);
@@ -67,6 +74,12 @@ public class LoggerTests {
         assertTrue(warnLine.contains(warnIdentifier + " - " + warnMessage));
         String errorLine = reader.nextLine();
         assertTrue(errorLine.contains(errorIdentifier + " - " + errorMessage));
+        String infoLineLazy = reader.nextLine();
+        assertTrue(infoLineLazy.contains(infoIdentifier + " - " + infoMessage));
+        String warnLineLazy = reader.nextLine();
+        assertTrue(warnLineLazy.contains(warnIdentifier + " - " + warnMessage));
+        String errorLineLazy = reader.nextLine();
+        assertTrue(errorLineLazy.contains(errorIdentifier + " - " + errorMessage));
         assertFalse(reader.hasNextLine());
         reader.close();
     }

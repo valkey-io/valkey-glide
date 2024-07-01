@@ -122,14 +122,17 @@ public final class Logger {
     }
 
     /**
-     * Logs the provided message if the provided log level is lower then the logger level.
+     * Logs the provided message if the provided log level is lower than the logger level. This
+     * overload takes a <code>Supplier</code> to lazily construct the message.
      *
      * @param level The log level of the provided message.
      * @param logIdentifier The log identifier should give the log a context.
-     * @param message The message to log.
+     * @param messageSupplier The <code>Supplier</code> of the message to log.
      */
     public static void log(
-            @NonNull Level level, @NonNull String logIdentifier, @NonNull Supplier<String> message) {
+            @NonNull Level level,
+            @NonNull String logIdentifier,
+            @NonNull Supplier<String> messageSupplier) {
         if (loggerLevel == null) {
             initLogger(Level.DEFAULT, null);
         }
@@ -141,7 +144,30 @@ public final class Logger {
         if (!(level.getLevel() <= loggerLevel.getLevel())) {
             return;
         }
-        logInternal(level.getLevel(), logIdentifier, message.get());
+        logInternal(level.getLevel(), logIdentifier, messageSupplier.get());
+    }
+
+    /**
+     * Logs the provided message if the provided log level is lower than the logger level.
+     *
+     * @param level The log level of the provided message.
+     * @param logIdentifier The log identifier should give the log a context.
+     * @param message The message to log.
+     */
+    public static void log(
+            @NonNull Level level, @NonNull String logIdentifier, @NonNull String message) {
+        if (loggerLevel == null) {
+            initLogger(Level.DEFAULT, null);
+        }
+
+        if (level == Level.DISABLED) {
+            return;
+        }
+
+        if (!(level.getLevel() <= loggerLevel.getLevel())) {
+            return;
+        }
+        logInternal(level.getLevel(), logIdentifier, message);
     }
 
     /**
