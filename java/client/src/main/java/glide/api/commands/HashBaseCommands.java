@@ -371,7 +371,7 @@ public interface HashBaseCommands {
      * @example
      *     <pre>{@code
      * String[] names = client.hkeys("my_hash").get();
-     * assert names.equals(new String[] { "field_1", "field_2" });
+     * assert Arrays.equals(names, new String[] { "field_1", "field_2" });
      * }</pre>
      */
     CompletableFuture<String[]> hkeys(String key);
@@ -386,7 +386,7 @@ public interface HashBaseCommands {
      * @example
      *     <pre>{@code
      * GlideString[] names = client.hkeys(gs("my_hash")).get();
-     * assert names.equals(new GlideString[] { gs("field_1"), gs("field_2") });
+     * assert Arrays.equals(names, new GlideString[] { gs("field_1"), gs("field_2") });
      * }</pre>
      */
     CompletableFuture<GlideString[]> hkeys(GlideString key);
