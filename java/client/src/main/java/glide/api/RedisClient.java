@@ -397,6 +397,12 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> randomKeyBinary() {
+        return commandManager.submitNewCommand(
+                randomKeyBinary, new GlideString[0], this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<String[]> sort(@NonNull String key, @NonNull SortOptions sortOptions) {
         String[] arguments = ArrayUtils.addFirst(sortOptions.toArgs(), key);
         return commandManager.submitNewCommand(

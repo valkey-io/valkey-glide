@@ -793,6 +793,12 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> randomKeyBinary() {
+        return commandManager.submitNewCommand(
+                randomKeyBinary, new GlideString[0], this::handleGlideStringOrNullResponse);
+    }
+
+    @Override
     public CompletableFuture<String> spublish(@NonNull String channel, @NonNull String message) {
         return commandManager.submitNewCommand(
                 SPublish,
