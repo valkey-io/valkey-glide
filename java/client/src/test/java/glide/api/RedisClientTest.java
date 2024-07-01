@@ -42,8 +42,8 @@ import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VA
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
 import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
 import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING;
-import static glide.api.models.commands.scan.BaseScanOptionsGlideString.COUNT_OPTION_GLIDE_STRING;
-import static glide.api.models.commands.scan.BaseScanOptionsGlideString.MATCH_OPTION_GLIDE_STRING;
+import static glide.api.models.commands.scan.BaseScanOptionsBinary.COUNT_OPTION_GLIDE_STRING;
+import static glide.api.models.commands.scan.BaseScanOptionsBinary.MATCH_OPTION_GLIDE_STRING;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.ENTRIES_READ_REDIS_API;
 import static glide.api.models.commands.stream.StreamGroupOptions.MAKE_STREAM_REDIS_API;
@@ -314,11 +314,11 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
-import glide.api.models.commands.scan.HScanOptionsGlideString;
+import glide.api.models.commands.scan.HScanOptionsBinary;
 import glide.api.models.commands.scan.SScanOptions;
-import glide.api.models.commands.scan.SScanOptionsGlideString;
+import glide.api.models.commands.scan.SScanOptionsBinary;
 import glide.api.models.commands.scan.ZScanOptions;
-import glide.api.models.commands.scan.ZScanOptionsGlideString;
+import glide.api.models.commands.scan.ZScanOptionsBinary;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -9382,7 +9382,7 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Object[]> response =
                 service.sscan(
-                        key, cursor, SScanOptionsGlideString.builder().matchPattern(gs("*")).count(1L).build());
+                        key, cursor, SScanOptionsBinary.builder().matchPattern(gs("*")).count(1L).build());
         Object[] payload = response.get();
 
         // verify
@@ -9489,7 +9489,7 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Object[]> response =
                 service.zscan(
-                        key, cursor, ZScanOptionsGlideString.builder().matchPattern(gs("*")).count(1L).build());
+                        key, cursor, ZScanOptionsBinary.builder().matchPattern(gs("*")).count(1L).build());
         Object[] payload = response.get();
 
         // verify
@@ -9596,7 +9596,7 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Object[]> response =
                 service.hscan(
-                        key, cursor, HScanOptionsGlideString.builder().matchPattern(gs("*")).count(1L).build());
+                        key, cursor, HScanOptionsBinary.builder().matchPattern(gs("*")).count(1L).build());
         Object[] payload = response.get();
 
         // verify

@@ -219,11 +219,11 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
-import glide.api.models.commands.scan.HScanOptionsGlideString;
+import glide.api.models.commands.scan.HScanOptionsBinary;
 import glide.api.models.commands.scan.SScanOptions;
-import glide.api.models.commands.scan.SScanOptionsGlideString;
+import glide.api.models.commands.scan.SScanOptionsBinary;
 import glide.api.models.commands.scan.ZScanOptions;
-import glide.api.models.commands.scan.ZScanOptionsGlideString;
+import glide.api.models.commands.scan.ZScanOptionsBinary;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
 import glide.api.models.commands.stream.StreamPendingOptions;
@@ -3034,7 +3034,7 @@ public abstract class BaseClient
     public CompletableFuture<Object[]> sscan(
             @NonNull GlideString key,
             @NonNull GlideString cursor,
-            @NonNull SScanOptionsGlideString sScanOptions) {
+            @NonNull SScanOptionsBinary sScanOptions) {
         GlideString[] arguments =
                 concatenateArrays(new GlideString[] {key, cursor}, sScanOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(SScan, arguments, this::handleArrayOrNullResponseBinary);
@@ -3063,7 +3063,7 @@ public abstract class BaseClient
     public CompletableFuture<Object[]> zscan(
             @NonNull GlideString key,
             @NonNull GlideString cursor,
-            @NonNull ZScanOptionsGlideString zScanOptions) {
+            @NonNull ZScanOptionsBinary zScanOptions) {
         GlideString[] arguments =
                 concatenateArrays(new GlideString[] {key, cursor}, zScanOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(ZScan, arguments, this::handleArrayOrNullResponseBinary);
@@ -3092,7 +3092,7 @@ public abstract class BaseClient
     public CompletableFuture<Object[]> hscan(
             @NonNull GlideString key,
             @NonNull GlideString cursor,
-            @NonNull HScanOptionsGlideString hScanOptions) {
+            @NonNull HScanOptionsBinary hScanOptions) {
         GlideString[] arguments =
                 concatenateArrays(new GlideString[] {key, cursor}, hScanOptions.toGlideStringArgs());
         return commandManager.submitNewCommand(HScan, arguments, this::handleArrayOrNullResponseBinary);

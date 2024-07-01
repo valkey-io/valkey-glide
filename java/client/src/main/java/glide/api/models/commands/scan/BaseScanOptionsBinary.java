@@ -15,7 +15,7 @@ import lombok.experimental.SuperBuilder;
  * and ZSCAN).
  */
 @SuperBuilder
-public abstract class BaseScanOptionsGlideString {
+public abstract class BaseScanOptionsBinary {
     /** <code>MATCH</code> option string to include in the <code>SCAN</code> commands. */
     public static final GlideString MATCH_OPTION_GLIDE_STRING = gs("MATCH");
 

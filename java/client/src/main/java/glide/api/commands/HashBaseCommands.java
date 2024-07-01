@@ -3,7 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.commands.scan.HScanOptions;
-import glide.api.models.commands.scan.HScanOptionsGlideString;
+import glide.api.models.commands.scan.HScanOptionsBinary;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -601,7 +601,7 @@ public interface HashBaseCommands {
      * @param key The key of the hash.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
      *     </code> indicates the start of the search.
-     * @param hScanOptions The {@link HScanOptionsGlideString}.
+     * @param hScanOptions The {@link HScanOptionsBinary}.
      * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
      *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
      *     </code> returned on the last iteration of the result. The second element is always an
@@ -614,7 +614,7 @@ public interface HashBaseCommands {
      * GlideString cursor = gs("0");
      * Object[] result;
      * do {
-     *   result = client.hscan(key1, cursor, HScanOptionsGlideString.builder().matchPattern(gs("*")).count(20L).build()).get();
+     *   result = client.hscan(key1, cursor, HScanOptionsBinary.builder().matchPattern(gs("*")).count(20L).build()).get();
      *   cursor = gs(result[0].toString());
      *   Object[] gslideStringResults = (Object[]) result[1];
      *
@@ -629,5 +629,5 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> hscan(
-            GlideString key, GlideString cursor, HScanOptionsGlideString hScanOptions);
+            GlideString key, GlideString cursor, HScanOptionsBinary hScanOptions);
 }

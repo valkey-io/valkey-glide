@@ -6,9 +6,9 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * Optional arguments for {@link HashBaseCommands#hscan(GlideString, GlideString,
- * HScanOptionsGlideString)}.
+ * HScanOptionsBinary)}.
  *
  * @see <a href="https://valkey.io/commands/hscan/">valkey.io</a>
  */
 @SuperBuilder
-public class HScanOptionsGlideString extends BaseScanOptionsGlideString {}
+public class HScanOptionsBinary extends BaseScanOptionsBinary {}

@@ -6,9 +6,9 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * Optional arguments for {@link SetBaseCommands#sscan(GlideString, GlideString,
- * SScanOptionsGlideString)}.
+ * SScanOptionsBinary)}.
  *
  * @see <a href="https://valkey.io/commands/sscan/">valkey.io</a>
  */
 @SuperBuilder
-public class SScanOptionsGlideString extends BaseScanOptionsGlideString {}
+public class SScanOptionsBinary extends BaseScanOptionsBinary {}

@@ -6,9 +6,9 @@ import lombok.experimental.SuperBuilder;
 
 /**
  * Optional arguments for {@link SortedSetBaseCommands#zscan(GlideString, GlideString,
- * ZScanOptionsGlideString)}.
+ * ZScanOptionsBinary)}.
  *
  * @see <a href="https://valkey.io/commands/zscan/">valkey.io</a>
  */
 @SuperBuilder
-public class ZScanOptionsGlideString extends BaseScanOptionsGlideString {}
+public class ZScanOptionsBinary extends BaseScanOptionsBinary {}
