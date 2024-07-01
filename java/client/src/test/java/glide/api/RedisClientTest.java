@@ -661,6 +661,50 @@ public class RedisClientTest {
         assertEquals(value, payload);
     }
 
+    @SneakyThrows
+    @Test
+    public void getex_with_options() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        GetExOptions options = GetExOptions.Seconds(10L);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<String>submitNewCommand(
+                        eq(GetEx), eq(new String[] {key, "EX", "10"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.getex(key, options);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void getex_with_options_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString value = gs("testValue");
+        GetExOptions options = GetExOptions.Seconds(10L);
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<GlideString>submitNewCommand(
+                        eq(GetEx), eq(new GlideString[] {key, gs("EX"), gs("10")}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.getex(key, options);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
     private static List<Arguments> getGetExOptions() {
         return List.of(
                 Arguments.of(
@@ -715,7 +759,6 @@ public class RedisClientTest {
     public void getex_options(String testName, GetExOptions options, String[] expectedArgs) {
         assertArrayEquals(
                 expectedArgs, options.toArgs(), "Expected " + testName + " toArgs() to pass.");
-        System.out.println(expectedArgs);
     }
 
     @SneakyThrows
@@ -727,7 +770,6 @@ public class RedisClientTest {
                 expectedGlideStringArgs,
                 options.toGlideStringArgs(),
                 "Expected " + testName + " toArgs() to pass.");
-        System.out.println(expectedGlideStringArgs);
     }
 
     @SneakyThrows
