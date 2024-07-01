@@ -6022,21 +6022,21 @@ class CoreCommands(Protocol):
                                      in the list. A `max_len` of 0 means unlimited amount of comparisons.
 
         Returns:
-            If the element is found, its index (the zero-based position in the list) is returned.
-            Otherwise, if no match is found, None is returned.
-            With the COUNT option, a list of indices of matching elements will be returned.
+            Union[int, list[int], None]: If the element is found, its index (the zero-based position in the list) is
+            returned. Otherwise, if no match is found, None is returned.
+            With the `count` option, a list of indices of matching elements will be returned.
 
         Examples:
             >>> await client.rpush(key, ['a', 'b', 'c', '1', '2', '3', 'c', 'c'])
             >>> await client.lpos(key, 'c')
                 2
-            >>> await client.lpos(key, 'c', 2)
+            >>> await client.lpos(key, 'c', rank = 2)
                 6
-            >>> await client.lpos(key, 'c', -1)
+            >>> await client.lpos(key, 'c', rank = -1)
                 7
-            >>> await client.lpos(key, 'c', None, 2)
+            >>> await client.lpos(key, 'c', count = 2)
                 [2, 6]
-            >>> await client.lpos(key, 'c', None, 0)
+            >>> await client.lpos(key, 'c', count = 0)
                 [2, 6, 7]
 
         Since: Redis version 6.0.6.

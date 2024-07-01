@@ -4297,9 +4297,9 @@ class BaseTransaction:
                                      in the list. A `max_len` of 0 means unlimited amount of comparisons.
 
         Command Response:
-            If the element is found, its index (the zero-based position in the list) is returned.
-            Otherwise, if no match is found, None is returned.
-            With the COUNT option, a list of indices of matching elements will be returned.
+            Union[int, list[int], None]: If the element is found, its index (the zero-based position in the list) is
+            returned. Otherwise, if no match is found, None is returned.
+            With the `count` option, a list of indices of matching elements will be returned.
 
         Since: Redis version 6.0.6.
         """
