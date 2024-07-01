@@ -231,9 +231,9 @@ def generate_lua_lib_code(
 def check_function_list_response(
     response: List[Dict[str, Any]],
     lib_name: str,
-    function_descriptions: Dict[str, str | None],
+    function_descriptions: Dict[str, Optional[str]],
     function_flags: Dict[str, Set[str]],
-    lib_code: str | None = "",
+    lib_code: Optional[str] = "",
 ):
     assert len(response) > 0
     has_lib = False
