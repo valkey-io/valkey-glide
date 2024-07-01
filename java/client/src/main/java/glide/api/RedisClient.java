@@ -54,8 +54,6 @@ import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.RedisClientConfiguration;
-import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -73,15 +71,18 @@ public class RedisClient extends BaseClient
                 ScriptingAndFunctionsCommands,
                 TransactionsCommands {
 
-    protected RedisClient(ConnectionManager connectionManager, CommandManager commandManager) {
-        super(connectionManager, commandManager);
+    /**
+     * A constructor. Use {@link #CreateClient} to get a client. Made protected to simplify testing.
+     */
+    protected RedisClient(ClientBuilder builder) {
+        super(builder);
     }
 
     /**
      * Async request for an async (non-blocking) Redis client in Standalone mode.
      *
-     * @param config Redis client Configuration
-     * @return A Future to connect and return a RedisClient
+     * @param config Redis client Configuration.
+     * @return A Future to connect and return a RedisClient.
      */
     public static CompletableFuture<RedisClient> CreateClient(
             @NonNull RedisClientConfiguration config) {

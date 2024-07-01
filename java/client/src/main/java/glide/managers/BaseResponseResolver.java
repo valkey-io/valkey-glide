@@ -11,8 +11,7 @@ import response.ResponseOuterClass.Response;
  * Response resolver responsible for evaluating the Redis response object with a success or failure.
  */
 @AllArgsConstructor
-public class BaseCommandResponseResolver
-        implements RedisExceptionCheckedFunction<Response, Object> {
+public class BaseResponseResolver implements RedisExceptionCheckedFunction<Response, Object> {
 
     private RedisExceptionCheckedFunction<Long, Object> respPointerResolver;
 

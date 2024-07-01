@@ -51,6 +51,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
+import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -68,7 +69,6 @@ import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import glide.managers.RedisExceptionCheckedFunction;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -86,17 +86,15 @@ public class RedisClusterClientTest {
 
     RedisClusterClient service;
 
-    ConnectionManager connectionManager;
-
     CommandManager commandManager;
 
     private final String[] TEST_ARGS = new String[0];
 
     @BeforeEach
     public void setUp() {
-        connectionManager = mock(ConnectionManager.class);
         commandManager = mock(CommandManager.class);
-        service = new RedisClusterClient(connectionManager, commandManager);
+        service =
+                new RedisClusterClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
     }
 
     @Test
@@ -165,7 +163,7 @@ public class RedisClusterClientTest {
         private final Object object;
 
         public TestClient(CommandManager commandManager, Object objectToReturn) {
-            super(null, commandManager);
+            super(new BaseClient.ClientBuilder(null, commandManager, null, null));
             object = objectToReturn;
         }
 
@@ -2090,6 +2088,30 @@ public class RedisClusterClientTest {
 
         // verify
         assertEquals(testResponse, response);
+    }
+
+    @SneakyThrows
+    @Test
+    public void spublish_returns_success() {
+        // setup
+        String channel = "channel";
+        String message = "message";
+        String[] arguments = new String[] {channel, message};
+
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(OK);
+
+        // match on protobuf request
+        when(commandManager.<String>submitNewCommand(eq(SPublish), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.spublish(channel, message);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(OK, payload);
     }
 
     @SneakyThrows

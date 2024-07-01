@@ -21,6 +21,9 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class CallbackDispatcher {
 
+    /** A message handler instance. */
+    protected final MessageHandler messageHandler;
+
     /** Unique request ID (callback ID). Thread-safe and overflow-safe. */
     protected final AtomicInteger nextAvailableRequestId = new AtomicInteger(0);
 
@@ -76,6 +79,11 @@ public class CallbackDispatcher {
             // a response with a closing error may arrive with any/random callback ID (usually -1)
             // CommandManager and ConnectionManager would close the UDS channel on ClosingException
             distributeClosingException(response.getClosingError());
+            return;
+        }
+        // pass pushes to the message handler and stop processing them
+        if (response.getIsPush()) {
+            messageHandler.handle(response);
             return;
         }
         // Complete and return the response at callbackId
