@@ -796,7 +796,15 @@ public class CommandTests {
                 Arguments.of("brpop", null, clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("pfcount", null, clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "pfcount binary",
+                        null,
+                        clusterClient.pfcount(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
                 Arguments.of("pfmerge", null, clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "pfmerge binary",
+                        null,
+                        clusterClient.pfmerge(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of(
                         "bzpopmax", "5.0.0", clusterClient.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of(
