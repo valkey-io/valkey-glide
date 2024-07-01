@@ -7504,7 +7504,7 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.lcs_idx(key1, lcs_non_string_key)
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_watch(self, redis_client: GlideClient):
         # watched key didn't change outside of transaction before transaction execution, transaction will execute
@@ -7547,6 +7547,9 @@ class TestCommands:
         assert len(result) == 2
         assert result[0] == "OK"
         assert result[1] == b"transaction_value"
+
+        # UNWATCH returns OK when there no watched keys
+        assert await redis_client.unwatch() == OK
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
