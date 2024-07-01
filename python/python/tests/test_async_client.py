@@ -68,6 +68,11 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
+from glide.async_commands.transaction import (
+    BaseTransaction,
+    ClusterTransaction,
+    Transaction,
+)
 from glide.config import (
     ClusterClientConfiguration,
     GlideClientConfiguration,
@@ -7052,16 +7057,13 @@ class TestCommands:
 
         assert await redis_client.function_load(code) == lib_name.encode()
 
-        # TODO: change when FCALL, FCALL_RO is implemented
+        # TODO: change when FCALL is implemented
         assert (
             await redis_client.custom_command(["FCALL", func_name, "0", "one", "two"])
             == b"one"
         )
         assert (
-            await redis_client.custom_command(
-                ["FCALL_RO", func_name, "0", "one", "two"]
-            )
-            == b"one"
+            await redis_client.fcall_ro(func_name, arguments=["one", "two"]) == b"one"
         )
 
         # TODO: add FUNCTION LIST once implemented
@@ -7082,6 +7084,11 @@ class TestCommands:
 
         assert await redis_client.function_load(new_code, True) == lib_name.encode()
 
+        # TODO: add when FCALL is implemented
+        assert await redis_client.fcall_ro(func2_name, arguments=["one", "two"]) == 2
+
+        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
@@ -7101,7 +7108,7 @@ class TestCommands:
 
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
-        # TODO: change when FCALL, FCALL_RO is implemented.
+        # TODO: change when FCALL is implemented.
         assert (
             await redis_client.custom_command(
                 ["FCALL", func_name, "0", "one", "two"],
@@ -7109,13 +7116,16 @@ class TestCommands:
             )
             == b"one"
         )
-        assert (
-            await redis_client.custom_command(
-                ["FCALL_RO", func_name, "0", "one", "two"],
-                SlotKeyRoute(SlotType.PRIMARY, "1"),
-            )
-            == b"one"
+        result = await redis_client.fcall_ro_route(
+            func_name, arguments=["one", "two"], route=route
         )
+
+        if single_route:
+            assert result == b"one"
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert nodeResponse == b"one"
 
         # TODO: add FUNCTION LIST once implemented
 
@@ -7136,6 +7146,20 @@ class TestCommands:
         assert (
             await redis_client.function_load(new_code, True, route) == lib_name.encode()
         )
+
+        # TODO: add when FCALL is implemented.
+        result = await redis_client.fcall_ro_route(
+            func2_name, arguments=["one", "two"], route=route
+        )
+
+        if single_route:
+            assert result == 2
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert nodeResponse == 2
+
+        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7252,6 +7276,91 @@ class TestCommands:
         with pytest.raises(RequestError) as e:
             await redis_client.function_delete(lib_name)
         assert "Library not found" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_fcall_with_key(self, redis_client: GlideClusterClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        key1 = f"{{testKey}}:1-{get_random_string(10)}"
+        key2 = f"{{testKey}}:2-{get_random_string(10)}"
+        keys = [key1, key2]
+        route = SlotKeyRoute(SlotType.PRIMARY, key1)
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return keys[1]"}, True)
+
+        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
+        assert await redis_client.function_load(code, False, route) == lib_name.encode()
+
+        # TODO: add when FCALL is implemented.
+        assert (
+            await redis_client.fcall_ro(func_name, keys=keys, arguments=[])
+            == key1.encode()
+        )
+
+        transaction = ClusterTransaction()
+        # TODO: add when FCALL is implemented.
+        transaction.fcall_ro(func_name, keys=keys, arguments=[])
+
+        # check response from a routed transaction request
+        result = await redis_client.exec(transaction, route)
+        assert result is not None
+        assert result[0] == key1.encode()
+
+        # if no route given, GLIDE should detect it automatically
+        result = await redis_client.exec(transaction)
+        assert result is not None
+        assert result[0] == key1.encode()
+
+        assert await redis_client.function_flush(FlushMode.SYNC, route) is OK
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_fcall_readonly_function(self, redis_client: GlideClusterClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        lib_name = f"fcall_readonly_function{get_random_string(5)}"
+        # intentionally using a REPLICA route
+        replicaRoute = SlotKeyRoute(SlotType.REPLICA, lib_name)
+        primaryRoute = SlotKeyRoute(SlotType.PRIMARY, lib_name)
+        func_name = f"fcall_readonly_function{get_random_string(5)}"
+
+        # function $funcName returns a magic number
+        code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, False)
+
+        assert await redis_client.function_load(code, False) == lib_name.encode()
+
+        # On a replica node should fail, because a function isn't guaranteed to be RO
+        # TODO: add when FCALL is implemented.
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.fcall_ro_route(
+                func_name, arguments=[], route=replicaRoute
+            )
+        assert "You can't write against a read only replica." in str(e)
+
+        # fcall_ro also fails to run it even on primary - another error
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.fcall_ro_route(
+                func_name, arguments=[], route=primaryRoute
+            )
+        assert "Can not execute a script with write flag using *_ro command." in str(e)
+
+        # create the same function, but with RO flag
+        code = generate_lua_lib_code(lib_name, {func_name: "return 42"}, True)
+        assert await redis_client.function_load(code, True) == lib_name.encode()
+
+        # fcall should succeed now
+        assert (
+            await redis_client.fcall_ro_route(
+                func_name, arguments=[], route=replicaRoute
+            )
+            == 42
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7810,6 +7919,7 @@ class TestMultiKeyCommandCrossSlot:
                     redis_client.lcs("abc", "def"),
                     redis_client.lcs_len("abc", "def"),
                     redis_client.lcs_idx("abc", "def"),
+                    redis_client.fcall_ro("func", ["abc", "zxy", "lkn"], []),
                 ]
             )
 
