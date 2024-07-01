@@ -239,6 +239,8 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseCommandResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -2045,9 +2047,26 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> xpending(
+            @NonNull GlideString key, @NonNull GlideString group) {
+        return commandManager.submitNewCommand(
+                XPending, new GlideString[] {key, group}, this::handleArrayOrNullResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<Object[][]> xpending(
             @NonNull String key,
             @NonNull String group,
+            @NonNull StreamRange start,
+            @NonNull StreamRange end,
+            long count) {
+        return xpending(key, group, start, end, count, StreamPendingOptions.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> xpending(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
             @NonNull StreamRange start,
             @NonNull StreamRange end,
             long count) {
@@ -2063,6 +2082,22 @@ public abstract class BaseClient
             long count,
             @NonNull StreamPendingOptions options) {
         String[] args = concatenateArrays(new String[] {key, group}, options.toArgs(start, end, count));
+        return commandManager.submitNewCommand(
+                XPending, args, response -> castArray(handleArrayResponse(response), Object[].class));
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> xpending(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull StreamRange start,
+            @NonNull StreamRange end,
+            long count,
+            @NonNull StreamPendingOptions options) {
+        String[] toArgsString = options.toArgs(start, end, count);
+        GlideString[] toArgs = Arrays.stream(toArgsString).map(GlideString::gs).toArray(GlideString[]::new);
+        GlideString[] args =
+                concatenateArrays(new GlideString[] {key, group}, toArgs);
         return commandManager.submitNewCommand(
                 XPending, args, response -> castArray(handleArrayResponse(response), Object[].class));
     }
