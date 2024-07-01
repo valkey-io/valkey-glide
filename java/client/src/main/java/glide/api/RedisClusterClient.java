@@ -80,11 +80,16 @@ public class RedisClusterClient extends BaseClient
                 TransactionsClusterCommands,
                 PubSubClusterCommands {
 
+    /** A private constructor. Use {@link #CreateClient} to get a client. */
+    RedisClusterClient(ClientBuilder builder) {
+        super(builder);
+    }
+
     /**
      * Async request for an async (non-blocking) Redis client in Cluster mode.
      *
-     * @param config Redis cluster client Configuration
-     * @return A Future to connect and return a RedisClusterClient
+     * @param config Redis cluster client Configuration.
+     * @return A Future to connect and return a RedisClusterClient.
      */
     public static CompletableFuture<RedisClusterClient> CreateClient(
             @NonNull RedisClusterClientConfiguration config) {

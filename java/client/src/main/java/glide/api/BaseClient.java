@@ -252,9 +252,10 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
-import java.util.function.Supplier;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.NonNull;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
 import org.apache.commons.lang3.NotImplementedException;
 import response.ResponseOuterClass.ConstantResponse;
@@ -280,14 +281,10 @@ public abstract class BaseClient
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
-    // Members below are effectively-final, but since we use a static async method as a constructor,
-    // we can't set them in a standard constructor. They all are set in the `buildClient` method
-    // below.
-    // All made protected to simplify testing.
-    protected CommandManager commandManager;
-    protected ConnectionManager connectionManager;
-    protected ConcurrentLinkedDeque<PubSubMessage> messageQueue;
-    protected Optional<BaseSubscriptionConfiguration> subscriptionConfiguration = Optional.empty();
+    protected final CommandManager commandManager;
+    protected final ConnectionManager connectionManager;
+    protected final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+    protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
     private static final BaseResponseResolver responseResolver =
@@ -297,21 +294,21 @@ public abstract class BaseClient
     private static final BaseResponseResolver binaryResponseResolver =
             new BaseResponseResolver(RedisValueResolver::valueFromPointerBinary);
 
-    /** Create a client instance and init private fields. */
-    protected static <T extends BaseClient> T buildClient(
-            Supplier<T> constructor,
-            ConnectionManager connectionManager,
-            CommandManager commandManager,
-            MessageHandler messageHandler,
-            BaseSubscriptionConfiguration subscriptionConfiguration) {
-        T client = constructor.get();
-        client.connectionManager = connectionManager;
-        client.commandManager = commandManager;
-        client.messageQueue = messageHandler.getQueue();
-        if (subscriptionConfiguration != null) {
-            client.subscriptionConfiguration = Optional.of(subscriptionConfiguration);
-        }
-        return client;
+    /** A constructor. */
+    protected BaseClient(ClientBuilder builder) {
+        this.connectionManager = builder.connectionManager;
+        this.commandManager = builder.commandManager;
+        this.messageQueue = builder.messageQueue;
+        this.subscriptionConfiguration = builder.subscriptionConfiguration;
+    }
+
+    /** Auxiliary builder which wraps all fields to be initialized in the constructor. */
+    @RequiredArgsConstructor
+    protected static class ClientBuilder {
+        private final ConnectionManager connectionManager;
+        private final CommandManager commandManager;
+        private final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+        private final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
     }
 
     /**
@@ -323,7 +320,7 @@ public abstract class BaseClient
      * @return a Future to connect and return a RedisClient.
      */
     protected static <T extends BaseClient> CompletableFuture<T> CreateClient(
-            @NonNull BaseClientConfiguration config, Supplier<T> constructor) {
+            @NonNull BaseClientConfiguration config, Function<ClientBuilder, T> constructor) {
         try {
             ThreadPoolResource threadPoolResource = config.getThreadPoolResource();
             if (threadPoolResource == null) {
@@ -339,12 +336,12 @@ public abstract class BaseClient
                     .connectToRedis(config)
                     .thenApply(
                             ignored ->
-                                    buildClient(
-                                            constructor,
-                                            connectionManager,
-                                            commandManager,
-                                            messageHandler,
-                                            config.getSubscriptionConfiguration()));
+                                    constructor.apply(
+                                            new ClientBuilder(
+                                                    connectionManager,
+                                                    commandManager,
+                                                    messageHandler.getQueue(),
+                                                    Optional.ofNullable(config.getSubscriptionConfiguration()))));
         } catch (InterruptedException e) {
             // Something bad happened while we were establishing netty connection to UDS
             var future = new CompletableFuture<T>();

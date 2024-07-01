@@ -355,8 +355,7 @@ public class RedisClientTest {
     @BeforeEach
     public void setUp() {
         commandManager = mock(CommandManager.class);
-        service = new RedisClient();
-        service.commandManager = commandManager;
+        service = new RedisClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
     }
 
     @SneakyThrows

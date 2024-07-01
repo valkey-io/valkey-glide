@@ -187,9 +187,12 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
     private static class TestClient extends RedisClient {
 
         public TestClient(ChannelHandler channelHandler) {
-            super();
-            this.connectionManager = new ConnectionManager(channelHandler);
-            this.commandManager = new CommandManager(channelHandler);
+            super(
+                    new ClientBuilder(
+                            new ConnectionManager(channelHandler),
+                            new CommandManager(channelHandler),
+                            null,
+                            null));
         }
     }
 }

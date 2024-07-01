@@ -72,10 +72,17 @@ public class RedisClient extends BaseClient
                 TransactionsCommands {
 
     /**
+     * A constructor. Use {@link #CreateClient} to get a client. Made protected to simplify testing.
+     */
+    protected RedisClient(ClientBuilder builder) {
+        super(builder);
+    }
+
+    /**
      * Async request for an async (non-blocking) Redis client in Standalone mode.
      *
-     * @param config Redis client Configuration
-     * @return A Future to connect and return a RedisClient
+     * @param config Redis client Configuration.
+     * @return A Future to connect and return a RedisClient.
      */
     public static CompletableFuture<RedisClient> CreateClient(
             @NonNull RedisClientConfiguration config) {

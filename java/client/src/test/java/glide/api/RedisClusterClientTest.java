@@ -93,8 +93,8 @@ public class RedisClusterClientTest {
     @BeforeEach
     public void setUp() {
         commandManager = mock(CommandManager.class);
-        service = new RedisClusterClient();
-        service.commandManager = commandManager;
+        service =
+                new RedisClusterClient(new BaseClient.ClientBuilder(null, commandManager, null, null));
     }
 
     @Test
@@ -163,8 +163,7 @@ public class RedisClusterClientTest {
         private final Object object;
 
         public TestClient(CommandManager commandManager, Object objectToReturn) {
-            super();
-            this.commandManager = commandManager;
+            super(new BaseClient.ClientBuilder(null, commandManager, null, null));
             object = objectToReturn;
         }
 
