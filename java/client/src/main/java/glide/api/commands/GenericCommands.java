@@ -4,6 +4,7 @@ package glide.api.commands;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsGlideString;
 import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
@@ -221,22 +222,23 @@ public interface GenericCommands {
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * The <code>sort</code> command can be used to sort elements based on different criteria and
      * apply transformations on sorted elements.<br>
-     * To store the result into a new key, see {@link #sortStore(String, String, SortOptions)}.
+     * To store the result into a new key, see {@link #sortStore(GlideString, GlideString,
+     * SortOptions)}.
      *
      * @param key The key of the list, set, or sorted set to be sorted.
-     * @param sortOptions The {@link SortOptions}.
+     * @param sortOptions The {@link SortOptionsGlideString}.
      * @return An <code>Array</code> of sorted elements.
      * @example
      *     <pre>{@code
      * client.hset(gs("user:1"), Map.of(gs("name"), gs("Alice"), gs("age"), gs("30"))).get();
      * client.hset(gs("user:2"), Map.of(gs("name"), gs("Bob"), gs("age"), gs("25"))).get();
      * client.lpush(gs("user_ids"), new GlideString[] {gs("2"), gs("1")}).get();
-     * GlideString [] payload = client.sort(gs("user_ids"), SortOptions.builder().byPattern("user:*->age")
-     *                  .getPattern("user:*->name").build()).get();
+     * GlideString [] payload = client.sort(gs("user_ids"), SortOptionsGlideString.builder().byPattern(gs("user:*->age"))
+     *                  .getPattern(gs("user:*->name")).build()).get();
      * assertArrayEquals(new GlideString[] {gs("Bob"), gs("Alice")}, payload); // Returns a list of the names sorted by age
      * }</pre>
      */
-    CompletableFuture<GlideString[]> sort(GlideString key, SortOptions sortOptions);
+    CompletableFuture<GlideString[]> sort(GlideString key, SortOptionsGlideString sortOptions);
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
@@ -275,12 +277,13 @@ public interface GenericCommands {
      * client.hset(gs("user:1"), Map.of(gs("name"), gs("Alice"), gs("age"), gs("30"))).get();
      * client.hset(gs("user:2"), Map.of(gs("name"), gs("Bob"), gs("age"), gs("25"))).get();
      * client.lpush("user_ids", new GlideString[] {gs("2"), gs("1")}).get();
-     * GlideString [] payload = client.sortReadOnly(gs("user_ids"), SortOptions.builder().byPattern("user:*->age")
-     *                  .getPattern("user:*->name").build()).get();
+     * GlideString [] payload = client.sortReadOnly(gs("user_ids"), SortOptionsGlideString.builder().byPattern(gs("user:*->age"))
+     *                  .getPattern(gs("user:*->name")).build()).get();
      * assertArrayEquals(new GlideString[] {gs("Bob"), gs("Alice")}, payload); // Returns a list of the names sorted by age
      * }</pre>
      */
-    CompletableFuture<GlideString[]> sortReadOnly(GlideString key, SortOptions sortOptions);
+    CompletableFuture<GlideString[]> sortReadOnly(
+            GlideString key, SortOptionsGlideString sortOptions);
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
@@ -327,7 +330,7 @@ public interface GenericCommands {
      * client.hset(gs("user:2"), Map.of(gs("name"), gs("Bob"), gs("age"), gs("25"))).get();
      * client.lpush(gs("user_ids"), new GlideString[] {gs("2"), gs("1")}).get();
      * Long payload = client.sortStore(gs("user_ids"), gs("destination"),
-     *          SortOptions.builder().byPattern("user:*->age").getPattern("user:*->name").build())
+     *          SortOptionsGlideString.builder().byPattern(gs("user:*->age")).getPattern(gs("user:*->name")).build())
      *          .get();
      * assertEquals(2, payload);
      * assertArrayEquals(
@@ -336,5 +339,5 @@ public interface GenericCommands {
      * }</pre>
      */
     CompletableFuture<Long> sortStore(
-            GlideString key, GlideString destination, SortOptions sortOptions);
+            GlideString key, GlideString destination, SortOptionsGlideString sortOptions);
 }

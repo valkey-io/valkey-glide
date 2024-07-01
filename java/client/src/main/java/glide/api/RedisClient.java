@@ -52,6 +52,7 @@ import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsGlideString;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.managers.CommandManager;
@@ -399,7 +400,7 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<GlideString[]> sort(
-            @NonNull GlideString key, @NonNull SortOptions sortOptions) {
+            @NonNull GlideString key, @NonNull SortOptionsGlideString sortOptions) {
         GlideString[] arguments = ArrayUtils.addFirst(sortOptions.toGlideStringArgs(), key);
         return commandManager.submitNewCommand(
                 Sort,
@@ -419,7 +420,7 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<GlideString[]> sortReadOnly(
-            @NonNull GlideString key, @NonNull SortOptions sortOptions) {
+            @NonNull GlideString key, @NonNull SortOptionsGlideString sortOptions) {
         GlideString[] arguments = ArrayUtils.addFirst(sortOptions.toGlideStringArgs(), key);
         return commandManager.submitNewCommand(
                 SortReadOnly,
@@ -440,7 +441,7 @@ public class RedisClient extends BaseClient
     public CompletableFuture<Long> sortStore(
             @NonNull GlideString key,
             @NonNull GlideString destination,
-            @NonNull SortOptions sortOptions) {
+            @NonNull SortOptionsGlideString sortOptions) {
         GlideString[] storeArguments = new GlideString[] {gs(STORE_COMMAND_STRING), destination};
         GlideString[] arguments =
                 concatenateArrays(new GlideString[] {key}, sortOptions.toGlideStringArgs(), storeArguments);

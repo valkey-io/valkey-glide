@@ -30,6 +30,8 @@ import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.BY_COMMAND_STRING;
+import static glide.api.models.commands.SortOptionsGlideString.BY_COMMAND_GLIDE_STRING;
+import static glide.api.models.commands.SortOptionsGlideString.GET_COMMAND_GLIDE_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT;
 import static glide.api.models.commands.bitmap.BitFieldOptions.GET_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.INCRBY_COMMAND_STRING;
@@ -285,6 +287,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsGlideString;
 import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
@@ -9165,9 +9168,9 @@ public class RedisClientTest {
                     gs(limitCount.toString()),
                     gs(DESC.toString()),
                     gs(ALPHA_COMMAND_STRING),
-                    gs(BY_COMMAND_STRING),
+                    BY_COMMAND_GLIDE_STRING,
                     byPattern,
-                    gs(GET_COMMAND_STRING),
+                    GET_COMMAND_GLIDE_STRING,
                     getPattern
                 };
         CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
@@ -9181,7 +9184,7 @@ public class RedisClientTest {
         CompletableFuture<GlideString[]> response =
                 service.sort(
                         key,
-                        SortOptions.builder()
+                        SortOptionsGlideString.builder()
                                 .alpha()
                                 .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
@@ -9254,11 +9257,11 @@ public class RedisClientTest {
         // setup
         GlideString[] result = new GlideString[] {gs("1"), gs("2"), gs("3")};
         GlideString key = gs("key");
-        String byPattern = "byPattern";
-        String getPattern = "getPattern";
+        GlideString byPattern = gs("byPattern");
+        GlideString getPattern = gs("getPattern");
         GlideString[] args =
                 new GlideString[] {
-                    key, gs(BY_COMMAND_STRING), gs(byPattern), gs(GET_COMMAND_STRING), gs(getPattern)
+                    key, BY_COMMAND_GLIDE_STRING, byPattern, GET_COMMAND_GLIDE_STRING, getPattern
                 };
         CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
         testResponse.complete(result);
@@ -9270,7 +9273,8 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<GlideString[]> response =
                 service.sortReadOnly(
-                        key, SortOptions.builder().getPattern(getPattern).byPattern(byPattern).build());
+                        key,
+                        SortOptionsGlideString.builder().getPattern(getPattern).byPattern(byPattern).build());
         GlideString[] payload = response.get();
 
         // verify
@@ -9338,8 +9342,8 @@ public class RedisClientTest {
         GlideString destKey = gs("destKey");
         Long limitOffset = 0L;
         Long limitCount = 2L;
-        String byPattern = "byPattern";
-        String getPattern = "getPattern";
+        GlideString byPattern = gs("byPattern");
+        GlideString getPattern = gs("getPattern");
         GlideString[] args =
                 new GlideString[] {
                     key,
@@ -9349,9 +9353,9 @@ public class RedisClientTest {
                     gs(DESC.toString()),
                     gs(ALPHA_COMMAND_STRING),
                     gs(BY_COMMAND_STRING),
-                    gs(byPattern),
-                    gs(GET_COMMAND_STRING),
-                    gs(getPattern),
+                    byPattern,
+                    GET_COMMAND_GLIDE_STRING,
+                    getPattern,
                     gs(STORE_COMMAND_STRING),
                     destKey
                 };
@@ -9366,7 +9370,7 @@ public class RedisClientTest {
                 service.sortStore(
                         key,
                         destKey,
-                        SortOptions.builder()
+                        SortOptionsGlideString.builder()
                                 .alpha()
                                 .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)

@@ -1,33 +1,37 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
+import static glide.api.models.GlideString.gs;
+
 import glide.api.commands.GenericCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.Singular;
 import lombok.experimental.SuperBuilder;
 
 /**
- * Optional arguments to {@link GenericCommands#sort(String, SortOptions)}, {@link
- * GenericCommands#sortReadOnly(String, SortOptions)}, and {@link GenericCommands#sortStore(String,
- * String, SortOptions)}
+ * Optional arguments to {@link GenericCommands#sort(GlideString, SortOptionsGlideString)}, {@link
+ * GenericCommands#sortReadOnly(GlideString, SortOptionsGlideString)}, and {@link
+ * GenericCommands#sortStore(GlideString, String, SortOptionsGlideString)}
  *
  * @see <a href="https://redis.io/commands/sort/">redis.io</a> and <a
  *     href="https://redis.io/docs/latest/commands/sort_ro/">redis.io</a>
  */
 @SuperBuilder
-public class SortOptions extends SortBaseOptions {
+public class SortOptionsGlideString extends SortBaseOptions {
     /**
      * <code>BY</code> subcommand string to include in the <code>SORT</code> and <code>SORT_RO</code>
      * commands.
      */
-    public static final String BY_COMMAND_STRING = "BY";
+    public static final GlideString BY_COMMAND_GLIDE_STRING = gs("BY");
 
     /**
      * <code>GET</code> subcommand string to include in the <code>SORT</code> and <code>SORT_RO</code>
      * commands.
      */
-    public static final String GET_COMMAND_STRING = "GET";
+    public static final GlideString GET_COMMAND_GLIDE_STRING = gs("GET");
 
     /**
      * A pattern to sort by external keys instead of by the elements stored at the key themselves. The
@@ -36,7 +40,7 @@ public class SortOptions extends SortBaseOptions {
      * contains IDs of objects, <code>byPattern</code> can be used to sort these IDs based on an
      * attribute of the objects, like their weights or timestamps.
      */
-    private final String byPattern;
+    private final GlideString byPattern;
 
     /**
      * A pattern used to retrieve external keys' values, instead of the elements at <code>key</code>.
@@ -53,26 +57,37 @@ public class SortOptions extends SortBaseOptions {
      *
      * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> for more information.
      */
-    @Singular private final List<String> getPatterns;
+    @Singular private final List<GlideString> getPatterns;
 
     /**
      * Creates the arguments to be used in <code>SORT</code> and <code>SORT_RO</code> commands.
      *
      * @return a String array that holds the sub commands and their arguments.
      */
-    public String[] toArgs() {
+    public String[] toStringArgs() {
         List<String> optionArgs = new ArrayList<>(List.of(super.toArgs()));
 
         if (byPattern != null) {
-            optionArgs.addAll(List.of(BY_COMMAND_STRING, byPattern.toString()));
+            optionArgs.addAll(List.of(BY_COMMAND_GLIDE_STRING.toString(), byPattern.toString()));
         }
 
         if (getPatterns != null) {
             getPatterns.stream()
                     .forEach(
-                            getPattern -> optionArgs.addAll(List.of(GET_COMMAND_STRING, getPattern.toString())));
+                            getPattern ->
+                                    optionArgs.addAll(
+                                            List.of(GET_COMMAND_GLIDE_STRING.toString(), getPattern.toString())));
         }
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Creates the arguments to be used in <code>SORT</code> and <code>SORT_RO</code> commands.
+     *
+     * @return a GlideString array that holds the sub commands and their arguments.
+     */
+    public GlideString[] toGlideStringArgs() {
+        return Arrays.stream(toStringArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }

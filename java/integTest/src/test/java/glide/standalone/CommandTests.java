@@ -42,6 +42,7 @@ import glide.api.RedisClient;
 import glide.api.models.GlideString;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsGlideString;
 import glide.api.models.exceptions.RequestException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -1084,7 +1085,10 @@ public class CommandTests {
                 regularClient
                         .sort(
                                 listKey,
-                                SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
+                                SortOptionsGlideString.builder()
+                                        .limit(new Limit(0L, 2L))
+                                        .getPattern(namePattern)
+                                        .build())
                         .get());
 
         assertArrayEquals(
@@ -1092,7 +1096,7 @@ public class CommandTests {
                 regularClient
                         .sort(
                                 listKey,
-                                SortOptions.builder()
+                                SortOptionsGlideString.builder()
                                         .limit(new Limit(0L, 2L))
                                         .orderBy(DESC)
                                         .getPattern(namePattern)
@@ -1103,7 +1107,7 @@ public class CommandTests {
                 regularClient
                         .sort(
                                 listKey,
-                                SortOptions.builder()
+                                SortOptionsGlideString.builder()
                                         .limit(new Limit(0L, 2L))
                                         .orderBy(DESC)
                                         .byPattern(agePattern)
@@ -1114,13 +1118,16 @@ public class CommandTests {
         // Non-existent key in the BY pattern will result in skipping the sorting operation
         assertArrayEquals(
                 userIDs,
-                regularClient.sort(listKey, SortOptions.builder().byPattern("noSort").build()).get());
+                regularClient
+                        .sort(listKey, SortOptionsGlideString.builder().byPattern(gs("noSort")).build())
+                        .get());
 
         // Non-existent key in the GET pattern results in nulls
         assertArrayEquals(
                 new GlideString[] {null, null, null, null, null},
                 regularClient
-                        .sort(listKey, SortOptions.builder().alpha().getPattern("missing").build())
+                        .sort(
+                                listKey, SortOptionsGlideString.builder().alpha().getPattern(gs("missing")).build())
                         .get());
 
         // Missing key in the set
@@ -1130,7 +1137,10 @@ public class CommandTests {
                 regularClient
                         .sort(
                                 listKey,
-                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                                SortOptionsGlideString.builder()
+                                        .byPattern(agePattern)
+                                        .getPattern(namePattern)
+                                        .build())
                         .get());
         assertEquals(missingListKey.toString(), regularClient.lpop(listKey.toString()).get());
 
@@ -1141,14 +1151,17 @@ public class CommandTests {
                     regularClient
                             .sortReadOnly(
                                     listKey,
-                                    SortOptions.builder().limit(new Limit(0L, 2L)).getPattern(namePattern).build())
+                                    SortOptionsGlideString.builder()
+                                            .limit(new Limit(0L, 2L))
+                                            .getPattern(namePattern)
+                                            .build())
                             .get());
             assertArrayEquals(
                     new GlideString[] {gs("Eve"), gs("Dave")},
                     regularClient
                             .sortReadOnly(
                                     listKey,
-                                    SortOptions.builder()
+                                    SortOptionsGlideString.builder()
                                             .limit(new Limit(0L, 2L))
                                             .orderBy(DESC)
                                             .getPattern(namePattern)
@@ -1159,7 +1172,7 @@ public class CommandTests {
                     regularClient
                             .sortReadOnly(
                                     listKey,
-                                    SortOptions.builder()
+                                    SortOptionsGlideString.builder()
                                             .limit(new Limit(0L, 2L))
                                             .orderBy(DESC)
                                             .byPattern(agePattern)
@@ -1171,14 +1184,17 @@ public class CommandTests {
             assertArrayEquals(
                     userIDs,
                     regularClient
-                            .sortReadOnly(listKey, SortOptions.builder().byPattern("noSort").build())
+                            .sortReadOnly(
+                                    listKey, SortOptionsGlideString.builder().byPattern(gs("noSort")).build())
                             .get());
 
             // Non-existent key in the GET pattern results in nulls
             assertArrayEquals(
                     new GlideString[] {null, null, null, null, null},
                     regularClient
-                            .sortReadOnly(listKey, SortOptions.builder().alpha().getPattern("missing").build())
+                            .sortReadOnly(
+                                    listKey,
+                                    SortOptionsGlideString.builder().alpha().getPattern(gs("missing")).build())
                             .get());
 
             assertArrayEquals(
@@ -1186,7 +1202,10 @@ public class CommandTests {
                     regularClient
                             .sortReadOnly(
                                     listKey,
-                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                                    SortOptionsGlideString.builder()
+                                            .byPattern(agePattern)
+                                            .getPattern(namePattern)
+                                            .build())
                             .get());
 
             // Missing key in the set
@@ -1196,7 +1215,10 @@ public class CommandTests {
                     regularClient
                             .sortReadOnly(
                                     listKey,
-                                    SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                                    SortOptionsGlideString.builder()
+                                            .byPattern(agePattern)
+                                            .getPattern(namePattern)
+                                            .build())
                             .get());
             assertEquals(missingListKey.toString(), regularClient.lpop(listKey.toString()).get());
         }
@@ -1208,7 +1230,7 @@ public class CommandTests {
                         .sortStore(
                                 listKey,
                                 storeKey,
-                                SortOptions.builder()
+                                SortOptionsGlideString.builder()
                                         .limit(new Limit(0L, -1L))
                                         .orderBy(ASC)
                                         .byPattern(agePattern)
@@ -1222,7 +1244,10 @@ public class CommandTests {
                         .sortStore(
                                 listKey,
                                 storeKey,
-                                SortOptions.builder().byPattern(agePattern).getPattern(namePattern).build())
+                                SortOptionsGlideString.builder()
+                                        .byPattern(agePattern)
+                                        .getPattern(namePattern)
+                                        .build())
                         .get());
         assertArrayEquals(namesSortedByAge, regularClient.lrange(storeKey.toString(), 0, -1).get());
     }
