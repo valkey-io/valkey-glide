@@ -451,6 +451,21 @@ public interface StreamBaseCommands {
     CompletableFuture<Boolean> xgroupDestroy(String key, String groupname);
 
     /**
+     * Destroys the consumer group <code>groupname</code> for the stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xgroup-destroy/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupname The consumer group name to delete.
+     * @return <code>true</code> if the consumer group is destroyed. Otherwise, <code>false</code>.
+     * @example
+     *     <pre>{@code
+     * // Destroys the consumer group "mygroup"
+     * assert client.xgroupDestroy(gs("mystream"), gs("mygroup")).get().equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<Boolean> xgroupDestroy(GlideString key, GlideString groupname);
+
+    /**
      * Creates a consumer named <code>consumer</code> in the consumer group <code>group</code> for the
      * stream stored at <code>key</code>.
      *

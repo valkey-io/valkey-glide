@@ -2110,6 +2110,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Boolean> xgroupDestroy(@NonNull GlideString key, @NonNull GlideString groupname) {
+        return commandManager.submitNewCommand(
+                XGroupDestroy, new GlideString[] {key, groupname}, this::handleBooleanResponse);
+    }
+
+    @Override
     public CompletableFuture<Boolean> xgroupCreateConsumer(
             @NonNull String key, @NonNull String group, @NonNull String consumer) {
         return commandManager.submitNewCommand(
