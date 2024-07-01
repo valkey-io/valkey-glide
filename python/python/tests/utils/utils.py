@@ -229,30 +229,30 @@ def generate_lua_lib_code(
 
 
 def check_function_list_response(
-    response: List[Dict[str, Any]],
-    lib_name: str,
-    function_descriptions: Dict[str, Optional[str]],
-    function_flags: Dict[str, Set[str]],
-    lib_code: Optional[str] = None,
+    response: List[Mapping[bytes, Any]],
+    lib_name: bytes,
+    function_descriptions: Mapping[bytes, Optional[bytes]],
+    function_flags: Mapping[bytes, Set[bytes]],
+    lib_code: Optional[bytes] = None,
 ):
     assert len(response) > 0
     has_lib = False
     for lib in response:
-        has_lib = lib.get("library_name") == lib_name
+        has_lib = lib.get(b'library_name') == lib_name
         if has_lib:
-            functions: List[Dict[str, Any]] = cast(
-                List[Dict[str, Any]], lib.get("functions")
+            functions: List[Mapping[bytes, Any]] = cast(
+                List[Mapping[bytes, Any]], lib.get(b'functions')
             )
             assert len(functions) == len(function_descriptions)
             for function in functions:
-                function_name: str = str(function.get("name"))
-                assert function.get("description") == function_descriptions.get(
+                function_name: bytes = cast(bytes, function.get(b'name'))
+                assert function.get(b'description') == function_descriptions.get(
                     function_name
                 )
-                assert function.get("flags") == function_flags.get(function_name)
+                assert function.get(b'flags') == function_flags.get(function_name)
 
                 if lib_code:
-                    assert lib.get("library_code") == lib_code
+                    assert lib.get(b'library_code') == lib_code
             break
 
     assert has_lib is True

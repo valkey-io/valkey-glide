@@ -7068,10 +7068,10 @@ class TestCommands:
         # verify with FUNCTION LIST
         check_function_list_response(
             await redis_client.function_list(lib_name, with_code=True),
-            lib_name,
-            {func_name: None},
-            {func_name: {"no-writes"}},
-            code,
+            lib_name.encode(),
+            {func_name.encode(): None},
+            {func_name.encode(): {b"no-writes"}},
+            code.encode(),
         )
 
         # re-load library without replace
@@ -7137,11 +7137,11 @@ class TestCommands:
 
         # verify with FUNCTION LIST
         check_function_list_response(
-            await redis_client.function_list(lib_name),
-            lib_name,
-            {func_name: None},
-            {func_name: {"no-writes"}},
-            code,
+            await redis_client.function_list(lib_name, with_code=True),
+            lib_name.encode(),
+            {func_name.encode(): None},
+            {func_name.encode(): {b"no-writes"}},
+            code.encode(),
         )
 
         # re-load library without replace
@@ -7197,24 +7197,24 @@ class TestCommands:
 
         check_function_list_response(
             await redis_client.function_list(lib_name),
-            lib_name,
-            {func_name: None},
-            {func_name: {"no-writes"}},
+            lib_name.encode(),
+            {func_name.encode(): None},
+            {func_name.encode(): {b"no-writes"}},
             None,
         )
         check_function_list_response(
             await redis_client.function_list(f"{lib_name}*"),
-            lib_name,
-            {func_name: None},
-            {func_name: {"no-writes"}},
+            lib_name.encode(),
+            {func_name.encode(): None},
+            {func_name.encode(): {b"no-writes"}},
             None,
         )
         check_function_list_response(
             await redis_client.function_list(lib_name, with_code=True),
-            lib_name,
-            {func_name: None},
-            {func_name: {"no-writes"}},
-            code,
+            lib_name.encode(),
+            {func_name.encode(): None},
+            {func_name.encode(): {b"no-writes"}},
+            code.encode(),
         )
 
         no_args_response = await redis_client.function_list()
@@ -7223,16 +7223,16 @@ class TestCommands:
         assert len(wildcard_pattern_response) == original_functions_count + 1
         check_function_list_response(
             no_args_response,
-            lib_name,
-            {func_name: None},
-            {func_name: {"no-writes"}},
+            lib_name.encode(),
+            {func_name.encode(): None},
+            {func_name.encode(): {b"no-writes"}},
             None,
         )
         check_function_list_response(
             wildcard_pattern_response,
-            lib_name,
-            {func_name: None},
-            {func_name: {"no-writes"}},
+            lib_name.encode(),
+            {func_name.encode(): None},
+            {func_name.encode(): {b"no-writes"}},
             None,
         )
 
@@ -7269,16 +7269,16 @@ class TestCommands:
         assert len(no_args_response) == original_functions_count + 2
         check_function_list_response(
             no_args_response,
-            lib_name_1,
-            {func_name_1: None, func_name_2: None},
-            {func_name_1: set(), func_name_2: set()},
+            lib_name_1.encode(),
+            {func_name_1.encode(): None, func_name_2.encode(): None},
+            {func_name_1.encode(): set(), func_name_2.encode(): set()},
             None,
         )
         check_function_list_response(
             no_args_response,
-            lib_name_2,
-            {func_name_3: None},
-            {func_name_3: {"no-writes"}},
+            lib_name_2.encode(),
+            {func_name_3.encode(): None},
+            {func_name_3.encode(): {b"no-writes"}},
             None,
         )
 

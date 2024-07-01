@@ -355,7 +355,7 @@ class ClusterCommands(CoreCommands):
 
     async def function_list(
         self, library_name: Optional[str] = None, with_code: bool = False, route: Optional[Route] = None
-    ) -> List[Mapping[str, Any]]:
+    ) -> List[Mapping[bytes, Any]]:
         # TODO Doc comment
         args = []
         if library_name is not None:
@@ -363,7 +363,7 @@ class ClusterCommands(CoreCommands):
         if with_code:
             args.append("WITHCODE")
         return cast(
-            List[Mapping[str, Any]],
+            List[Mapping[bytes, Any]],
             await self._execute_command(
                 RequestType.FunctionList,
                 args,
