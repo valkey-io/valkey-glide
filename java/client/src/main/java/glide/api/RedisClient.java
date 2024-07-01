@@ -96,7 +96,12 @@ public class RedisClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> exec(@NonNull Transaction transaction) {
-        return commandManager.submitNewTransaction(transaction, this::handleArrayOrNullResponse);
+        if (transaction.isBinarySafeOutput()) {
+            return commandManager.submitNewTransaction(
+                    transaction, this::handleArrayOrNullResponseBinary);
+        } else {
+            return commandManager.submitNewTransaction(transaction, this::handleArrayOrNullResponse);
+        }
     }
 
     @Override
