@@ -925,6 +925,16 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             key_type: &None,
             value_type: &None,
         }),
+        b"XCLAIM" => {
+            if cmd.position(b"JUSTID").is_some() {
+                Some(ExpectedReturnType::ArrayOfStrings)
+            } else {
+                Some(ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::SimpleString),
+                    value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+                })
+            }
+        }
         b"XAUTOCLAIM" => {
             if cmd.position(b"JUSTID").is_some() {
                 // Value conversion is not needed if the JUSTID arg was passed.
@@ -1260,6 +1270,36 @@ mod tests {
             Some(ExpectedReturnType::Lolwut),
         );
         assert!(converted_4.is_err());
+    }
+
+    #[test]
+    fn convert_xclaim() {
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("XCLAIM")
+                    .arg("key")
+                    .arg("grou")
+                    .arg("consumer")
+                    .arg("0")
+                    .arg("id")
+            ),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::SimpleString),
+                value_type: &Some(ExpectedReturnType::ArrayOfPairs),
+            })
+        ));
+        assert!(matches!(
+            expected_type_for_cmd(
+                redis::cmd("XCLAIM")
+                    .arg("key")
+                    .arg("grou")
+                    .arg("consumer")
+                    .arg("0")
+                    .arg("id")
+                    .arg("JUSTID")
+            ),
+            Some(ExpectedReturnType::ArrayOfStrings)
+        ));
     }
 
     #[test]
