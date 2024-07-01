@@ -7594,7 +7594,6 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.sunion(["def", "ghi"]),
             redis_client.bitop(BitwiseOperation.OR, "abc", ["zxy", "lkn"]),
             redis_client.xread({"abc": "0-0", "zxy": "0-0"}),
-            redis_client.watch(["abc", "def"]),
         ]
 
         if not await check_if_server_version_lt(redis_client, "6.2.0"):
@@ -7644,6 +7643,7 @@ class TestMultiKeyCommandCrossSlot:
         await redis_client.mget(["abc", "zxy", "lkn"])
         await redis_client.mset({"abc": "1", "zxy": "2", "lkn": "3"})
         await redis_client.touch(["abc", "zxy", "lkn"])
+        await redis_client.watch(["abc", "zxy", "lkn"])
 
 
 class TestCommandsUnitTests:
