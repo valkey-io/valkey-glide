@@ -1632,7 +1632,7 @@ export class BaseClient {
             keys: option?.keys?.map((item) => {
                 if (typeof item === "string") {
                     // Convert the string to a Uint8Array
-                    return new TextEncoder().encode(item);
+                    return Buffer.from(item);
                 } else {
                     // If it's already a Uint8Array, just return it
                     return item;
@@ -1641,7 +1641,7 @@ export class BaseClient {
             args: option?.args?.map((item) => {
                 if (typeof item === "string") {
                     // Convert the string to a Uint8Array
-                    return new TextEncoder().encode(item);
+                    return Buffer.from(item);
                 } else {
                     // If it's already a Uint8Array, just return it
                     return item;

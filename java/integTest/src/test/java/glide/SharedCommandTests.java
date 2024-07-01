@@ -2563,12 +2563,12 @@ public class SharedCommandTests {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
 
-        try (Script script = new Script("return 'Hello'", true)) {
+        try (Script script = new Script("return 'Hello'", false)) {
             Object response = client.invokeScript(script).get();
             assertEquals("Hello", response);
         }
 
-        try (Script script = new Script("return redis.call('SET', KEYS[1], ARGV[1])", true)) {
+        try (Script script = new Script("return redis.call('SET', KEYS[1], ARGV[1])", false)) {
             Object setResponse1 =
                     client
                             .invokeScript(script, ScriptOptions.builder().key(key1).arg("value1").build())
@@ -2582,7 +2582,7 @@ public class SharedCommandTests {
             assertEquals(OK, setResponse2);
         }
 
-        try (Script script = new Script("return redis.call('GET', KEYS[1])", true)) {
+        try (Script script = new Script("return redis.call('GET', KEYS[1])", false)) {
             Object getResponse1 =
                     client.invokeScript(script, ScriptOptions.builder().key(key1).build()).get();
             assertEquals("value1", getResponse1);
@@ -2603,12 +2603,12 @@ public class SharedCommandTests {
         GlideString key1 = gs(UUID.randomUUID().toString());
         GlideString key2 = gs(UUID.randomUUID().toString());
 
-        try (Script script = new Script(gs("return 'Hello'"), false)) {
+        try (Script script = new Script(gs("return 'Hello'"), true)) {
             Object response = client.invokeScript(script).get();
             assertEquals(gs("Hello"), response);
         }
 
-        try (Script script = new Script(gs("return redis.call('SET', KEYS[1], ARGV[1])"), false)) {
+        try (Script script = new Script(gs("return redis.call('SET', KEYS[1], ARGV[1])"), true)) {
             Object setResponse1 =
                     client
                             .invokeScript(
@@ -2624,7 +2624,7 @@ public class SharedCommandTests {
             assertEquals(OK, setResponse2);
         }
 
-        try (Script script = new Script(gs("return redis.call('GET', KEYS[1])"), false)) {
+        try (Script script = new Script(gs("return redis.call('GET', KEYS[1])"), true)) {
             Object getResponse1 =
                     client.invokeScript(script, ScriptOptionsGlideString.builder().key(key1).build()).get();
             assertEquals(gs("value1"), getResponse1);

@@ -4971,8 +4971,8 @@ class CoreCommands(Protocol):
 
         Args:
             script (Script): The Lua script to execute.
-            keys (Union[str, bytes]): The keys that are used in the script.
-            args (Union[str, bytes]): The arguments for the script.
+            keys (List[Union[str, bytes]]): The keys that are used in the script.
+            args (List[Union[str, bytes]]): The arguments for the script.
 
         Returns:
             TResult: a value that depends on the script that was executed.

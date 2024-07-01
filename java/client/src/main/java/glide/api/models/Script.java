@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
-import static glide.api.models.GlideString.gs;
 import static glide.ffi.resolvers.ScriptResolver.dropScript;
 import static glide.ffi.resolvers.ScriptResolver.storeScript;
 
@@ -26,19 +25,10 @@ public class Script implements AutoCloseable {
      * Wraps around creating a Script object from <code>code</code>.
      *
      * @param code To execute with a ScriptInvoke call.
+     * @param binarySafeOutput Indicates if the output can return binary data.
      */
-    public Script(String code, Boolean binarySafeOutput) {
-        hash = storeScript(gs(code).getBytes());
-        this.binarySafeOutput = binarySafeOutput;
-    }
-
-    /**
-     * Wraps around creating a Script object from <code>code</code>.
-     *
-     * @param code To execute with a ScriptInvoke call.
-     */
-    public Script(GlideString code, Boolean binarySafeOutput) {
-        hash = storeScript(code.getBytes());
+    public <T> Script(T code, Boolean binarySafeOutput) {
+        this.hash = storeScript(GlideString.of(code).getBytes());
         this.binarySafeOutput = binarySafeOutput;
     }
 
