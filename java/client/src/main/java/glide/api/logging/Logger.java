@@ -7,6 +7,8 @@ import static glide.ffi.resolvers.LoggerResolver.logInternal;
 import lombok.Getter;
 import lombok.NonNull;
 
+import java.util.function.Supplier;
+
 /**
  * A singleton class that allows logging which is consistent with logs from the internal rust core.
  * The logger can be set up in 2 ways -
@@ -128,7 +130,7 @@ public final class Logger {
      * @param message The message to log.
      */
     public static void log(
-            @NonNull Level level, @NonNull String logIdentifier, @NonNull String message) {
+            @NonNull Level level, @NonNull String logIdentifier, @NonNull Supplier<String> message) {
         if (loggerLevel == null) {
             initLogger(Level.DEFAULT, null);
         }
@@ -140,7 +142,7 @@ public final class Logger {
         if (!(level.getLevel() <= loggerLevel.getLevel())) {
             return;
         }
-        logInternal(level.getLevel(), logIdentifier, message);
+        logInternal(level.getLevel(), logIdentifier, message.get());
     }
 
     /**

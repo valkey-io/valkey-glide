@@ -114,7 +114,7 @@ public class CallbackDispatcher {
             Logger.log(
                     ERROR,
                     "callback dispatcher",
-                    "Received a response for not registered callback id "
+                () -> "Received a response for not registered callback id "
                             + callbackId
                             + ", request error = "
                             + response.getRequestError());
