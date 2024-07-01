@@ -2260,6 +2260,93 @@ class BaseTransaction:
         args = _create_xpending_range_args(key, group_name, start, end, count, options)
         return self.append_command(RequestType.XPending, args)
 
+    def xautoclaim(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        consumer_name: str,
+        min_idle_time_ms: int,
+        start: str,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Transfers ownership of pending stream entries that match the specified criteria.
+
+        See https://valkey.io/commands/xautoclaim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name.
+            min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
+                value.
+            start (str): Filters the claimed entries to those that have an ID equal or greater than the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value.
+
+        Command response:
+            List[Union[str, Mapping[str, List[List[str]]], List[str]]]: A list containing the following elements:
+                - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
+                to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
+                scanned.
+                - A mapping of the claimed entries, with the keys being the claimed entry IDs and the values being a
+                2D list of the field-value pairs in the format `[[field1, value1], [field2, value2], ...]`.
+                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
+                deleted from the Pending Entries List.
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return self.append_command(RequestType.XAutoClaim, args)
+
+    def xautoclaim_just_id(
+        self: TTransaction,
+        key: str,
+        group_name: str,
+        consumer_name: str,
+        min_idle_time_ms: int,
+        start: str,
+        count: Optional[int] = None,
+    ) -> TTransaction:
+        """
+        Transfers ownership of pending stream entries that match the specified criteria. This command uses the JUSTID
+        argument to further specify that the return value should contain a list of claimed IDs without their
+        field-value info.
+
+        See https://valkey.io/commands/xautoclaim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name.
+            min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
+                value.
+            start (str): Filters the claimed entries to those that have an ID equal or greater than the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value.
+
+        Command response:
+            List[Union[str, List[str]]]: A list containing the following elements:
+                - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
+                to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
+                scanned.
+                - A list of the IDs for the claimed entries.
+                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
+                deleted from the Pending Entries List.
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        args.append("JUSTID")
+
+        return self.append_command(RequestType.XAutoClaim, args)
+
     def geoadd(
         self: TTransaction,
         key: str,

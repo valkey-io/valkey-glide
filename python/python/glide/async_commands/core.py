@@ -3128,6 +3128,144 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.XPending, args),
         )
 
+    async def xautoclaim(
+        self,
+        key: str,
+        group_name: str,
+        consumer_name: str,
+        min_idle_time_ms: int,
+        start: str,
+        count: Optional[int] = None,
+    ) -> List[Union[str, Mapping[str, List[List[str]]], List[str]]]:
+        """
+        Transfers ownership of pending stream entries that match the specified criteria.
+
+        See https://valkey.io/commands/xautoclaim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name.
+            min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
+                value.
+            start (str): Filters the claimed entries to those that have an ID equal or greater than the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value.
+
+        Returns:
+            List[Union[str, Mapping[str, List[List[str]]], List[str]]]: A list containing the following elements:
+                - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
+                to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
+                scanned.
+                - A mapping of the claimed entries, with the keys being the claimed entry IDs and the values being a
+                2D list of the field-value pairs in the format `[[field1, value1], [field2, value2], ...]`.
+                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
+                deleted from the Pending Entries List.
+
+        Examples:
+            # Redis version < 7.0.0:
+            >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
+                [
+                    "0-0",
+                    {
+                        "1-1": [
+                            ["field1", "value1"],
+                            ["field2", "value2"],
+                        ]
+                    }
+                ]
+                # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
+                # was scanned.
+
+            # Redis version 7.0.0 and above:
+            >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
+                [
+                    "0-0",
+                    {
+                        "1-1": [
+                            ["field1", "value1"],
+                            ["field2", "value2"],
+                        ]
+                    },
+                    ["1-2"]
+                ]
+                # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
+                # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
+                # exists in the stream.
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        return cast(
+            List[Union[str, Mapping[str, List[List[str]]], List[str]]],
+            await self._execute_command(RequestType.XAutoClaim, args),
+        )
+
+    async def xautoclaim_just_id(
+        self,
+        key: str,
+        group_name: str,
+        consumer_name: str,
+        min_idle_time_ms: int,
+        start: str,
+        count: Optional[int] = None,
+    ) -> List[Union[str, List[str]]]:
+        """
+        Transfers ownership of pending stream entries that match the specified criteria. This command uses the JUSTID
+        argument to further specify that the return value should contain a list of claimed IDs without their
+        field-value info.
+
+        See https://valkey.io/commands/xautoclaim for more details.
+
+        Args:
+            key (str): The key of the stream.
+            group_name (str): The consumer group name.
+            consumer_name (str): The consumer name.
+            min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
+                value.
+            start (str): Filters the claimed entries to those that have an ID equal or greater than the specified value.
+            count (Optional[int]): Limits the number of claimed entries to the specified value.
+
+        Returns:
+            List[Union[str, List[str]]]: A list containing the following elements:
+                - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
+                to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
+                scanned.
+                - A list of the IDs for the claimed entries.
+                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
+                deleted from the Pending Entries List.
+
+        Examples:
+            # Redis version < 7.0.0:
+            >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
+                ["0-0", ["1-1"]]
+                # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
+                # was scanned.
+
+            # Redis version 7.0.0 and above:
+            >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
+                ["0-0", ["1-1"], ["1-2"]]
+                # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
+                # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
+                # exists in the stream.
+
+        Since: Redis version 6.2.0.
+        """
+        args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
+        if count is not None:
+            args.extend(["COUNT", str(count)])
+
+        args.append("JUSTID")
+
+        return cast(
+            List[Union[str, List[str]]],
+            await self._execute_command(RequestType.XAutoClaim, args),
+        )
+
     async def geoadd(
         self,
         key: str,
