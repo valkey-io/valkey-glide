@@ -5779,6 +5779,7 @@ class CoreCommands(Protocol):
         return cast(
             TOK,
             await self._execute_command(RequestType.Watch, keys),
+        )
 
     @dataclass
     class PubSubMsg:

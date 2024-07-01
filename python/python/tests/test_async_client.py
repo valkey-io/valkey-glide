@@ -68,7 +68,7 @@ from glide.async_commands.stream import (
     TrimByMaxLen,
     TrimByMinId,
 )
-from glide.async_commands.transaction import Transaction
+from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
     ClusterClientConfiguration,
     GlideClientConfiguration,
@@ -99,10 +99,6 @@ from tests.utils.utils import (
     is_single_response,
     parse_info_response,
 )
-
-from glide.async_commands.transaction import Transaction
-
-from glide.async_commands.transaction import Transaction
 
 
 @pytest.mark.asyncio
