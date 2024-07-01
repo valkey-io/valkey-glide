@@ -5448,6 +5448,9 @@ class CoreCommands(Protocol):
 
         See https://valkey.io/commands/watch for more details.
 
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+
         Args:
             keys (List[str]): The keys to watch.
 
