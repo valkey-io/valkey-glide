@@ -7112,12 +7112,12 @@ class TestCommands:
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
         # verify function does not yet exist
-        result = await redis_client.function_list(lib_name, False, route)
+        function_list = await redis_client.function_list(lib_name, False, route)
         if single_route:
-            assert result == []
+            assert function_list == []
         else:
-            assert isinstance(result, dict)
-            for nodeResponse in result.values():
+            assert isinstance(function_list, dict)
+            for nodeResponse in function_list.values():
                 assert nodeResponse == []
 
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
@@ -7142,13 +7142,27 @@ class TestCommands:
                 assert nodeResponse == b"one"
 
         # verify with FUNCTION LIST
-        check_function_list_response(
-            await redis_client.function_list(lib_name, with_code=True, route=route),
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
-            code.encode(),
+        function_list = await redis_client.function_list(
+            lib_name, with_code=True, route=route
         )
+        if single_route:
+            check_function_list_response(
+                function_list,
+                lib_name.encode(),
+                {func_name.encode(): None},
+                {func_name.encode(): {b"no-writes"}},
+                code.encode(),
+            )
+        else:
+            assert isinstance(function_list, dict)
+            for nodeResponse in result.values():
+                check_function_list_response(
+                    nodeResponse,
+                    lib_name.encode(),
+                    {func_name.encode(): None},
+                    {func_name.encode(): {b"no-writes"}},
+                    code.encode(),
+                )
 
         # re-load library without replace
         with pytest.raises(RequestError) as e:
