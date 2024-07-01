@@ -96,7 +96,7 @@ from tests.utils.utils import (
     get_first_result,
     get_random_string,
     is_single_response,
-    parse_info_response,
+    parse_info_response, check_function_list_response,
 )
 
 
@@ -6922,7 +6922,7 @@ class TestCommands:
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        # assert await redis_client.function_list() == [] # Cannot assume function list is empty at start of test
+        original_functions_count = len(await redis_client.function_list())
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -6934,8 +6934,84 @@ class TestCommands:
         # load library
         await redis_client.function_load(code)
 
-        assert await redis_client.function_list(lib_name) == [self.__get_function_description(lib_name, [func_name])]
-        assert await redis_client.function_list(lib_name, with_code=True) == [self.__get_function_description(lib_name, [func_name], code)]
+        check_function_list_response(
+            await redis_client.function_list(lib_name),
+            lib_name,
+            {func_name: None},
+            {func_name: {'no-writes'}},
+            None
+        )
+        check_function_list_response(
+            await redis_client.function_list(f"{lib_name}*"),
+            lib_name,
+            {func_name: None},
+            {func_name: {'no-writes'}},
+            None
+        )
+        check_function_list_response(
+            await redis_client.function_list(lib_name, with_code=True),
+            lib_name,
+            {func_name: None},
+            {func_name: {'no-writes'}},
+            code
+        )
+
+        no_args_response = await redis_client.function_list()
+        wildcard_pattern_response = await redis_client.function_list("*", False)
+        assert len(no_args_response) == original_functions_count + 1
+        assert len(wildcard_pattern_response) == original_functions_count + 1
+        check_function_list_response(
+            no_args_response,
+            lib_name,
+            {func_name: None},
+            {func_name: {'no-writes'}},
+            None
+        )
+        check_function_list_response(
+            wildcard_pattern_response,
+            lib_name,
+            {func_name: None},
+            {func_name: {'no-writes'}},
+            None
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_list_with_multiple_functions(self, redis_client: TGlideClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        original_functions_count = len(await redis_client.function_list())
+
+        lib_name_1 = f"mylib1C{get_random_string(5)}"
+        func_name_1 = f"myfunc1c{get_random_string(5)}"
+        func_name_2 = f"myfunc2c{get_random_string(5)}"
+        code_1 = generate_lua_lib_code(lib_name_1, {func_name_1: "return args[1]", func_name_2: "return args[2]"}, False)
+        await redis_client.function_load(code_1)
+
+        lib_name_2 = f"mylib2C{get_random_string(5)}"
+        func_name_3 = f"myfunc3c{get_random_string(5)}"
+        code_2 = generate_lua_lib_code(lib_name_2, {func_name_3: "return args[3]"}, True)
+        await redis_client.function_load(code_2)
+
+        no_args_response = await redis_client.function_list()
+
+        assert len(no_args_response) == original_functions_count + 2
+        check_function_list_response(
+            no_args_response,
+            lib_name_1,
+            {func_name_1: None, func_name_2: None},
+            {func_name_1: set(), func_name_2: set()},
+            None
+        )
+        check_function_list_response(
+            no_args_response,
+            lib_name_2,
+            {func_name_3: None},
+            {func_name_3: {'no-writes'}},
+            None
+        )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

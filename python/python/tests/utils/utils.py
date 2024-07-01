@@ -226,3 +226,28 @@ def generate_lua_lib_code(
             code += ", flags = { 'no-writes' }"
         code += " }\n"
     return code
+
+
+def check_function_list_response(
+        response: List[Dict[str, Any]],
+        lib_name: str,
+        function_descriptions: Dict[str, str],
+        function_flags: Dict[str, Set[str]],
+        lib_code: str = ""):
+    assert len(response) > 0
+    has_lib = False
+    for lib in response:
+        has_lib = lib.get('library_name') == lib_name
+        if has_lib:
+            functions = lib.get('functions')
+            assert len(functions) == len(function_descriptions)
+            for function in functions:
+                function_name = function.get('name')
+                assert function.get('description') == function_descriptions.get(function_name)
+                assert function.get('flags') == function_flags.get(function_name)
+
+                if lib_code:
+                    assert lib.get('library_code') == lib_code
+            break
+
+    assert has_lib is True
