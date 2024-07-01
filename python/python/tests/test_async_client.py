@@ -6898,6 +6898,45 @@ class TestCommands:
             await redis_client.function_load(new_code, True, route) == lib_name.encode()
         )
 
+    @staticmethod
+    def __get_function_description(lib_name: str, func_names: list[str], code: str = ""):
+        description = {
+            'library_name': lib_name,
+            'engine': 'LUA',
+            'functions': [{
+                'name': func_name,
+                'description': None,
+                'flags': {'no-writes'}
+            } for func_name in func_names]
+        }
+
+        if code:
+            description['library_code'] = code
+
+        return description
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_list(self, redis_client: TGlideClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        # assert await redis_client.function_list() == [] # Cannot assume function list is empty at start of test
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+
+        # Assert function `lib_name` does not yet exist
+        assert await redis_client.function_list(lib_name) == []
+
+        # load library
+        await redis_client.function_load(code)
+
+        assert await redis_client.function_list(lib_name) == [self.__get_function_description(lib_name, [func_name])]
+        assert await redis_client.function_list(lib_name, with_code=True) == [self.__get_function_description(lib_name, [func_name], code)]
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_flush(self, redis_client: TGlideClient):
