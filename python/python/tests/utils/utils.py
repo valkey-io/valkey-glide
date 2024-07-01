@@ -233,7 +233,7 @@ def check_function_list_response(
     lib_name: str,
     function_descriptions: Dict[str, Optional[str]],
     function_flags: Dict[str, Set[str]],
-    lib_code: Optional[str] = "",
+    lib_code: Optional[str] = None,
 ):
     assert len(response) > 0
     has_lib = False

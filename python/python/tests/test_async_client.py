@@ -7067,7 +7067,7 @@ class TestCommands:
 
         # verify with FUNCTION LIST
         check_function_list_response(
-            await redis_client.function_list(lib_name),
+            await redis_client.function_list(lib_name, with_code=True),
             lib_name,
             {func_name: None},
             {func_name: {"no-writes"}},

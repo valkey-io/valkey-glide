@@ -1801,12 +1801,12 @@ class BaseTransaction:
             ["REPLACE", library_code] if replace else [library_code],
         )
 
-    async def function_list(
-        self: TTransaction, library_name: str = "", with_code: bool = False
+    def function_list(
+        self: TTransaction, library_name: Optional[str] = None, with_code: bool = False
     ) -> TTransaction:
         # TODO Doc comment
         args = []
-        if library_name:
+        if library_name is not None:
             args.extend(["LIBRARYNAME", library_name])
         if with_code:
             args.append("WITHCODE")

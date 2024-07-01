@@ -263,16 +263,16 @@ class StandaloneCommands(CoreCommands):
         )
 
     async def function_list(
-        self, library_name: str = "", with_code: bool = False
-    ) -> List[Dict[str, Any]]:
+        self, library_name: Optional[str] = None, with_code: bool = False
+    ) -> List[Mapping[str, Any]]:
         # TODO Doc comment
         args = []
-        if library_name:
+        if library_name is not None:
             args.extend(["LIBRARYNAME", library_name])
         if with_code:
             args.append("WITHCODE")
         return cast(
-            List[Dict[str, Any]],
+            List[Mapping[str, Any]],
             await self._execute_command(
                 RequestType.FunctionList,
                 args,
