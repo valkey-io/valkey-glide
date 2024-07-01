@@ -695,3 +695,24 @@ class StandaloneCommands(CoreCommands):
             int,
             await self._execute_command(RequestType.Wait, args),
         )
+
+    async def unwatch(self) -> TOK:
+        """
+        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        automatically flush all previously watched keys.
+
+        See https://valkey.io/commands/unwatch for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.watch("sampleKey")
+                'OK'
+            >>> await client.unwatch()
+                'OK'
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.UnWatch, []),
+        )

@@ -5743,6 +5743,44 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.FCallReadOnly, args),
         )
 
+    async def watch(self, keys: List[str]) -> TOK:
+        """
+        Marks the given keys to be watched for conditional execution of a transaction. Transactions
+        will only execute commands if the watched keys are not modified before execution of the
+        transaction.
+
+        See https://valkey.io/commands/watch for more details.
+
+        Note:
+            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
+
+        Args:
+            keys (List[str]): The keys to watch.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.watch("sampleKey")
+                'OK'
+            >>> transaction.set("sampleKey", "foobar")
+            >>> await redis_client.exec(transaction)
+                'OK' # Executes successfully and keys are unwatched.
+
+            >>> await client.watch("sampleKey")
+                'OK'
+            >>> transaction.set("sampleKey", "foobar")
+            >>> await client.set("sampleKey", "hello world")
+                'OK'
+            >>> await redis_client.exec(transaction)
+                None  # None is returned when the watched key is modified before transaction execution.
+        """
+
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.Watch, keys),
+        )
+
     @dataclass
     class PubSubMsg:
         """
