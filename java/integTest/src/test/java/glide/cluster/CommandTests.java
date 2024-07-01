@@ -784,12 +784,12 @@ public class CommandTests {
                 Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("pfcount", null, clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
-                        "pfcount",
+                        "pfcount binary",
                         null,
                         clusterClient.pfcount(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
                 Arguments.of("pfmerge", null, clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})),
                 Arguments.of(
-                        "pfmerge",
+                        "pfmerge binary",
                         null,
                         clusterClient.pfmerge(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of(
