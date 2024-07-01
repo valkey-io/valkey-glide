@@ -738,6 +738,33 @@ pub(crate) fn convert_to_expected_type(
                                 let Value::Array(nested_array) = inner_value.clone() else {
                                     return Err((ErrorKind::TypeError, "Incorrect value type received ----").into());
                                 };
+                                // nested array is a 2D array actually
+                                let converted_array: Vec<Value> = nested_array.into_iter().map(|elem| {
+                                    let Value::Array(mut nested_sub_array) = elem else {
+                                        return Err((ErrorKind::TypeError, "Incorrect value type received +++").into());
+                                    };
+                                    let mut converted = Vec::with_capacity(nested_sub_array.len() / 2);
+
+                                    while !nested_sub_array.is_empty() {
+                                        let submap_key = convert_to_expected_type(nested_sub_array.remove(0), Some(ExpectedReturnType::SimpleString))?;
+                                        let submap_value = nested_sub_array.remove(0);
+                                        converted.push((submap_key, submap_value));
+                                    }
+    
+                                    dbg!(converted.clone());
+                                    let converted = convert_to_expected_type(
+                                        Value::Map(converted),
+                                        Some(ExpectedReturnType::XInfoStreamReturnType))?;
+                                    dbg!(converted.clone());
+                                    Ok(converted)
+                                }).collect::<RedisResult<_>>()?;
+
+                                let converted_value = Value::Array(converted_array);
+
+                                //*
+
+                                // */
+                                /*
                                 let converted_array: RedisResult<Vec<_>> = 
                                 nested_array
                                     .into_iter()
@@ -745,12 +772,13 @@ pub(crate) fn convert_to_expected_type(
                                     .collect();
 
                                 let converted_value = converted_array.map(Value::Array)?;
-
+                                */
                                 /*
                                 let converted_value = convert_to_expected_type(
                                     inner_value,
                                     Some(ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::XInfoStreamReturnType))))?;
-                                */
+                                dbg!(converted_value.clone());
+                                // */
                                 Ok((converted_key, converted_value))
                             }
                         } else if converted_key == Value::SimpleString("entries".into()) 
@@ -818,6 +846,11 @@ pub(crate) fn convert_to_expected_type(
                             Some(ExpectedReturnType::XInfoStreamReturnType))?,
                         Some(ExpectedReturnType::XInfoStreamReturnType))
                     */
+                    if (*array).is_empty() {
+                        dbg!("arr is empty");
+                        return Ok(value);
+                    }
+
                     if (*array).len() == 2 {
                         dbg!("arr of 2 - single entry");
                         let converted = convert_to_expected_type(
@@ -864,7 +897,7 @@ pub(crate) fn convert_to_expected_type(
                     */
                 },
                 Value::Int(_) | Value::BulkString(_) | Value::SimpleString(_)
-                | Value::VerbatimString { .. } => Ok(value),
+                | Value::VerbatimString { .. } | Value::Nil => Ok(value),
                 _ => Err((
                     ErrorKind::TypeError,
                     "Response couldn't be converted============",
