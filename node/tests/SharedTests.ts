@@ -1503,7 +1503,7 @@ export function runBaseTests<Context>(config: {
                 checkSimple(await client.invokeScript(script)).toEqual("Hello");
 
                 script = new Script(
-                    Buffer.from( "return redis.call('SET', KEYS[1], ARGV[1])"),
+                    Buffer.from("return redis.call('SET', KEYS[1], ARGV[1])"),
                 );
                 checkSimple(
                     await client.invokeScript(script, {
@@ -1520,7 +1520,9 @@ export function runBaseTests<Context>(config: {
                     }),
                 ).toEqual("OK");
 
-                script = new Script(Buffer.from("return redis.call('GET', KEYS[1])"));
+                script = new Script(
+                    Buffer.from("return redis.call('GET', KEYS[1])"),
+                );
                 checkSimple(
                     await client.invokeScript(script, { keys: [key1] }),
                 ).toEqual("value1");
