@@ -637,11 +637,11 @@ async def transaction_test(
 
     min_version = "6.0.6"
     if not await check_if_server_version_lt(redis_client, min_version):
-        transaction.rpush(key25, ['a', 'a', 'b', 'c', 'a', 'b'])
+        transaction.rpush(key25, ["a", "a", "b", "c", "a", "b"])
         args.append(6)
-        transaction.lpos(key25, 'a')
+        transaction.lpos(key25, "a")
         args.append(0)
-        transaction.lpos(key25, 'a', 1, 0, 0)
+        transaction.lpos(key25, "a", 1, 0, 0)
         args.append([0, 1, 4])
 
     min_version = "6.2.0"
