@@ -7239,7 +7239,9 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     @pytest.mark.parametrize("single_route", [True, False])
-    async def test_function_list_with_routing(self, redis_client: TGlideClient, single_route: bool):
+    async def test_function_list_with_routing(
+        self, redis_client: GlideClusterClient, single_route: bool
+    ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -7281,7 +7283,9 @@ class TestCommands:
         )
 
         no_args_response = await redis_client.function_list(route=route)
-        wildcard_pattern_response = await redis_client.function_list("*", False, route=route)
+        wildcard_pattern_response = await redis_client.function_list(
+            "*", False, route=route
+        )
         assert len(no_args_response) == original_functions_count + 1
         assert len(wildcard_pattern_response) == original_functions_count + 1
         check_function_list_response(
