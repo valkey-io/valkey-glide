@@ -64,13 +64,12 @@ public class SortOptions extends SortBaseOptions {
         List<String> optionArgs = new ArrayList<>(List.of(super.toArgs()));
 
         if (byPattern != null) {
-            optionArgs.addAll(List.of(BY_COMMAND_STRING, byPattern.toString()));
+            optionArgs.addAll(List.of(BY_COMMAND_STRING, byPattern));
         }
 
         if (getPatterns != null) {
             getPatterns.stream()
-                    .forEach(
-                            getPattern -> optionArgs.addAll(List.of(GET_COMMAND_STRING, getPattern.toString())));
+                    .forEach(getPattern -> optionArgs.addAll(List.of(GET_COMMAND_STRING, getPattern)));
         }
 
         return optionArgs.toArray(new String[0]);
