@@ -42,19 +42,13 @@ class ClusterCommands(CoreCommands):
             RequestType.CustomCommand, command_args, route
         )
 
-    async def fcall(self, function: str, keys_or_route: Optional[Union[List[str], Route]] = None, arguments: Optional[List[str]] = None) -> TClusterResponse[Optional[TResult]]:
+    async def fcall_route(self, function: str, arguments: Optional[List[str]] = None, route: Optional[Route] = None) -> TClusterResponse[Optional[TResult]]:
         """
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.
         
         Args:
             function (str): The function name.
-            keys_or_route (Optional[Union[List[str], Route]]): Either a list of keys accessed by the
-                function, or a route to a node that the client will send a command to. To ensure the correct
-                execution of functions, both in standalone and clustered deployments, all names of keys
-                that a function accesses must be explicitly provided as `keys`.
-                The command will be routed to a random primary node, unless `route` is provided, in which
-                case the client will route the command to the nodes defined by `route`.
             arguments (Optional[List[str]]): A list of `function` arguments. `Arguments`
                 should not represent names of keys.
             route (Optional[Route]): The command will be routed to a random primay node, unless `route` is provided, in which
@@ -72,14 +66,9 @@ class ClusterCommands(CoreCommands):
 
         Since: Redis version 7.0.0.
         """
-        args = [function]
-        route = None
-        if instanceof(keys_or_route, List[str]):
-            args.append(str(len(keys_or_route)))
-            args.extend(keys_or_route)
-        else if instanceof(keys_or_route, Route):
-            route = keys_or_route
-        args.extend(arguments)
+        args = [function, "0"]
+        if arguments is not None:
+            args.extend(arguments)
         return cast(
             TClusterResponse[Optional[TResult]],
             await self._execute_command(RequestType.FCall, args, route),

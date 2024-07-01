@@ -5295,6 +5295,46 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GetEx, args),
         )
 
+    async def fcall(
+        self,
+        function: str,
+        keys: Optional[List[str]] = None,
+        arguments: Optional[List[str]] = None
+    ) -> Optional[TResult]:
+        """
+        Invokes a previously loaded function.
+        See https://redis.io/commands/fcall/ for more details.
+
+        Args:
+            function (str): The function name.
+            keys (Optional[List[str]]): A list of keys accessed by the function. To ensure the correct
+                execution of functions, both in standalone and clustered deployments, all names of keys
+                that a function accesses must be explicitly provided as `keys`.
+            arguments (Optional[List[str]]): A list of `function` arguments. `Arguments`
+                should not represent names of keys.
+
+        Returns:
+            Optional[TResult]:
+                The invoked function's return value.
+
+        Example:
+            >>> await client.fcall("Deep_Thought")
+                'new_value' # Returns the function's return value.
+
+        Since: Redis version 7.0.0.
+        """
+        args = []
+        if keys is not None:
+            args.extend([function, str(len(keys))] + keys)
+        else:
+            args.extend([function, str(0)])
+        if arguments is not None:
+            args.extend(arguments)
+        return cast(
+            TResult,
+            await self._execute_command(RequestType.FCall, args),
+        )
+
     @dataclass
     class PubSubMsg:
         """
