@@ -8,6 +8,7 @@ import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
+import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
 import static glide.api.BaseClient.OK;
@@ -551,6 +552,111 @@ public class CommandTests {
         assertEquals(2L, functionResult);
         functionResult =
                 regularClient.fcallReadOnly(newFuncName, new String[0], new String[] {"one", "two"}).get();
+        assertEquals(2L, functionResult);
+
+        assertEquals(OK, regularClient.functionFlush(ASYNC).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void function_commands_binary() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        assertEquals(OK, regularClient.functionFlush(SYNC).get());
+
+        GlideString libName = gs("mylib1c");
+        GlideString funcName = gs("myfunc1c");
+        // function $funcName returns first argument
+        GlideString code =
+                generateLuaLibCodeBinary(libName, Map.of(funcName, gs("return args[1]")), true);
+        assertEquals(libName, regularClient.functionLoad(code, false).get());
+
+        var functionResult =
+                regularClient.fcall(funcName.toString(), new String[0], new String[] {"one", "two"}).get();
+        assertEquals("one", functionResult);
+        functionResult =
+                regularClient
+                        .fcallReadOnly(funcName.toString(), new String[0], new String[] {"one", "two"})
+                        .get();
+        assertEquals("one", functionResult);
+
+        var flist = regularClient.functionList(false).get();
+        var expectedDescription =
+                new HashMap<String, String>() {
+                    {
+                        put(funcName.toString(), null);
+                    }
+                };
+        var expectedFlags =
+                new HashMap<String, Set<String>>() {
+                    {
+                        put(funcName.toString(), Set.of("no-writes"));
+                    }
+                };
+        checkFunctionListResponse(
+                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+
+        flist = regularClient.functionList(true).get();
+        checkFunctionListResponse(
+                flist,
+                libName.toString(),
+                expectedDescription,
+                expectedFlags,
+                Optional.of(code.toString()));
+
+        // re-load library without overwriting
+        var executionException =
+                assertThrows(ExecutionException.class, () -> regularClient.functionLoad(code, false).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("Library '" + libName + "' already exists"));
+
+        // re-load library with overwriting
+        assertEquals(libName, regularClient.functionLoad(code, true).get());
+        GlideString newFuncName = gs("myfunc2c");
+        // function $funcName returns first argument
+        // function $newFuncName returns argument array len
+        GlideString newCode =
+                generateLuaLibCodeBinary(
+                        libName, Map.of(funcName, gs("return args[1]"), newFuncName, gs("return #args")), true);
+        assertEquals(libName, regularClient.functionLoad(newCode, true).get());
+
+        // load new lib and delete it - first lib remains loaded
+        GlideString anotherLib =
+                generateLuaLibCodeBinary(gs("anotherLib"), Map.of(gs("anotherFunc"), gs("")), false);
+        assertEquals(gs("anotherLib"), regularClient.functionLoad(anotherLib, true).get());
+        assertEquals(OK, regularClient.functionDelete(gs("anotherLib")).get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> regularClient.functionDelete(gs("anotherLib")).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
+
+        flist = regularClient.functionList(libName.toString(), false).get();
+        expectedDescription.put(newFuncName.toString(), null);
+        expectedFlags.put(newFuncName.toString(), Set.of("no-writes"));
+        checkFunctionListResponse(
+                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+
+        flist = regularClient.functionList(libName.toString(), true).get();
+        checkFunctionListResponse(
+                flist,
+                libName.toString(),
+                expectedDescription,
+                expectedFlags,
+                Optional.of(newCode.toString()));
+
+        functionResult =
+                regularClient
+                        .fcall(newFuncName.toString(), new String[0], new String[] {"one", "two"})
+                        .get();
+        assertEquals(2L, functionResult);
+        functionResult =
+                regularClient
+                        .fcallReadOnly(newFuncName.toString(), new String[0], new String[] {"one", "two"})
+                        .get();
         assertEquals(2L, functionResult);
 
         assertEquals(OK, regularClient.functionFlush(ASYNC).get());
