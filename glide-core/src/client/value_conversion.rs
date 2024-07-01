@@ -801,20 +801,24 @@ pub(crate) fn convert_to_expected_type(
                         Some(Value::Array(inner_array)) if inner_array.len() == 2 => {
                             dbg!("arr of 2");
 
+                            //panic!();
                             Ok(value)
                         },
                         Some(Value::Array(_)) => {
                             dbg!("do nothing");
                             Ok(value)
                         },
-                        _ => convert_array_to_map_by_type(
-                            (*array).clone(),
-                            Some(ExpectedReturnType::SimpleString),
-                            Some(ExpectedReturnType::XInfoStreamReturnType))
+                        _ => {
+                            let mmap = convert_array_to_map_by_type(
+                                (*array).clone(),
+                                Some(ExpectedReturnType::SimpleString),
+                                Some(ExpectedReturnType::XInfoStreamReturnType));
+                            convert_to_expected_type(mmap?, Some(ExpectedReturnType::XInfoStreamReturnType))
+                        }
                     }?;
                     dbg!(map.clone());
                     Ok(map)
-                    // convert_to_expected_type(map, Some(ExpectedReturnType::XInfoStreamReturnType))
+                    //convert_to_expected_type(map, Some(ExpectedReturnType::XInfoStreamReturnType))
                     //dbg!(map.clone());
                     //Ok(map)
                     
