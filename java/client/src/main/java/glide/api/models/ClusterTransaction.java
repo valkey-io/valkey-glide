@@ -3,11 +3,11 @@ package glide.api.models;
 
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
+import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 
 import glide.api.models.commands.SortClusterOptions;
-import lombok.AllArgsConstructor;
 import lombok.NonNull;
 import org.apache.commons.lang3.ArrayUtils;
 
@@ -29,11 +29,24 @@ import org.apache.commons.lang3.ArrayUtils;
  *  // result contains: OK and "value"
  *  </pre>
  */
-@AllArgsConstructor
 public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
     @Override
     protected ClusterTransaction getThis() {
         return this;
+    }
+
+    /**
+     * Publishes message on pubsub channel in sharded mode.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/publish/">redis.io</a> for details.
+     * @param channel The channel to publish the message on.
+     * @param message The message to publish.
+     * @return Command response - The number of clients that received the message.
+     */
+    public ClusterTransaction spublish(@NonNull String channel, @NonNull String message) {
+        protobufTransaction.addCommands(buildCommand(SPublish, channel, message));
+        return getThis();
     }
 
     /**

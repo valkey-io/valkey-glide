@@ -97,7 +97,9 @@ public class TransactionTestUtilities {
                         "Geospatial Commands",
                         (TransactionBuilder) TransactionTestUtilities::geospatialCommands),
                 Arguments.of(
-                        "Bitmap Commands", (TransactionBuilder) TransactionTestUtilities::bitmapCommands));
+                        "Bitmap Commands", (TransactionBuilder) TransactionTestUtilities::bitmapCommands),
+                Arguments.of(
+                        "PubSub Commands", (TransactionBuilder) TransactionTestUtilities::pubsubCommands));
     }
 
     /** Generate test samples for parametrized tests. Could be routed to primary nodes only. */
@@ -1182,5 +1184,13 @@ public class TransactionTestUtilities {
                     });
         }
         return expectedResults;
+    }
+
+    private static Object[] pubsubCommands(BaseTransaction<?> transaction) {
+        transaction.publish("Tchannel", "message");
+
+        return new Object[] {
+            0L, // publish("Tchannel", "message")
+        };
     }
 }
