@@ -783,7 +783,7 @@ class TestTransaction:
         keyslot = get_random_string(3)
         transaction = ClusterTransaction() if is_cluster else Transaction()
         transaction.get(keyslot)
-        result1 = await redis_client.custom_command(["WATCH", keyslot])
+        result1 = await redis_client.watch([keyslot])
         assert result1 == OK
 
         result2 = await client2.set(keyslot, "foo")
