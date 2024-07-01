@@ -5521,7 +5521,7 @@ class CoreCommands(Protocol):
     async def dump(
         self,
         key: str,
-    ) -> bytes:
+    ) -> Optional[bytes]:
         """
         Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
 
@@ -5531,7 +5531,7 @@ class CoreCommands(Protocol):
             key (str): The `key` of the set.
 
         Returns:
-            bytes: The serialized value of a set. If `key` does not exist, `None` will be returned.
+            Optional[bytes]: The serialized value of a set. If `key` does not exist, `None` will be returned.
 
         Examples:
             >>> await client.dump("key")
@@ -5540,7 +5540,7 @@ class CoreCommands(Protocol):
                 None # Non-existing key will return `None`.
         """
         return cast(
-            bytes,
+            Optional[bytes],
             await self._execute_command(RequestType.Dump, [key]),
         )
 

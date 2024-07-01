@@ -232,7 +232,7 @@ class BaseClient(CoreCommands):
         if not args_list:
             return (encoded_args_list, args_size)
         for arg in args_list:
-            encoded_arg = self._encode_arg(arg)
+            encoded_arg = self._encode_arg(arg) if isinstance(arg, str) else arg
             encoded_args_list.append(encoded_arg)
             args_size += sys.getsizeof(encoded_arg)
         return (encoded_args_list, args_size)
