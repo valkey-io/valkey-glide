@@ -1784,7 +1784,7 @@ class BaseTransaction:
         """
         Loads a library to Redis.
 
-        See https://valkey.io/docs/latest/commands/function-load/ for more details.
+        See https://valkey.io/commands/function-load/ for more details.
 
         Args:
             library_code (str): The source code that implements the library.
@@ -1807,7 +1807,7 @@ class BaseTransaction:
         """
         Deletes all function libraries.
 
-        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+        See https://valkey.io/commands/function-flush/ for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -1826,7 +1826,7 @@ class BaseTransaction:
         """
         Deletes a library and all its functions.
 
-        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+        See https://valkey.io/commands/function-delete/ for more details.
 
         Args:
             library_code (str): The libary name to delete
