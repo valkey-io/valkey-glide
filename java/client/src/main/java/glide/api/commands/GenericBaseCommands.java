@@ -636,8 +636,7 @@ public interface GenericBaseCommands {
      * @return a value that depends on the script that was executed.
      * @example
      *     <pre>{@code
-     * try(Script luaScript = new Script("return 'Hello'", true)) {
-     *     luaScript.setBinarySafeOutput(true);
+     * try(Script luaScript = new Script("return 'Hello'", false)) {
      *     String result = (String) client.invokeScript(luaScript).get();
      *     assert result.equals("Hello");
      * }
@@ -660,8 +659,7 @@ public interface GenericBaseCommands {
      * @return a value that depends on the script that was executed.
      * @example
      *     <pre>{@code
-     * try(Script luaScript = new Script("return { KEYS[1], ARGV[1] }", true)) {
-     *     luaScript.setBinarySafeOutput(true);
+     * try(Script luaScript = new Script("return { KEYS[1], ARGV[1] }", false)) {
      *     ScriptOptions scriptOptions = ScriptOptions.builder().key("foo").arg("bar").build();
      *     Object[] result = (Object[]) client.invokeScript(luaScript, scriptOptions).get();
      *     assert result[0].equals("foo");
@@ -686,7 +684,7 @@ public interface GenericBaseCommands {
      * @return a value that depends on the script that was executed.
      * @example
      *     <pre>{@code
-     * try(Script luaScript = new Script(gs("return { KEYS[1], ARGV[1] }", false))) {
+     * try(Script luaScript = new Script(gs("return { KEYS[1], ARGV[1] }", true))) {
      *     ScriptOptionsGlideString scriptOptions = ScriptOptionsGlideString.builder().key(gs("foo")).arg(gs("bar")).build();
      *     Object[] result = (Object[]) client.invokeScript(luaScript, scriptOptions).get();
      *     assert result[0].equals(gs("foo"));
