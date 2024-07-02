@@ -12,14 +12,14 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
-from glide.constants import TOK, TClusterResponse, TResult, TSingleNodeRoute
+from glide.constants import TOK, TClusterResponse, TEncodable, TResult, TSingleNodeRoute
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
 
 class ClusterCommands(CoreCommands):
     async def custom_command(
-        self, command_args: List[str], route: Optional[Route] = None
+        self, command_args: List[TEncodable], route: Optional[Route] = None
     ) -> TResult:
         """
         Executes a single command, without checking inputs.
@@ -30,7 +30,7 @@ class ClusterCommands(CoreCommands):
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"], AllNodes())
         Args:
-            command_args (List[str]): List of strings of the command's arguments.
+            command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
             route (Optional[Route]): The command will be routed automatically based on the passed command's default request policy, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`. Defaults to None.
@@ -62,8 +62,9 @@ class ClusterCommands(CoreCommands):
             the required sections. Otherwise, returns a dict of strings, with each key containing the address of
             the queried node and value containing the information regarding the requested sections.
         """
-        args = [section.value for section in sections] if sections else []
-
+        args: List[TEncodable] = (
+            [section.value for section in sections] if sections else []
+        )
         return cast(
             TClusterResponse[bytes],
             await self._execute_command(RequestType.Info, args, route),
@@ -159,21 +160,21 @@ class ClusterCommands(CoreCommands):
         )
 
     async def ping(
-        self, message: Optional[str] = None, route: Optional[Route] = None
-    ) -> str:
+        self, message: Optional[TEncodable] = None, route: Optional[Route] = None
+    ) -> bytes:
         """
         Ping the Redis server.
         See https://redis.io/commands/ping/ for more details.
 
         Args:
-            message (Optional[str]): An optional message to include in the PING command. If not provided,
+            message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
             the server will respond with "PONG". If provided, the server will respond with a copy of the message
 
             route (Optional[Route]): The command will be sent to all primaries, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`
 
         Returns:
-           str: "PONG" if `message` is not provided, otherwise return a copy of `message`.
+           bytes: b'PONG' if `message` is not provided, otherwise return a copy of `message`.
 
         Examples:
             >>> await client.ping()
@@ -185,14 +186,14 @@ class ClusterCommands(CoreCommands):
         return cast(str, await self._execute_command(RequestType.Ping, argument, route))
 
     async def config_get(
-        self, parameters: List[str], route: Optional[Route] = None
-    ) -> TClusterResponse[Dict[str, str]]:
+        self, parameters: List[TEncodable], route: Optional[Route] = None
+    ) -> TClusterResponse[Dict[bytes, bytes]]:
         """
         Get the values of configuration parameters.
         See https://redis.io/commands/config-get/ for details.
 
         Args:
-            parameters (List[str]): A list of configuration parameter names to retrieve values for.
+            parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
 
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
             in which case the client will route the command to the nodes defined by `route`.
@@ -215,14 +216,16 @@ class ClusterCommands(CoreCommands):
         )
 
     async def config_set(
-        self, parameters_map: Mapping[str, str], route: Optional[Route] = None
+        self,
+        parameters_map: Mapping[TEncodable, TEncodable],
+        route: Optional[Route] = None,
     ) -> TOK:
         """
         Set configuration parameters to the specified values.
         See https://redis.io/commands/config-set/ for details.
 
         Args:
-            parameters_map (Mapping[str, str]): A map consisting of configuration
+            parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
             parameters and their respective values to set.
 
             route (Optional[Route]): The command will be routed to all nodes, unless `route` is provided,
@@ -235,7 +238,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.config_set([("timeout", "1000")], [("maxmemory", "1GB")])
             OK
         """
-        parameters: List[str] = []
+        parameters: List[TEncodable] = []
         for pair in parameters_map.items():
             parameters.extend(pair)
         return cast(
@@ -291,15 +294,15 @@ class ClusterCommands(CoreCommands):
         return cast(int, await self._execute_command(RequestType.DBSize, [], route))
 
     async def echo(
-        self, message: str, route: Optional[Route] = None
-    ) -> TClusterResponse[str]:
+        self, message: TEncodable, route: Optional[Route] = None
+    ) -> TClusterResponse[bytes]:
         """
         Echoes the provided `message` back.
 
         See https://redis.io/commands/echo for more details.
 
         Args:
-            message (str): The message to be echoed back.
+            message (TEncodable): The message to be echoed back.
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
             in which case the client will route the command to the nodes defined by `route`.
 
@@ -309,10 +312,10 @@ class ClusterCommands(CoreCommands):
             {Address (str) : response (str) , ... } with type of Dict[str, str].
 
         Examples:
-            >>> await client.echo("Glide-for-Redis")
-                'Glide-for-Redis'
+            >>> await client.echo(b"Glide-for-Redis")
+                b'Glide-for-Redis'
             >>> await client.echo("Glide-for-Redis", AllNodes())
-                {'addr': 'Glide-for-Redis', 'addr2': 'Glide-for-Redis', 'addr3': 'Glide-for-Redis'}
+                {b'addr': b'Glide-for-Redis', b'addr2': b'Glide-for-Redis', b'addr3': b'Glide-for-Redis'}
         """
         return cast(
             TClusterResponse[str],
@@ -479,7 +482,7 @@ class ClusterCommands(CoreCommands):
 
         Since: Redis version 7.0.0.
         """
-        args = [function, "0"]
+        args: List[TEncodable] = [function, "0"]
         if arguments is not None:
             args.extend(arguments)
         return cast(
@@ -544,7 +547,7 @@ class ClusterCommands(CoreCommands):
 
     async def sort(
         self,
-        key: str,
+        key: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
@@ -558,7 +561,7 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/sort for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
@@ -569,20 +572,20 @@ class ClusterCommands(CoreCommands):
             List[str]: A list of sorted elements.
 
         Examples:
-            >>> await client.lpush("mylist", '3', '1', '2')
+            >>> await client.lpush(b"mylist", [b'3', b'1', b'2'])
             >>> await client.sort("mylist")
-            ['1', '2', '3']
+            [b'1', b'2', b'3']
 
             >>> await client.sort("mylist", order=OrderBy.DESC)
             ['3', '2', '1']
 
-            >>> await client.lpush("mylist", '2', '1', '2', '3', '3', '1')
+            >>> await client.lpush(b"mylist", [b'2', b'1', b'2', b'3', b'3', b'1'])
             >>> await client.sort("mylist", limit=Limit(2, 3))
-            ['1', '2', '2']
+            [b'2', b'2', b'3']
 
-            >>> await client.lpush("mylist", "a", "b", "c", "d")
-            >>> await client.sort("mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
-            ['b', 'a']
+            >>> await client.lpush(b"mylist", [b"a", b"b", b"c", b"d"])
+            >>> await client.sort(b"mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
+            [b'b', b'a']
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         result = await self._execute_command(RequestType.Sort, args)
@@ -590,8 +593,8 @@ class ClusterCommands(CoreCommands):
 
     async def sort_store(
         self,
-        key: str,
-        destination: str,
+        key: TEncodable,
+        destination: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
@@ -604,8 +607,8 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/sort for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
-            destination (str): The key where the sorted result will be stored.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            destination (TEncodable): The key where the sorted result will be stored.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
@@ -616,8 +619,8 @@ class ClusterCommands(CoreCommands):
             int: The number of elements in the sorted key stored at `store`.
 
         Examples:
-            >>> await client.lpush("mylist", 3, 1, 2)
-            >>> await client.sort_store("mylist", "sorted_list")
+            >>> await client.lpush(b"mylist", [b'3', b'1', b'2'])
+            >>> await client.sort_store("mylist", b"sorted_list")
             3  # Indicates that the sorted list "sorted_list" contains three elements.
             >>> await client.lrange("sorted_list", 0, -1)
             ['1', '2', '3']
@@ -626,7 +629,12 @@ class ClusterCommands(CoreCommands):
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
-    async def publish(self, message: str, channel: str, sharded: bool = False) -> int:
+    async def publish(
+        self,
+        message: TEncodable,
+        channel: TEncodable,
+        sharded: bool = False,
+    ) -> int:
         """
         Publish a message on pubsub channel.
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
@@ -635,9 +643,9 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
 
         Args:
-            message (str): Message to publish
-            channel (str): Channel to publish the message on.
-            sharded (bool): Use sharded pubsub mode. Available since Redis version 7.0.
+            message (TEncodable): Message to publish.
+            channel (TEncodable): Channel to publish the message on.
+            sharded (bool): Use sharded pubsub mode.
 
         Returns:
             int: Number of subscriptions in that node that received the message.
@@ -675,7 +683,7 @@ class ClusterCommands(CoreCommands):
              >>> await client.flushall(FlushMode.ASYNC, AllNodes())
                  OK  # This command never fails.
         """
-        args = []
+        args: List[TEncodable] = []
         if flush_mode is not None:
             args.append(flush_mode.value)
 
@@ -708,7 +716,7 @@ class ClusterCommands(CoreCommands):
              >>> await client.flushdb(FlushMode.ASYNC, AllNodes())
                  OK  # The keys of the currently selected database were deleted asynchronously on all nodes.
         """
-        args = []
+        args: List[TEncodable] = []
         if flush_mode is not None:
             args.append(flush_mode.value)
 
@@ -749,7 +757,7 @@ class ClusterCommands(CoreCommands):
 
         Since: Redis version 6.2.0.
         """
-        args = [source, destination]
+        args: List[TEncodable] = [source, destination]
         if replace is True:
             args.append("REPLACE")
         return cast(
@@ -783,7 +791,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.lolwut(6, [40, 20], ALL_NODES);
             "Redis ver. 7.2.3" # Indicates the current Redis version
         """
-        args = []
+        args: List[TEncodable] = []
         if version is not None:
             args.extend(["VERSION", str(version)])
         if parameters:
@@ -842,7 +850,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.wait(1, 1000);
             // return 1 when a replica is reached or 0 if 1000ms is reached.
         """
-        args = [str(numreplicas), str(timeout)]
+        args: List[TEncodable] = [str(numreplicas), str(timeout)]
         return cast(
             int,
             await self._execute_command(RequestType.Wait, args, route),

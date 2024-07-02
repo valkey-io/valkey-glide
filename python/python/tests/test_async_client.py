@@ -8,7 +8,7 @@ import math
 import time
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Union, cast
+from typing import Any, Dict, List, Tuple, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
@@ -75,7 +75,7 @@ from glide.config import (
     ProtocolVersion,
     RedisCredentials,
 )
-from glide.constants import OK, TResult
+from glide.constants import OK, TEncodable, TResult
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import (
     AllNodes,
@@ -647,8 +647,8 @@ class TestCommands:
         non_existing = get_random_string(5)
         value = get_random_string(5)
         value_encoded = value.encode()
-        key_value_map1 = {key1: value, key2: value}
-        key_value_map2 = {key2: get_random_string(5), key3: value}
+        key_value_map1: Mapping[TEncodable, TEncodable] = {key1: value, key2: value}
+        key_value_map2: Mapping[TEncodable, TEncodable] = {key2: get_random_string(5), key3: value}
 
         assert await redis_client.msetnx(key_value_map1) is True
         mget_res = await redis_client.mget([key1, key2, non_existing])
@@ -1036,7 +1036,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lpush_lpop_lrange(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        value_list = ["value4", "value3", "value2", "value1"]
+        value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
         assert await redis_client.lpush(key, value_list) == 4
         assert await redis_client.lpop(key) == value_list[-1].encode()
@@ -1099,7 +1099,7 @@ class TestCommands:
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         value1 = "value1"
         value2 = "value2"
-        value_list = [value1, value2]
+        value_list: List[TEncodable] = [value1, value2]
 
         assert await redis_client.lpush(key1, value_list) == 2
         assert await redis_client.blpop(
@@ -1223,7 +1223,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_rpush_rpop(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        value_list = ["value4", "value3", "value2", "value1"]
+        value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
         assert await redis_client.rpush(key, value_list) == 4
         assert await redis_client.rpop(key) == value_list[-1].encode()
@@ -1277,7 +1277,7 @@ class TestCommands:
         key2 = f"{{test}}-2-f{get_random_string(10)}"
         value1 = "value1"
         value2 = "value2"
-        value_list = [value1, value2]
+        value_list: List[TEncodable] = [value1, value2]
 
         assert await redis_client.lpush(key1, value_list) == 2
         # ensure that command doesn't time out even if timeout > request timeout (250ms by default)
@@ -1558,7 +1558,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_sadd_srem_smembers_scard(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        value_list = ["member1", "member2", "member3", "member4"]
+        value_list: List[TEncodable] = ["member1", "member2", "member3", "member4"]
 
         assert await redis_client.sadd(key, value_list) == 4
         assert await redis_client.srem(key, ["member4", "nonExistingMember"]) == 1
@@ -1696,8 +1696,8 @@ class TestCommands:
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
-        member1_list = ["a", "b", "c"]
-        member2_list = ["b", "c", "d", "e"]
+        member1_list: List[TEncodable] = ["a", "b", "c"]
+        member2_list: List[TEncodable] = ["b", "c", "d", "e"]
 
         assert await redis_client.sadd(key1, member1_list) == 3
         assert await redis_client.sadd(key2, member2_list) == 4
@@ -1780,8 +1780,8 @@ class TestCommands:
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
-        member1_list = ["a", "b", "c"]
-        member2_list = ["c", "d", "e"]
+        member1_list: List[TEncodable] = ["a", "b", "c"]
+        member2_list: List[TEncodable] = ["c", "d", "e"]
 
         # positive test case
         assert await redis_client.sadd(key1, member1_list) == 3
@@ -1809,8 +1809,8 @@ class TestCommands:
         key3 = f"{{testKey}}:{get_random_string(10)}"
         string_key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
-        member1_list = ["a", "b", "c"]
-        member2_list = ["c", "d", "e"]
+        member1_list: List[TEncodable] = ["a", "b", "c"]
+        member2_list: List[TEncodable] = ["c", "d", "e"]
 
         assert await redis_client.sadd(key1, member1_list) == 3
         assert await redis_client.sadd(key2, member2_list) == 3
@@ -1856,9 +1856,9 @@ class TestCommands:
         key3 = f"{{testKey}}:{get_random_string(10)}"
         string_key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:non_existing_key"
-        member1_list = ["a", "b", "c"]
-        member2_list = ["b", "c", "d", "e"]
-        member3_list = ["b", "c", "f", "g"]
+        member1_list: List[TEncodable] = ["a", "b", "c"]
+        member2_list: List[TEncodable] = ["b", "c", "d", "e"]
+        member3_list: List[TEncodable] = ["b", "c", "f", "g"]
 
         assert await redis_client.sadd(key1, member1_list) == 3
         assert await redis_client.sadd(key2, member2_list) == 4
@@ -2001,7 +2001,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_ltrim(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        value_list = ["value4", "value3", "value2", "value1"]
+        value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
         assert await redis_client.lpush(key, value_list) == 4
         assert await redis_client.ltrim(key, 0, 1) == OK
@@ -2023,7 +2023,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_lrem(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        value_list = ["value1", "value2", "value1", "value1", "value2"]
+        value_list: List[TEncodable] = ["value1", "value2", "value1", "value1", "value2"]
 
         assert await redis_client.lpush(key, value_list) == 5
 
@@ -2047,7 +2047,7 @@ class TestCommands:
     async def test_llen(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
-        value_list = ["value4", "value3", "value2", "value1"]
+        value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
         assert await redis_client.lpush(key1, value_list) == 4
         assert await redis_client.llen(key1) == 4
@@ -2064,7 +2064,7 @@ class TestCommands:
     async def test_strlen(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
-        value_list = ["value4", "value3", "value2", "value1"]
+        value_list: List[TEncodable] = ["value4", "value3", "value2", "value1"]
 
         assert await redis_client.set(key1, "foo") == OK
         assert await redis_client.strlen(key1) == 3
@@ -2287,7 +2287,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_geoadd(self, redis_client: TGlideClient):
         key, key2 = get_random_string(10), get_random_string(10)
-        members_coordinates = {
+        members_coordinates: Mapping[str | bytes, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         }
@@ -2349,7 +2349,7 @@ class TestCommands:
     async def test_geosearch_by_box(self, redis_client: TGlideClient):
         key = get_random_string(10)
         members = ["Catania", "Palermo", "edge2", "edge1"]
-        members_coordinates = {
+        members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
             "edge1": GeospatialData(12.758489, 38.788135),
@@ -2441,7 +2441,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_geosearch_by_radius(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_coordinates = {
+        members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
             "edge1": GeospatialData(12.758489, 38.788135),
@@ -2516,7 +2516,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_geosearch_no_result(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_coordinates = {
+        members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
             "edge1": GeospatialData(12.758489, 38.788135),
@@ -2579,7 +2579,7 @@ class TestCommands:
     async def test_geosearchstore_by_box(self, redis_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
-        members_coordinates = {
+        members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
             "edge1": GeospatialData(12.758489, 38.788135),
@@ -2695,7 +2695,7 @@ class TestCommands:
     async def test_geosearchstore_by_radius(self, redis_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
-        members_coordinates = {
+        members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
             "edge1": GeospatialData(12.758489, 38.788135),
@@ -2808,7 +2808,7 @@ class TestCommands:
     async def test_geosearchstore_no_result(self, redis_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
-        members_coordinates = {
+        members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
             "edge1": GeospatialData(12.758489, 38.788135),
@@ -2880,7 +2880,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_geohash(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_coordinates = {
+        members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         }
@@ -2915,7 +2915,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_geodist(self, redis_client: TGlideClient):
         key, key2 = get_random_string(10), get_random_string(10)
-        members_coordinates = {
+        members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         }
@@ -2942,7 +2942,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_geopos(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_coordinates = {
+        members_coordinates: Mapping[TEncodable, GeospatialData] = {
             "Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
         }
@@ -2986,7 +2986,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zadd_zaddincr(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
         assert await redis_client.zadd_incr(key, member="one", increment=2) == 3.0
 
@@ -2994,7 +2994,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zadd_nx_xx(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert (
             await redis_client.zadd(
                 key,
@@ -3036,7 +3036,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zadd_gt_lt(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": -3, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": -3, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
         members_scores["one"] = 10
         assert (
@@ -3109,7 +3109,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrem(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
 
         assert await redis_client.zrem(key, ["one"]) == 1
@@ -3121,7 +3121,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zremrangebyscore(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores) == 3
 
         assert (
@@ -3151,7 +3151,7 @@ class TestCommands:
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         range = RangeByIndex(0, -1)
-        members_scores = {"a": 1, "b": 2, "c": 3, "d": 4}
+        members_scores: Mapping[TEncodable, float] = {"a": 1, "b": 2, "c": 3, "d": 4}
         assert await redis_client.zadd(key1, members_scores) == 4
 
         assert (
@@ -3196,7 +3196,7 @@ class TestCommands:
         key1 = get_random_string(10)
         key2 = get_random_string(10)
         range = RangeByIndex(0, -1)
-        members_scores = {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
+        members_scores: Mapping[TEncodable, float] = {"a": 1, "b": 2, "c": 3, "d": 4, "e": 5}
         assert await redis_client.zadd(key1, members_scores) == 5
 
         # Test start exceeding end
@@ -3224,7 +3224,7 @@ class TestCommands:
     async def test_zlexcount(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
-        members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
+        members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
 
         assert await redis_client.zadd(key1, members_scores) == 3
         assert (
@@ -3267,7 +3267,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zcard(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
         assert await redis_client.zcard(key) == 3
 
@@ -3279,7 +3279,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zcount(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
 
         assert await redis_client.zcount(key, InfBound.NEG_INF, InfBound.POS_INF) == 3
@@ -3322,7 +3322,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zscore(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
         assert await redis_client.zscore(key, "one") == 1.0
 
@@ -3336,7 +3336,7 @@ class TestCommands:
     async def test_zmscore(self, redis_client: TGlideClient):
         key1 = get_random_string(10)
         key2 = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
 
         assert await redis_client.zadd(key1, members_scores=members_scores) == 3
         assert await redis_client.zmscore(key1, ["one", "two", "three"]) == [
@@ -3360,8 +3360,8 @@ class TestCommands:
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
         range = RangeByIndex(0, -1)
-        members_scores1 = {"one": 1.0, "two": 2.0}
-        members_scores2 = {"one": 1.5, "two": 2.5, "three": 3.5}
+        members_scores1: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0}
+        members_scores2: Mapping[TEncodable, float] = {"one": 1.5, "two": 2.5, "three": 3.5}
 
         assert await redis_client.zadd(key1, members_scores1) == 2
         assert await redis_client.zadd(key2, members_scores2) == 3
@@ -3472,7 +3472,7 @@ class TestCommands:
 
         # Empty list check
         with pytest.raises(RequestError) as e:
-            await redis_client.zinterstore("{xyz}", [])
+            await redis_client.zinterstore("{xyz}", cast(List[TEncodable], cast(List[TEncodable], [])))
         assert "wrong number of arguments" in str(e)
 
         with pytest.raises(RequestError) as e:
@@ -3480,7 +3480,7 @@ class TestCommands:
         assert "wrong number of arguments" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.zinter_withscores([])
+            await redis_client.zinter_withscores(cast(List[TEncodable], []))
         assert "at least 1 input key is needed" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -3490,8 +3490,8 @@ class TestCommands:
         key2 = "{testKey}:2-" + get_random_string(10)
         key3 = "{testKey}:3-" + get_random_string(10)
         range = RangeByIndex(0, -1)
-        members_scores1 = {"one": 1.0, "two": 2.0}
-        members_scores2 = {"one": 1.5, "two": 2.5, "three": 3.5}
+        members_scores1: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0}
+        members_scores2: Mapping[TEncodable, float] = {"one": 1.5, "two": 2.5, "three": 3.5}
 
         assert await redis_client.zadd(key1, members_scores1) == 2
         assert await redis_client.zadd(key2, members_scores2) == 3
@@ -3625,7 +3625,7 @@ class TestCommands:
 
         # Empty list check
         with pytest.raises(RequestError) as e:
-            await redis_client.zunionstore("{xyz}", [])
+            await redis_client.zunionstore("{xyz}", cast(List[TEncodable], []))
         assert "wrong number of arguments" in str(e)
 
         with pytest.raises(RequestError) as e:
@@ -3633,14 +3633,14 @@ class TestCommands:
         assert "wrong number of arguments" in str(e)
 
         with pytest.raises(RequestError) as e:
-            await redis_client.zunion_withscores([])
+            await redis_client.zunion_withscores(cast(List[TEncodable],[]))
         assert "at least 1 input key is needed" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zpopmin(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
+        members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
         assert await redis_client.zpopmin(key) == {b"a": 1.0}
 
@@ -3699,7 +3699,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zpopmax(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
+        members_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await redis_client.zadd(key, members_scores) == 3
         assert await redis_client.zpopmax(key) == {b"c": 3.0}
 
@@ -3758,7 +3758,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrange_by_index(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
 
         assert await redis_client.zrange(key, RangeByIndex(start=0, stop=1)) == [
@@ -3789,7 +3789,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrange_byscore(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
 
         assert await redis_client.zrange(
@@ -3871,7 +3871,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrange_bylex(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"a": 1, "b": 2, "c": 3}
+        members_scores: Mapping[TEncodable, float] = {"a": 1, "b": 2, "c": 3}
         assert await redis_client.zadd(key, members_scores=members_scores) == 3
 
         assert await redis_client.zrange(
@@ -3952,7 +3952,7 @@ class TestCommands:
         string_key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
 
-        member_scores = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0, "three": 3.0}
         assert await redis_client.zadd(source, member_scores) == 3
 
         # full range
@@ -4010,7 +4010,7 @@ class TestCommands:
         string_key = f"{{testKey}}:{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:{get_random_string(10)}"
 
-        member_scores = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0, "three": 3.0}
         assert await redis_client.zadd(source, member_scores) == 3
 
         # range from negative infinity to 3 (exclusive)
@@ -4113,7 +4113,7 @@ class TestCommands:
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        member_scores = {"a": 1.0, "b": 2.0, "c": 3.0}
+        member_scores: Mapping[TEncodable, float] = {"a": 1.0, "b": 2.0, "c": 3.0}
         assert await redis_client.zadd(source, member_scores) == 3
 
         # range from negative infinity to "c" (exclusive)
@@ -4212,7 +4212,7 @@ class TestCommands:
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_zrank(self, redis_client: TGlideClient):
         key = get_random_string(10)
-        members_scores = {"one": 1.5, "two": 2, "three": 3}
+        members_scores: Mapping[TEncodable, float] = {"one": 1.5, "two": 2, "three": 3}
         assert await redis_client.zadd(key, members_scores) == 3
         assert await redis_client.zrank(key, "one") == 0
         if not await check_if_server_version_lt(redis_client, "7.2.0"):
@@ -4235,7 +4235,7 @@ class TestCommands:
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
         string_key = get_random_string(10)
-        member_scores = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0, "three": 3.0}
 
         assert await redis_client.zadd(key, member_scores) == 3
         assert await redis_client.zrevrank(key, "three") == 0
@@ -4273,9 +4273,9 @@ class TestCommands:
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        member_scores1 = {"one": 1.0, "two": 2.0, "three": 3.0}
-        member_scores2 = {"two": 2.0}
-        member_scores3 = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0}
+        member_scores1: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores2: Mapping[TEncodable, float] = {"two": 2.0}
+        member_scores3: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0}
 
         assert await redis_client.zadd(key1, member_scores1) == 3
         assert await redis_client.zadd(key2, member_scores2) == 1
@@ -4324,9 +4324,9 @@ class TestCommands:
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        member_scores1 = {"one": 1.0, "two": 2.0, "three": 3.0}
-        member_scores2 = {"two": 2.0}
-        member_scores3 = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0}
+        member_scores1: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores2: Mapping[TEncodable, float] = {"two": 2.0}
+        member_scores3: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0, "three": 3.0, "four": 4.0}
 
         assert await redis_client.zadd(key1, member_scores1) == 3
         assert await redis_client.zadd(key2, member_scores2) == 1
@@ -4365,8 +4365,8 @@ class TestCommands:
         non_existing_key = f"{{test}}-non_existing_key"
         string_key = f"{{test}}-3-f{get_random_string(10)}"
 
-        assert await redis_client.zadd(key1, {"a1": 1, "b1": 2}) == 2
-        assert await redis_client.zadd(key2, {"a2": 0.1, "b2": 0.2}) == 2
+        assert await redis_client.zadd(key1, cast(Mapping[TEncodable, float], {"a1": 1, "b1": 2})) == 2
+        assert await redis_client.zadd(key2, cast(Mapping[TEncodable, float],{"a2": 0.1, "b2": 0.2})) == 2
 
         assert await redis_client.bzmpop([key1, key2], ScoreFilter.MAX, 0.1) == [
             key1.encode(),
@@ -4402,7 +4402,7 @@ class TestCommands:
             assert await redis_client.bzmpop([key1], ScoreFilter.MAX, 0.1, 0)
 
         # check that order of entries in the response is preserved
-        entries = {}
+        entries: Mapping[TEncodable, float] = {}
         for i in range(0, 10):
             entries.update({f"a{i}": float(i)})
 
@@ -4425,7 +4425,7 @@ class TestCommands:
     async def test_zrandmember(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
-        scores = {"one": 1, "two": 2}
+        scores: Mapping[TEncodable, float] = {"one": 1, "two": 2}
         assert await redis_client.zadd(key, scores) == 2
 
         member = await redis_client.zrandmember(key)
@@ -4444,7 +4444,7 @@ class TestCommands:
     async def test_zrandmember_count(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
-        scores = {"one": 1, "two": 2}
+        scores: Mapping[TEncodable, float] = {"one": 1, "two": 2}
         assert await redis_client.zadd(key, scores) == 2
 
         # unique values are expected as count is positive
@@ -4473,7 +4473,7 @@ class TestCommands:
     async def test_zrandmember_withscores(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
-        scores = {"one": 1, "two": 2}
+        scores: Mapping[TEncodable, float] = {"one": 1, "two": 2}
         assert await redis_client.zadd(key, scores) == 2
 
         # unique values are expected as count is positive
@@ -4513,8 +4513,8 @@ class TestCommands:
         string_key = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key = f"{{testKey}}:5-{get_random_string(10)}"
 
-        member_scores1 = {"one": 1.0, "two": 2.0, "three": 3.0}
-        member_scores2 = {"two": 2.0, "three": 3.0, "four": 4.0}
+        member_scores1: Mapping[TEncodable, float] = {"one": 1.0, "two": 2.0, "three": 3.0}
+        member_scores2: Mapping[TEncodable, float] = {"two": 2.0, "three": 3.0, "four": 4.0}
 
         assert await redis_client.zadd(key1, member_scores1) == 3
         assert await redis_client.zadd(key2, member_scores2) == 3
@@ -4578,7 +4578,7 @@ class TestCommands:
             assert await redis_client.zmpop([key1], ScoreFilter.MAX, 0)
 
         # check that order of entries in the response is preserved
-        entries = {}
+        entries: Mapping[TEncodable, float] = {}
         for i in range(0, 10):
             entries.update({f"a{i}": float(i)})
 
@@ -6619,11 +6619,11 @@ class TestCommands:
     async def test_bitop(self, redis_client: TGlideClient):
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
-        keys = [key1, key2]
-        destination = f"{{testKey}}:3-{get_random_string(10)}"
+        keys: List[TEncodable] = [key1, key2]
+        destination : TEncodable = f"{{testKey}}:3-{get_random_string(10)}"
         non_existing_key1 = f"{{testKey}}:4-{get_random_string(10)}"
         non_existing_key2 = f"{{testKey}}:5-{get_random_string(10)}"
-        non_existing_keys = [non_existing_key1, non_existing_key2]
+        non_existing_keys: List[TEncodable] = [non_existing_key1, non_existing_key2]
         set_key = f"{{testKey}}:6-{get_random_string(10)}"
         value1 = "foobar"
         value2 = "abcdef"
@@ -7289,7 +7289,7 @@ class TestCommands:
 
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
-        keys = [key1, key2]
+        keys: List[TEncodable] = [key1, key2]
         route = SlotKeyRoute(SlotType.PRIMARY, key1)
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -7382,7 +7382,7 @@ class TestCommands:
     async def test_srandmember(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
-        elements = ["one", "two"]
+        elements: List[TEncodable] = ["one", "two"]
         assert await redis_client.sadd(key, elements) == 2
 
         member = await redis_client.srandmember(key)
@@ -7401,7 +7401,7 @@ class TestCommands:
     async def test_srandmember_count(self, redis_client: TGlideClient):
         key = get_random_string(10)
         string_key = get_random_string(10)
-        elements = ["one", "two"]
+        elements: List[TEncodable] = ["one", "two"]
         assert await redis_client.sadd(key, elements) == 2
 
         # unique values are expected as count is positive
@@ -7986,8 +7986,8 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.zdiff(["abc", "zxy", "lkn"]),
             redis_client.zdiff_withscores(["abc", "zxy", "lkn"]),
             redis_client.zrangestore("abc", "zxy", RangeByIndex(0, -1)),
-            redis_client.zinterstore("{xyz}", ["{abc}", "{def}"]),
-            redis_client.zunionstore("{xyz}", ["{abc}", "{def}"]),
+            redis_client.zinterstore("{xyz}", cast(Union[List[Union[TEncodable]]], ["{abc}", "{def}"])),
+            redis_client.zunionstore("{xyz}", cast(Union[List[Union[TEncodable]]], ["{abc}", "{def}"])),
             redis_client.bzpopmin(["abc", "zxy", "lkn"], 0.5),
             redis_client.bzpopmax(["abc", "zxy", "lkn"], 0.5),
             redis_client.smove("abc", "def", "_"),
@@ -8000,9 +8000,9 @@ class TestMultiKeyCommandCrossSlot:
             redis_client.pfcount(["def", "ghi"]),
             redis_client.pfmerge("abc", ["def", "ghi"]),
             redis_client.zinter(["def", "ghi"]),
-            redis_client.zinter_withscores(["def", "ghi"]),
+            redis_client.zinter_withscores(cast(Union[List[TEncodable]], ["def", "ghi"])),
             redis_client.zunion(["def", "ghi"]),
-            redis_client.zunion_withscores(["def", "ghi"]),
+            redis_client.zunion_withscores(cast(List[TEncodable], ["def", "ghi"])),
             redis_client.sort_store("abc", "zxy"),
             redis_client.lmove("abc", "zxy", ListDirection.LEFT, ListDirection.LEFT),
             redis_client.blmove(
@@ -8361,10 +8361,10 @@ class TestClusterRoutes:
         result_cursor_index = 0
         result_collection_index = 1
         default_count = 10
-        num_members = list(
+        num_members: List[TEncodable] = list(
             map(str, range(50000))
         )  # Use large dataset to force an iterative cursor.
-        char_members = ["a", "b", "c", "d", "e"]
+        char_members: List[TEncodable] = ["a", "b", "c", "d", "e"]
 
         # Empty set
         result = await redis_client.sscan(key1, initial_cursor)
@@ -8458,12 +8458,12 @@ class TestClusterRoutes:
         result_cursor_index = 0
         result_collection_index = 1
         default_count = 20
-        num_map = {}
+        num_map: Mapping[TEncodable, float] = {}
         num_map_with_str_scores = {}
         for i in range(50000):  # Use large dataset to force an iterative cursor.
             num_map.update({"value " + str(i): i})
             num_map_with_str_scores.update({"value " + str(i): str(i)})
-        char_map = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4}
+        char_map: Mapping[TEncodable, float] = {"a": 0, "b": 1, "c": 2, "d": 3, "e": 4}
         char_map_with_str_scores = {
             "a": "0",
             "b": "1",
@@ -8573,10 +8573,10 @@ class TestClusterRoutes:
         result_cursor_index = 0
         result_collection_index = 1
         default_count = 20
-        num_map = {}
+        num_map: dict[TEncodable, TEncodable] = {}
         for i in range(50000):  # Use large dataset to force an iterative cursor.
             num_map.update({"field " + str(i): "value " + str(i)})
-        char_map = {
+        char_map: Mapping[TEncodable, TEncodable] = {
             "field a": "value a",
             "field b": "value b",
             "field c": "value c",

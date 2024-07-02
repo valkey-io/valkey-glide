@@ -12,12 +12,12 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, Transaction
-from glide.constants import OK, TOK, TResult
+from glide.constants import OK, TOK, TEncodable, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 
 
 class StandaloneCommands(CoreCommands):
-    async def custom_command(self, command_args: List[str]) -> TResult:
+    async def custom_command(self, command_args: List[TEncodable]) -> TResult:
         """
         Executes a single command, without checking inputs.
         See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
@@ -27,7 +27,7 @@ class StandaloneCommands(CoreCommands):
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
         Args:
-            command_args (List[str]): List of strings of the command's arguments.
+            command_args (List[TEncodable]): List of strings or bytes of the command's arguments.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
 
         Returns:
@@ -51,7 +51,9 @@ class StandaloneCommands(CoreCommands):
         Returns:
             bytes: Returns bytes containing the information for the sections requested.
         """
-        args = [section.value for section in sections] if sections else []
+        args: List[TEncodable] = (
+            [section.value for section in sections] if sections else []
+        )
         return cast(bytes, await self._execute_command(RequestType.Info, args))
 
     async def exec(
@@ -119,13 +121,13 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(int, await self._execute_command(RequestType.ClientId, []))
 
-    async def ping(self, message: Optional[str] = None) -> str:
+    async def ping(self, message: Optional[TEncodable] = None) -> bytes:
         """
         Ping the Redis server.
         See https://redis.io/commands/ping/ for more details.
 
         Args:
-           message (Optional[str]): An optional message to include in the PING command. If not provided,
+           message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
             the server will respond with "PONG". If provided, the server will respond with a copy of the message.
 
         Returns:
@@ -140,13 +142,13 @@ class StandaloneCommands(CoreCommands):
         argument = [] if message is None else [message]
         return cast(str, await self._execute_command(RequestType.Ping, argument))
 
-    async def config_get(self, parameters: List[str]) -> Dict[str, str]:
+    async def config_get(self, parameters: List[TEncodable]) -> Dict[bytes, bytes]:
         """
         Get the values of configuration parameters.
         See https://redis.io/commands/config-get/ for details.
 
         Args:
-            parameters (List[str]): A list of configuration parameter names to retrieve values for.
+            parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
 
         Returns:
             Dict[str, str]: A dictionary of values corresponding to the configuration parameters.
@@ -159,17 +161,17 @@ class StandaloneCommands(CoreCommands):
 
         """
         return cast(
-            Dict[str, str],
+            Dict[bytes, bytes],
             await self._execute_command(RequestType.ConfigGet, parameters),
         )
 
-    async def config_set(self, parameters_map: Mapping[str, str]) -> TOK:
+    async def config_set(self, parameters_map: Mapping[TEncodable, TEncodable]) -> TOK:
         """
         Set configuration parameters to the specified values.
         See https://redis.io/commands/config-set/ for details.
 
         Args:
-            parameters_map (Mapping[str, str]): A map consisting of configuration
+            parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
             parameters and their respective values to set.
 
         Returns:
@@ -179,7 +181,7 @@ class StandaloneCommands(CoreCommands):
             >>> config_set({"timeout": "1000", "maxmemory": "1GB"})
             OK
         """
-        parameters: List[str] = []
+        parameters: List[TEncodable] = []
         for pair in parameters_map.items():
             parameters.extend(pair)
         return cast(TOK, await self._execute_command(RequestType.ConfigSet, parameters))
@@ -215,14 +217,14 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(int, await self._execute_command(RequestType.DBSize, []))
 
-    async def echo(self, message: str) -> str:
+    async def echo(self, message: TEncodable) -> bytes:
         """
         Echoes the provided `message` back.
 
         See https://redis.io/commands/echo for more details.
 
         Args:
-            message (str): The message to be echoed back.
+            message (TEncodable): The message to be echoed back.
 
         Returns:
             str: The provided `message`.
@@ -352,14 +354,14 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(RequestType.LastSave, []),
         )
 
-    async def move(self, key: str, db_index: int) -> bool:
+    async def move(self, key: TEncodable, db_index: int) -> bool:
         """
         Move `key` from the currently selected database to the database specified by `db_index`.
 
         See https://valkey.io/commands/move/ for more details.
 
         Args:
-            key (str): The key to move.
+            key (TEncodable): The key to move.
             db_index (int): The index of the database to move `key` to.
 
         Returns:
@@ -377,10 +379,10 @@ class StandaloneCommands(CoreCommands):
 
     async def sort(
         self,
-        key: str,
-        by_pattern: Optional[str] = None,
+        key: TEncodable,
+        by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
-        get_patterns: Optional[List[str]] = None,
+        get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> List[Optional[str]]:
@@ -392,8 +394,8 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/sort for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
-            by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
                 `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
@@ -402,7 +404,7 @@ class StandaloneCommands(CoreCommands):
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            get_pattern (Optional[str]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+            get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
                 transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
@@ -440,11 +442,11 @@ class StandaloneCommands(CoreCommands):
 
     async def sort_store(
         self,
-        key: str,
-        destination: str,
-        by_pattern: Optional[str] = None,
+        key: TEncodable,
+        destination: TEncodable,
+        by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
-        get_patterns: Optional[List[str]] = None,
+        get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> int:
@@ -456,9 +458,9 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/sort for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
-            destination (str): The key where the sorted result will be stored.
-            by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            destination (TEncodable): The key where the sorted result will be stored.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
                 `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
@@ -467,7 +469,7 @@ class StandaloneCommands(CoreCommands):
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            get_pattern (Optional[str]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+            get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
                 transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
@@ -497,14 +499,14 @@ class StandaloneCommands(CoreCommands):
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
-    async def publish(self, message: str, channel: str) -> int:
+    async def publish(self, message: TEncodable, channel: TEncodable) -> TOK:
         """
         Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
 
         Args:
-            message (str): Message to publish
-            channel (str): Channel to publish the message on.
+            message (TEncodable): Message to publish
+            channel (TEncodable): Channel to publish the message on.
 
         Returns:
             int: Number of subscriptions in primary node that received the message.
@@ -533,7 +535,7 @@ class StandaloneCommands(CoreCommands):
              >>> await client.flushall(FlushMode.ASYNC)
                  OK  # This command never fails.
         """
-        args = []
+        args: List[TEncodable] = []
         if flush_mode is not None:
             args.append(flush_mode.value)
 
@@ -560,7 +562,7 @@ class StandaloneCommands(CoreCommands):
              >>> await client.flushdb(FlushMode.ASYNC)
                  OK  # The keys of the currently selected database were deleted asynchronously.
         """
-        args = []
+        args: List[TEncodable] = []
         if flush_mode is not None:
             args.append(flush_mode.value)
 
@@ -603,7 +605,7 @@ class StandaloneCommands(CoreCommands):
 
         Since: Redis version 6.2.0.
         """
-        args = [source, destination]
+        args: List[TEncodable] = [source, destination]
         if destinationDB is not None:
             args.extend(["DB", str(destinationDB)])
         if replace is True:
@@ -638,7 +640,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.lolwut(5, [30, 5, 5]);
             "Redis ver. 7.2.3" # Indicates the current Redis version
         """
-        args = []
+        args: List[TEncodable] = []
         if version is not None:
             args.extend(["VERSION", str(version)])
         if parameters:
@@ -691,7 +693,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.wait(1, 1000);
             // return 1 when a replica is reached or 0 if 1000ms is reached.
         """
-        args = [str(numreplicas), str(timeout)]
+        args: List[TEncodable] = [str(numreplicas), str(timeout)]
         return cast(
             int,
             await self._execute_command(RequestType.Wait, args),

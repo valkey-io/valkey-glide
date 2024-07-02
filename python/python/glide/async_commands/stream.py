@@ -4,6 +4,8 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import List, Optional, Union
 
+from glide.constants import TEncodable
+
 
 class StreamTrimOptions(ABC):
     """
@@ -251,14 +253,14 @@ class StreamReadOptions:
         self.block_ms = block_ms
         self.count = count
 
-    def to_args(self) -> List[str]:
+    def to_args(self) -> List[TEncodable]:
         """
         Returns the options as a list of string arguments to be used in the `XREAD` command.
 
         Returns:
             List[str]: The options as a list of arguments for the `XREAD` command.
         """
-        args = []
+        args: List[TEncodable] = []
         if self.block_ms is not None:
             args.extend([self.READ_BLOCK_REDIS_API, str(self.block_ms)])
 
@@ -325,14 +327,14 @@ class StreamReadGroupOptions(StreamReadOptions):
         super().__init__(block_ms=block_ms, count=count)
         self.no_ack = no_ack
 
-    def to_args(self) -> List[str]:
+    def to_args(self) -> List[TEncodable]:
         """
         Returns the options as a list of string arguments to be used in the `XREADGROUP` command.
 
         Returns:
             List[str]: The options as a list of arguments for the `XREADGROUP` command.
         """
-        args = super().to_args()
+        args: List[TEncodable] = super().to_args()
         if self.no_ack:
             args.append(self.READ_NOACK_REDIS_API)
 
@@ -360,13 +362,13 @@ class StreamPendingOptions:
 
 
 def _create_xpending_range_args(
-    key: str,
-    group_name: str,
+    key: TEncodable,
+    group_name: TEncodable,
     start: StreamRangeBound,
     end: StreamRangeBound,
     count: int,
     options: Optional[StreamPendingOptions],
-) -> List[str]:
+) -> List[TEncodable]:
     args = [key, group_name]
     if options is not None and options.min_idle_time is not None:
         args.extend([options.IDLE_TIME_REDIS_API, str(options.min_idle_time)])
