@@ -8,6 +8,7 @@ import static glide.api.BaseClient.OK;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -431,6 +432,15 @@ public class ClusterClientTests {
                 assertEquals(1L, client.zadd(k, Map.of(k, 1.0)).get());
             }
 
+            String streamKey = "streamKey:" + UUID.randomUUID();
+            Map<String, String> streamData = new LinkedHashMap<>();
+            for (int i = 0; i < baseNumberOfEntries; i++) {
+                streamData.put(streamKey + ":" + i, "value " + i);
+            }
+            for (String k : streamData.keySet()) {
+                assertNotNull(client.xadd(k, Map.of(k, "value " + k)).get());
+            }
+
             ClusterScanCursor cursor = ClusterScanCursor.initalCursor();
             Set<String> results = new LinkedHashSet<>();
             while (!cursor.isFinished()) {
@@ -515,6 +525,23 @@ public class ClusterClientTests {
             }
             cursor.releaseCursorHandle();
             assertEquals(zSetData.keySet(), results);
+
+            cursor = ClusterScanCursor.initalCursor();
+            results.clear();
+            while (!cursor.isFinished()) {
+                Object[] response =
+                    client
+                        .scan(cursor, ScanOptions.builder().type(ScanOptions.ObjectType.STREAM).build())
+                        .get();
+                cursor.releaseCursorHandle();
+                cursor = (ClusterScanCursor) response[0];
+                results.addAll(
+                    Arrays.stream((Object[]) response[1])
+                        .map(Object::toString)
+                        .collect(Collectors.toSet()));
+            }
+            cursor.releaseCursorHandle();
+            assertEquals(streamData.keySet(), results);
         }
     }
 }
