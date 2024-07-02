@@ -4941,7 +4941,7 @@ public class SharedCommandTests {
         assertEquals(false, client.xgroupDestroy(key, groupName).get());
 
         // ENTRIESREAD option was added in redis 7.0.0
-        StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead("10").build();
+        StreamGroupOptions entriesReadOption = StreamGroupOptions.builder().entriesRead(10L).build();
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(OK, client.xgroupCreate(key, groupName, streamId, entriesReadOption).get());
         } else {
@@ -5126,15 +5126,7 @@ public class SharedCommandTests {
         if (REDIS_VERSION.isLowerThan("7.0.0")) {
             assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1).get());
         } else {
-            assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1, streamId0).get());
-
-            // The entriesReadId cannot be the first, last, or zero ID. Here we pass the first ID and
-            // assert that an error is raised.
-            ExecutionException executionException =
-                    assertThrows(
-                            ExecutionException.class,
-                            () -> client.xgroupSetId(key, groupName, streamId1_1, streamId1_0).get());
-            assertInstanceOf(RequestException.class, executionException.getCause());
+            assertEquals(OK, client.xgroupSetId(key, groupName, streamId1_1, 1L).get());
         }
 
         // xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1.

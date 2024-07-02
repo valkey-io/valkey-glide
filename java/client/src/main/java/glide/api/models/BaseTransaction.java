@@ -3681,9 +3681,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param groupName The consumer group name.
      * @param id The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
-     * @param entriesReadId An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
-     *      "0-0"</code>)) used to find out how many entries are between the arbitrary ID (excluding
-     *     it) and the stream's last entry.
+     * @param entriesReadId A value representing the number of stream entries already read by the
+     *     group
      * @return Command Response - <code>OK</code>.
      */
     public <ArgType> T xgroupSetId(
