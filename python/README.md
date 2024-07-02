@@ -18,9 +18,15 @@ This preview release is recommended for testing purposes only.
 
 The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
 
-## Python supported version
+## Python Supported Versions
 
-Python 3.8 or higher.
+| Python Version |
+|----------------|
+| 3.8            |
+| 3.9            |
+| 3.10           |
+| 3.11           |
+| 3.12           |
 
 ## Installation and Setup
 
