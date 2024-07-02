@@ -197,8 +197,7 @@ class BaseClient(CoreCommands):
         self._writer.write(b_arr)
         await self._writer.drain()
 
-    # TODO: change `str` to `TEncodable` where `TEncodable = Union[str, bytes]`
-    def _encode_arg(self, arg: str) -> bytes:
+    def _encode_arg(self, arg: Union[str, bytes]) -> bytes:
         """
         Converts a string argument to bytes.
 
@@ -208,9 +207,10 @@ class BaseClient(CoreCommands):
         Returns:
             bytes: The encoded argument as bytes.
         """
-
-        # TODO: Allow passing different encoding options
-        return bytes(arg, encoding="utf8")
+        if isinstance(arg, str):
+            # TODO: Allow passing different encoding options
+            return bytes(arg, encoding="utf8")
+        return arg
 
     # TODO: change `List[str]` to `List[TEncodable]` where `TEncodable = Union[str, bytes]`
     def _encode_and_sum_size(
@@ -306,20 +306,10 @@ class BaseClient(CoreCommands):
         request.callback_idx = self._get_callback_index()
         request.script_invocation.hash = hash
         request.script_invocation.args[:] = (
-            [
-                bytes(elem, encoding="utf8") if isinstance(elem, str) else elem
-                for elem in args
-            ]
-            if args is not None
-            else []
+            [self._encode_arg(elem) for elem in args] if args is not None else []
         )
         request.script_invocation.keys[:] = (
-            [
-                bytes(elem, encoding="utf8") if isinstance(elem, str) else elem
-                for elem in keys
-            ]
-            if keys is not None
-            else []
+            [self._encode_arg(elem) for elem in keys] if keys is not None else []
         )
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
