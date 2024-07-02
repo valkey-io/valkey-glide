@@ -1434,8 +1434,8 @@ public class CommandTests {
         for (int i = 0; i < 10; i++) {
             String key = "{key}-set-" + i + "-" + matchPattern;
             regularClient.sadd(
-                gs(key),
-                new GlideString[] {gs(UUID.randomUUID().toString()), gs(UUID.randomUUID().toString())});
+                    gs(key),
+                    new GlideString[] {gs(UUID.randomUUID().toString()), gs(UUID.randomUUID().toString())});
             setKeys.add(key);
         }
 
@@ -1452,7 +1452,7 @@ public class CommandTests {
 
         // scan for strings by match pattern:
         options =
-            ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(STRING).build();
+                ScanOptions.builder().matchPattern("*" + matchPattern).count(100L).type(STRING).build();
         Object[] result;
         Object[] keysFound = new String[0];
         String resultCursor = "0";
