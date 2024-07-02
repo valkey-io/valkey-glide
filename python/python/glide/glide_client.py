@@ -294,8 +294,8 @@ class BaseClient(CoreCommands):
     async def _execute_script(
         self,
         hash: str,
-        keys: Optional[List[str]] = None,
-        args: Optional[List[str]] = None,
+        keys: Optional[List[Union[str, bytes]]] = None,
+        args: Optional[List[Union[str, bytes]]] = None,
         route: Optional[Route] = None,
     ) -> TResult:
         if self._is_closed:
@@ -305,8 +305,22 @@ class BaseClient(CoreCommands):
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
         request.script_invocation.hash = hash
-        request.script_invocation.args[:] = args if args is not None else []
-        request.script_invocation.keys[:] = keys if keys is not None else []
+        request.script_invocation.args[:] = (
+            [
+                bytes(elem, encoding="utf8") if isinstance(elem, str) else elem
+                for elem in args
+            ]
+            if args is not None
+            else []
+        )
+        request.script_invocation.keys[:] = (
+            [
+                bytes(elem, encoding="utf8") if isinstance(elem, str) else elem
+                for elem in keys
+            ]
+            if keys is not None
+            else []
+        )
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 

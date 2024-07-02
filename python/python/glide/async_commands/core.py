@@ -357,8 +357,8 @@ class CoreCommands(Protocol):
     async def _execute_script(
         self,
         hash: str,
-        keys: Optional[List[str]] = None,
-        args: Optional[List[str]] = None,
+        keys: Optional[List[Union[str, bytes]]] = None,
+        args: Optional[List[Union[str, bytes]]] = None,
         route: Optional[Route] = None,
     ) -> TResult: ...
 
@@ -4957,8 +4957,8 @@ class CoreCommands(Protocol):
     async def invoke_script(
         self,
         script: Script,
-        keys: Optional[List[str]] = None,
-        args: Optional[List[str]] = None,
+        keys: Optional[List[Union[str, bytes]]] = None,
+        args: Optional[List[Union[str, bytes]]] = None,
     ) -> TResult:
         """
         Invokes a Lua script with its keys and arguments.
@@ -4971,8 +4971,8 @@ class CoreCommands(Protocol):
 
         Args:
             script (Script): The Lua script to execute.
-            keys (List[str]): The keys that are used in the script.
-            args (List[str]): The arguments for the script.
+            keys (List[Union[str, bytes]]): The keys that are used in the script.
+            args (List[Union[str, bytes]]): The arguments for the script.
 
         Returns:
             TResult: a value that depends on the script that was executed.
