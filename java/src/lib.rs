@@ -39,17 +39,7 @@ fn redis_value_to_java<'local>(
                 Ok(JObject::from(env.byte_array_from_slice(&data)?))
             }
         }
-        Value::Array(array) => {
-            let items: JObjectArray =
-                env.new_object_array(array.len() as i32, "java/lang/Object", JObject::null())?;
-
-            for (i, item) in array.into_iter().enumerate() {
-                let java_value = redis_value_to_java(env, item, encoding_utf8)?;
-                env.set_object_array_element(&items, i as i32, java_value)?;
-            }
-
-            Ok(items.into())
-        }
+        Value::Array(array) => array_to_java_array(env, array, encoding_utf8),
         Value::Map(map) => {
             let linked_hash_map = env.new_object("java/util/LinkedHashMap", "()V", &[])?;
 
@@ -89,8 +79,57 @@ fn redis_value_to_java<'local>(
             data: _,
             attributes: _,
         } => todo!(),
-        Value::Push { kind: _, data: _ } => todo!(),
+        // Create a java `Map<String, Object>` with two keys:
+        //   - "kind" which corresponds to the push type, stored as a `String`
+        //   - "values" which corresponds to the array of values received, stored as `Object[]`
+        // Only string messages are supported now by Redis and `redis-rs`.
+        Value::Push { kind, data } => {
+            let hash_map = env.new_object("java/util/HashMap", "()V", &[])?;
+
+            let kind_str = env.new_string("kind")?;
+            let kind_value_str = env.new_string(format!("{kind:?}"))?;
+
+            let _ = env.call_method(
+                &hash_map,
+                "put",
+                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                &[(&kind_str).into(), (&kind_value_str).into()],
+            )?;
+
+            let values_str = env.new_string("values")?;
+            let values = array_to_java_array(env, data, encoding_utf8)?;
+
+            let _ = env.call_method(
+                &hash_map,
+                "put",
+                "(Ljava/lang/Object;Ljava/lang/Object;)Ljava/lang/Object;",
+                &[(&values_str).into(), (&values).into()],
+            )?;
+
+            Ok(hash_map)
+        }
     }
+}
+
+/// Convert an array of values into java array of corresponding values.
+///
+/// Recursively calls to [`redis_value_to_java`] for every element.
+///
+/// Returns an arbitrary java `Object[]`.
+fn array_to_java_array<'local>(
+    env: &mut JNIEnv<'local>,
+    values: Vec<Value>,
+    encoding_utf8: bool,
+) -> Result<JObject<'local>, FFIError> {
+    let items: JObjectArray =
+        env.new_object_array(values.len() as i32, "java/lang/Object", JObject::null())?;
+
+    for (i, item) in values.into_iter().enumerate() {
+        let java_value = redis_value_to_java(env, item, encoding_utf8)?;
+        env.set_object_array_element(&items, i as i32, java_value)?;
+    }
+
+    Ok(items.into())
 }
 
 #[no_mangle]
@@ -237,16 +276,16 @@ pub extern "system" fn Java_glide_ffi_resolvers_SocketListenerResolver_startSock
 pub extern "system" fn Java_glide_ffi_resolvers_ScriptResolver_storeScript<'local>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
-    code: JString,
+    code: JByteArray,
 ) -> JObject<'local> {
     handle_panics(
         move || {
             fn store_script<'a>(
                 env: &mut JNIEnv<'a>,
-                code: JString,
+                code: JByteArray,
             ) -> Result<JObject<'a>, FFIError> {
-                let code_str: String = env.get_string(&code)?.into();
-                let hash = glide_core::scripts_container::add_script(&code_str);
+                let code_byte_array = env.convert_byte_array(code)?;
+                let hash = glide_core::scripts_container::add_script(&code_byte_array);
                 Ok(JObject::from(env.new_string(hash)?))
             }
             let result = store_script(&mut env, code);

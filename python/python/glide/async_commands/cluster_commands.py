@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast
+from typing import Dict, List, Mapping, Optional, Union, cast
 
 from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
@@ -46,7 +46,7 @@ class ClusterCommands(CoreCommands):
         self,
         sections: Optional[List[InfoSection]] = None,
         route: Optional[Route] = None,
-    ) -> TClusterResponse[str]:
+    ) -> TClusterResponse[bytes]:
         """
         Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
@@ -65,7 +65,7 @@ class ClusterCommands(CoreCommands):
         args = [section.value for section in sections] if sections else []
 
         return cast(
-            TClusterResponse[str],
+            TClusterResponse[bytes],
             await self._execute_command(RequestType.Info, args, route),
         )
 
@@ -415,6 +415,78 @@ class ClusterCommands(CoreCommands):
             ),
         )
 
+    async def fcall_route(
+        self,
+        function: str,
+        arguments: Optional[List[str]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a previously loaded function.
+        See https://redis.io/commands/fcall/ for more details.
+
+        Args:
+            function (str): The function name.
+            arguments (Optional[List[str]]): A list of `function` arguments. `Arguments`
+                should not represent names of keys.
+            route (Optional[Route]): The command will be routed to a random primay node, unless `route` is provided, in which
+                case the client will route the command to the nodes defined by `route`. Defaults to None.
+
+        Returns:
+            TClusterResponse[TResult]:
+                If a single node route is requested, returns a Optional[TResult] representing the function's return value.
+                Otherwise, returns a dict of [str , Optional[TResult]] where each key contains the address of
+                the queried node and the value contains the function's return value.
+
+        Example:
+            >>> await client.fcall("Deep_Thought", ["Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], RandomNode())
+                'new_value' # Returns the function's return value.
+
+        Since: Redis version 7.0.0.
+        """
+        args = [function, "0"]
+        if arguments is not None:
+            args.extend(arguments)
+        return cast(
+            TClusterResponse[TResult],
+            await self._execute_command(RequestType.FCall, args, route),
+        )
+
+    async def fcall_ro_route(
+        self,
+        function: str,
+        arguments: Optional[List[str]] = None,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TResult]:
+        """
+        Invokes a previously loaded read-only function.
+
+        See https://valkey.io/commands/fcall_ro for more details.
+
+        Args:
+            function (str): The function name.
+            arguments (List[str]): An `array` of `function` arguments. `arguments` should not
+                represent names of keys.
+            route (Optional[Route]): Specifies the routing configuration of the command. The client
+                will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[TResult]: The return value depends on the function that was executed.
+
+        Examples:
+            >>> await client.fcall_ro_route("Deep_Thought", ALL_NODES)
+                42 # The return value on the function that was executed
+
+        Since: Redis version 7.0.0.
+        """
+        args = [function, "0"]
+        if arguments is not None:
+            args.extend(arguments)
+        return cast(
+            TClusterResponse[TResult],
+            await self._execute_command(RequestType.FCallReadOnly, args, route),
+        )
+
     async def time(self, route: Optional[Route] = None) -> TClusterResponse[List[str]]:
         """
         Returns the server time.
@@ -558,22 +630,23 @@ class ClusterCommands(CoreCommands):
         """
         Publish a message on pubsub channel.
         This command aggregates PUBLISH and SPUBLISH commands functionalities.
-        The mode is selected using the 'sharded' parameter
+        The mode is selected using the 'sharded' parameter.
+        For both sharded and non-sharded mode, request is routed using hashed channel as key.
         See https://valkey.io/commands/publish and https://valkey.io/commands/spublish for more details.
 
         Args:
             message (str): Message to publish
             channel (str): Channel to publish the message on.
-            sharded (bool): Use sharded pubsub mode.
+            sharded (bool): Use sharded pubsub mode. Available since Redis version 7.0.
 
         Returns:
-            int: Number of subscriptions in that shard that received the message.
+            int: Number of subscriptions in that node that received the message.
 
         Examples:
             >>> await client.publish("Hi all!", "global-channel", False)
-                1  # Publishes "Hi all!" message on global-channel channel using non-sharded mode
+                1  # Published 1 instance of "Hi all!" message on global-channel channel using non-sharded mode
             >>> await client.publish("Hi to sharded channel1!", "channel1, True)
-                2  # Publishes "Hi to sharded channel1!" message on channel1 using sharded mode
+                2  # Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
         """
         result = await self._execute_command(
             RequestType.SPublish if sharded else RequestType.Publish, [channel, message]
@@ -741,4 +814,59 @@ class ClusterCommands(CoreCommands):
         return cast(
             Optional[str],
             await self._execute_command(RequestType.RandomKey, [], route),
+        )
+
+    async def wait(
+        self,
+        numreplicas: int,
+        timeout: int,
+        route: Optional[Route] = None,
+    ) -> int:
+        """
+        Blocks the current client until all the previous write commands are successfully transferred
+        and acknowledged by at least `numreplicas` of replicas. If `timeout` is
+        reached, the command returns even if the specified number of replicas were not yet reached.
+
+        See https://valkey.io/commands/wait for more details.
+
+        Args:
+            numreplicas (int): The number of replicas to reach.
+            timeout (int): The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+            in which case the client will route the command to the nodes defined by `route`.
+        Returns:
+            int: The number of replicas reached by all the writes performed in the context of the current connection.
+
+        Examples:
+            >>> await client.set("key", "value");
+            >>> await client.wait(1, 1000);
+            // return 1 when a replica is reached or 0 if 1000ms is reached.
+        """
+        args = [str(numreplicas), str(timeout)]
+        return cast(
+            int,
+            await self._execute_command(RequestType.Wait, args, route),
+        )
+
+    async def unwatch(self, route: Optional[Route] = None) -> TOK:
+        """
+        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        automatically flush all previously watched keys.
+
+        See https://valkey.io/commands/unwatch for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.unwatch()
+                'OK'
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.UnWatch, [], route),
         )

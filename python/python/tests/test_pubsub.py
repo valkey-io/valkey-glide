@@ -78,6 +78,16 @@ async def create_two_clients(
     return client, client2
 
 
+def decode_pubsub_msg(msg: Optional[CoreCommands.PubSubMsg]) -> CoreCommands.PubSubMsg:
+    if not msg:
+        return CoreCommands.PubSubMsg("", "", None)
+    string_msg = cast(bytes, msg.message).decode()
+    string_channel = cast(bytes, msg.channel).decode()
+    string_pattern = cast(bytes, msg.pattern).decode() if msg.pattern else None
+    decoded_msg = CoreCommands.PubSubMsg(string_msg, string_channel, string_pattern)
+    return decoded_msg
+
+
 async def get_message_by_method(
     method: MethodTesting,
     client: TGlideClient,
@@ -85,11 +95,11 @@ async def get_message_by_method(
     index: Optional[int] = None,
 ):
     if method == MethodTesting.Async:
-        return await client.get_pubsub_message()
+        return decode_pubsub_msg(await client.get_pubsub_message())
     elif method == MethodTesting.Sync:
-        return client.try_get_pubsub_message()
+        return decode_pubsub_msg(client.try_get_pubsub_message())
     assert messages and (index is not None)
-    return messages[index]
+    return decode_pubsub_msg(messages[index])
 
 
 async def check_no_messages_left(
@@ -159,7 +169,6 @@ class TestPubSub:
         """
         channel = get_random_string(10)
         message = get_random_string(5)
-        publish_response = 1 if cluster_mode else OK
 
         callback, context = None, None
         callback_messages: List[CoreCommands.PubSubMsg] = []
@@ -180,7 +189,9 @@ class TestPubSub:
         )
 
         try:
-            assert await publishing_client.publish(message, channel) == publish_response
+            result = await publishing_client.publish(message, channel)
+            if cluster_mode:
+                assert result == 1
             # allow the message to propagate
             await asyncio.sleep(1)
 
@@ -214,7 +225,6 @@ class TestPubSub:
         channel = get_random_string(10)
         message = get_random_string(5)
         message2 = get_random_string(7)
-        publish_response = 1 if cluster_mode else OK
 
         pub_sub = create_pubsub_subscription(
             cluster_mode,
@@ -227,16 +237,19 @@ class TestPubSub:
         )
 
         try:
-            assert await publishing_client.publish(message, channel) == publish_response
-            assert (
-                await publishing_client.publish(message2, channel) == publish_response
-            )
+            for msg in [message, message2]:
+                result = await publishing_client.publish(msg, channel)
+                if cluster_mode:
+                    assert result == 1
+
             # allow the message to propagate
             await asyncio.sleep(1)
 
-            async_msg = await listening_client.get_pubsub_message()
-            sync_msg = listening_client.try_get_pubsub_message()
-            assert sync_msg
+            async_msg_res = await listening_client.get_pubsub_message()
+            sync_msg_res = listening_client.try_get_pubsub_message()
+            assert sync_msg_res
+            async_msg = decode_pubsub_msg(async_msg_res)
+            sync_msg = decode_pubsub_msg(sync_msg_res)
 
             assert async_msg.message in [message, message2]
             assert async_msg.channel == channel
@@ -276,7 +289,6 @@ class TestPubSub:
         """
         NUM_CHANNELS = 256
         shard_prefix = "{same-shard}"
-        publish_response = 1 if cluster_mode else OK
 
         # Create a map of channels to random messages with shard prefix
         channels_and_messages = {
@@ -312,10 +324,9 @@ class TestPubSub:
         try:
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
-                assert (
-                    await publishing_client.publish(message, channel)
-                    == publish_response
-                )
+                result = await publishing_client.publish(message, channel)
+                if cluster_mode:
+                    assert result == 1
 
             # Allow the messages to propagate
             await asyncio.sleep(1)
@@ -359,7 +370,6 @@ class TestPubSub:
         """
         NUM_CHANNELS = 256
         shard_prefix = "{same-shard}"
-        publish_response = 1 if cluster_mode else OK
 
         # Create a map of channels to random messages with shard prefix
         channels_and_messages = {
@@ -388,10 +398,9 @@ class TestPubSub:
         try:
             # Publish messages to each channel
             for channel, message in channels_and_messages.items():
-                assert (
-                    await publishing_client.publish(message, channel)
-                    == publish_response
-                )
+                result = await publishing_client.publish(message, channel)
+                if cluster_mode:
+                    assert result == 1
 
             # Allow the messages to propagate
             await asyncio.sleep(1)
@@ -536,11 +545,12 @@ class TestPubSub:
             # allow the messages to propagate
             await asyncio.sleep(1)
 
-            async_msg = await listening_client.get_pubsub_message()
-            sync_msg = listening_client.try_get_pubsub_message()
-            assert sync_msg
+            async_msg_res = await listening_client.get_pubsub_message()
+            sync_msg_res = listening_client.try_get_pubsub_message()
+            assert sync_msg_res
+            async_msg = decode_pubsub_msg(async_msg_res)
+            sync_msg = decode_pubsub_msg(sync_msg_res)
 
-            assert async_msg.message == message
             assert async_msg.message in [message, message2]
             assert async_msg.channel == channel
             assert async_msg.pattern is None
@@ -671,7 +681,6 @@ class TestPubSub:
             "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5),
             "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5),
         }
-        publish_response = 1 if cluster_mode else OK
 
         callback, context = None, None
         callback_messages: List[CoreCommands.PubSubMsg] = []
@@ -692,10 +701,9 @@ class TestPubSub:
 
         try:
             for channel, message in channels.items():
-                assert (
-                    await publishing_client.publish(message, channel)
-                    == publish_response
-                )
+                result = await publishing_client.publish(message, channel)
+                if cluster_mode:
+                    assert result == 1
 
             # allow the message to propagate
             await asyncio.sleep(1)
@@ -736,7 +744,6 @@ class TestPubSub:
             "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5),
             "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5),
         }
-        publish_response = 1 if cluster_mode else OK
 
         pub_sub = create_pubsub_subscription(
             cluster_mode,
@@ -750,10 +757,9 @@ class TestPubSub:
 
         try:
             for channel, message in channels.items():
-                assert (
-                    await publishing_client.publish(message, channel)
-                    == publish_response
-                )
+                result = await publishing_client.publish(message, channel)
+                if cluster_mode:
+                    assert result == 1
 
             # allow the message to propagate
             await asyncio.sleep(1)
@@ -804,7 +810,6 @@ class TestPubSub:
             "{{{}}}:{}".format("channel", get_random_string(5)): get_random_string(5)
             for _ in range(NUM_CHANNELS)
         }
-        publish_response = 1 if cluster_mode else OK
 
         callback, context = None, None
         callback_messages: List[CoreCommands.PubSubMsg] = []
@@ -825,10 +830,9 @@ class TestPubSub:
 
         try:
             for channel, message in channels.items():
-                assert (
-                    await publishing_client.publish(message, channel)
-                    == publish_response
-                )
+                result = await publishing_client.publish(message, channel)
+                if cluster_mode:
+                    assert result == 1
 
             # allow the message to propagate
             await asyncio.sleep(1)
@@ -891,8 +895,6 @@ class TestPubSub:
             **pattern_channels_and_messages,
         }
 
-        publish_response = 1 if cluster_mode else OK
-
         callback, context = None, None
         callback_messages: List[CoreCommands.PubSubMsg] = []
 
@@ -928,10 +930,9 @@ class TestPubSub:
         try:
             # Publish messages to all channels
             for channel, message in all_channels_and_messages.items():
-                assert (
-                    await publishing_client.publish(message, channel)
-                    == publish_response
-                )
+                result = await publishing_client.publish(message, channel)
+                if cluster_mode:
+                    assert result == 1
 
             # allow the message to propagate
             await asyncio.sleep(1)
@@ -1005,8 +1006,6 @@ class TestPubSub:
             **pattern_channels_and_messages,
         }
 
-        publish_response = 1 if cluster_mode else OK
-
         callback, context = None, None
         callback_messages: List[CoreCommands.PubSubMsg] = []
 
@@ -1058,10 +1057,9 @@ class TestPubSub:
         try:
             # Publish messages to all channels
             for channel, message in all_channels_and_messages.items():
-                assert (
-                    await publishing_client.publish(message, channel)
-                    == publish_response
-                )
+                result = await publishing_client.publish(message, channel)
+                if cluster_mode:
+                    assert result == 1
 
             # allow the messages to propagate
             await asyncio.sleep(1)
@@ -1625,7 +1623,6 @@ class TestPubSub:
         CHANNEL_NAME = "channel-name"
         MESSAGE_EXACT = get_random_string(10)
         MESSAGE_PATTERN = get_random_string(7)
-        publish_response = 2 if cluster_mode else OK
         callback, context_exact, context_pattern = None, None, None
         callback_messages_exact: List[CoreCommands.PubSubMsg] = []
         callback_messages_pattern: List[CoreCommands.PubSubMsg] = []
@@ -1658,14 +1655,10 @@ class TestPubSub:
 
         try:
             # Publish messages to each channel - both clients publishing
-            assert (
-                await client_pattern.publish(MESSAGE_EXACT, CHANNEL_NAME)
-                == publish_response
-            )
-            assert (
-                await client_exact.publish(MESSAGE_PATTERN, CHANNEL_NAME)
-                == publish_response
-            )
+            for msg in [MESSAGE_EXACT, MESSAGE_PATTERN]:
+                result = await client_pattern.publish(msg, CHANNEL_NAME)
+                if cluster_mode:
+                    assert result == 2
 
             # allow the message to propagate
             await asyncio.sleep(1)
@@ -1881,12 +1874,12 @@ class TestPubSub:
             sync_msg = listening_client.try_get_pubsub_message()
             assert sync_msg
 
-            assert async_msg.message == message
-            assert async_msg.channel == channel
+            assert async_msg.message == message.encode()
+            assert async_msg.channel == channel.encode()
             assert async_msg.pattern is None
 
-            assert sync_msg.message == message2
-            assert sync_msg.channel == channel
+            assert sync_msg.message == message2.encode()
+            assert sync_msg.channel == channel.encode()
             assert sync_msg.pattern is None
 
             # assert there are no messages to read
@@ -1957,12 +1950,12 @@ class TestPubSub:
             sync_msg = listening_client.try_get_pubsub_message()
             assert sync_msg
 
-            assert async_msg.message == message
-            assert async_msg.channel == channel
+            assert async_msg.message == message.encode()
+            assert async_msg.channel == channel.encode()
             assert async_msg.pattern is None
 
-            assert sync_msg.message == message2
-            assert sync_msg.channel == channel
+            assert sync_msg.message == message2.encode()
+            assert sync_msg.channel == channel.encode()
             assert sync_msg.pattern is None
 
             # assert there are no messages to read

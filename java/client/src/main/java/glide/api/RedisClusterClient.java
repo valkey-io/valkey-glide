@@ -37,6 +37,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.LastSave;
 import static redis_request.RedisRequestOuterClass.RequestType.Lolwut;
 import static redis_request.RedisRequestOuterClass.RequestType.Ping;
 import static redis_request.RedisRequestOuterClass.RequestType.RandomKey;
+import static redis_request.RedisRequestOuterClass.RequestType.SPublish;
 import static redis_request.RedisRequestOuterClass.RequestType.Sort;
 import static redis_request.RedisRequestOuterClass.RequestType.SortReadOnly;
 import static redis_request.RedisRequestOuterClass.RequestType.Time;
@@ -44,6 +45,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.UnWatch;
 
 import glide.api.commands.ConnectionManagementClusterCommands;
 import glide.api.commands.GenericClusterCommands;
+import glide.api.commands.PubSubClusterCommands;
 import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
@@ -57,8 +59,6 @@ import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
-import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -77,17 +77,19 @@ public class RedisClusterClient extends BaseClient
                 GenericClusterCommands,
                 ServerManagementClusterCommands,
                 ScriptingAndFunctionsClusterCommands,
-                TransactionsClusterCommands {
+                TransactionsClusterCommands,
+                PubSubClusterCommands {
 
-    protected RedisClusterClient(ConnectionManager connectionManager, CommandManager commandManager) {
-        super(connectionManager, commandManager);
+    /** A private constructor. Use {@link #CreateClient} to get a client. */
+    RedisClusterClient(ClientBuilder builder) {
+        super(builder);
     }
 
     /**
      * Async request for an async (non-blocking) Redis client in Cluster mode.
      *
-     * @param config Redis cluster client Configuration
-     * @return A Future to connect and return a RedisClusterClient
+     * @param config Redis cluster client Configuration.
+     * @return A Future to connect and return a RedisClusterClient.
      */
     public static CompletableFuture<RedisClusterClient> CreateClient(
             @NonNull RedisClusterClientConfiguration config) {
@@ -120,15 +122,25 @@ public class RedisClusterClient extends BaseClient
 
     @Override
     public CompletableFuture<Object[]> exec(@NonNull ClusterTransaction transaction) {
-        return commandManager.submitNewTransaction(
-                transaction, Optional.empty(), this::handleArrayOrNullResponse);
+        if (transaction.isBinarySafeOutput()) {
+            return commandManager.submitNewTransaction(
+                    transaction, Optional.empty(), this::handleArrayOrNullResponseBinary);
+        } else {
+            return commandManager.submitNewTransaction(
+                    transaction, Optional.empty(), this::handleArrayOrNullResponse);
+        }
     }
 
     @Override
     public CompletableFuture<Object[]> exec(
             @NonNull ClusterTransaction transaction, @NonNull SingleNodeRoute route) {
-        return commandManager.submitNewTransaction(
-                transaction, Optional.of(route), this::handleArrayOrNullResponse);
+        if (transaction.isBinarySafeOutput()) {
+            return commandManager.submitNewTransaction(
+                    transaction, Optional.of(route), this::handleArrayOrNullResponseBinary);
+        } else {
+            return commandManager.submitNewTransaction(
+                    transaction, Optional.of(route), this::handleArrayOrNullResponse);
+        }
     }
 
     @Override
@@ -514,12 +526,34 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> functionLoad(
+            @NonNull GlideString libraryCode, boolean replace) {
+        GlideString[] arguments =
+                replace
+                        ? new GlideString[] {gs(REPLACE.toString()), libraryCode}
+                        : new GlideString[] {libraryCode};
+        return commandManager.submitNewCommand(
+                FunctionLoad, arguments, this::handleGlideStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> functionLoad(
             @NonNull String libraryCode, boolean replace, @NonNull Route route) {
         String[] arguments =
                 replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
         return commandManager.submitNewCommand(
                 FunctionLoad, arguments, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> functionLoad(
+            @NonNull GlideString libraryCode, boolean replace, @NonNull Route route) {
+        GlideString[] arguments =
+                replace
+                        ? new GlideString[] {gs(REPLACE.toString()), libraryCode}
+                        : new GlideString[] {libraryCode};
+        return commandManager.submitNewCommand(
+                FunctionLoad, arguments, route, this::handleGlideStringResponse);
     }
 
     /** Process a <code>FUNCTION LIST</code> cluster response. */
@@ -611,9 +645,22 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> functionDelete(@NonNull GlideString libName) {
+        return commandManager.submitNewCommand(
+                FunctionDelete, new GlideString[] {libName}, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> functionDelete(@NonNull String libName, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionDelete, new String[] {libName}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionDelete(
+            @NonNull GlideString libName, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionDelete, new GlideString[] {libName}, route, this::handleStringResponse);
     }
 
     @Override
@@ -793,11 +840,33 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> spublish(@NonNull String channel, @NonNull String message) {
+        return commandManager.submitNewCommand(
+                SPublish,
+                new String[] {channel, message},
+                response -> {
+                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                    handleLongResponse(response);
+                    return OK;
+                });
+    }
+
+    @Override
     public CompletableFuture<String[]> sort(
             @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
         String[] arguments = ArrayUtils.addFirst(sortClusterOptions.toArgs(), key);
         return commandManager.submitNewCommand(
                 Sort, arguments, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> sort(
+            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
+        GlideString[] arguments = ArrayUtils.addFirst(sortClusterOptions.toGlideStringArgs(), key);
+        return commandManager.submitNewCommand(
+                Sort,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -811,6 +880,16 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> sortReadOnly(
+            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
+        GlideString[] arguments = ArrayUtils.addFirst(sortClusterOptions.toGlideStringArgs(), key);
+        return commandManager.submitNewCommand(
+                SortReadOnly,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<Long> sortStore(
             @NonNull String key,
             @NonNull String destination,
@@ -818,6 +897,18 @@ public class RedisClusterClient extends BaseClient
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         String[] arguments =
                 concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments);
+        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sortStore(
+            @NonNull GlideString key,
+            @NonNull GlideString destination,
+            @NonNull SortClusterOptions sortClusterOptions) {
+        GlideString[] storeArguments = new GlideString[] {gs(STORE_COMMAND_STRING), destination};
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key}, sortClusterOptions.toGlideStringArgs(), storeArguments);
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 }

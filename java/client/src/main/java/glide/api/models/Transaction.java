@@ -4,8 +4,6 @@ package glide.api.models;
 import static glide.api.commands.GenericBaseCommands.REPLACE_REDIS_API;
 import static glide.api.commands.GenericCommands.DB_REDIS_API;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.SortOptions.STORE_COMMAND_STRING;
-import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static redis_request.RedisRequestOuterClass.RequestType.Copy;
 import static redis_request.RedisRequestOuterClass.RequestType.Move;
 import static redis_request.RedisRequestOuterClass.RequestType.Select;
@@ -52,7 +50,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @return Command Response - A simple <code>OK</code> response.
      */
     public Transaction select(long index) {
-        protobufTransaction.addCommands(buildCommand(Select, Long.toString(index)));
+        protobufTransaction.addCommands(buildCommand(Select, this.buildArgs(Long.toString(index))));
         return this;
     }
 
@@ -67,8 +65,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      *     </code> if the <code>key</code> already exists in the destination database or does not
      *     exist in the source database.
      */
-    public Transaction move(String key, long dbIndex) {
-        protobufTransaction.addCommands(buildCommand(Move, key, Long.toString(dbIndex)));
+    public <ArgType> Transaction move(ArgType key, long dbIndex) {
+        protobufTransaction.addCommands(buildCommand(Move, newArgsBuilder().add(key).add(dbIndex)));
         return this;
     }
 
@@ -109,7 +107,7 @@ public class Transaction extends BaseTransaction<Transaction> {
         if (replace) {
             args = ArrayUtils.add(args, REPLACE_REDIS_API);
         }
-        protobufTransaction.addCommands(buildCommand(Copy, args));
+        protobufTransaction.addCommands(buildCommand(Copy, this.buildArgs(args)));
         return this;
     }
 
@@ -123,9 +121,9 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @param sortOptions The {@link SortOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
-    public Transaction sort(@NonNull String key, @NonNull SortOptions sortOptions) {
+    public <ArgType> Transaction sort(@NonNull ArgType key, @NonNull SortOptions sortOptions) {
         protobufTransaction.addCommands(
-                buildCommand(Sort, ArrayUtils.addFirst(sortOptions.toArgs(), key)));
+                buildCommand(Sort, newArgsBuilder().add(key).add(sortOptions.toArgs())));
         return this;
     }
 
@@ -139,9 +137,10 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @param sortOptions The {@link SortOptions}.
      * @return Command Response - An <code>Array</code> of sorted elements.
      */
-    public Transaction sortReadOnly(@NonNull String key, @NonNull SortOptions sortOptions) {
+    public <ArgType> Transaction sortReadOnly(
+            @NonNull ArgType key, @NonNull SortOptions sortOptions) {
         protobufTransaction.addCommands(
-                buildCommand(SortReadOnly, ArrayUtils.addFirst(sortOptions.toArgs(), key)));
+                buildCommand(SortReadOnly, newArgsBuilder().add(key).add(sortOptions.toArgs())));
         return this;
     }
 
@@ -158,12 +157,16 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @return Command Response - The number of elements in the sorted key stored at <code>destination
      *     </code>.
      */
-    public Transaction sortStore(
-            @NonNull String key, @NonNull String destination, @NonNull SortOptions sortOptions) {
-        String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
+    public <ArgType> Transaction sortStore(
+            @NonNull ArgType key, @NonNull ArgType destination, @NonNull SortOptions sortOptions) {
         protobufTransaction.addCommands(
                 buildCommand(
-                        Sort, concatenateArrays(new String[] {key}, sortOptions.toArgs(), storeArguments)));
+                        Sort,
+                        newArgsBuilder()
+                                .add(key)
+                                .add(sortOptions.toArgs())
+                                .add(STORE_COMMAND_STRING)
+                                .add(destination)));
         return this;
     }
 }

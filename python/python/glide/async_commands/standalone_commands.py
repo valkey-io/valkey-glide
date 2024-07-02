@@ -38,7 +38,7 @@ class StandaloneCommands(CoreCommands):
     async def info(
         self,
         sections: Optional[List[InfoSection]] = None,
-    ) -> str:
+    ) -> bytes:
         """
         Get information and statistics about the Redis server.
         See https://redis.io/commands/info/ for details.
@@ -49,10 +49,10 @@ class StandaloneCommands(CoreCommands):
 
 
         Returns:
-            str: Returns a string containing the information for the sections requested.
+            bytes: Returns bytes containing the information for the sections requested.
         """
         args = [section.value for section in sections] if sections else []
-        return cast(str, await self._execute_command(RequestType.Info, args))
+        return cast(bytes, await self._execute_command(RequestType.Info, args))
 
     async def exec(
         self,
@@ -497,7 +497,7 @@ class StandaloneCommands(CoreCommands):
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
-    async def publish(self, message: str, channel: str) -> TOK:
+    async def publish(self, message: str, channel: str) -> int:
         """
         Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
@@ -507,14 +507,15 @@ class StandaloneCommands(CoreCommands):
             channel (str): Channel to publish the message on.
 
         Returns:
-            TOK: a simple `OK` response.
+            int: Number of subscriptions in primary node that received the message.
+            Note that this value does not include subscriptions that configured on replicas.
 
         Examples:
             >>> await client.publish("Hi all!", "global-channel")
-                "OK"
+                1 # This message was posted to 1 subscription which is configured on primary node
         """
-        await self._execute_command(RequestType.Publish, [channel, message])
-        return cast(TOK, OK)
+        result = await self._execute_command(RequestType.Publish, [channel, message])
+        return cast(int, result)
 
     async def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
         """
@@ -664,4 +665,55 @@ class StandaloneCommands(CoreCommands):
         return cast(
             Optional[str],
             await self._execute_command(RequestType.RandomKey, []),
+        )
+
+    async def wait(
+        self,
+        numreplicas: int,
+        timeout: int,
+    ) -> int:
+        """
+        Blocks the current client until all the previous write commands are successfully transferred
+        and acknowledged by at least `numreplicas` of replicas. If `timeout` is
+        reached, the command returns even if the specified number of replicas were not yet reached.
+
+        See https://valkey.io/commands/wait for more details.
+
+        Args:
+            numreplicas (int): The number of replicas to reach.
+            timeout (int): The timeout value specified in milliseconds. A value of 0 will block indefinitely.
+
+        Returns:
+            int: The number of replicas reached by all the writes performed in the context of the current connection.
+
+        Examples:
+            >>> await client.set("key", "value");
+            >>> await client.wait(1, 1000);
+            // return 1 when a replica is reached or 0 if 1000ms is reached.
+        """
+        args = [str(numreplicas), str(timeout)]
+        return cast(
+            int,
+            await self._execute_command(RequestType.Wait, args),
+        )
+
+    async def unwatch(self) -> TOK:
+        """
+        Flushes all the previously watched keys for a transaction. Executing a transaction will
+        automatically flush all previously watched keys.
+
+        See https://valkey.io/commands/unwatch for more details.
+
+        Returns:
+            TOK: A simple "OK" response.
+
+        Examples:
+            >>> await client.watch("sampleKey")
+                'OK'
+            >>> await client.unwatch()
+                'OK'
+        """
+        return cast(
+            TOK,
+            await self._execute_command(RequestType.UnWatch, []),
         )

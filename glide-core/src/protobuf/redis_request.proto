@@ -241,7 +241,9 @@ enum RequestType {
     SScan = 200;
     ZScan = 201;
     HScan = 202;
+    XAutoClaim = 203;
     Wait = 208;
+    XClaim = 209;
 }
 
 message Command {
@@ -258,8 +260,8 @@ message Command {
 
 message ScriptInvocation {
     string hash = 1;
-    repeated string keys = 2;
-    repeated string args = 3;
+    repeated bytes keys = 2;
+    repeated bytes args = 3;
 }
 
 message Transaction {
