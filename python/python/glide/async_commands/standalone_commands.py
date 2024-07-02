@@ -310,7 +310,15 @@ class StandaloneCommands(CoreCommands):
         return cast(
             List[
                 Mapping[
-                    bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]
+                    bytes,
+                    List[
+                        Mapping[
+                            bytes,
+                            Union[
+                                bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]
+                            ],
+                        ]
+                    ],
                 ]
             ],
             await self._execute_command(

@@ -229,7 +229,9 @@ def generate_lua_lib_code(
 
 
 def check_function_list_response(
-    response: List[Mapping[bytes, Any]],
+    response: Union[
+        List[Mapping[bytes, Any]], Mapping[bytes, List[Mapping[bytes, Any]]]
+    ],
     lib_name: str,
     function_descriptions: Mapping[str, Optional[bytes]],
     function_flags: Mapping[str, Set[bytes]],
@@ -246,6 +248,7 @@ def check_function_list_response(
         functionFlags (Mapping[bytes, Set[bytes]]): Expected function flags. Key - function name, value - flags set.
         libCode (Optional[bytes]): Expected library to check if given.
     """
+    response = cast(List[Mapping[bytes, Any]], response)
     assert len(response) > 0
     has_lib = False
     for lib in response:

@@ -7111,8 +7111,8 @@ class TestCommands:
             assert function_list == []
         else:
             assert isinstance(function_list, dict)
-            for nodeResponse in function_list.values():
-                assert nodeResponse == []
+            for functions in function_list.values():
+                assert functions == []
 
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
