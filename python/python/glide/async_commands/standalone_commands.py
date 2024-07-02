@@ -293,7 +293,7 @@ class StandaloneCommands(CoreCommands):
                     b"library_name": b"myLib5_backup",
                     b"engine": b"LUA",
                     b"functions": [{
-                        b"name": func_name.encode(),
+                        b"name": b"myfunc",
                         b"description": None,
                         b"flags": {b"no-writes"},
                     }],
