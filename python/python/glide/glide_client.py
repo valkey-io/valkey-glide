@@ -197,7 +197,6 @@ class BaseClient(CoreCommands):
         self._writer.write(b_arr)
         await self._writer.drain()
 
-    # TODO: change `str` to `TEncodable` where `TEncodable = Union[str, bytes]`
     def _encode_arg(self, arg: Union[str, bytes]) -> bytes:
         """
         Converts a string argument to bytes.
