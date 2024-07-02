@@ -5337,7 +5337,7 @@ class TestCommands:
                     key,
                     group_name1,
                     stream_id,
-                    StreamGroupOptions(entries_read_id="10"),
+                    StreamGroupOptions(entries_read=10),
                 )
         else:
             assert (
@@ -5345,19 +5345,10 @@ class TestCommands:
                     key,
                     group_name1,
                     stream_id,
-                    StreamGroupOptions(entries_read_id="10"),
+                    StreamGroupOptions(entries_read=10),
                 )
                 == OK
             )
-
-            # invalid entries_read_id - cannot be the zero ("0-0") ID
-            with pytest.raises(RequestError):
-                await redis_client.xgroup_create(
-                    key,
-                    group_name2,
-                    stream_id,
-                    StreamGroupOptions(entries_read_id="0-0"),
-                )
 
         # key exists, but it is not a stream
         assert await redis_client.set(string_key, "foo") == OK
@@ -6583,17 +6574,10 @@ class TestCommands:
         else:
             assert (
                 await redis_client.xgroup_set_id(
-                    key, group_name, stream_id1_1, entries_read_id=stream_id0
+                    key, group_name, stream_id1_1, entries_read=0
                 )
                 == OK
             )
-
-            # the entries_read_id cannot be the first, last, or zero ID. Here we pass the first ID and assert that an
-            # error is raised.
-            with pytest.raises(RequestError):
-                await redis_client.xgroup_set_id(
-                    key, group_name, stream_id1_1, entries_read_id=stream_id1_0
-                )
 
         # xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
