@@ -284,7 +284,7 @@ class StreamGroupOptions:
             make_stream (bool): If set to True and the stream doesn't exist, this creates a new stream with a
                 length of 0.
             entries_read: (Optional[int]): A value representing the number of stream entries already read by the
-            group. This option can only be specified if you are using Redis version 7.0.0 or above.
+                group. This option can only be specified if you are using Redis version 7.0.0 or above.
         """
         self.make_stream = make_stream
         self.entries_read = entries_read
