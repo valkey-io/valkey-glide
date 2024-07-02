@@ -306,6 +306,12 @@ class FlushMode(Enum):
     SYNC = "SYNC"
 
 
+class FunctionRestorePolicy(Enum):
+    APPEND = "APPEND"
+    FLUSH = "FLUSH"
+    REPLACE = "REPLACE"
+
+
 def _build_sort_args(
     key: TEncodable,
     by_pattern: Optional[TEncodable] = None,

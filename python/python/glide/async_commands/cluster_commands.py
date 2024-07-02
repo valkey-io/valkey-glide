@@ -8,6 +8,7 @@ from glide.async_commands.command_args import Limit, ObjectType, OrderBy
 from glide.async_commands.core import (
     CoreCommands,
     FlushMode,
+    FunctionRestorePolicy,
     InfoSection,
     _build_sort_args,
 )
@@ -552,6 +553,68 @@ class ClusterCommands(CoreCommands):
         return cast(
             TClusterResponse[TResult],
             await self._execute_command(RequestType.FCallReadOnly, args, route),
+        )
+
+    async def function_dump(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[bytes]:
+        """
+        Returns the serialized payload of all loaded libraries.
+
+        See https://valkey.io/docs/latest/commands/function-dump/ for more details.
+
+        Args:
+            route (Optional[Route]): Specifies the routing configuration of the command. The client
+                will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[bytes]: The serialized payload of all loaded libraries.
+
+        Examples:
+            >>> await client.function_dump()
+                data # data could be saved to restore loaded functions on any Redis instance
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TClusterResponse[bytes],
+            await self._execute_command(RequestType.FunctionDump, [], route),
+        )
+
+    async def function_restore(
+        self,
+        payload: TEncodable,
+        policy: Optional[FunctionRestorePolicy] = None,
+        route: Optional[Route] = None,
+    ) -> TOK:
+        """
+        Restores libraries from the serialized payload returned by function-dump command.
+
+        See https://valkey.io/docs/latest/commands/function-restore/ for more details.
+
+        Args:
+            payload (bytes): The serialized data from function-dump command.
+            policy (Optional[FunctionRestorePolicy]): A policy for handling existing libraries.
+            route (Optional[Route]): Specifies the routing configuration of the command. The client
+                will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: OK.
+
+        Examples:
+            >>> await client.function_restore(data, AllPrimaries())
+                "OK"
+            >>> await client.function_restore(data, FLUSH, AllPrimaries())
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        args: List[TEncodable] = [payload]
+        if policy is not None:
+            args.append(policy.value)
+
+        return cast(
+            TOK, await self._execute_command(RequestType.FunctionRestore, args, route)
         )
 
     async def time(
