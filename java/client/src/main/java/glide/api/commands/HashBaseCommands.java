@@ -3,6 +3,7 @@ package glide.api.commands;
 
 import glide.api.models.GlideString;
 import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.HScanOptionsBinary;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -596,6 +597,41 @@ public interface HashBaseCommands {
      * @param key The key of the hash.
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
      *     </code> indicates the start of the search.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the result. The second element is always an
+     *     <code>Array</code> of the subset of the hash held in <code>key</code>. The array in the
+     *     second element is always a flattened series of <code>String</code> pairs, where the key is
+     *     at even indices and the value is at odd indices.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 member-score pairs
+     * GlideString cursor = gs("0");
+     * Object[] result;
+     * do {
+     *   result = client.hscan(key1, cursor).get();
+     *   cursor = gs(result[0].toString());
+     *   Object[] glideStringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nHSCAN iteration:");
+     *   for (int i = 0; i < glideStringResults.length; i += 2) {
+     *     System.out.printf("{%s=%s}", glideStringResults[i], glideStringResults[i + 1]);
+     *     if (i + 2 < glideStringResults.length) {
+     *       System.out.print(", ");
+     *     }
+     *   }
+     * } while (!cursor.equals(gs("0")));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> hscan(GlideString key, GlideString cursor);
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
      * @param hScanOptions The {@link HScanOptions}.
      * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
      *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
@@ -624,4 +660,41 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<Object[]> hscan(String key, String cursor, HScanOptions hScanOptions);
+
+    /**
+     * Iterates fields of Hash types and their associated values.
+     *
+     * @see <a href="https://valkey.io/commands/hscan">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @param hScanOptions The {@link HScanOptionsBinary}.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the result. The second element is always an
+     *     <code>Array</code> of the subset of the hash held in <code>key</code>. The array in the
+     *     second element is always a flattened series of <code>String</code> pairs, where the key is
+     *     at even indices and the value is at odd indices.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 member-score pairs
+     * GlideString cursor = gs("0");
+     * Object[] result;
+     * do {
+     *   result = client.hscan(key1, cursor, HScanOptionsBinary.builder().matchPattern(gs("*")).count(20L).build()).get();
+     *   cursor = gs(result[0].toString());
+     *   Object[] gslideStringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nHSCAN iteration:");
+     *   for (int i = 0; i < gslideStringResults.length; i += 2) {
+     *     System.out.printf("{%s=%s}", gslideStringResults[i], gslideStringResults[i + 1]);
+     *     if (i + 2 < gslideStringResults.length) {
+     *       System.out.print(", ");
+     *     }
+     *   }
+     * } while (!cursor.equals(gs("0")));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> hscan(
+            GlideString key, GlideString cursor, HScanOptionsBinary hScanOptions);
 }

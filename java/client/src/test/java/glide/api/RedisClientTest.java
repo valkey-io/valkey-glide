@@ -44,6 +44,8 @@ import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMLONLAT_VA
 import static glide.api.models.commands.geospatial.GeoSearchOrigin.FROMMEMBER_VALKEY_API;
 import static glide.api.models.commands.scan.BaseScanOptions.COUNT_OPTION_STRING;
 import static glide.api.models.commands.scan.BaseScanOptions.MATCH_OPTION_STRING;
+import static glide.api.models.commands.scan.BaseScanOptionsBinary.COUNT_OPTION_GLIDE_STRING;
+import static glide.api.models.commands.scan.BaseScanOptionsBinary.MATCH_OPTION_GLIDE_STRING;
 import static glide.api.models.commands.stream.StreamAddOptions.NO_MAKE_STREAM_REDIS_API;
 import static glide.api.models.commands.stream.StreamClaimOptions.FORCE_REDIS_API;
 import static glide.api.models.commands.stream.StreamClaimOptions.IDLE_REDIS_API;
@@ -323,8 +325,11 @@ import glide.api.models.commands.geospatial.GeoSearchStoreOptions;
 import glide.api.models.commands.geospatial.GeoUnit;
 import glide.api.models.commands.geospatial.GeospatialData;
 import glide.api.models.commands.scan.HScanOptions;
+import glide.api.models.commands.scan.HScanOptionsBinary;
 import glide.api.models.commands.scan.SScanOptions;
+import glide.api.models.commands.scan.SScanOptionsBinary;
 import glide.api.models.commands.scan.ZScanOptions;
+import glide.api.models.commands.scan.ZScanOptionsBinary;
 import glide.api.models.commands.stream.StreamAddOptions;
 import glide.api.models.commands.stream.StreamClaimOptions;
 import glide.api.models.commands.stream.StreamGroupOptions;
@@ -10244,6 +10249,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sscan_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString cursor = gs("0");
+        GlideString[] arguments = new GlideString[] {key, cursor};
+        Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(SScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.sscan(key, cursor);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sortReadOnly_with_options_returns_success() {
         // setup
         String[] result = new String[] {"1", "2", "3"};
@@ -10455,12 +10485,67 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sscan_with_options_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString cursor = gs("0");
+        GlideString[] arguments =
+                new GlideString[] {
+                    key, cursor, MATCH_OPTION_GLIDE_STRING, gs("*"), COUNT_OPTION_GLIDE_STRING, gs("1")
+                };
+        Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(SScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.sscan(
+                        key, cursor, SScanOptionsBinary.builder().matchPattern(gs("*")).count(1L).build());
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zscan_returns_success() {
         // setup
         String key = "testKey";
         String cursor = "0";
         String[] arguments = new String[] {key, cursor};
         Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.zscan(key, cursor);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zscan_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString cursor = gs("0");
+        GlideString[] arguments = new GlideString[] {key, cursor};
+        Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -10507,12 +10592,67 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zscan_with_options_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString cursor = gs("0");
+        GlideString[] arguments =
+                new GlideString[] {
+                    key, cursor, MATCH_OPTION_GLIDE_STRING, gs("*"), COUNT_OPTION_GLIDE_STRING, gs("1")
+                };
+        Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.zscan(
+                        key, cursor, ZScanOptionsBinary.builder().matchPattern(gs("*")).count(1L).build());
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void hscan_returns_success() {
         // setup
         String key = "testKey";
         String cursor = "0";
         String[] arguments = new String[] {key, cursor};
         Object[] value = new Object[] {0L, new String[] {"hello", "world"}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(HScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.hscan(key, cursor);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hscan_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString cursor = gs("0");
+        GlideString[] arguments = new GlideString[] {key, cursor};
+        Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -10550,6 +10690,36 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Object[]> response =
                 service.hscan(key, cursor, HScanOptions.builder().matchPattern("*").count(1L).build());
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hscan_with_options_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString cursor = gs("0");
+        GlideString[] arguments =
+                new GlideString[] {
+                    key, cursor, MATCH_OPTION_GLIDE_STRING, gs("*"), COUNT_OPTION_GLIDE_STRING, gs("1")
+                };
+        Object[] value = new Object[] {0L, new GlideString[] {gs("hello"), gs("world")}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(HScan), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response =
+                service.hscan(
+                        key, cursor, HScanOptionsBinary.builder().matchPattern(gs("*")).count(1L).build());
         Object[] payload = response.get();
 
         // verify
