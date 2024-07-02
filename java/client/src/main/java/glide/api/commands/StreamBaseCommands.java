@@ -682,7 +682,7 @@ public interface StreamBaseCommands {
      * @param groupName The consumer group name.
      * @param id The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
-     * @param entriesReadId A value representing the number of stream entries already read by the
+     * @param entriesRead A value representing the number of stream entries already read by the
      *     group.
      * @return <code>OK</code>.
      * @example
@@ -692,7 +692,7 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> xgroupSetId(
-            String key, String groupName, String id, Long entriesReadId);
+            String key, String groupName, String id, Long entriesRead);
 
     /**
      * Reads entries from the given streams owned by a consumer group.

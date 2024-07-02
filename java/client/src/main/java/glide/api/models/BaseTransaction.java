@@ -3681,7 +3681,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param groupName The consumer group name.
      * @param id The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
-     * @param entriesReadId A value representing the number of stream entries already read by the
+     * @param entriesRead A value representing the number of stream entries already read by the
      *     group
      * @return Command Response - <code>OK</code>.
      */
@@ -3689,7 +3689,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull ArgType key,
             @NonNull ArgType groupName,
             @NonNull ArgType id,
-            @NonNull ArgType entriesReadId) {
+            @NonNull ArgType entriesRead) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
@@ -3699,7 +3699,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(groupName)
                                 .add(id)
                                 .add("ENTRIESREAD")
-                                .add(entriesReadId)));
+                                .add(entriesRead)));
         return getThis();
     }
 
