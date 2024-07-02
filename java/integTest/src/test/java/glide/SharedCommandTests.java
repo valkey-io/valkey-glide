@@ -49,6 +49,7 @@ import glide.api.models.commands.RangeOptions.RangeByScore;
 import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
@@ -2777,12 +2778,12 @@ public class SharedCommandTests {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
 
-        try (Script script = new Script("return 'Hello'")) {
+        try (Script script = new Script("return 'Hello'", false)) {
             Object response = client.invokeScript(script).get();
             assertEquals("Hello", response);
         }
 
-        try (Script script = new Script("return redis.call('SET', KEYS[1], ARGV[1])")) {
+        try (Script script = new Script("return redis.call('SET', KEYS[1], ARGV[1])", false)) {
             Object setResponse1 =
                     client
                             .invokeScript(script, ScriptOptions.builder().key(key1).arg("value1").build())
@@ -2796,14 +2797,57 @@ public class SharedCommandTests {
             assertEquals(OK, setResponse2);
         }
 
-        try (Script script = new Script("return redis.call('GET', KEYS[1])")) {
+        try (Script script = new Script("return redis.call('GET', KEYS[1])", false)) {
             Object getResponse1 =
                     client.invokeScript(script, ScriptOptions.builder().key(key1).build()).get();
             assertEquals("value1", getResponse1);
 
+            // Use GlideString in option but we still expect nonbinary output
             Object getResponse2 =
-                    client.invokeScript(script, ScriptOptions.builder().key(key2).build()).get();
+                    client
+                            .invokeScript(script, ScriptOptionsGlideString.builder().key(gs(key2)).build())
+                            .get();
             assertEquals("value2", getResponse2);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void invokeScript_gs_test(BaseClient client) {
+        GlideString key1 = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+
+        try (Script script = new Script(gs("return 'Hello'"), true)) {
+            Object response = client.invokeScript(script).get();
+            assertEquals(gs("Hello"), response);
+        }
+
+        try (Script script = new Script(gs("return redis.call('SET', KEYS[1], ARGV[1])"), true)) {
+            Object setResponse1 =
+                    client
+                            .invokeScript(
+                                    script, ScriptOptionsGlideString.builder().key(key1).arg(gs("value1")).build())
+                            .get();
+            assertEquals(OK, setResponse1);
+
+            Object setResponse2 =
+                    client
+                            .invokeScript(
+                                    script, ScriptOptionsGlideString.builder().key(key2).arg(gs("value2")).build())
+                            .get();
+            assertEquals(OK, setResponse2);
+        }
+
+        try (Script script = new Script(gs("return redis.call('GET', KEYS[1])"), true)) {
+            Object getResponse1 =
+                    client.invokeScript(script, ScriptOptionsGlideString.builder().key(key1).build()).get();
+            assertEquals(gs("value1"), getResponse1);
+
+            // Use String in option but we still expect binary output (GlideString)
+            Object getResponse2 =
+                    client.invokeScript(script, ScriptOptions.builder().key(key2.toString()).build()).get();
+            assertEquals(gs("value2"), getResponse2);
         }
     }
 
