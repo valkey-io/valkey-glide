@@ -255,6 +255,7 @@ import glide.ffi.resolvers.RedisValueResolver;
 import glide.managers.BaseResponseResolver;
 import glide.managers.CommandManager;
 import glide.managers.ConnectionManager;
+import java.util.Arrays;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -2294,9 +2295,26 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> xpending(
+            @NonNull GlideString key, @NonNull GlideString group) {
+        return commandManager.submitNewCommand(
+                XPending, new GlideString[] {key, group}, this::handleArrayOrNullResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<Object[][]> xpending(
             @NonNull String key,
             @NonNull String group,
+            @NonNull StreamRange start,
+            @NonNull StreamRange end,
+            long count) {
+        return xpending(key, group, start, end, count, StreamPendingOptions.builder().build());
+    }
+
+    @Override
+    public CompletableFuture<Object[][]> xpending(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
             @NonNull StreamRange start,
             @NonNull StreamRange end,
             long count) {
@@ -2317,6 +2335,22 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[][]> xpending(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull StreamRange start,
+            @NonNull StreamRange end,
+            long count,
+            @NonNull StreamPendingOptions options) {
+        String[] toArgsString = options.toArgs(start, end, count);
+        GlideString[] toArgs =
+                Arrays.stream(toArgsString).map(GlideString::gs).toArray(GlideString[]::new);
+        GlideString[] args = concatenateArrays(new GlideString[] {key, group}, toArgs);
+        return commandManager.submitNewCommand(
+                XPending, args, response -> castArray(handleArrayResponse(response), Object[].class));
+    }
+
+    @Override
     public CompletableFuture<Map<String, String[][]>> xclaim(
             @NonNull String key,
             @NonNull String group,
@@ -2326,6 +2360,19 @@ public abstract class BaseClient
         String[] args =
                 concatenateArrays(new String[] {key, group, consumer, Long.toString(minIdleTime)}, ids);
         return commandManager.submitNewCommand(XClaim, args, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, GlideString[][]>> xclaim(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString[] ids) {
+        GlideString[] args =
+                concatenateArrays(
+                        new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))}, ids);
+        return commandManager.submitNewCommand(XClaim, args, this::handleBinaryStringMapResponse);
     }
 
     @Override
@@ -2343,6 +2390,23 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, GlideString[][]>> xclaim(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString[] ids,
+            @NonNull StreamClaimOptions options) {
+        String[] toArgsString = options.toArgs();
+        GlideString[] toArgs =
+                Arrays.stream(toArgsString).map(GlideString::gs).toArray(GlideString[]::new);
+        GlideString[] args =
+                concatenateArrays(
+                        new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))}, ids, toArgs);
+        return commandManager.submitNewCommand(XClaim, args, this::handleBinaryStringMapResponse);
+    }
+
+    @Override
     public CompletableFuture<String[]> xclaimJustId(
             @NonNull String key,
             @NonNull String group,
@@ -2356,6 +2420,22 @@ public abstract class BaseClient
                         new String[] {JUST_ID_REDIS_API});
         return commandManager.submitNewCommand(
                 XClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> xclaimJustId(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString[] ids) {
+        GlideString[] args =
+                concatenateArrays(
+                        new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))},
+                        ids,
+                        new GlideString[] {gs(JUST_ID_REDIS_API)});
+        return commandManager.submitNewCommand(
+                XClaim, args, response -> castArray(handleArrayResponse(response), GlideString.class));
     }
 
     @Override
@@ -2374,6 +2454,27 @@ public abstract class BaseClient
                         new String[] {JUST_ID_REDIS_API});
         return commandManager.submitNewCommand(
                 XClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+    }
+
+    @Override
+    public CompletableFuture<GlideString[]> xclaimJustId(
+            @NonNull GlideString key,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            long minIdleTime,
+            @NonNull GlideString[] ids,
+            @NonNull StreamClaimOptions options) {
+        String[] toArgsString = options.toArgs();
+        GlideString[] toArgs =
+                Arrays.stream(toArgsString).map(GlideString::gs).toArray(GlideString[]::new);
+        GlideString[] args =
+                concatenateArrays(
+                        new GlideString[] {key, group, consumer, gs(Long.toString(minIdleTime))},
+                        ids,
+                        toArgs,
+                        new GlideString[] {gs(JUST_ID_REDIS_API)});
+        return commandManager.submitNewCommand(
+                XClaim, args, response -> castArray(handleArrayResponse(response), GlideString.class));
     }
 
     @Override

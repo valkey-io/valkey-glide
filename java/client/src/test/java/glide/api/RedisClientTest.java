@@ -6588,6 +6588,38 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xclaim_biary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumer = gs("testConsumer");
+        Long minIdleTime = 18L;
+        GlideString[] ids = new GlideString[] {gs("testId")};
+        GlideString[] arguments =
+                concatenateArrays(new GlideString[] {key, groupName, consumer, gs("18")}, ids);
+        Map<GlideString, GlideString[][]> mockResult =
+                Map.of(gs("1234-0"), new GlideString[][] {{gs("message"), gs("log")}});
+
+        CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, GlideString[][]>>submitNewCommand(
+                        eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, GlideString[][]>> response =
+                service.xclaim(key, groupName, consumer, minIdleTime, ids);
+        Map<GlideString, GlideString[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xclaim_with_options_returns_success() {
         // setup
         String key = "testKey";
@@ -6611,6 +6643,51 @@ public class RedisClientTest {
                     RETRY_COUNT_REDIS_API,
                     "5",
                     FORCE_REDIS_API
+                };
+        Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
+
+        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, String[][]>>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, String[][]>> response =
+                service.xclaim(key, groupName, consumer, minIdleTime, ids, options);
+        Map<String, String[][]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xclaim_binary_with_options_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumer = gs("testConsumer");
+        Long minIdleTime = 18L;
+        GlideString[] ids = new GlideString[] {gs("testId")};
+        StreamClaimOptions options =
+                StreamClaimOptions.builder().force().idle(11L).idleUnixTime(12L).retryCount(5L).build();
+        GlideString[] arguments =
+                new GlideString[] {
+                    key,
+                    groupName,
+                    consumer,
+                    gs("18"),
+                    gs("testId"),
+                    gs(IDLE_REDIS_API),
+                    gs("11"),
+                    gs(TIME_REDIS_API),
+                    gs("12"),
+                    gs(RETRY_COUNT_REDIS_API),
+                    gs("5"),
+                    gs(FORCE_REDIS_API)
                 };
         Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
 
@@ -6662,6 +6739,36 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xclaimJustId_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumer = gs("testConsumer");
+        Long minIdleTime = 18L;
+        GlideString[] ids = new GlideString[] {gs("testId")};
+        GlideString[] arguments =
+                new GlideString[] {key, groupName, consumer, gs("18"), gs("testId"), gs(JUST_ID_REDIS_API)};
+        GlideString[] mockResult = {gs("message"), gs("log")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response =
+                service.xclaimJustId(key, groupName, consumer, minIdleTime, ids);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xclaimJustId_with_options_returns_success() {
         // setup
         String key = "testKey";
@@ -6700,6 +6807,52 @@ public class RedisClientTest {
         CompletableFuture<String[]> response =
                 service.xclaimJustId(key, groupName, consumer, minIdleTime, ids, options);
         String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xclaimJustId_binary_with_options_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumer = gs("testConsumer");
+        Long minIdleTime = 18L;
+        GlideString[] ids = new GlideString[] {gs("testId")};
+        StreamClaimOptions options =
+                StreamClaimOptions.builder().force().idle(11L).idleUnixTime(12L).retryCount(5L).build();
+        GlideString[] arguments =
+                new GlideString[] {
+                    key,
+                    groupName,
+                    consumer,
+                    gs("18"),
+                    gs("testId"),
+                    gs(IDLE_REDIS_API),
+                    gs("11"),
+                    gs(TIME_REDIS_API),
+                    gs("12"),
+                    gs(RETRY_COUNT_REDIS_API),
+                    gs("5"),
+                    gs(FORCE_REDIS_API),
+                    gs(JUST_ID_REDIS_API)
+                };
+        GlideString[] mockResult = {gs("message"), gs("log")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(XClaim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response =
+                service.xclaimJustId(key, groupName, consumer, minIdleTime, ids, options);
+        GlideString[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -6759,11 +6912,64 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xpending_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString[] arguments = {key, groupName};
+        Object[] summary = new Object[] {1L, "1234-0", "2345-4", new Object[][] {{"consumer", "4"}}};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(summary);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(XPending), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.xpending(key, groupName);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(summary, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xpending_with_start_end_count_returns_success() {
         // setup
         String key = "testKey";
         String groupName = "testGroupName";
         String[] arguments = {key, groupName, EXCLUSIVE_RANGE_REDIS_API + "1234-0", "2345-5", "4"};
+        StreamRange start = IdBound.ofExclusive("1234-0");
+        StreamRange end = IdBound.of("2345-5");
+        Long count = 4L;
+        Object[][] extendedForm = new Object[][] {{"1234-0", "consumer", 4L, 1L}};
+
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(extendedForm);
+
+        // match on protobuf request
+        when(commandManager.<Object[][]>submitNewCommand(eq(XPending), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[][]> response = service.xpending(key, groupName, start, end, count);
+        Object[][] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(extendedForm, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xpending_binary_with_start_end_count_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString[] arguments = {key, groupName, EXCLUSIVE_RANGE_REDIS_API + "1234-0", "2345-5", "4"};
         StreamRange start = IdBound.ofExclusive("1234-0");
         StreamRange end = IdBound.of("2345-5");
         Long count = 4L;
@@ -6800,6 +7006,51 @@ public class RedisClientTest {
             MINIMUM_RANGE_REDIS_API,
             MAXIMUM_RANGE_REDIS_API,
             "4",
+            consumer
+        };
+        StreamRange start = InfRangeBound.MIN;
+        StreamRange end = InfRangeBound.MAX;
+        Long count = 4L;
+        Object[][] extendedForm = new Object[][] {{"1234-0", consumer, 4L, 1L}};
+
+        CompletableFuture<Object[][]> testResponse = new CompletableFuture<>();
+        testResponse.complete(extendedForm);
+
+        // match on protobuf request
+        when(commandManager.<Object[][]>submitNewCommand(eq(XPending), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[][]> response =
+                service.xpending(
+                        key,
+                        groupName,
+                        start,
+                        end,
+                        count,
+                        StreamPendingOptions.builder().minIdleTime(100L).consumer(consumer).build());
+        Object[][] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(extendedForm, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xpending_binary_with_start_end_count_options_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("testGroupName");
+        GlideString consumer = gs("testConsumer");
+        GlideString[] arguments = {
+            key,
+            groupName,
+            gs(IDLE_TIME_REDIS_API),
+            gs("100"),
+            gs(MINIMUM_RANGE_REDIS_API),
+            gs(MAXIMUM_RANGE_REDIS_API),
+            gs("4"),
             consumer
         };
         StreamRange start = InfRangeBound.MIN;
