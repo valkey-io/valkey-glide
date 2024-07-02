@@ -30,6 +30,8 @@ import static glide.api.models.commands.SortBaseOptions.LIMIT_COMMAND_STRING;
 import static glide.api.models.commands.SortBaseOptions.OrderBy.DESC;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.SortOptions.BY_COMMAND_STRING;
+import static glide.api.models.commands.SortOptionsBinary.BY_COMMAND_GLIDE_STRING;
+import static glide.api.models.commands.SortOptionsBinary.GET_COMMAND_GLIDE_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldOverflow.BitOverflowControl.SAT;
 import static glide.api.models.commands.bitmap.BitFieldOptions.GET_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.INCRBY_COMMAND_STRING;
@@ -293,6 +295,7 @@ import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
 import glide.api.models.commands.SortBaseOptions;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.commands.SortOrder;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
@@ -2275,6 +2278,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void hvals_binary_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] args = {key};
+        GlideString[] values = new GlideString[] {gs("value1"), gs("value2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(values);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(HVals), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.hvals(key);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(values, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void hmget_success() {
         // setup
         String key = "testKey";
@@ -2292,6 +2319,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String[]> response = service.hmget(key, fields);
         String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hmget_binary_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] fields = {gs("testField1"), gs("testField2")};
+        GlideString[] args = {gs("testKey"), gs("testField1"), gs("testField2")};
+        GlideString[] value = {gs("testValue1"), gs("testValue2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(HMGet), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.hmget(key, fields);
+        GlideString[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -2500,6 +2552,30 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String[]> response = service.hkeys(key);
         String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(values, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void hkeys_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] args = {key};
+        GlideString[] values = new GlideString[] {gs("field_1"), gs("field_2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(values);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(HKeys), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.hkeys(key);
+        GlideString[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -7668,6 +7744,42 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void geoadd_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Map<GlideString, GeospatialData> membersToGeoSpatialData = new LinkedHashMap<>();
+        membersToGeoSpatialData.put(gs("Catania"), new GeospatialData(15.087269, 40));
+        membersToGeoSpatialData.put(gs("Palermo"), new GeospatialData(13.361389, 38.115556));
+        GlideString[] arguments =
+                new GlideString[] {
+                    key,
+                    gs("15.087269"),
+                    gs("40.0"),
+                    gs("Catania"),
+                    gs("13.361389"),
+                    gs("38.115556"),
+                    gs("Palermo")
+                };
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(GeoAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.geoadd(key, membersToGeoSpatialData);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void geoadd_with_options_returns_success() {
         // setup
         String key = "testKey";
@@ -7686,6 +7798,45 @@ public class RedisClientTest {
                     "13.361389",
                     "38.115556",
                     "Palermo"
+                };
+        Long value = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(GeoAdd), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.geoadd(key, membersToGeoSpatialData, options);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geoadd_with_options_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Map<GlideString, GeospatialData> membersToGeoSpatialData = new LinkedHashMap<>();
+        membersToGeoSpatialData.put(gs("Catania"), new GeospatialData(15.087269, 40));
+        membersToGeoSpatialData.put(gs("Palermo"), new GeospatialData(13.361389, 38.115556));
+        GeoAddOptions options = new GeoAddOptions(ConditionalChange.ONLY_IF_EXISTS, true);
+        GlideString[] arguments =
+                new GlideString[] {
+                    key,
+                    gs(ConditionalChange.ONLY_IF_EXISTS.getRedisApi()),
+                    gs(CHANGED_REDIS_API),
+                    gs("15.087269"),
+                    gs("40.0"),
+                    gs("Catania"),
+                    gs("13.361389"),
+                    gs("38.115556"),
+                    gs("Palermo")
                 };
         Long value = 1L;
 
@@ -7793,6 +7944,32 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<String[]> response = service.geohash(key, members);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void geohash_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] members = {gs("Catania"), gs("Palermo"), gs("NonExisting")};
+        GlideString[] arguments =
+                new GlideString[] {key, gs("Catania"), gs("Palermo"), gs("NonExisting")};
+        GlideString[] value = {gs("sqc8b49rny0"), gs("sqdtr74hyu0"), null};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(GeoHash), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.geohash(key, members);
         Object[] payload = response.get();
 
         // verify
@@ -9101,6 +9278,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void srandmember_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key};
+        GlideString value = gs("one");
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(SRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.srandmember(key);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void srandmember_with_count_returns_success() {
         // setup
         String key = "testKey";
@@ -9118,6 +9319,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String[]> response = service.srandmember(key, count);
         String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void srandmember_with_count_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long count = 2;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(count))};
+        GlideString[] value = {gs("one"), gs("two")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(SRandMember), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.srandmember(key, count);
+        GlideString[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -9945,6 +10171,54 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sort_with_options_binary_returns_success() {
+        // setup
+        GlideString[] result = new GlideString[] {gs("1"), gs("2"), gs("3")};
+        GlideString key = gs("key");
+        Long limitOffset = 0L;
+        Long limitCount = 2L;
+        GlideString byPattern = gs("byPattern");
+        GlideString getPattern = gs("getPattern");
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    gs(LIMIT_COMMAND_STRING),
+                    gs(limitOffset.toString()),
+                    gs(limitCount.toString()),
+                    gs(DESC.toString()),
+                    gs(ALPHA_COMMAND_STRING),
+                    BY_COMMAND_GLIDE_STRING,
+                    byPattern,
+                    GET_COMMAND_GLIDE_STRING,
+                    getPattern
+                };
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(Sort), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response =
+                service.sort(
+                        key,
+                        SortOptionsBinary.builder()
+                                .alpha()
+                                .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
+                                .orderBy(DESC)
+                                .getPattern(getPattern)
+                                .byPattern(byPattern)
+                                .build());
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sscan_returns_success() {
         // setup
         String key = "testKey";
@@ -9998,6 +10272,36 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void sortReadOnly_with_options_binary_returns_success() {
+        // setup
+        GlideString[] result = new GlideString[] {gs("1"), gs("2"), gs("3")};
+        GlideString key = gs("key");
+        GlideString byPattern = gs("byPattern");
+        GlideString getPattern = gs("getPattern");
+        GlideString[] args =
+                new GlideString[] {
+                    key, BY_COMMAND_GLIDE_STRING, byPattern, GET_COMMAND_GLIDE_STRING, getPattern
+                };
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(SortReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response =
+                service.sortReadOnly(
+                        key, SortOptionsBinary.builder().getPattern(getPattern).byPattern(byPattern).build());
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void sortStore_with_options_returns_success() {
         // setup
         Long result = 5L;
@@ -10034,6 +10338,57 @@ public class RedisClientTest {
                         key,
                         destKey,
                         SortOptions.builder()
+                                .alpha()
+                                .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
+                                .orderBy(DESC)
+                                .getPattern(getPattern)
+                                .byPattern(byPattern)
+                                .build());
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sortStore_with_options_binary_returns_success() {
+        // setup
+        Long result = 5L;
+        GlideString key = gs("key");
+        GlideString destKey = gs("destKey");
+        Long limitOffset = 0L;
+        Long limitCount = 2L;
+        GlideString byPattern = gs("byPattern");
+        GlideString getPattern = gs("getPattern");
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    gs(LIMIT_COMMAND_STRING),
+                    gs(limitOffset.toString()),
+                    gs(limitCount.toString()),
+                    gs(DESC.toString()),
+                    gs(ALPHA_COMMAND_STRING),
+                    gs(BY_COMMAND_STRING),
+                    byPattern,
+                    GET_COMMAND_GLIDE_STRING,
+                    getPattern,
+                    gs(STORE_COMMAND_STRING),
+                    destKey
+                };
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Sort), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response =
+                service.sortStore(
+                        key,
+                        destKey,
+                        SortOptionsBinary.builder()
                                 .alpha()
                                 .limit(new SortBaseOptions.Limit(limitOffset, limitCount))
                                 .orderBy(DESC)
