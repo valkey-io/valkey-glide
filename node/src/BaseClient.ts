@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 import {
@@ -59,6 +59,8 @@ import {
     createMSet,
     createObjectEncoding,
     createObjectFreq,
+    createObjectIdletime,
+    createObjectRefcount,
     createPExpire,
     createPExpireAt,
     createPTTL,
@@ -77,17 +79,20 @@ import {
     createSMove,
     createSPop,
     createSRem,
+    createSUnionStore,
     createSet,
     createStrlen,
     createTTL,
     createType,
     createUnlink,
     createXAdd,
+    createXLen,
     createXRead,
     createXTrim,
     createZAdd,
     createZCard,
     createZCount,
+    createZInterCard,
     createZInterstore,
     createZPopMax,
     createZPopMin,
@@ -98,11 +103,6 @@ import {
     createZRemRangeByRank,
     createZRemRangeByScore,
     createZScore,
-    createSUnionStore,
-    createXLen,
-    createZInterCard,
-    createObjectIdletime,
-    createObjectRefcount,
 } from "./Commands";
 import {
     ClosingError,
@@ -222,11 +222,11 @@ export type ScriptOptions = {
     /**
      * The keys that are used in the script.
      */
-    keys?: string[];
+    keys?: (string | Uint8Array)[];
     /**
      * The arguments for the script.
      */
-    args?: string[];
+    args?: (string | Uint8Array)[];
 };
 
 function getRequestErrorClass(
@@ -1629,8 +1629,24 @@ export class BaseClient {
     ): Promise<ReturnType> {
         const scriptInvocation = redis_request.ScriptInvocation.create({
             hash: script.getHash(),
-            keys: option?.keys,
-            args: option?.args,
+            keys: option?.keys?.map((item) => {
+                if (typeof item === "string") {
+                    // Convert the string to a Uint8Array
+                    return Buffer.from(item);
+                } else {
+                    // If it's already a Uint8Array, just return it
+                    return item;
+                }
+            }),
+            args: option?.args?.map((item) => {
+                if (typeof item === "string") {
+                    // Convert the string to a Uint8Array
+                    return Buffer.from(item);
+                } else {
+                    // If it's already a Uint8Array, just return it
+                    return item;
+                }
+            }),
         });
         return this.createWritePromise(scriptInvocation);
     }

@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
 import static glide.api.models.commands.GetExOptions.ExpiryType.MILLISECONDS;
@@ -8,7 +8,9 @@ import static glide.api.models.commands.GetExOptions.ExpiryType.UNIX_MILLISECOND
 import static glide.api.models.commands.GetExOptions.ExpiryType.UNIX_SECONDS;
 
 import glide.api.commands.StringBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.RequiredArgsConstructor;
 
@@ -107,5 +109,14 @@ public class GetExOptions {
         }
         System.out.println(optionArgs);
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Converts GetExOptions into a GlideString[] to pass to the <code>GETEX</code> command.
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toGlideStringArgs() {
+        return Arrays.stream(toArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }

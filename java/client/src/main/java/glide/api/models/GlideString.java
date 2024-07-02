@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models;
 
 import java.nio.charset.StandardCharsets;
@@ -7,7 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import lombok.Getter;
 
 // TODO docs for the god of docs
-public class GlideString {
+public class GlideString implements Comparable<GlideString> {
 
     @Getter private byte[] bytes;
     private String string = null;
@@ -30,6 +30,22 @@ public class GlideString {
         return res;
     }
 
+    /** Allow converting any type to GlideString */
+    public static <ArgType> GlideString of(ArgType o) {
+        if (o instanceof GlideString) {
+            return (GlideString) o;
+        } else if (o instanceof byte[]) {
+            return GlideString.of((byte[]) o);
+        } else if (o instanceof String) {
+            return GlideString.of((String) o);
+        } else {
+            var res = new GlideString();
+            res.string = o.toString();
+            res.bytes = res.string.getBytes(StandardCharsets.UTF_8);
+            return res;
+        }
+    }
+
     public static GlideString gs(String string) {
         return GlideString.of(string);
     }
@@ -50,6 +66,10 @@ public class GlideString {
 
         assert canConvertToString() : "Value cannot be represented as a string";
         return string;
+    }
+
+    public int compareTo(GlideString o) {
+        return Arrays.compare(this.bytes, o.bytes);
     }
 
     public boolean canConvertToString() {
