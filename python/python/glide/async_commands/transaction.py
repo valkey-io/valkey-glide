@@ -4662,7 +4662,9 @@ class Transaction(BaseTransaction):
 
         return self.append_command(RequestType.Copy, args)
 
-    def publish(self: TTransaction, message: TEncodable, channel: TEncodable) -> TTransaction:
+    def publish(
+        self: TTransaction, message: TEncodable, channel: TEncodable
+    ) -> TTransaction:
         """
         Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.

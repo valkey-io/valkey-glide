@@ -7751,13 +7751,11 @@ class TestCommands:
             # test with single-node route
             result = await redis_client.lolwut(2, route=RandomNode())
             assert isinstance(result, bytes)
-            result_decoded = convert_bytes_to_string_object(result)
-            assert "Redis ver. " in node_result
+            assert b"Redis ver. " in result
 
             result = await redis_client.lolwut(2, [10, 20], RandomNode())
             assert isinstance(result, bytes)
-            result_decoded = convert_bytes_to_string_object(result)
-            assert "Redis ver. " in node_result
+            assert b"Redis ver. " in result
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
