@@ -1,15 +1,17 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
 
 import glide.api.commands.StreamBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import lombok.NonNull;
 
 /**
  * Optional arguments for {@link StreamBaseCommands#xtrim(String, StreamTrimOptions)}
  *
- * @see <a href="https://redis.io/commands/xtrim/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/xtrim/">valkey.io</a>
  */
 public abstract class StreamTrimOptions {
 
@@ -63,6 +65,16 @@ public abstract class StreamTrimOptions {
         }
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Converts options for {@link StreamBaseCommands#xtrim(String, StreamTrimOptions)} into a
+     * GlideString[].
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toGlideStringArgs() {
+        return Arrays.stream(toArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 
     /** Option to trim the stream according to minimum ID. */

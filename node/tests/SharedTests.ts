@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 
 import { expect, it } from "@jest/globals";
@@ -8,22 +8,22 @@ import { v4 as uuidv4 } from "uuid";
 import {
     ClosingError,
     ExpireOptions,
+    GlideClient,
+    GlideClusterClient,
     InfoOptions,
     InsertPosition,
     ProtocolVersion,
-    RedisClient,
-    RedisClusterClient,
     Script,
     parseInfoResponse,
 } from "../";
 import {
     Client,
-    checkSimple,
     GetAndSetRandomValue,
+    checkSimple,
     compareMaps,
     getFirstResult,
-    intoString,
     intoArray,
+    intoString,
 } from "./TestUtilities";
 
 async function getVersion(): Promise<[number, number, number]> {
@@ -59,7 +59,7 @@ export async function checkIfServerVersionLessThan(
     return versionToCompare < minVersion;
 }
 
-export type BaseClient = RedisClient | RedisClusterClient;
+export type BaseClient = GlideClient | GlideClusterClient;
 
 export function runBaseTests<Context>(config: {
     init: (
@@ -1496,6 +1496,49 @@ export function runBaseTests<Context>(config: {
         `script test_%p`,
         async (protocol) => {
             await runTest(async (client: BaseClient) => {
+                const key1 = Buffer.from(uuidv4());
+                const key2 = Buffer.from(uuidv4());
+
+                let script = new Script(Buffer.from("return 'Hello'"));
+                checkSimple(await client.invokeScript(script)).toEqual("Hello");
+
+                script = new Script(
+                    Buffer.from("return redis.call('SET', KEYS[1], ARGV[1])"),
+                );
+                checkSimple(
+                    await client.invokeScript(script, {
+                        keys: [key1],
+                        args: [Buffer.from("value1")],
+                    }),
+                ).toEqual("OK");
+
+                /// Reuse the same script with different parameters.
+                checkSimple(
+                    await client.invokeScript(script, {
+                        keys: [key2],
+                        args: [Buffer.from("value2")],
+                    }),
+                ).toEqual("OK");
+
+                script = new Script(
+                    Buffer.from("return redis.call('GET', KEYS[1])"),
+                );
+                checkSimple(
+                    await client.invokeScript(script, { keys: [key1] }),
+                ).toEqual("value1");
+
+                checkSimple(
+                    await client.invokeScript(script, { keys: [key2] }),
+                ).toEqual("value2");
+            }, protocol);
+        },
+        config.timeout,
+    );
+
+    it.each([ProtocolVersion.RESP2, ProtocolVersion.RESP3])(
+        `script test_binary_%p`,
+        async (protocol) => {
+            await runTest(async (client: BaseClient) => {
                 const key1 = uuidv4();
                 const key2 = uuidv4();
 
@@ -2473,7 +2516,7 @@ export function runBaseTests<Context>(config: {
                 await expect(client.brpop(["foo"], 0.1)).rejects.toThrow();
 
                 // Same-slot requirement
-                if (client instanceof RedisClusterClient) {
+                if (client instanceof GlideClusterClient) {
                     try {
                         expect(
                             await client.brpop(["abc", "zxy", "lkn"], 0.1),
@@ -2510,7 +2553,7 @@ export function runBaseTests<Context>(config: {
                 await expect(client.blpop(["foo"], 0.1)).rejects.toThrow();
 
                 // Same-slot requirement
-                if (client instanceof RedisClusterClient) {
+                if (client instanceof GlideClusterClient) {
                     try {
                         expect(
                             await client.blpop(["abc", "zxy", "lkn"], 0.1),
@@ -3158,7 +3201,7 @@ export function runBaseTests<Context>(config: {
 
                 expect(await client.lpush(list_key, ["1"])).toEqual(1);
 
-                if (versionLessThan7) {
+                if (versionLessThan72) {
                     checkSimple(await client.objectEncoding(list_key)).toEqual(
                         "quicklist",
                     );

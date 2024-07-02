@@ -1,9 +1,11 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.geospatial;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
+import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import lombok.Getter;
@@ -77,5 +79,14 @@ public final class GeoAddOptions {
         }
 
         return arguments.toArray(new String[0]);
+    }
+
+    /**
+     * Converts GeoAddOptions into a GlideString[].
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toGlideStringArgs() {
+        return Arrays.stream(toArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }

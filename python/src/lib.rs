@@ -1,15 +1,19 @@
+use bytes::Bytes;
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener;
+use glide_core::MAX_REQUEST_ARGS_LENGTH;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyDict, PyFloat, PyList, PySet};
+use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet};
 use pyo3::Python;
 
 use redis::Value;
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
     glide_core::client::DEFAULT_RESPONSE_TIMEOUT.as_millis() as u32;
+pub const MAX_REQUEST_ARGS_LEN: u32 = MAX_REQUEST_ARGS_LENGTH as u32;
 
 #[pyclass]
 #[derive(PartialEq, Eq, PartialOrd, Clone)]
@@ -37,9 +41,18 @@ pub struct Script {
 #[pymethods]
 impl Script {
     #[new]
-    fn new(code: String) -> Self {
-        let hash = glide_core::scripts_container::add_script(&code);
-        Script { hash }
+    fn new(code: &PyAny) -> PyResult<Self> {
+        let hash = if let Ok(code_str) = code.extract::<String>() {
+            glide_core::scripts_container::add_script(code_str.as_bytes())
+        } else if let Ok(code_bytes) = code.extract::<&PyBytes>() {
+            glide_core::scripts_container::add_script(code_bytes.as_bytes())
+        } else {
+            return Err(PyTypeError::new_err(
+                "code must be either a String or PyBytes",
+            ));
+        };
+
+        Ok(Script { hash })
     }
 
     fn get_hash(&self) -> String {
@@ -60,6 +73,7 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
         "DEFAULT_TIMEOUT_IN_MILLISECONDS",
         DEFAULT_TIMEOUT_IN_MILLISECONDS,
     )?;
+    m.add("MAX_REQUEST_ARGS_LEN", MAX_REQUEST_ARGS_LEN)?;
 
     #[pyfn(m)]
     fn py_log(log_level: Level, log_identifier: String, message: String) {
@@ -107,15 +121,15 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
     fn redis_value_to_py(py: Python, val: Value) -> PyResult<PyObject> {
         match val {
             Value::Nil => Ok(py.None()),
-            Value::SimpleString(str) => Ok(str.into_py(py)),
+            Value::SimpleString(str) => {
+                let data_bytes = PyBytes::new(py, str.as_bytes());
+                Ok(data_bytes.into_py(py))
+            }
             Value::Okay => Ok("OK".into_py(py)),
             Value::Int(num) => Ok(num.into_py(py)),
             Value::BulkString(data) => {
-                // TODO: for now, and in order to keep the current tests to work,
-                // we still return a UTF-8 encoded string instead of `&[u8]`. This needs
-                // to be changed
-                let value_str = String::from_utf8_lossy(&data);
-                Ok(value_str.into_py(py))
+                let data_bytes = PyBytes::new(py, &data);
+                Ok(data_bytes.into_py(py))
             }
             Value::Array(bulk) => {
                 let elements: &PyList = PyList::new(py, iter_to_value(py, bulk)?);
@@ -143,7 +157,11 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
             }
             Value::Double(double) => Ok(PyFloat::new(py, double).into_py(py)),
             Value::Boolean(boolean) => Ok(PyBool::new(py, boolean).into_py(py)),
-            Value::VerbatimString { format: _, text } => Ok(text.into_py(py)),
+            Value::VerbatimString { format: _, text } => {
+                // TODO create MATCH on the format
+                let data_bytes = PyBytes::new(py, text.as_bytes());
+                Ok(data_bytes.into_py(py))
+            }
             Value::BigNumber(bigint) => Ok(bigint.into_py(py)),
             Value::Push { kind, data } => {
                 let dict = PyDict::new(py);
@@ -167,6 +185,19 @@ fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
     pub fn create_leaked_value(message: String) -> usize {
         let value = Value::SimpleString(message);
         Box::leak(Box::new(value)) as *mut Value as usize
+    }
+
+    #[pyfn(m)]
+    pub fn create_leaked_bytes_vec(args_vec: Vec<&PyBytes>) -> usize {
+        // Convert the bytes vec -> Bytes vector
+        let bytes_vec: Vec<Bytes> = args_vec
+            .iter()
+            .map(|v| {
+                let bytes = v.as_bytes();
+                Bytes::from(bytes.to_vec())
+            })
+            .collect();
+        Box::leak(Box::new(bytes_vec)) as *mut Vec<Bytes> as usize
     }
     Ok(())
 }

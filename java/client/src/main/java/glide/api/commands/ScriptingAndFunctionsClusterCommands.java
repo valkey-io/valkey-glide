@@ -1,7 +1,8 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.ClusterValue;
+import glide.api.models.GlideString;
 import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.function.FunctionRestorePolicy;
 import glide.api.models.configuration.ReadFrom;
@@ -37,6 +38,25 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<String> functionLoad(String libraryCode, boolean replace);
 
     /**
+     * Loads a library to Redis.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
+     * @param libraryCode The source code that implements the library.
+     * @param replace Whether the given library should overwrite a library with the same name if it
+     *     already exists.
+     * @return The library name that was loaded.
+     * @example
+     *     <pre>{@code
+     * GlideString code = gs("#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)");
+     * GlideString response = client.functionLoad(code, true).get();
+     * assert response.equals(gs("mylib"));
+     * }</pre>
+     */
+    CompletableFuture<GlideString> functionLoad(GlideString libraryCode, boolean replace);
+
+    /**
      * Loads a library to Redis.
      *
      * @since Redis 7.0 and above.
@@ -56,6 +76,28 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> functionLoad(String libraryCode, boolean replace, Route route);
+
+    /**
+     * Loads a library to Redis.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
+     * @param libraryCode The source code that implements the library.
+     * @param replace Whether the given library should overwrite a library with the same name if it
+     *     already exists.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return The library name that was loaded.
+     * @example
+     *     <pre>{@code
+     * GlideString code = gs("#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)");
+     * Route route = new SlotKeyRoute("key", PRIMARY);
+     * GlideString response = client.functionLoad(code, true, route).get();
+     * assert response.equals(gs("mylib"));
+     * }</pre>
+     */
+    CompletableFuture<GlideString> functionLoad(
+            GlideString libraryCode, boolean replace, Route route);
 
     /**
      * Returns information about the functions and libraries.<br>
@@ -254,6 +296,22 @@ public interface ScriptingAndFunctionsClusterCommands {
     CompletableFuture<String> functionDelete(String libName);
 
     /**
+     * Deletes a library and all its functions.<br>
+     * The command will be routed to all primary nodes.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @param libName The library name to delete.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionDelete(gs("myLib")).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionDelete(GlideString libName);
+
+    /**
      * Deletes a library and all its functions.
      *
      * @since Redis 7.0 and above.
@@ -269,6 +327,23 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> functionDelete(String libName, Route route);
+
+    /**
+     * Deletes a library and all its functions.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @param libName The library name to delete.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.functionDelete(gs("myLib"), RANDOM).get();
+     * assert response.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> functionDelete(GlideString libName, Route route);
 
     /**
      * Returns the serialized payload of all loaded libraries.<br>

@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.ffi.resolvers;
 
 public class ScriptResolver {
@@ -14,7 +14,7 @@ public class ScriptResolver {
      * @param code The Lua script
      * @return String representing the saved hash
      */
-    public static native String storeScript(String code);
+    public static native String storeScript(byte[] code);
 
     /**
      * Unload or drop the stored Lua script from the script cache.
