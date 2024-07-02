@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
@@ -172,6 +172,28 @@ public interface BitmapBaseCommands {
     CompletableFuture<Long> setbit(String key, long offset, long value);
 
     /**
+     * Sets or clears the bit at <code>offset</code> in the string value stored at <code>key</code>.
+     * The <code>offset</code> is a zero-based index, with <code>0</code> being the first element of
+     * the list, <code>1</code> being the next element, and so on. The <code>offset</code> must be
+     * less than <code>2^32</code> and greater than or equal to <code>0</code>. If a key is
+     * non-existent then the bit at <code>offset</code> is set to <code>value</code> and the preceding
+     * bits are set to <code>0</code>.
+     *
+     * @see <a href="https://valkey.io/commands/setbit/">valkey.io</a> for details.
+     * @param key The key of the string.
+     * @param offset The index of the bit to be set.
+     * @param value The bit value to set at <code>offset</code>. The value must be <code>0</code> or
+     *     <code>1</code>.
+     * @return The bit value that was previously stored at <code>offset</code>.
+     * @example
+     *     <pre>{@code
+     * Long payload = client.setbit(gs("myKey1"), 1, 1).get();
+     * assert payload == 0L; // The second bit value was 0 before setting to 1.
+     * }</pre>
+     */
+    CompletableFuture<Long> setbit(GlideString key, long offset, long value);
+
+    /**
      * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
      * <code>offset</code> should be greater than or equal to zero.
      *
@@ -188,6 +210,24 @@ public interface BitmapBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> getbit(String key, long offset);
+
+    /**
+     * Returns the bit value at <code>offset</code> in the string value stored at <code>key</code>.
+     * <code>offset</code> should be greater than or equal to zero.
+     *
+     * @see <a href="https://valkey.io/commands/getbit/">valkey.io</a> for details.
+     * @param key The key of the string.
+     * @param offset The index of the bit to return.
+     * @return The bit at offset of the string. Returns zero if the key is empty or if the positive
+     *     <code>offset</code> exceeds the length of the string.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("sampleKey"), gs("A")); // "A" has binary value 01000001
+     * Long payload = client.getbit(gs("sampleKey"), 1).get();
+     * assert payload == 1L; // The second bit for string stored at "sampleKey" is set to 1.
+     * }</pre>
+     */
+    CompletableFuture<Long> getbit(GlideString key, long offset);
 
     /**
      * Returns the position of the first bit matching the given <code>bit</code> value.
@@ -476,6 +516,46 @@ public interface BitmapBaseCommands {
     CompletableFuture<Long[]> bitfield(String key, BitFieldSubCommands[] subCommands);
 
     /**
+     * Reads or modifies the array of bits representing the string that is held at <code>key</code>
+     * based on the specified <code>subCommands</code>.
+     *
+     * @see <a href="https://valkey.io/commands/bitfield/">valkey.io</a> for details.
+     * @param key The key of the string.
+     * @param subCommands The subCommands to be performed on the binary value of the string at <code>
+     *     key</code>, which could be any of the following:
+     *     <ul>
+     *       <li>{@link BitFieldGet}.
+     *       <li>{@link BitFieldSet}.
+     *       <li>{@link BitFieldIncrby}.
+     *       <li>{@link BitFieldOverflow}.
+     *     </ul>
+     *
+     * @return An <code>array</code> of results from the executed subcommands.
+     *     <ul>
+     *       <li>{@link BitFieldGet} returns the value in {@link Offset} or {@link OffsetMultiplier}.
+     *       <li>{@link BitFieldSet} returns the old value in {@link Offset} or {@link
+     *           OffsetMultiplier}.
+     *       <li>{@link BitFieldIncrby} returns the new value in {@link Offset} or {@link
+     *           OffsetMultiplier}.
+     *       <li>{@link BitFieldOverflow} determines the behaviour of <code>SET</code> and <code>
+     *           INCRBY</code> when an overflow occurs. <code>OVERFLOW</code> does not return a value
+     *           and does not contribute a value to the array response.
+     *     </ul>
+     *
+     * @example
+     *     <pre>{@code
+     * client.set(gs("sampleKey"), gs("A")); // string "A" has binary value 01000001
+     * BitFieldSubCommands[] subcommands = new BitFieldSubCommands[] {
+     *      new BitFieldSet(new UnsignedEncoding(2), new Offset(1), 3), // Sets the new binary value to 01100001
+     *      new BitFieldGet(new UnsignedEncoding(2), new Offset(1)) // Gets value from 0(11)00001
+     * };
+     * Long[] payload = client.bitfield(gs("sampleKey"), subcommands).get();
+     * assertArrayEquals(payload, new Long[] {2L, 3L});
+     * }</pre>
+     */
+    CompletableFuture<Long[]> bitfield(GlideString key, BitFieldSubCommands[] subCommands);
+
+    /**
      * Reads the array of bits representing the string that is held at <code>key</code> based on the
      * specified <code>subCommands</code>.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
@@ -500,4 +580,31 @@ public interface BitmapBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long[]> bitfieldReadOnly(String key, BitFieldReadOnlySubCommands[] subCommands);
+
+    /**
+     * Reads the array of bits representing the string that is held at <code>key</code> based on the
+     * specified <code>subCommands</code>.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 6.0 and above
+     * @see <a href="https://valkey.io/commands/bitfield_ro/">valkey.io</a> for details.
+     * @param key The key of the string.
+     * @param subCommands The <code>GET</code> subCommands to be performed.
+     * @return An array of results from the <code>GET</code> subcommands.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("sampleKey"), gs("A")); //string "A" has binary value 01000001
+     * Long[] payload =
+     *      client.
+     *          bitfieldReadOnly(
+     *              gs("sampleKey"),
+     *              new BitFieldReadOnlySubCommands[] {
+     *                  new BitFieldGet(new UnsignedEncoding(2), new Offset(1))
+     *              })
+     *          .get();
+     * assertArrayEquals(payload, new Long[] {2L}); // Value is from 0(10)00001
+     * }</pre>
+     */
+    CompletableFuture<Long[]> bitfieldReadOnly(
+            GlideString key, BitFieldReadOnlySubCommands[] subCommands);
 }

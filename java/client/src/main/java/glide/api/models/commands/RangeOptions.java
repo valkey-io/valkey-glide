@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands;
 
 import static glide.api.commands.SortedSetBaseCommands.WITH_SCORES_REDIS_API;
@@ -316,7 +316,7 @@ public class RangeOptions {
                 new String[] {destination, source}, createZRangeBaseArgs(rangeQuery, reverse));
     }
 
-    private static String[] createZRangeBaseArgs(RangeQuery rangeQuery, boolean reverse) {
+    public static String[] createZRangeBaseArgs(RangeQuery rangeQuery, boolean reverse) {
         String[] arguments = new String[] {rangeQuery.getStart(), rangeQuery.getEnd()};
 
         if (rangeQuery instanceof RangeByScore) {

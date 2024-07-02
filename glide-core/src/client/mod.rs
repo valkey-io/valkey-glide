@@ -1,5 +1,5 @@
 /**
- * Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0
+ * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 mod types;
 
@@ -13,7 +13,6 @@ use redis::{Cmd, ErrorKind, PushInfo, Value};
 use redis::{RedisError, RedisResult};
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::ops::Deref;
 use std::time::Duration;
 pub use types::*;
 
@@ -204,6 +203,7 @@ fn get_request_timeout(cmd: &Cmd, default_timeout: Duration) -> RedisResult<Opti
             .position(b"BLOCK")
             .map(|idx| get_timeout_from_cmd_arg(cmd, idx + 1, TimeUnit::Milliseconds))
             .unwrap_or(Ok(RequestTimeoutOption::ClientConfig)),
+        b"WAIT" => get_timeout_from_cmd_arg(cmd, 2, TimeUnit::Milliseconds),
         _ => Ok(RequestTimeoutOption::ClientConfig),
     }?;
 
@@ -326,11 +326,11 @@ impl Client {
         .boxed()
     }
 
-    pub async fn invoke_script<'a, T: Deref<Target = str>>(
+    pub async fn invoke_script<'a>(
         &'a mut self,
         hash: &'a str,
-        keys: Vec<T>,
-        args: Vec<T>,
+        keys: &Vec<&[u8]>,
+        args: &Vec<&[u8]>,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisResult<Value> {
         let eval = eval_cmd(hash, keys, args);
@@ -342,7 +342,7 @@ impl Client {
             let Some(code) = get_script(hash) else {
                 return Err(err);
             };
-            let load = load_cmd(code.as_str());
+            let load = load_cmd(&code);
             self.send_command(&load, None).await?;
             self.send_command(&eval, routing).await
         } else {
@@ -351,20 +351,20 @@ impl Client {
     }
 }
 
-fn load_cmd(code: &str) -> Cmd {
+fn load_cmd(code: &[u8]) -> Cmd {
     let mut cmd = redis::cmd("SCRIPT");
     cmd.arg("LOAD").arg(code);
     cmd
 }
 
-fn eval_cmd<T: Deref<Target = str>>(hash: &str, keys: Vec<T>, args: Vec<T>) -> Cmd {
+fn eval_cmd(hash: &str, keys: &Vec<&[u8]>, args: &Vec<&[u8]>) -> Cmd {
     let mut cmd = redis::cmd("EVALSHA");
     cmd.arg(hash).arg(keys.len());
     for key in keys {
-        cmd.arg(&*key);
+        cmd.arg(key);
     }
     for arg in args {
-        cmd.arg(&*arg);
+        cmd.arg(arg);
     }
     cmd
 }
@@ -734,6 +734,17 @@ mod tests {
             result.unwrap(),
             Some(Duration::from_secs_f64(
                 0.857 + BLOCKING_CMD_TIMEOUT_EXTENSION
+            ))
+        );
+
+        let mut cmd = Cmd::new();
+        cmd.arg("WAIT").arg(1).arg("500");
+        let result = get_request_timeout(&cmd, Duration::from_millis(500));
+        assert!(result.is_ok());
+        assert_eq!(
+            result.unwrap(),
+            Some(Duration::from_secs_f64(
+                0.5 + BLOCKING_CMD_TIMEOUT_EXTENSION
             ))
         );
     }

@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.GlideString;
@@ -22,6 +22,8 @@ import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeys;
 import glide.api.models.commands.WeightAggregateOptions.WeightedKeysBinary;
 import glide.api.models.commands.ZAddOptions;
+import glide.api.models.commands.scan.ZScanOptions;
+import glide.api.models.commands.scan.ZScanOptionsBinary;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 
@@ -755,6 +757,24 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Double[]> zmscore(String key, String[] members);
 
     /**
+     * Returns the scores associated with the specified <code>members</code> in the sorted set stored
+     * at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/zmscore/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param members An array of members in the sorted set.
+     * @return An <code>Array</code> of scores of the <code>members</code>.<br>
+     *     If a <code>member</code> does not exist, the corresponding value in the <code>Array</code>
+     *     will be <code>null</code>.
+     * @example
+     *     <pre>{@code
+     * Double[] payload = client.zmscore(key1, new GlideString[] {gs("one"), gs("nonExistentMember"), gs("three")}).get();
+     * assert payload.equals(new Double[] {1.0, null, 3.0});
+     * }</pre>
+     */
+    CompletableFuture<Double[]> zmscore(GlideString key, GlideString[] members);
+
+    /**
      * Returns the difference between the first sorted set and all the successive sorted sets.<br>
      * To get the elements with their scores, see {@link #zdiffWithScores}.
      *
@@ -814,6 +834,26 @@ public interface SortedSetBaseCommands {
     CompletableFuture<Long> zdiffstore(String destination, String[] keys);
 
     /**
+     * Calculates the difference between the first sorted set and all the successive sorted sets at
+     * <code>keys</code> and stores the difference as a sorted set to <code>destination</code>,
+     * overwriting it if it already exists. Non-existent keys are treated as empty sets.
+     *
+     * @apiNote When in cluster mode, <code>destination</code> and all <code>keys</code> must map to
+     *     the same hash slot.
+     * @since Redis 6.2 and above.
+     * @see <a href="https://redis.io/commands/zdiffstore/">redis.io</a> for more details.
+     * @param destination The key for the resulting sorted set.
+     * @param keys The keys of the sorted sets to compare.
+     * @return The number of members in the resulting sorted set stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * Long payload = client.zdiffstore(gs("mySortedSet"), new GlideString[] {gs("key1"), gs("key2")}).get();
+     * assert payload > 0; // At least one member differed in "key1" compared to "key2", and this difference was stored in "mySortedSet".
+     * }</pre>
+     */
+    CompletableFuture<Long> zdiffstore(GlideString destination, GlideString[] keys);
+
+    /**
      * Returns the number of members in the sorted set stored at <code>key</code> with scores between
      * <code>minScore</code> and <code>maxScore</code>.
      *
@@ -866,6 +906,33 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zremrangebyrank(String key, long start, long end);
+
+    /**
+     * Removes all elements in the sorted set stored at <code>key</code> with rank between <code>start
+     * </code> and <code>end</code>. Both <code>start</code> and <code>end</code> are zero-based
+     * indexes with <code>0</code> being the element with the lowest score. These indexes can be
+     * negative numbers, where they indicate offsets starting at the element with the highest score.
+     *
+     * @see <a href="https://redis.io/commands/zremrangebyrank/">redis.io</a> for more details.
+     * @param key The key of the sorted set.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return The number of elements removed.<br>
+     *     If <code>start</code> exceeds the end of the sorted set, or if <code>start</code> is
+     *     greater than <code>end</code>, <code>0</code> returned.<br>
+     *     If <code>end</code> exceeds the actual end of the sorted set, the range will stop at the
+     *     actual end of the sorted set.<br>
+     *     If <code>key</code> does not exist <code>0</code> will be returned.
+     * @example
+     *     <pre>{@code
+     * Long payload1 = client.zremrangebyrank(gs("mySortedSet"), 0, 4).get();
+     * assert payload1 == 5L; // Indicates that 5 elements, with ranks ranging from 0 to 4 (inclusive), have been removed from "mySortedSet".
+     *
+     * Long payload2 = client.zremrangebyrank(gs("mySortedSet"), 0, 4).get();
+     * assert payload2 == 0L; // Indicates that nothing was removed.
+     * }</pre>
+     */
+    CompletableFuture<Long> zremrangebyrank(GlideString key, long start, long end);
 
     /**
      * Removes all elements in the sorted set stored at <code>key</code> with a lexicographical order
@@ -1536,6 +1603,22 @@ public interface SortedSetBaseCommands {
 
     /**
      * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets to intersect.
+     * @return The cardinality of the intersection of the given sorted sets.
+     * @example
+     *     <pre>{@code
+     * Long length = client.zintercard(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")}).get();
+     * assert length == 3L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zintercard(GlideString[] keys);
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
      * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
      * algorithm will exit early and yield <code>limit</code> as the cardinality.
      *
@@ -1554,4 +1637,172 @@ public interface SortedSetBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> zintercard(String[] keys, long limit);
+
+    /**
+     * Returns the cardinality of the intersection of the sorted sets specified by <code>keys</code>.
+     * If the intersection cardinality reaches <code>limit</code> partway through the computation, the
+     * algorithm will exit early and yield <code>limit</code> as the cardinality.
+     *
+     * @apiNote When in cluster mode, all <code>keys</code> must map to the same hash slot.
+     * @since Redis 7.0 and above.
+     * @see <a href="https://redis.io/commands/zintercard/">redis.io</a> for more details.
+     * @param keys The keys of the sorted sets to intersect.
+     * @param limit Specifies a maximum number for the intersection cardinality. If limit is set to
+     *     <code>0</code> the range will be unlimited.
+     * @return The cardinality of the intersection of the given sorted sets, or the <code>limit</code>
+     *     if reached.
+     * @example
+     *     <pre>{@code
+     * Long length = client.zintercard(new GlideString[] {gs("mySortedSet1"), gs("mySortedSet2")}, 5).get();
+     * assert length == 3L;
+     * }</pre>
+     */
+    CompletableFuture<Long> zintercard(GlideString[] keys, long limit);
+
+    /**
+     * Iterates incrementally over a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the sorted set. The second element is always an
+     *     <code>
+     *     Array</code> of the subset of the sorted set held in <code>key</code>. The array in the
+     *     second element is always a flattened series of <code>String</code> pairs, where the value
+     *     is at even indices and the score is at odd indices.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 member-score pairs
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *   result = client.zscan(key1, cursor).get();
+     *   cursor = result[0].toString();
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nZSCAN iteration:");
+     *   for (int i = 0; i < stringResults.length; i += 2) {
+     *     System.out.printf("{%s=%s}", stringResults[i], stringResults[i + 1]);
+     *     if (i + 2 < stringResults.length) {
+     *       System.out.print(", ");
+     *     }
+     *   }
+     * } while (!cursor.equals("0"));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zscan(String key, String cursor);
+
+    /**
+     * Iterates incrementally over a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the sorted set. The second element is always an
+     *     <code>
+     *     Array</code> of the subset of the sorted set held in <code>key</code>. The array in the
+     *     second element is always a flattened series of <code>String</code> pairs, where the value
+     *     is at even indices and the score is at odd indices.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 member-score pairs
+     * GlideString cursor = gs("0");
+     * Object[] result;
+     * do {
+     *   result = client.zscan(key1, cursor).get();
+     *   cursor = gs(result[0].toString());
+     *   Object[] glideStringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nZSCAN iteration:");
+     *   for (int i = 0; i < glideStringResults.length; i += 2) {
+     *     System.out.printf("{%s=%s}", glideStringResults[i], glideStringResults[i + 1]);
+     *     if (i + 2 < glideStringResults.length) {
+     *       System.out.print(", ");
+     *     }
+     *   }
+     * } while (!cursor.equals(gs("0")));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zscan(GlideString key, GlideString cursor);
+
+    /**
+     * Iterates incrementally over a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @param zScanOptions The {@link ZScanOptions}.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the sorted set. The second element is always an
+     *     <code>
+     *     Array</code> of the subset of the sorted set held in <code>key</code>. The array in the
+     *     second element is always a flattened series of <code>String</code> pairs, where the value
+     *     is at even indices and the score is at odd indices.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 member-score pairs
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *   result = client.zscan(key1, cursor, ZScanOptions.builder().matchPattern("*").count(20L).build()).get();
+     *   cursor = result[0].toString();
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nZSCAN iteration:");
+     *   for (int i = 0; i < stringResults.length; i += 2) {
+     *     System.out.printf("{%s=%s}", stringResults[i], stringResults[i + 1]);
+     *     if (i + 2 < stringResults.length) {
+     *       System.out.print(", ");
+     *     }
+     *   }
+     * } while (!cursor.equals("0"));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zscan(String key, String cursor, ZScanOptions zScanOptions);
+
+    /**
+     * Iterates incrementally over a sorted set.
+     *
+     * @see <a href="https://valkey.io/commands/zscan">valkey.io</a> for details.
+     * @param key The key of the sorted set.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @param zScanOptions The {@link ZScanOptions}.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the sorted set. The second element is always an
+     *     <code>
+     *     Array</code> of the subset of the sorted set held in <code>key</code>. The array in the
+     *     second element is always a flattened series of <code>String</code> pairs, where the value
+     *     is at even indices and the score is at odd indices.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 member-score pairs
+     * GlideString cursor = gs("0");
+     * Object[] result;
+     * do {
+     *   result = client.zscan(key1, cursor, ZScanOptionsBinary.builder().matchPattern(gs("*")).count(20L).build()).get();
+     *   cursor = gs(result[0].toString());
+     *   Object[] glideStringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nZSCAN iteration:");
+     *   for (int i = 0; i < glideStringResults.length; i += 2) {
+     *     System.out.printf("{%s=%s}", glideStringResults[i], glideStringResults[i + 1]);
+     *     if (i + 2 < glideStringResults.length) {
+     *       System.out.print(", ");
+     *     }
+     *   }
+     * } while (!cursor.equals(gs("0")));
+     * }</pre>
+     */
+    CompletableFuture<Object[]> zscan(
+            GlideString key, GlideString cursor, ZScanOptionsBinary zScanOptions);
 }

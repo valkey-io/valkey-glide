@@ -1,8 +1,10 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
+import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.SortOptions;
+import glide.api.models.commands.SortOptionsBinary;
 import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
@@ -78,6 +80,24 @@ public interface GenericCommands {
     CompletableFuture<Boolean> move(String key, long dbIndex);
 
     /**
+     * Move <code>key</code> from the currently selected database to the database specified by <code>
+     * dbIndex</code>.
+     *
+     * @see <a href="https://redis.io/commands/move/">redis.io</a> for more details.
+     * @param key The key to move.
+     * @param dbIndex The index of the database to move <code>key</code> to.
+     * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
+     *     </code> already exists in the destination database or does not exist in the source
+     *     database.
+     * @example
+     *     <pre>{@code
+     * Boolean moved = client.move(gs("some_key"), 1L).get();
+     * assert moved;
+     * }</pre>
+     */
+    CompletableFuture<Boolean> move(GlideString key, long dbIndex);
+
+    /**
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
      * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
      * </code> key first if it already exists, otherwise performs no action.
@@ -109,6 +129,28 @@ public interface GenericCommands {
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
+     * @param replace If the destination key should be removed before copying the value to it.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("test1"), gs("one")).get();
+     * assert client.copy(gs("test1"), gs("test2"), 1, false).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(
+            GlideString source, GlideString destination, long destinationDB, boolean replace);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
      * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
      * </code> was not copied.
      * @example
@@ -118,6 +160,26 @@ public interface GenericCommands {
      * }</pre>
      */
     CompletableFuture<Boolean> copy(String source, String destination, long destinationDB);
+
+    /**
+     * Copies the value stored at the <code>source</code> to the <code>destination</code> key on
+     * <code>destinationDB</code>. When <code>replace</code> is true, removes the <code>destination
+     * </code> key first if it already exists, otherwise performs no action.
+     *
+     * @since Redis 6.2.0 and above.
+     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @param source The key to the source value.
+     * @param destination The key where the value should be copied to.
+     * @param destinationDB The alternative logical database index for the destination key.
+     * @return <code>true</code> if <code>source</code> was copied, <code>false</code> if <code>source
+     * </code> was not copied.
+     * @example
+     *     <pre>{@code
+     * client.set(gs("test1"), gs("one")).get();
+     * assert client.copy(gs("test1"), gs("test2"), 1).get();
+     * }</pre>
+     */
+    CompletableFuture<Boolean> copy(GlideString source, GlideString destination, long destinationDB);
 
     /**
      * Returns a random key from currently selected database.
@@ -158,6 +220,28 @@ public interface GenericCommands {
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sort</code> command can be used to sort elements based on different criteria and
+     * apply transformations on sorted elements.<br>
+     * To store the result into a new key, see {@link #sortStore(GlideString, GlideString,
+     * SortOptions)}.
+     *
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptionsBinary}.
+     * @return An <code>Array</code> of sorted elements.
+     * @example
+     *     <pre>{@code
+     * client.hset(gs("user:1"), Map.of(gs("name"), gs("Alice"), gs("age"), gs("30"))).get();
+     * client.hset(gs("user:2"), Map.of(gs("name"), gs("Bob"), gs("age"), gs("25"))).get();
+     * client.lpush(gs("user_ids"), new GlideString[] {gs("2"), gs("1")}).get();
+     * GlideString [] payload = client.sort(gs("user_ids"), SortOptionsBinary.builder().byPattern(gs("user:*->age"))
+     *                  .getPattern(gs("user:*->name")).build()).get();
+     * assertArrayEquals(new GlideString[] {gs("Bob"), gs("Alice")}, payload); // Returns a list of the names sorted by age
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> sort(GlideString key, SortOptionsBinary sortOptions);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
      * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
      * and apply transformations on sorted elements.<br>
      * This command is routed depending on the client's {@link ReadFrom} strategy.
@@ -177,6 +261,28 @@ public interface GenericCommands {
      * }</pre>
      */
     CompletableFuture<String[]> sortReadOnly(String key, SortOptions sortOptions);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
+     * The <code>sortReadOnly</code> command can be used to sort elements based on different criteria
+     * and apply transformations on sorted elements.<br>
+     * This command is routed depending on the client's {@link ReadFrom} strategy.
+     *
+     * @since Redis 7.0 and above.
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @return An <code>Array</code> of sorted elements.
+     * @example
+     *     <pre>{@code
+     * client.hset(gs("user:1"), Map.of(gs("name"), gs("Alice"), gs("age"), gs("30"))).get();
+     * client.hset(gs("user:2"), Map.of(gs("name"), gs("Bob"), gs("age"), gs("25"))).get();
+     * client.lpush("user_ids", new GlideString[] {gs("2"), gs("1")}).get();
+     * GlideString [] payload = client.sortReadOnly(gs("user_ids"), SortOptionsBinary.builder().byPattern(gs("user:*->age"))
+     *                  .getPattern(gs("user:*->name")).build()).get();
+     * assertArrayEquals(new GlideString[] {gs("Bob"), gs("Alice")}, payload); // Returns a list of the names sorted by age
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> sortReadOnly(GlideString key, SortOptionsBinary sortOptions);
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
@@ -204,4 +310,33 @@ public interface GenericCommands {
      * }</pre>
      */
     CompletableFuture<Long> sortStore(String key, String destination, SortOptions sortOptions);
+
+    /**
+     * Sorts the elements in the list, set, or sorted set at <code>key</code> and stores the result in
+     * <code>destination</code>. The <code>sort</code> command can be used to sort elements based on
+     * different criteria, apply transformations on sorted elements, and store the result in a new
+     * key.<br>
+     * To get the sort result without storing it into a key, see {@link #sort(GlideString,
+     * SortOptions)}.
+     *
+     * @param key The key of the list, set, or sorted set to be sorted.
+     * @param sortOptions The {@link SortOptions}.
+     * @param destination The key where the sorted result will be stored.
+     * @return The number of elements in the sorted key stored at <code>destination</code>.
+     * @example
+     *     <pre>{@code
+     * client.hset(gs("user:1"), Map.of(gs("name"), gs("Alice"), gs("age"), gs("30"))).get();
+     * client.hset(gs("user:2"), Map.of(gs("name"), gs("Bob"), gs("age"), gs("25"))).get();
+     * client.lpush(gs("user_ids"), new GlideString[] {gs("2"), gs("1")}).get();
+     * Long payload = client.sortStore(gs("user_ids"), gs("destination"),
+     *          SortOptionsBinary.builder().byPattern(gs("user:*->age")).getPattern(gs("user:*->name")).build())
+     *          .get();
+     * assertEquals(2, payload);
+     * assertArrayEquals(
+     *      new GlideString[] {gs("Bob"), gs("Alice")},
+     *      client.lrange(gs("destination"), 0, -1).get()); // The list of the names sorted by age is stored in `destination`
+     * }</pre>
+     */
+    CompletableFuture<Long> sortStore(
+            GlideString key, GlideString destination, SortOptionsBinary sortOptions);
 }

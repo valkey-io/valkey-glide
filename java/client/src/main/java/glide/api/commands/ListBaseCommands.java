@@ -1,4 +1,4 @@
-/** Copyright GLIDE-for-Redis Project Contributors - SPDX Identifier: Apache-2.0 */
+/** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
 import glide.api.models.GlideString;
@@ -41,6 +41,27 @@ public interface ListBaseCommands {
     CompletableFuture<Long> lpush(String key, String[] elements);
 
     /**
+     * Inserts all the specified values at the head of the list stored at <code>key</code>. <code>
+     * elements</code> are inserted one after the other to the head of the list, from the leftmost
+     * element to the rightmost element. If <code>key</code> does not exist, it is created as an empty
+     * list before performing the push operation.
+     *
+     * @see <a href="https://redis.io/commands/lpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long pushCount1 = client.lpush(gs("my_list"), new GlideString[] {gs("value1"), gs("value2")}).get();
+     * assert pushCount1 == 2L;
+     *
+     * Long pushCount2 = client.lpush(gs("nonexistent_list"), new GlideString[] {gs("new_value")}).get();
+     * assert pushCount2 == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lpush(GlideString key, GlideString[] elements);
+
+    /**
      * Removes and returns the first elements of the list stored at <code>key</code>. The command pops
      * a single element from the beginning of the list.
      *
@@ -79,6 +100,25 @@ public interface ListBaseCommands {
     CompletableFuture<Long> lpos(String key, String element);
 
     /**
+     * Returns the index of the first occurrence of <code>element</code> inside the list specified by
+     * <code>key</code>. If no match is found, <code>null</code> is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @return The index of the first occurrence of <code>element</code>, or <code>null</code> if
+     *     <code>element</code> is not in the list.
+     * @example
+     *     <pre>{@code
+     * Long listLen = client.rpush(gs("my_list"), new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e"), gs("e")}).get();
+     * Long position = client.lpos(gs("my_list"), gs("e")).get();
+     * assert position == 4L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lpos(GlideString key, GlideString element);
+
+    /**
      * Returns the index of an occurrence of <code>element</code> within a list based on the given
      * <code>options</code>. If no match is found, <code>null</code> is returned.
      *
@@ -108,6 +148,35 @@ public interface ListBaseCommands {
             @NonNull String key, @NonNull String element, @NonNull LPosOptions options);
 
     /**
+     * Returns the index of an occurrence of <code>element</code> within a list based on the given
+     * <code>options</code>. If no match is found, <code>null</code> is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param options The LPos options.
+     * @return The index of <code>element</code>, or <code>null</code> if <code>element</code> is not
+     *     in the list.
+     * @example
+     *     <pre>{@code
+     * Long listLen = client.rpush(gs("my_list")), new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e"), gs("e")}).get();
+     *
+     * // Returns the second occurrence of the element gs("e").
+     * LPosOptions options1 = LPosOptions.builder().rank(2L).build();
+     * Long position1 = client.lpos(gs("my_list"), gs("e"), options1).get();
+     * assert position1 == 5L;
+     *
+     * // rank and maxLength
+     * LPosOptions options2 = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+     * Long position2 = client.lpos(gs("my_list"), gs("e"), options2).get();
+     * assert position2 == 4L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lpos(
+            @NonNull GlideString key, @NonNull GlideString element, @NonNull LPosOptions options);
+
+    /**
      * Returns an <code>array</code> of indices of matching elements within a list.
      *
      * @since Redis 6.0.6.
@@ -124,6 +193,25 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long[]> lposCount(@NonNull String key, @NonNull String element, long count);
+
+    /**
+     * Returns an <code>array</code> of indices of matching elements within a list.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param count The number of matches wanted.
+     * @return An <code>array</code> that holds the indices of the matching elements within the list.
+     * @example
+     *     <pre>{@code
+     * Long listLen = client.rpush(gs("my_list"), new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e"), gs("e"), gs("e")}).get();
+     * Long[] position = client.lposCount(gs("my_list"), gs("e"), 3L).get());
+     * assertArrayEquals(new Long[]{4L, 5L, 6L}, position);
+     * }</pre>
+     */
+    CompletableFuture<Long[]> lposCount(
+            @NonNull GlideString key, @NonNull GlideString element, long count);
 
     /**
      * Returns an <code>array</code> of indices of matching elements within a list based on the given
@@ -153,6 +241,38 @@ public interface ListBaseCommands {
      */
     CompletableFuture<Long[]> lposCount(
             @NonNull String key, @NonNull String element, long count, @NonNull LPosOptions options);
+
+    /**
+     * Returns an <code>array</code> of indices of matching elements within a list based on the given
+     * <code>options</code>. If no match is found, an empty <code>array</code>is returned.
+     *
+     * @since Redis 6.0.6.
+     * @see <a href="https://redis.io/docs/latest/commands/lpos/">redis.io</a> for details.
+     * @param key The name of the list.
+     * @param element The value to search for within the list.
+     * @param count The number of matches wanted.
+     * @param options The LPos options.
+     * @return An <code>array</code> that holds the indices of the matching elements within the list.
+     * @example
+     *     <pre>{@code
+     * Long listLen = client.rpush(gs("my_list"), new GlideString[] {gs("a"), gs("b"), gs("c"), gs("d"), gs("e"), gs("e"), gs("e")}).get();
+     *
+     * // rank
+     * LPosOptions options1 = LPosOptions.builder().rank(2L).build();
+     * Long[] position1 = client.lposCount(gs("my_list"), gs("e"), 1L, options1).get();
+     * assertArrayEquals(new Long[]{5L}, position1);
+     *
+     * // rank and maxLength
+     * LPosOptions options2 = LPosOptions.builder.rank(2L).maxLength(1000L).build();
+     * Long[] position2 = client.lposCount(gs("my_list"), gs("e"), 3L, options2).get();
+     * assertArrayEquals(new Long[]{5L, 6L}, position2);
+     * }</pre>
+     */
+    CompletableFuture<Long[]> lposCount(
+            @NonNull GlideString key,
+            @NonNull GlideString element,
+            long count,
+            @NonNull LPosOptions options);
 
     /**
      * Removes and returns up to <code>count</code> elements of the list stored at <code>key</code>,
@@ -222,13 +342,37 @@ public interface ListBaseCommands {
      * @example
      *     <pre>{@code
      * String payload1 = client.lindex("myList", 0).get();
-     * assert payload1.equals('value1'); // Returns the first element in the list stored at 'myList'.
+     * assert payload1.equals("value1"); // Returns the first element in the list stored at 'myList'.
      *
      * String payload2 = client.lindex("myList", -1).get();
-     * assert payload2.equals('value3'); // Returns the last element in the list stored at 'myList'.
+     * assert payload2.equals("value3"); // Returns the last element in the list stored at 'myList'.
      * }</pre>
      */
     CompletableFuture<String> lindex(String key, long index);
+
+    /**
+     * Returns the element at <code>index</code> from the list stored at <code>key</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://redis.io/commands/lindex/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to retrieve.
+     * @return The element at <code>index</code> in the list stored at <code>key</code>.<br>
+     *     If <code>index</code> is out of range or if <code>key</code> does not exist, <code>null
+     *     </code> is returned.
+     * @example
+     *     <pre>{@code
+     * String payload1 = client.lindex(gs("myList"), 0).get();
+     * assert payload1.equals(gs("value1")); // Returns the first element in the list stored at 'myList'.
+     *
+     * String payload2 = client.lindex(gs("myList"), -1).get();
+     * assert payload2.equals(gs("value3")); // Returns the last element in the list stored at 'myList'.
+     * }</pre>
+     */
+    CompletableFuture<GlideString> lindex(GlideString key, long index);
 
     /**
      * Trims an existing list so that it will contain only the specified range of elements specified.
@@ -255,6 +399,32 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> ltrim(String key, long start, long end);
+
+    /**
+     * Trims an existing list so that it will contain only the specified range of elements specified.
+     * <br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with 0 being the
+     * first element of the list, 1 being the next element and so on.<br>
+     * These offsets can also be negative numbers indicating offsets starting at the end of the list,
+     * with -1 being the last element of the list, -2 being the penultimate, and so on.
+     *
+     * @see <a href="https://redis.io/commands/ltrim/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Always <code>OK</code>.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, the result will be an empty list (which causes key to be removed).<br>
+     *     If <code>end</code> exceeds the actual end of the list, it will be treated like the last
+     *     element of the list.<br>
+     *     If <code>key</code> does not exist, OK will be returned without changes to the database.
+     * @example
+     *     <pre>{@code
+     * String payload = client.ltrim(gs("my_list"), 0, 1).get();
+     * assert payload.equals("OK");
+     * }</pre>
+     */
+    CompletableFuture<String> ltrim(GlideString key, long start, long end);
 
     /**
      * Returns the length of the list stored at <code>key</code>.
@@ -313,6 +483,30 @@ public interface ListBaseCommands {
     CompletableFuture<Long> lrem(String key, long count, String element);
 
     /**
+     * Removes the first <code>count</code> occurrences of elements equal to <code>element</code> from
+     * the list stored at <code>key</code>.<br>
+     * If <code>count</code> is positive: Removes elements equal to <code>element</code> moving from
+     * head to tail.<br>
+     * If <code>count</code> is negative: Removes elements equal to <code>element</code> moving from
+     * tail to head.<br>
+     * If <code>count</code> is 0 or <code>count</code> is greater than the occurrences of elements
+     * equal to <code>element</code>, it removes all elements equal to <code>element</code>.
+     *
+     * @see <a href="https://redis.io/commands/lrem/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param count The count of the occurrences of elements equal to <code>element</code> to remove.
+     * @param element The element to remove from the list.
+     * @return The number of the removed elements.<br>
+     *     If <code>key</code> does not exist, <code>0</code> is returned.
+     * @example
+     *     <pre>{@code
+     * Long num = client.rem(gs("my_list"), 2, gs("value")).get();
+     * assert num == 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lrem(GlideString key, long count, GlideString element);
+
+    /**
      * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
      * <code>elements</code> are inserted one after the other to the tail of the list, from the
      * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
@@ -332,6 +526,27 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> rpush(String key, String[] elements);
+
+    /**
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>.<br>
+     * <code>elements</code> are inserted one after the other to the tail of the list, from the
+     * leftmost element to the rightmost element. If <code>key</code> does not exist, it is created as
+     * an empty list before performing the push operation.
+     *
+     * @see <a href="https://redis.io/commands/rpush/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long pushCount1 = client.rpush(gs("my_list"), new GlideString[] {gs("value1"), gs("value2")}).get();
+     * assert pushCount1 == 2L;
+     *
+     * Long pushCount2 = client.rpush(gs("nonexistent_list"), new GlideString[] {gs("new_value")}).get();
+     * assert pushCount2 == 1L;
+     * }</pre>
+     */
+    CompletableFuture<Long> rpush(GlideString key, GlideString[] elements);
 
     /**
      * Removes and returns the last elements of the list stored at <code>key</code>.<br>
@@ -393,6 +608,28 @@ public interface ListBaseCommands {
      */
     CompletableFuture<Long> linsert(
             String key, InsertPosition position, String pivot, String element);
+
+    /**
+     * Inserts <code>element</code> in the list at <code>key</code> either before or after the <code>
+     * pivot</code>.
+     *
+     * @see <a href="https://redis.io/commands/linsert/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param position The relative position to insert into - either {@link InsertPosition#BEFORE} or
+     *     {@link InsertPosition#AFTER} the <code>pivot</code>.
+     * @param pivot An element of the list.
+     * @param element The new element to insert.
+     * @return The list length after a successful insert operation.<br>
+     *     If the <code>key</code> doesn't exist returns <code>-1</code>.<br>
+     *     If the <code>pivot</code> wasn't found, returns <code>0</code>.
+     * @example
+     *     <pre>{@code
+     * Long length = client.linsert(gs("my_list"), BEFORE, gs("World"), gs("There")).get();
+     * assert length > 0L;
+     * }</pre>
+     */
+    CompletableFuture<Long> linsert(
+            GlideString key, InsertPosition position, GlideString pivot, GlideString element);
 
     /**
      * Pops an element from the head of the first list that is non-empty, with the given <code>keys
@@ -472,6 +709,23 @@ public interface ListBaseCommands {
     CompletableFuture<Long> rpushx(String key, String[] elements);
 
     /**
+     * Inserts all the specified values at the tail of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/rpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the tail of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long listLength = client.rpushx(gs("my_list"), new GlideString[] {gs("value1"), gs("value2")}).get();
+     * assert listLength >= 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> rpushx(GlideString key, GlideString[] elements);
+
+    /**
      * Inserts all the specified values at the head of the list stored at <code>key</code>, only if
      * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
      * operation.
@@ -487,6 +741,23 @@ public interface ListBaseCommands {
      * }</pre>
      */
     CompletableFuture<Long> lpushx(String key, String[] elements);
+
+    /**
+     * Inserts all the specified values at the head of the list stored at <code>key</code>, only if
+     * <code>key</code> exists and holds a list. If <code>key</code> is not a list, this performs no
+     * operation.
+     *
+     * @see <a href="https://redis.io/commands/lpushx/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param elements The elements to insert at the head of the list stored at <code>key</code>.
+     * @return The length of the list after the push operation.
+     * @example
+     *     <pre>{@code
+     * Long listLength = client.lpushx(gs("my_list"), new GlideString[] {gs("value1"), gs("value2")}).get();
+     * assert listLength >= 2L;
+     * }</pre>
+     */
+    CompletableFuture<Long> lpushx(GlideString key, GlideString[] elements);
 
     /**
      * Pops one or more elements from the first non-empty list from the provided <code>keys
@@ -618,6 +889,25 @@ public interface ListBaseCommands {
     CompletableFuture<String> lset(String key, long index, String element);
 
     /**
+     * Sets the list element at <code>index</code> to <code>element</code>.<br>
+     * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
+     * element and so on. Negative indices can be used to designate elements starting at the tail of
+     * the list. Here, <code>-1</code> means the last element, <code>-2</code> means the penultimate
+     * and so forth.
+     *
+     * @see <a href="https://valkey.io/commands/lset/">valkey.io</a> for details.
+     * @param key The key of the list.
+     * @param index The index of the element in the list to be set.
+     * @return <code>OK</code>.
+     * @example
+     *     <pre>{@code
+     * String response = client.lset(gs("testKey"), 1, gs("two")).get();
+     * assertEquals(response, "OK");
+     * }</pre>
+     */
+    CompletableFuture<String> lset(GlideString key, long index, GlideString element);
+
+    /**
      * Atomically pops and removes the left/right-most element to the list stored at <code>source
      * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
      * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
@@ -645,6 +935,35 @@ public interface ListBaseCommands {
      */
     CompletableFuture<String> lmove(
             String source, String destination, ListDirection wherefrom, ListDirection whereto);
+
+    /**
+     * Atomically pops and removes the left/right-most element to the list stored at <code>source
+     * </code> depending on <code>wherefrom</code>, and pushes the element at the first/last element
+     * of the list stored at <code>destination</code> depending on <code>wherefrom</code>.
+     *
+     * @since Redis 6.2.0 and above.
+     * @apiNote When in cluster mode, <code>source</code> and <code>destination</code> must map to the
+     *     same hash slot.
+     * @see <a href="https://valkey.io/commands/lmove/">valkey.io</a> for details.
+     * @param source The key to the source list.
+     * @param destination The key to the destination list.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
+     * @return The popped element or <code>null</code> if <code>source</code> does not exist.
+     * @example
+     *     <pre>{@code
+     * client.lpush(gs("testKey1"), new GlideString[] {gs("two"), gs("one")}).get();
+     * client.lpush(gs("testKey2"), new GlideString[] {gs("four"), gs("three")}).get();
+     * var result = client.lmove(gs("testKey1"), gs("testKey2"), ListDirection.LEFT, ListDirection.LEFT).get();
+     * assertEquals(result, gs("one"));
+     * GlideString[] upratedArray1 = client.lrange(gs("testKey1"), 0, -1).get();
+     * GlideString[] upratedArray2 = client.lrange(gs("testKey2"), 0, -1).get();
+     * assertArrayEquals(new GlideString[] {gs("two")}, updatedArray1);
+     * assertArrayEquals(new GlideString[] {gs("one"), gs("three"), gs("four)"}, updatedArray2);
+     * }</pre>
+     */
+    CompletableFuture<GlideString> lmove(
+            GlideString source, GlideString destination, ListDirection wherefrom, ListDirection whereto);
 
     /**
      * Blocks the connection until it pops atomically and removes the left/right-most element to the
@@ -688,6 +1007,52 @@ public interface ListBaseCommands {
     CompletableFuture<String> blmove(
             String source,
             String destination,
+            ListDirection wherefrom,
+            ListDirection whereto,
+            double timeout);
+
+    /**
+     * Blocks the connection until it pops atomically and removes the left/right-most element to the
+     * list stored at <code>source</code> depending on <code>wherefrom</code>, and pushes the element
+     * at the first/last element of the list stored at <code>destination</code> depending on <code>
+     * wherefrom</code>.<br>
+     * <code>BLMove</code> is the blocking variant of {@link #lmove(String, String, ListDirection,
+     * ListDirection)}.
+     *
+     * @since Redis 6.2.0 and above.
+     * @apiNote
+     *     <ol>
+     *       <li>When in cluster mode, all <code>source</code> and <code>destination</code> must map
+     *           to the same hash slot.
+     *       <li><code>BLMove</code> is a client blocking command, see <a
+     *           href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands">Blocking
+     *           Commands</a> for more details and best practices.
+     *     </ol>
+     *
+     * @see <a href="https://valkey.io/commands/blmove/">valkey.io</a> for details.
+     * @param source The key to the source list.
+     * @param destination The key to the destination list.
+     * @param wherefrom The {@link ListDirection} the element should be removed from.
+     * @param whereto The {@link ListDirection} the element should be added to.
+     * @param timeout The number of seconds to wait for a blocking operation to complete. A value of
+     *     <code>0</code> will block indefinitely.
+     * @return The popped element or <code>null</code> if <code>source</code> does not exist or if the
+     *     operation timed-out.
+     * @example
+     *     <pre>{@code
+     * client.lpush(gs("testKey1"), new GlideString[] {gs("two"), gs("one")}).get();
+     * client.lpush(gs("testKey2"), new GlideString[] {gs("four"), gs("three")}).get();
+     * var result = client.blmove(gs("testKey1"), gs("testKey2"), ListDirection.LEFT, ListDirection.LEFT, 0.1).get();
+     * assertEquals(result, gs("one"));
+     * GlideString[] upratedArray1 = client.lrange(gs("testKey1"), 0, -1).get();
+     * GlideString[] upratedArray2 = client.lrange(gs("testKey2"), 0, -1).get();
+     * assertArrayEquals(new GlideString[] {gs("two")}, updatedArray1);
+     * assertArrayEquals(new GlideString[] {gs("one"), gs("three"), gs("four")}, updatedArray2);
+     * }</pre>
+     */
+    CompletableFuture<GlideString> blmove(
+            GlideString source,
+            GlideString destination,
             ListDirection wherefrom,
             ListDirection whereto,
             double timeout);
