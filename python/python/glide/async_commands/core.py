@@ -2996,7 +2996,7 @@ class CoreCommands(Protocol):
             group_name (TEncodable): The consumer group name.
             stream_id (TEncodable): The stream entry ID that should be set as the last delivered ID for the consumer group.
             entries_read: (Optional[int]): A value representing the number of stream entries already read by the
-            group. This option can only be specified if you are using Redis version 7.0.0 or above.
+                group. This option can only be specified if you are using Redis version 7.0.0 or above.
 
         Returns:
             TOK: A simple "OK" response.
