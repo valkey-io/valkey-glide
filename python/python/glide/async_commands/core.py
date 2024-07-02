@@ -357,7 +357,7 @@ class CoreCommands(Protocol):
 
     async def _execute_script(
         self,
-        hash: TEncodable,
+        hash: str,
         keys: Optional[List[TEncodable]] = None,
         args: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
