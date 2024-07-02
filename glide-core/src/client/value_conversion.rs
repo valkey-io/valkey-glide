@@ -1068,35 +1068,20 @@ mod tests {
     #[test]
     fn convert_xinfo_groups_xinfo_consumers() {
         // The format of the XINFO GROUPS and XINFO CONSUMERS responses are essentially the same, so we only need to
-        // test one of them here.
+        // test one of them here. Only a partial response is represented here for brevity - the rest of the response
+        // follows the same format.
         let groups_resp2_response = Value::Array(vec![
             Value::Array(vec![
                 Value::BulkString("name".to_string().into_bytes()),
                 Value::BulkString("mygroup".to_string().into_bytes()),
-                Value::BulkString("consumers".to_string().into_bytes()),
-                Value::Int(2),
-                Value::BulkString("pending".to_string().into_bytes()),
-                Value::Int(2),
-                Value::BulkString("last-delivered-id".to_string().into_bytes()),
-                Value::BulkString("1638126030001-0".to_string().into_bytes()),
-                Value::BulkString("entries-read".to_string().into_bytes()),
-                Value::Int(2),
                 Value::BulkString("lag".to_string().into_bytes()),
                 Value::Int(0),
             ]),
             Value::Array(vec![
                 Value::BulkString("name".to_string().into_bytes()),
                 Value::BulkString("some-other-group".to_string().into_bytes()),
-                Value::BulkString("consumers".to_string().into_bytes()),
-                Value::Int(1),
-                Value::BulkString("pending".to_string().into_bytes()),
-                Value::Int(0),
-                Value::BulkString("last-delivered-id".to_string().into_bytes()),
-                Value::BulkString("1638126028070-0".to_string().into_bytes()),
-                Value::BulkString("entries-read".to_string().into_bytes()),
-                Value::Int(1),
                 Value::BulkString("lag".to_string().into_bytes()),
-                Value::Int(1),
+                Value::Nil,
             ]),
         ]);
 
@@ -1105,22 +1090,6 @@ mod tests {
                 (
                     Value::BulkString("name".to_string().into_bytes()),
                     Value::BulkString("mygroup".to_string().into_bytes()),
-                ),
-                (
-                    Value::BulkString("consumers".to_string().into_bytes()),
-                    Value::Int(2),
-                ),
-                (
-                    Value::BulkString("pending".to_string().into_bytes()),
-                    Value::Int(2),
-                ),
-                (
-                    Value::BulkString("last-delivered-id".to_string().into_bytes()),
-                    Value::BulkString("1638126030001-0".to_string().into_bytes()),
-                ),
-                (
-                    Value::BulkString("entries-read".to_string().into_bytes()),
-                    Value::Int(2),
                 ),
                 (
                     Value::BulkString("lag".to_string().into_bytes()),
@@ -1133,24 +1102,8 @@ mod tests {
                     Value::BulkString("some-other-group".to_string().into_bytes()),
                 ),
                 (
-                    Value::BulkString("consumers".to_string().into_bytes()),
-                    Value::Int(1),
-                ),
-                (
-                    Value::BulkString("pending".to_string().into_bytes()),
-                    Value::Int(0),
-                ),
-                (
-                    Value::BulkString("last-delivered-id".to_string().into_bytes()),
-                    Value::BulkString("1638126028070-0".to_string().into_bytes()),
-                ),
-                (
-                    Value::BulkString("entries-read".to_string().into_bytes()),
-                    Value::Int(1),
-                ),
-                (
                     Value::BulkString("lag".to_string().into_bytes()),
-                    Value::Int(1),
+                    Value::Nil,
                 ),
             ]),
         ]);

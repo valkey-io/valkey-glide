@@ -3353,16 +3353,7 @@ class CoreCommands(Protocol):
 
         Returns:
             List[Mapping[bytes, Union[bytes, int, None]]]: A list of mappings, where each mapping represents the
-                attributes of a consumer group for the stream at `key`. Each mapping contains the following info:
-                - name: the consumer group's name.
-                - consumers: the number of consumers in the group.
-                - pending: the length of the group's pending entries list (PEL), which are messages that were delivered
-                but are yet to be acknowledged.
-                - last-delivered-id: the ID of the last entry delivered to the group's consumers.
-                - entries-read: the logical "read counter" of the last entry delivered to the group's consumers. Added
-                in Redis version 7.0.0.
-                - lag: the number of entries in the stream that are still waiting to be delivered to the group's
-                consumers, or `None` when that number can't be determined. Added in Redis version 7.0.0.
+                attributes of a consumer group for the stream at `key`.
 
         Examples:
             >>> await client.xinfo_groups("my_stream")
@@ -3372,8 +3363,8 @@ class CoreCommands(Protocol):
                         b"consumers": 2,
                         b"pending": 2,
                         b"last-delivered-id": b"1638126030001-0",
-                        b"entries-read": 2,
-                        b"lag": 0,
+                        b"entries-read": 2,  # The "entries-read" field was added in Redis version 7.0.0.
+                        b"lag": 0,  # The "lag" field was added in Redis version 7.0.0.
                     },
                     {
                         b"name": b"some-other-group",
@@ -3408,18 +3399,7 @@ class CoreCommands(Protocol):
 
         Returns:
             List[Mapping[bytes, Union[bytes, int]]]: A list of mappings, where each mapping contains the attributes of a
-                consumer for the given consumer group of the stream at `key`. Each mapping contains the following info:
-                - name: the consumer's name.
-                - pending: the number of entries in the pending entries list (PEL): pending messages for the consumer,
-                which are messages that were delivered but are yet to be acknowledged.
-                - idle: if you are using Redis version < 7.2.0, denotes the number of milliseconds that have passed
-                since the consumer's last successful interaction (Examples: XREADGROUP that actually read some entries
-                into the PEL, XCLAIM/XAUTOCLAIM that actually claimed some entries). Otherwise, denotes the number of
-                milliseconds that have passed since the consumer's last attempted interaction (Examples: XREADGROUP,
-                XCLAIM, XAUTOCLAIM).
-                - inactive: the number of milliseconds that have passed since the consumer's last successful interaction
-                (Examples: XREADGROUP that actually read some entries into the PEL, XCLAIM/XAUTOCLAIM that actually
-                claimed some entries). Added in Redis version 7.2.0.
+                consumer for the given consumer group of the stream at `key`.
 
         Examples:
             >>> await client.xinfo_consumers("my_stream", "my_group")
@@ -3428,7 +3408,7 @@ class CoreCommands(Protocol):
                         b"name": b"Alice",
                         b"pending": 1,
                         b"idle": 9104628,
-                        b"inactive": 18104698,
+                        b"inactive": 18104698,  # The "inactive" field was added in Redis version 7.2.0.
                     },
                     {
                         b"name": b"Bob",
