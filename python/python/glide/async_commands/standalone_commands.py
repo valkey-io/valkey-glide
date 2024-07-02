@@ -308,7 +308,11 @@ class StandaloneCommands(CoreCommands):
         if with_code:
             args.append("WITHCODE")
         return cast(
-            List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]],
+            List[
+                Mapping[
+                    bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]
+                ]
+            ],
             await self._execute_command(
                 RequestType.FunctionList,
                 args,
