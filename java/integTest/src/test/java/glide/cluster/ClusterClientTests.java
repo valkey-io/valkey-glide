@@ -530,15 +530,15 @@ public class ClusterClientTests {
             results.clear();
             while (!cursor.isFinished()) {
                 Object[] response =
-                    client
-                        .scan(cursor, ScanOptions.builder().type(ScanOptions.ObjectType.STREAM).build())
-                        .get();
+                        client
+                                .scan(cursor, ScanOptions.builder().type(ScanOptions.ObjectType.STREAM).build())
+                                .get();
                 cursor.releaseCursorHandle();
                 cursor = (ClusterScanCursor) response[0];
                 results.addAll(
-                    Arrays.stream((Object[]) response[1])
-                        .map(Object::toString)
-                        .collect(Collectors.toSet()));
+                        Arrays.stream((Object[]) response[1])
+                                .map(Object::toString)
+                                .collect(Collectors.toSet()));
             }
             cursor.releaseCursorHandle();
             assertEquals(streamData.keySet(), results);
