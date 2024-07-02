@@ -125,7 +125,7 @@ class StreamAddOptions:
         Returns:
             List[str]: List of arguments for Redis command.
         """
-        option_args = []
+        option_args: List[TEncodable] = []
         if not self.make_stream:
             option_args.append("NOMKSTREAM")
         if self.trim:
@@ -142,7 +142,7 @@ class StreamRangeBound(ABC):
     """
 
     @abstractmethod
-    def to_arg(self) -> str:
+    def to_arg(self) -> TEncodable:
         """
         Returns the stream range bound as a string argument to be used in the `XRANGE` or `XREVRANGE` commands.
         """
@@ -231,7 +231,7 @@ class ExclusiveIdBound(StreamRangeBound):
         Args:
             stream_id (TEncodable): The stream ID.
         """
-        self.stream_id = f"{self.EXCLUSIVE_BOUND_REDIS_API}{stream_id}"
+        self.stream_id = f"{self.EXCLUSIVE_BOUND_REDIS_API}{stream_id!r}"
 
     def to_arg(self) -> TEncodable:
         return self.stream_id
@@ -297,7 +297,7 @@ class StreamGroupOptions:
         Returns:
             List[TEncodable]: The options as a list of arguments for the `XGROUP CREATE` command.
         """
-        args = []
+        args: List[TEncodable] = []
         if self.make_stream is True:
             args.append(self.MAKE_STREAM_REDIS_API)
 

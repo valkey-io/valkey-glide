@@ -258,7 +258,7 @@ class StandaloneCommands(CoreCommands):
         Since: Redis 7.0.0.
         """
         return cast(
-            str,
+            bytes,
             await self._execute_command(
                 RequestType.FunctionLoad,
                 ["REPLACE", library_code] if replace else [library_code],
@@ -649,7 +649,7 @@ class StandaloneCommands(CoreCommands):
             for var in parameters:
                 args.extend(str(var))
         return cast(
-            str,
+            bytes,
             await self._execute_command(RequestType.Lolwut, args),
         )
 
