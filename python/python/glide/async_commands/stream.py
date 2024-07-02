@@ -16,7 +16,7 @@ class StreamTrimOptions(ABC):
     def __init__(
         self,
         exact: bool,
-        threshold: Union[str, int],
+        threshold: Union[TEncodable, int],
         method: str,
         limit: Optional[int] = None,
     ):
@@ -26,7 +26,7 @@ class StreamTrimOptions(ABC):
         Args:
             exact (bool): If `true`, the stream will be trimmed exactly.
                 Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (Union[str, int]): Threshold for trimming.
+            threshold (Union[TEncodable, int]): Threshold for trimming.
             method (str): Method for trimming (e.g., MINID, MAXLEN).
             limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
                 Note: If `exact` is set to `True`, `limit` cannot be specified.
@@ -62,14 +62,14 @@ class TrimByMinId(StreamTrimOptions):
     Stream trim option to trim by minimum ID.
     """
 
-    def __init__(self, exact: bool, threshold: str, limit: Optional[int] = None):
+    def __init__(self, exact: bool, threshold: TEncodable, limit: Optional[int] = None):
         """
         Initialize trim option by minimum ID.
 
         Args:
             exact (bool): If `true`, the stream will be trimmed exactly.
                 Otherwise the stream will be trimmed in a near-exact manner, which is more efficient.
-            threshold (str): Threshold for trimming by minimum ID.
+            threshold (TEncodable): Threshold for trimming by minimum ID.
             limit (Optional[int]): Max number of entries to be trimmed. Defaults to None.
                 Note: If `exact` is set to `True`, `limit` cannot be specified.
         """
@@ -102,7 +102,7 @@ class StreamAddOptions:
 
     def __init__(
         self,
-        id: Optional[str] = None,
+        id: Optional[TEncodable] = None,
         make_stream: bool = True,
         trim: Optional[StreamTrimOptions] = None,
     ):
@@ -110,7 +110,7 @@ class StreamAddOptions:
         Initialize stream add options.
 
         Args:
-            id (Optional[str]): ID for the new entry. If set, the new entry will be added with this ID. If not specified, '*' is used.
+            id (Optional[TEncodable]): ID for the new entry. If set, the new entry will be added with this ID. If not specified, '*' is used.
             make_stream (bool, optional): If set to False, a new stream won't be created if no stream matches the given key.
             trim (Optional[StreamTrimOptions]): If set, the add operation will also trim the older entries in the stream. See `StreamTrimOptions`.
         """
@@ -118,7 +118,7 @@ class StreamAddOptions:
         self.make_stream = make_stream
         self.trim = trim
 
-    def to_args(self) -> List[str]:
+    def to_args(self) -> List[TEncodable]:
         """
         Convert options to arguments for Redis command.
 
@@ -190,7 +190,7 @@ class IdBound(StreamRangeBound):
         """
         return IdBound(str(timestamp))
 
-    def __init__(self, stream_id: str):
+    def __init__(self, stream_id: TEncodable):
         """
         Creates a stream ID boundary for a range search.
 
@@ -199,7 +199,7 @@ class IdBound(StreamRangeBound):
         """
         self.stream_id = stream_id
 
-    def to_arg(self) -> str:
+    def to_arg(self) -> TEncodable:
         return self.stream_id
 
 
@@ -224,16 +224,16 @@ class ExclusiveIdBound(StreamRangeBound):
         """
         return ExclusiveIdBound(str(timestamp))
 
-    def __init__(self, stream_id: str):
+    def __init__(self, stream_id: TEncodable):
         """
         Creates a stream ID boundary for a range search.
 
         Args:
-            stream_id (str): The stream ID.
+            stream_id (TEncodable): The stream ID.
         """
         self.stream_id = f"{self.EXCLUSIVE_BOUND_REDIS_API}{stream_id}"
 
-    def to_arg(self) -> str:
+    def to_arg(self) -> TEncodable:
         return self.stream_id
 
 
@@ -258,7 +258,7 @@ class StreamReadOptions:
         Returns the options as a list of string arguments to be used in the `XREAD` command.
 
         Returns:
-            List[str]: The options as a list of arguments for the `XREAD` command.
+            List[TEncodable]: The options as a list of arguments for the `XREAD` command.
         """
         args: List[TEncodable] = []
         if self.block_ms is not None:
@@ -275,7 +275,7 @@ class StreamGroupOptions:
     ENTRIES_READ_REDIS_API = "ENTRIESREAD"
 
     def __init__(
-        self, make_stream: bool = False, entries_read_id: Optional[str] = None
+        self, make_stream: bool = False, entries_read_id: Optional[TEncodable] = None
     ):
         """
         Options for creating stream consumer groups. Can be used as an optional argument to `XGROUP CREATE`.
@@ -283,19 +283,19 @@ class StreamGroupOptions:
         Args:
             make_stream (bool): If set to True and the stream doesn't exist, this creates a new stream with a
                 length of 0.
-            entries_read_id: (Optional[str]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
+            entries_read_id: (Optional[TEncodable]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
                 used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last
                 entry. This option can only be specified if you are using Redis version 7.0.0 or above.
         """
         self.make_stream = make_stream
         self.entries_read_id = entries_read_id
 
-    def to_args(self) -> List[str]:
+    def to_args(self) -> List[TEncodable]:
         """
         Returns the options as a list of string arguments to be used in the `XGROUP CREATE` command.
 
         Returns:
-            List[str]: The options as a list of arguments for the `XGROUP CREATE` command.
+            List[TEncodable]: The options as a list of arguments for the `XGROUP CREATE` command.
         """
         args = []
         if self.make_stream is True:
@@ -332,7 +332,7 @@ class StreamReadGroupOptions(StreamReadOptions):
         Returns the options as a list of string arguments to be used in the `XREADGROUP` command.
 
         Returns:
-            List[str]: The options as a list of arguments for the `XREADGROUP` command.
+            List[TEncodable]: The options as a list of arguments for the `XREADGROUP` command.
         """
         args: List[TEncodable] = super().to_args()
         if self.no_ack:
@@ -347,7 +347,7 @@ class StreamPendingOptions:
     def __init__(
         self,
         min_idle_time_ms: Optional[int] = None,
-        consumer_name: Optional[str] = None,
+        consumer_name: Optional[TEncodable] = None,
     ):
         """
         Options for `XPENDING` that can be used to filter returned items by minimum idle time and consumer name.
@@ -355,7 +355,7 @@ class StreamPendingOptions:
         Args:
             min_idle_time_ms (Optional[int]): Filters pending entries by their minimum idle time in milliseconds. This
                 option can only be specified if you are using Redis version 6.2.0 or above.
-            consumer_name (Optional[str]): Filters pending entries by consumer name.
+            consumer_name (Optional[TEncodable]): Filters pending entries by consumer name.
         """
         self.min_idle_time = min_idle_time_ms
         self.consumer_name = consumer_name

@@ -102,13 +102,13 @@ class BaseTransaction:
             key (TEncodable): The key to retrieve from the database.
 
         Command response:
-            Optional[str]: If the key exists, returns the value of the key as a string. Otherwise, return None.
+            Optional[bytes]: If the key exists, returns the value of the key as a bytes string. Otherwise, return None.
         """
         return self.append_command(RequestType.Get, [key])
 
     def getdel(self: TTransaction, key: TEncodable) -> TTransaction:
         """
-        Gets a string value associated with the given `key` and deletes the key.
+        Gets a value associated with the given string `key` and deletes the key.
 
         See https://valkey.io/commands/getdel for more details.
 
@@ -116,7 +116,7 @@ class BaseTransaction:
             key (TEncodable): The `key` to retrieve from the database.
 
         Command response:
-            Optional[str]: If `key` exists, returns the `value` of `key`. Otherwise, returns `None`.
+            Optional[bytes]: If `key` exists, returns the `value` of `key`. Otherwise, returns `None`.
         """
         return self.append_command(RequestType.GetDel, [key])
 
@@ -139,7 +139,7 @@ class BaseTransaction:
             end (int): The ending offset.
 
         Commands response:
-            str: A substring extracted from the value stored at `key`.
+            bytes: A substring extracted from the value stored at `key`.
         """
         return self.append_command(RequestType.GetRange, [key, str(start), str(end)])
 
@@ -166,15 +166,15 @@ class BaseTransaction:
                 Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
             expiry (Optional[ExpirySet], optional): set expiriation to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Redis API. Defaults to None.
-            return_old_value (bool, optional): Return the old string stored at key, or None if key did not exist.
+            return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
                 Equivalent to `GET` in the Redis API. Defaults to False.
 
         Command response:
-            Optional[str]:
+            Optional[bytes]:
                 If the value is successfully set, return OK.
                 If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return None.
-                If return_old_value is set, return the old value as a string.
+                If return_old_value is set, return the old value as a bytes string.
         """
         args = [key, value]
         if conditional_set:
@@ -288,7 +288,7 @@ class BaseTransaction:
             information to retrieve. When no parameter is provided, the default option is assumed.
 
         Command response:
-            str: Returns a string containing the information for the sections requested.
+            bytes: Returns a bytes string containing the information for the sections requested.
         """
         args: List[TEncodable] = (
             [section.value for section in sections] if sections else []
@@ -317,7 +317,7 @@ class BaseTransaction:
             parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
 
         Command response:
-            Dict[str, str]: A dictionary of values corresponding to the configuration parameters.
+            Dict[bytes, bytes]: A dictionary of values corresponding to the configuration parameters.
         """
         return self.append_command(RequestType.ConfigGet, parameters)
 
@@ -398,7 +398,7 @@ class BaseTransaction:
             keys (List[TEncodable]): A list of keys to retrieve values for.
 
         Command response:
-            List[Optional[str]]: A list of values corresponding to the provided keys. If a key is not found,
+            List[Optional[bytes]]: A list of values corresponding to the provided keys. If a key is not found,
             its corresponding value in the list will be None.
         """
         return self.append_command(RequestType.MGet, keys)
@@ -493,7 +493,7 @@ class BaseTransaction:
             the server will respond with "PONG". If provided, the server will respond with a copy of the message.
 
         Command response:
-           str: "PONG" if `message` is not provided, otherwise return a copy of `message`.
+           bytes: b"PONG" if `message` is not provided, otherwise return a copy of `message`.
         """
         argument = [] if message is None else [message]
         return self.append_command(RequestType.Ping, argument)
@@ -545,10 +545,10 @@ class BaseTransaction:
         Args:
             key (TEncodable): The key of the string to update.
             offset (int): The position in the string where `value` should be written.
-            value (TEncodable): The string written with `offset`.
+            value (TEncodable): The value written with `offset`.
 
         Command response:
-            int: The length of the string stored at `key` after it was modified.
+            int: The length of the value stored at `key` after it was modified.
         """
         return self.append_command(RequestType.SetRange, [key, str(offset), value])
 
@@ -584,7 +584,7 @@ class BaseTransaction:
             field (TEncodable): The field whose value should be retrieved.
 
         Command response:
-            Optional[str]: The value associated `field` in the hash.
+            Optional[bytes]: The value associated `field` in the hash.
             Returns None if `field` is not presented in the hash or `key` does not exist.
         """
         return self.append_command(RequestType.HGet, [key, field])
@@ -694,7 +694,7 @@ class BaseTransaction:
         See https://redis.io/commands/client-getname/ for more details.
 
         Command response:
-            Optional[str]: Returns the name of the client connection as a string if a name is set,
+            Optional[bytes]: Returns the name of the client connection as a bytes string if a name is set,
             or None if no name is assigned.
         """
         return self.append_command(RequestType.ClientGetName, [])
@@ -708,7 +708,7 @@ class BaseTransaction:
             key (TEncodable): The key of the hash.
 
         Command response:
-            Dict[str, str]: A dictionary of fields and their values stored in the hash. Every field name in the list is followed by
+            Dict[bytes, bytes]: A dictionary of fields and their values stored in the hash. Every field name in the list is followed by
             its value.
             If `key` does not exist, it returns an empty dictionary.
         """
@@ -726,7 +726,7 @@ class BaseTransaction:
             fields (List[TEncodable]): The list of fields in the hash stored at `key` to retrieve from the database.
 
         Returns:
-            List[Optional[str]]: A list of values associated with the given fields, in the same order as they are requested.
+            List[Optional[bytes]]: A list of values associated with the given fields, in the same order as they are requested.
             For every field that does not exist in the hash, a null value is returned.
             If `key` does not exist, it is treated as an empty hash, and the function returns a list of null values.
         """
@@ -759,7 +759,7 @@ class BaseTransaction:
             key (TEncodable): The key of the hash.
 
         Command response:
-            List[str]: A list of values in the hash, or an empty list when the key does not exist.
+            List[bytes]: A list of values in the hash, or an empty list when the key does not exist.
         """
         return self.append_command(RequestType.HVals, [key])
 
@@ -773,7 +773,7 @@ class BaseTransaction:
             key (TEncodable): The key of the hash.
 
         Command response:
-            List[str]: A list of field names for the hash, or an empty list when the key does not exist.
+            List[bytes]: A list of field names for the hash, or an empty list when the key does not exist.
         """
         return self.append_command(RequestType.HKeys, [key])
 
@@ -787,7 +787,7 @@ class BaseTransaction:
             key (TEncodable): The key of the hash.
 
         Command response:
-            Optional[str]: A random field name from the hash stored at `key`.
+            Optional[bytes]: A random field name from the hash stored at `key`.
             If the hash does not exist or is empty, None will be returned.
         """
         return self.append_command(RequestType.HRandField, [key])
@@ -807,7 +807,7 @@ class BaseTransaction:
                 If `count` is negative, allows for duplicates elements.
 
         Command response:
-            List[str]: A list of random field names from the hash.
+            List[bytes]: A list of random field names from the hash.
             If the hash does not exist or is empty, the response will be an empty list.
         """
         return self.append_command(RequestType.HRandField, [key, str(count)])
@@ -827,7 +827,7 @@ class BaseTransaction:
                 If `count` is negative, allows for duplicates elements.
 
         Command response:
-            List[List[str]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
+            List[List[bytes]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
             hash and `value` is the associated value of the field name.
             If the hash does not exist or is empty, the response will be an empty list.
         """
@@ -866,12 +866,7 @@ class BaseTransaction:
         Command response:
             int: The length of the list after the push operations.
         """
-        elements = [
-            elem.encode() if isinstance(elem, str) else elem for elem in elements
-        ]
-        args: List[TEncodable] = [key]
-        args.extend(elements)
-        return self.append_command(RequestType.LPush, args)
+        return self.append_command(RequestType.LPush, [key] + elements)
 
     def lpushx(
         self: TTransaction, key: TEncodable, elements: List[TEncodable]
@@ -901,7 +896,7 @@ class BaseTransaction:
             key (TEncodable): The key of the list.
 
         Command response:
-            Optional[str]: The value of the first element.
+            Optional[bytes]: The value of the first element.
             If `key` does not exist, None will be returned.
         """
         return self.append_command(RequestType.LPop, [key])
@@ -916,7 +911,7 @@ class BaseTransaction:
             count (int): The count of elements to pop from the list.
 
         Command response:
-            Optional[List[str]]: A a list of popped elements will be returned depending on the list's length.
+            Optional[List[bytes]]: A a list of popped elements will be returned depending on the list's length.
             If `key` does not exist, None will be returned.
         """
         return self.append_command(RequestType.LPop, [key, str(count)])
@@ -937,7 +932,7 @@ class BaseTransaction:
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 
         Command response:
-            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+            Optional[List[bytes]]: A two-element list containing the key from which the element was popped and the value of the
                 popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
         """
         return self.append_command(RequestType.BLPop, keys + [str(timeout)])
@@ -959,7 +954,7 @@ class BaseTransaction:
             count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
 
         Command response:
-            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
+            Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
 
         Since: Redis version 7.0.0.
         """
@@ -990,7 +985,7 @@ class BaseTransaction:
             count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
 
         Command response:
-            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
+            Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
 
         Since: Redis version 7.0.0.
         """
@@ -1016,7 +1011,7 @@ class BaseTransaction:
             end (int): The end of the range.
 
         Command response:
-            List[str]: A list of elements within the specified range.
+            List[byte]: A list of elements within the specified range.
             If `start` exceeds the `end` of the list, or if `start` is greater than `end`, an empty list will be returned.
             If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
             If `key` does not exist an empty list will be returned.
@@ -1042,7 +1037,7 @@ class BaseTransaction:
             index (int): The index of the element in the list to retrieve.
 
         Command response:
-            Optional[str]: The element at `index` in the list stored at `key`.
+            Optional[bytes]: The element at `index` in the list stored at `key`.
                 If `index` is out of range or if `key` does not exist, None is returned.
         """
         return self.append_command(RequestType.LIndex, [key, str(index)])
@@ -1121,7 +1116,7 @@ class BaseTransaction:
             key (TEncodable): The key of the list.
 
         Commands response:
-            Optional[str]: The value of the last element.
+            Optional[bytes]: The value of the last element.
             If `key` does not exist, None will be returned.
         """
         return self.append_command(RequestType.RPop, [key])
@@ -1136,7 +1131,7 @@ class BaseTransaction:
             count (int): The count of elements to pop from the list.
 
         Commands response:
-            Optional[List[str]: A list of popped elements will be returned depending on the list's length.
+            Optional[List[bytes]: A list of popped elements will be returned depending on the list's length.
             If `key` does not exist, None will be returned.
         """
         return self.append_command(RequestType.RPop, [key, str(count)])
@@ -1157,7 +1152,7 @@ class BaseTransaction:
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 
         Command response:
-            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+            Optional[List[bytes]]: A two-element list containing the key from which the element was popped and the value of the
                 popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
         """
         return self.append_command(RequestType.BRPop, keys + [str(timeout)])
@@ -1211,7 +1206,7 @@ class BaseTransaction:
             where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
 
         Command response:
-            Optional[str]: The popped element, or `None` if `source` does not exist.
+            Optional[bytes]: The popped element, or `None` if `source` does not exist.
 
         Since: Redis version 6.2.0.
         """
@@ -1243,7 +1238,7 @@ class BaseTransaction:
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 
         Command response:
-            Optional[str]: The popped element, or `None` if `source` does not exist or if the operation timed-out.
+            Optional[bytes]: The popped element, or `None` if `source` does not exist or if the operation timed-out.
 
         Since: Redis version 6.2.0.
         """
@@ -1297,7 +1292,7 @@ class BaseTransaction:
             key (TEncodable): The key from which to retrieve the set members.
 
         Commands response:
-            Set[str]: A set of all members of the set.
+            Set[bytes]: A set of all members of the set.
                 If `key` does not exist an empty list will be returned.
         """
         return self.append_command(RequestType.SMembers, [key])
@@ -1326,7 +1321,7 @@ class BaseTransaction:
             key (TEncodable): The key of the set.
 
         Commands response:
-            Optional[str]: The value of the popped member.
+            Optional[bytes]: The value of the popped member.
             If `key` does not exist, None will be returned.
         """
         return self.append_command(RequestType.SPop, [key])
@@ -1343,7 +1338,7 @@ class BaseTransaction:
             count (int): The count of the elements to pop from the set.
 
         Commands response:
-            Set[str]: A set of popped elements will be returned depending on the set's length.
+            Set[bytes]: A set of popped elements will be returned depending on the set's length.
                   If `key` does not exist, an empty set will be returned.
         """
         return self.append_command(RequestType.SPop, [key, str(count)])
@@ -1400,7 +1395,7 @@ class BaseTransaction:
             keys (List[TEncodable]): The keys of the sets.
 
         Commands response:
-            Set[str]: A set of members which are present in at least one of the given sets.
+            Set[bytes]: A set of members which are present in at least one of the given sets.
                 If none of the sets exist, an empty set will be returned.
         """
         return self.append_command(RequestType.SUnion, keys)
@@ -1434,7 +1429,7 @@ class BaseTransaction:
             keys (List[TEncodable]): The keys of the sets.
 
         Command response:
-            Set[str]: A set of members which are present in all given sets.
+            Set[bytes]: A set of members which are present in all given sets.
                 If one or more sets do not exist, an empty set will be returned.
         """
         return self.append_command(RequestType.SInter, keys)
@@ -1491,7 +1486,7 @@ class BaseTransaction:
             keys (List[TEncodable]): The keys of the sets to diff.
 
         Command response:
-            Set[str]: A set of elements representing the difference between the sets.
+            Set[bytes]: A set of elements representing the difference between the sets.
                 If any of the keys in `keys` do not exist, they are treated as empty sets.
         """
         return self.append_command(RequestType.SDiff, keys)
@@ -1837,7 +1832,7 @@ class BaseTransaction:
             message (TEncodable): The message to be echoed back.
 
         Commands response:
-            str: The provided `message`.
+            bytes: The provided `message`.
         """
         return self.append_command(RequestType.Echo, [message])
 
@@ -1862,7 +1857,7 @@ class BaseTransaction:
             key (TEncodable): The key to check its data type.
 
         Commands response:
-            str: If the key exists, the type of the stored value is returned.
+            bytes: If the key exists, the type of the stored value is returned.
             Otherwise, a "none" string is returned.
         """
         return self.append_command(RequestType.Type, [key])
@@ -1881,7 +1876,7 @@ class BaseTransaction:
                 it already exists.
 
         Commands response:
-            str: The library name that was loaded.
+            bytes: The library name that was loaded.
 
         Since: Redis 7.0.0.
         """
@@ -1918,7 +1913,7 @@ class BaseTransaction:
         See https://valkey.io/docs/latest/commands/function-delete/ for more details.
 
         Args:
-            library_code (TEncodable): The libary name to delete
+            library_code (TEncodable): The library name to delete
 
         Commands response:
             TOK: A simple `OK`.
@@ -2010,7 +2005,7 @@ class BaseTransaction:
             options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. See `StreamAddOptions`.
 
         Commands response:
-            str: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
+            bytes: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
         """
         args = [key]
         if options:
@@ -2410,7 +2405,7 @@ class BaseTransaction:
             options (Optional[StreamPendingOptions]): The stream pending options.
 
         Command response:
-            List[List[Union[str, int]]]: A list of lists, where each inner list is a length 4 list containing extended
+            List[List[Union[bytes, int]]]: A list of lists, where each inner list is a length 4 list containing extended
                 message information with the format `[[id, consumer_name, time_elapsed, num_delivered]]`, where:
                 - `id`: The ID of the message.
                 - `consumer_name`: The name of the consumer that fetched the message and has still to acknowledge it. We
@@ -2584,17 +2579,17 @@ class BaseTransaction:
         self: TTransaction, key: TEncodable, members: List[TEncodable]
     ) -> TTransaction:
         """
-        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        Returns the GeoHash bytes strings representing the positions of all the specified members in the sorted set stored at
         `key`.
 
         See https://valkey.io/commands/geohash for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
-            members (List[TEncodable]): The list of members whose GeoHash strings are to be retrieved.
+            members (List[TEncodable]): The list of members whose GeoHash bytes strings are to be retrieved.
 
         Commands response:
-            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            List[Optional[bytes]]: A list of GeoHash bytes strings representing the positions of the specified members stored at `key`.
             If a member does not exist in the sorted set, a None value is returned for that member.
         """
         return self.append_command(RequestType.GeoHash, [key] + members)
@@ -2655,7 +2650,7 @@ class BaseTransaction:
             with_hash (bool): Whether to include geohash of the returned items. Defaults to False.
 
         Command Response:
-            List[Union[str, List[Union[str, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
+            List[Union[bytes, List[Union[bytes, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
             If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, we're each sub array represents a single item in the following order:
                 (bytes): The member (location) name.
                 (float): The distance from the center as a floating point number, in the same unit specified in the radius, if `with_dist` is set to True.
@@ -2921,7 +2916,7 @@ class BaseTransaction:
             If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
 
         Commands response:
-            Mapping[str, float]: A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
+            Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
             If `key` doesn't exist, it will be treated as an empy sorted set and the command returns an empty map.
         """
         return self.append_command(
@@ -2948,7 +2943,7 @@ class BaseTransaction:
                 A value of 0 will block indefinitely.
 
         Command response:
-            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+            Optional[List[Union[bytes, float]]]: An array containing the key where the member was popped out, the member itself,
                 and the member score. If no member could be popped and the `timeout` expired, returns None.
         """
         return self.append_command(RequestType.BZPopMax, keys + [str(timeout)])
@@ -2969,7 +2964,7 @@ class BaseTransaction:
             If `count` is higher than the sorted set's cardinality, returns all members and their scores.
 
         Commands response:
-            Mapping[str, float]: A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
+            Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
             If `key` doesn't exist, it will be treated as an empty sorted set and the command returns an empty map.
         """
         return self.append_command(
@@ -2996,7 +2991,7 @@ class BaseTransaction:
                 A value of 0 will block indefinitely.
 
         Command response:
-            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+            Optional[List[Union[bytes, float]]]: An array containing the key where the member was popped out, the member itself,
                 and the member score. If no member could be popped and the `timeout` expired, returns None.
         """
         return self.append_command(RequestType.BZPopMin, keys + [str(timeout)])
@@ -3023,7 +3018,7 @@ class BaseTransaction:
             reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
 
         Commands response:
-            List[str]: A list of elements within the specified range.
+            List[bytes]: A list of elements within the specified range.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=False)
@@ -3050,7 +3045,7 @@ class BaseTransaction:
             reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
 
         Commands response:
-            Mapping[str , float]: A map of elements and their scores within the specified range.
+            Mapping[bytes , float]: A map of elements and their scores within the specified range.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
@@ -3383,7 +3378,7 @@ class BaseTransaction:
             keys (List[TEncodable]): The keys of the sorted sets.
 
         Command response:
-            List[str]: A list of elements representing the difference between the sorted sets.
+            List[bytes]: A list of elements representing the difference between the sorted sets.
                 If the first key does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
         """
@@ -3401,7 +3396,7 @@ class BaseTransaction:
             keys (List[TEncodable]): The keys of the sorted sets.
 
         Command response:
-            Mapping[str, float]: A mapping of elements and their scores representing the difference between the sorted sets.
+            Mapping[bytes, float]: A mapping of elements and their scores representing the difference between the sorted sets.
                 If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
         """
@@ -3445,7 +3440,7 @@ class BaseTransaction:
             keys (List[TEncodable]): The keys of the sorted sets.
 
         Command response:
-            List[str]: The resulting array of intersecting elements.
+            List[bytes]: The resulting array of intersecting elements.
         """
         args: List[TEncodable] = [str(len(keys))]
         args.extend(keys)
@@ -3469,7 +3464,7 @@ class BaseTransaction:
                 when combining the scores of elements. See `AggregationType`.
 
         Command response:
-            Mapping[str, float]: The resulting sorted set with scores.
+            Mapping[bytes, float]: The resulting sorted set with scores.
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
@@ -3491,7 +3486,7 @@ class BaseTransaction:
 
         Args:
             destination (TEncodable): The key of the destination sorted set.
-            keys (Union[List[TEncodable], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+            keys (Union[List[TEncodable], Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
                 List[TEncodable] - for keys only.
                 List[Tuple[TEncodable, float]]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
@@ -3516,7 +3511,7 @@ class BaseTransaction:
             keys (List[TEncodable]): The keys of the sorted sets.
 
         Command response:
-            List[str]: The resulting array of union elements.
+            List[bytes]: The resulting array of union elements.
         """
         args: List[TEncodable] = [str(len(keys))]
         args.extend(keys)
@@ -3533,14 +3528,14 @@ class BaseTransaction:
         See https://valkey.io/commands/zunion/ for more details.
 
         Args:
-            keys (Union[List[TEncodable], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
+            keys (Union[List[TEncodable], List[Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
                 List[TEncodable] - for keys only.
                 List[Tuple[TEncodable, float]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
         Command response:
-            Mapping[str, float]: The resulting sorted set with scores.
+            Mapping[bytes, float]: The resulting sorted set with scores.
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
@@ -3584,7 +3579,7 @@ class BaseTransaction:
             key (TEncodable): The key of the sorted set.
 
         Command response:
-            Optional[str]: A random member from the sorted set.
+            Optional[bytes]: A random member from the sorted set.
                 If the sorted set does not exist or is empty, the response will be None.
         """
         return self.append_command(RequestType.ZRandMember, [key])
@@ -3604,7 +3599,7 @@ class BaseTransaction:
                 If `count` is negative, allows for duplicates members.
 
         Command response:
-            List[str]: A list of members from the sorted set.
+            List[bytes]: A list of members from the sorted set.
                 If the sorted set does not exist or is empty, the response will be an empty list.
         """
         return self.append_command(RequestType.ZRandMember, [key, str(count)])
@@ -3625,7 +3620,7 @@ class BaseTransaction:
                 If `count` is negative, allows for duplicates members.
 
         Command response:
-            List[List[Union[str, float]]]: A list of `[member, score]` lists, where `member` is a random member from
+            List[List[Union[bytes, float]]]: A list of `[member, score]` lists, where `member` is a random member from
                 the sorted set and `score` is the associated score.
                 If the sorted set does not exist or is empty, the response will be an empty list.
         """
@@ -3653,7 +3648,7 @@ class BaseTransaction:
             count (Optional[int]): The number of elements to pop.
 
         Command response:
-            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+            Optional[List[Union[bytes, Mapping[bytes, float]]]]: A two-element list containing the key name of the set from
                 which elements were popped, and a member-score mapping of the popped elements. If no members could be
                 popped, returns None.
 
@@ -3696,7 +3691,7 @@ class BaseTransaction:
             count (Optional[int]): The number of elements to pop.
 
         Command response:
-            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+            Optional[List[Union[bytes, Mapping[bytes, float]]]]: A two-element list containing the key name of the set from
                 which elements were popped, and a member-score mapping. If no members could be popped and the timeout
                 expired, returns None.
 
@@ -4017,8 +4012,8 @@ class BaseTransaction:
             key (TEncodable): The `key` of the object to get the internal encoding of.
 
         Command response:
-            Optional[str]: If `key` exists, returns the internal encoding of the object stored at
-                `key` as a string. Otherwise, returns None.
+            Optional[bytes]: If `key` exists, returns the internal encoding of the object stored at
+                `key` as a bytes string. Otherwise, returns None.
         """
         return self.append_command(RequestType.ObjectEncoding, [key])
 
@@ -4076,7 +4071,7 @@ class BaseTransaction:
             key (TEncodable): The key from which to retrieve the set member.
 
         Command Response:
-            str: A random element from the set, or None if 'key' does not exist.
+            bytes: A random element from the set, or None if 'key' does not exist.
         """
         return self.append_command(RequestType.SRandMember, [key])
 
@@ -4150,7 +4145,7 @@ class BaseTransaction:
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
 
         Command Response:
-            Optional[str]:
+            Optional[bytes]:
                 If `key` exists, return the value stored at `key`
                 If 'key` does not exist, return 'None'
 
@@ -4178,7 +4173,7 @@ class BaseTransaction:
                 For version `6`, those are number of columns and number of lines.
 
         Command Response:
-            str: A piece of generative computer art along with the current Redis version.
+            bytes: A piece of generative computer art along with the current Redis version.
         """
         args: List[TEncodable] = []
         if version is not None:
@@ -4195,7 +4190,7 @@ class BaseTransaction:
         See https://valkey.io/commands/randomkey for more details.
 
         Command response:
-            Optional[str]: A random existing key name.
+            Optional[bytes]: A random existing key name.
         """
         return self.append_command(RequestType.RandomKey, [])
 
@@ -4203,7 +4198,7 @@ class BaseTransaction:
         self: TTransaction,
         key: TEncodable,
         cursor: TEncodable,
-        match: Optional[str] = None,
+        match: Optional[TEncodable] = None,
         count: Optional[int] = None,
     ) -> TTransaction:
         """
@@ -4215,8 +4210,8 @@ class BaseTransaction:
             key (TEncodable): The key of the set.
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
-            match (Optional[str]): The match filter is applied to the result of the command and will only include
-                strings that match the pattern specified. If the set is large enough for scan commands to return only a
+            match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
+                strings or bytes strings that match the pattern specified. If the set is large enough for scan commands to return only a
                 subset of the set then there could be a case where the result is empty although there are items that
                 match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
                 only fetch and match `10` items from the list.
@@ -4242,7 +4237,7 @@ class BaseTransaction:
         self: TTransaction,
         key: TEncodable,
         cursor: TEncodable,
-        match: Optional[str] = None,
+        match: Optional[TEncodable] = None,
         count: Optional[int] = None,
     ) -> TTransaction:
         """
@@ -4254,8 +4249,8 @@ class BaseTransaction:
             key (TEncodable): The key of the sorted set.
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
-            match (Optional[str]): The match filter is applied to the result of the command and will only include
-                strings that match the pattern specified. If the sorted set is large enough for scan commands to return
+            match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
+                strings or byte string that match the pattern specified. If the sorted set is large enough for scan commands to return
                 only a subset of the sorted set then there could be a case where the result is empty although there are
                 items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
                 that it will only fetch and match `10` items from the list.
@@ -4282,7 +4277,7 @@ class BaseTransaction:
         self: TTransaction,
         key: TEncodable,
         cursor: TEncodable,
-        match: Optional[str] = None,
+        match: Optional[TEncodable] = None,
         count: Optional[int] = None,
     ) -> TTransaction:
         """
@@ -4294,8 +4289,8 @@ class BaseTransaction:
             key (TEncodable): The key of the set.
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
-            match (Optional[str]): The match filter is applied to the result of the command and will only include
-                strings that match the pattern specified. If the hash is large enough for scan commands to return only a
+            match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
+                strings or bytes strings that match the pattern specified. If the hash is large enough for scan commands to return only a
                 subset of the hash then there could be a case where the result is empty although there are items that
                 match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
                 only fetch and match `10` items from the list.
@@ -4335,12 +4330,12 @@ class BaseTransaction:
         See https://valkey.io/commands/lcs for more details.
 
         Args:
-            key1 (TEncodable): The key that stores the first string.
-            key2 (TEncodable): The key that stores the second string.
+            key1 (TEncodable): The key that stores the first value.
+            key2 (TEncodable): The key that stores the second value.
 
         Command Response:
-            A String containing the longest common subsequence between the 2 strings.
-            An empty String is returned if the keys do not exist or have no common subsequences.
+            A Bytes String containing the longest common subsequence between the 2 strings.
+            An empty Bytes String is returned if the keys do not exist or have no common subsequences.
 
         Since: Redis version 7.0.0.
         """
@@ -4365,8 +4360,8 @@ class BaseTransaction:
         See https://valkey.io/commands/lcs for more details.
 
         Args:
-            key1 (TEncodable): The key that stores the first string.
-            key2 (TEncodable): The key that stores the second string.
+            key1 (TEncodable): The key that stores the first value.
+            key2 (TEncodable): The key that stores the second value.
 
         Command Response:
             The length of the longest common subsequence between the 2 strings.
@@ -4396,8 +4391,8 @@ class BaseTransaction:
         See https://valkey.io/commands/lcs for more details.
 
         Args:
-            key1 (TEncodable): The key that stores the first string.
-            key2 (TEncodable): The key that stores the second string.
+            key1 (TEncodable): The key that stores the first value.
+            key2 (TEncodable): The key that stores the second value.
             min_match_len (Optional[int]): The minimum length of matches to include in the result.
             with_match_len (Optional[bool]): If True, include the length of the substring matched for each substring.
 
@@ -4439,7 +4434,7 @@ class BaseTransaction:
             timeout (int): The timeout value specified in milliseconds.
 
         Command Response:
-            str: The number of replicas reached by all the writes performed in the context of the current connection.
+            bytes: The number of replicas reached by all the writes performed in the context of the current connection.
         """
         args: List[TEncodable] = [str(numreplicas), str(timeout)]
         return self.append_command(RequestType.Wait, args)
@@ -4577,7 +4572,7 @@ class Transaction(BaseTransaction):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
         Command response:
-            List[Optional[str]]: Returns a list of sorted elements.
+            List[Optional[bytes]]: Returns a list of sorted elements.
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         return self.append_command(RequestType.Sort, args)
@@ -4667,14 +4662,14 @@ class Transaction(BaseTransaction):
 
         return self.append_command(RequestType.Copy, args)
 
-    def publish(self: TTransaction, message: str, channel: str) -> TTransaction:
+    def publish(self: TTransaction, message: TEncodable, channel: TEncodable) -> TTransaction:
         """
         Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
 
         Args:
-            message (str): Message to publish
-            channel (str): Channel to publish the message on.
+            message (TEncodable): Message to publish
+            channel (TEncodable): Channel to publish the message on.
 
         Returns:
             TOK: a simple `OK` response.
@@ -4714,7 +4709,7 @@ class ClusterTransaction(BaseTransaction):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
         Command response:
-            List[str]: A list of sorted elements.
+            List[bytes]: A list of sorted elements.
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         return self.append_command(RequestType.Sort, args)

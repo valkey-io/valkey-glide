@@ -212,7 +212,6 @@ class BaseClient(CoreCommands):
             return bytes(arg, encoding="utf8")
         return arg
 
-    # TODO: change `List[str]` to `List[TEncodable]` where `TEncodable = TEncodable`
     def _encode_and_sum_size(
         self,
         args_list: Optional[List[TEncodable]],

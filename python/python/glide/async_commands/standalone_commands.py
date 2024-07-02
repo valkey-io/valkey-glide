@@ -27,7 +27,7 @@ class StandaloneCommands(CoreCommands):
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
         Args:
-            command_args (List[TEncodable]): List of strings or bytes of the command's arguments.
+            command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
 
         Returns:
@@ -128,10 +128,10 @@ class StandaloneCommands(CoreCommands):
 
         Args:
            message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
-            the server will respond with "PONG". If provided, the server will respond with a copy of the message.
+            the server will respond with b"PONG". If provided, the server will respond with a copy of the message.
 
         Returns:
-           str: "PONG" if `message` is not provided, otherwise return a copy of `message`.
+           bytes: b"PONG" if `message` is not provided, otherwise return a copy of `message`.
 
         Examples:
             >>> await client.ping()
@@ -151,14 +151,13 @@ class StandaloneCommands(CoreCommands):
             parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
 
         Returns:
-            Dict[str, str]: A dictionary of values corresponding to the configuration parameters.
+            Dict[bytes, bytes]: A dictionary of values corresponding to the configuration parameters.
 
         Examples:
             >>> await client.config_get(["timeout"] , RandomNode())
-            {'timeout': '1000'}
-            >>> await client.config_get(["timeout" , "maxmemory"])
-            {'timeout': '1000', "maxmemory": "1GB"}
-
+                {b'timeout': b'1000'}
+            >>> await client.config_get([b"timeout" , "maxmemory"])
+                {b'timeout': b'1000', b'maxmemory': b'1GB'}
         """
         return cast(
             Dict[bytes, bytes],
@@ -179,28 +178,28 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> config_set({"timeout": "1000", "maxmemory": "1GB"})
-            OK
+                OK
         """
         parameters: List[TEncodable] = []
         for pair in parameters_map.items():
             parameters.extend(pair)
         return cast(TOK, await self._execute_command(RequestType.ConfigSet, parameters))
 
-    async def client_getname(self) -> Optional[str]:
+    async def client_getname(self) -> Optional[bytes]:
         """
         Get the name of the primary's connection.
         See https://redis.io/commands/client-getname/ for more details.
 
         Returns:
-            Optional[str]: Returns the name of the client connection as a string if a name is set,
+            Optional[bytes]: Returns the name of the client connection as a byte string if a name is set,
             or None if no name is assigned.
 
         Examples:
             >>> await client.client_getname()
-            'Connection Name'
+                b'Connection Name'
         """
         return cast(
-            Optional[str], await self._execute_command(RequestType.ClientGetName, [])
+            Optional[bytes], await self._execute_command(RequestType.ClientGetName, [])
         )
 
     async def dbsize(self) -> int:
@@ -235,24 +234,26 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(bytes, await self._execute_command(RequestType.Echo, [message]))
 
-    async def function_load(self, library_code: str, replace: bool = False) -> str:
+    async def function_load(
+        self, library_code: TEncodable, replace: bool = False
+    ) -> bytes:
         """
         Loads a library to Redis.
 
         See https://valkey.io/docs/latest/commands/function-load/ for more details.
 
         Args:
-            library_code (str): The source code that implements the library.
+            library_code (TEncodable): The source code that implements the library.
             replace (bool): Whether the given library should overwrite a library with the same name if
                 it already exists.
 
         Returns:
-            str: The library name that was loaded.
+            bytes: The library name that was loaded.
 
         Examples:
             >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
             >>> await client.function_load(code, True)
-                "mylib"
+                b"mylib"
 
         Since: Redis 7.0.0.
         """
@@ -290,14 +291,14 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
-    async def function_delete(self, library_name: str) -> TOK:
+    async def function_delete(self, library_name: TEncodable) -> TOK:
         """
         Deletes a library and all its functions.
 
         See https://valkey.io/docs/latest/commands/function-delete/ for more details.
 
         Args:
-            library_code (str): The libary name to delete
+            library_code (TEncodable): The library name to delete
 
         Returns:
             TOK: A simple `OK`.
@@ -316,23 +317,23 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
-    async def time(self) -> List[str]:
+    async def time(self) -> List[bytes]:
         """
         Returns the server time.
 
         See https://redis.io/commands/time/ for more details.
 
         Returns:
-            List[str]:  The current server time as a two items `array`:
+            List[bytes]:  The current server time as a two items `array`:
             A Unix timestamp and the amount of microseconds already elapsed in the current second.
             The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
 
         Examples:
             >>> await client.time()
-            ['1710925775', '913580']
+                [b'1710925775', b'913580']
         """
         return cast(
-            List[str],
+            List[bytes],
             await self._execute_command(RequestType.Time, []),
         )
 
@@ -347,7 +348,7 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> await client.lastsave()
-            1710925775  # Unix time of the last DB save
+                1710925775  # Unix time of the last DB save
         """
         return cast(
             int,
@@ -385,7 +386,7 @@ class StandaloneCommands(CoreCommands):
         get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> List[Optional[str]]:
+    ) -> List[Optional[bytes]]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
@@ -419,26 +420,26 @@ class StandaloneCommands(CoreCommands):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point
 
         Returns:
-            List[Optional[str]]: Returns a list of sorted elements.
+            List[Optional[bytes]]: Returns a list of sorted elements.
 
         Examples:
-            >>> await client.lpush("mylist", 3, 1, 2)
+            >>> await client.lpush("mylist", [b"3", b"1", b"2"])
             >>> await client.sort("mylist")
-            ['1', '2', '3']
+                [b'1', b'2', b'3']
             >>> await client.sort("mylist", order=OrderBy.DESC)
-            ['3', '2', '1']
-            >>> await client.lpush("mylist2", 2, 1, 2, 3, 3, 1)
+                [b'3', b'2', b'1']
+            >>> await client.lpush("mylist2", ['2', '1', '2', '3', '3', '1'])
             >>> await client.sort("mylist2", limit=Limit(2, 3))
-            ['2', '2', '3']
-            >>> await client.hset("user:1", "name", "Alice", "age", 30)
-            >>> await client.hset("user:2", "name", "Bob", "age", 25)
-            >>> await client.lpush("user_ids", 2, 1)
+                [b'2', b'2', b'3']
+            >>> await client.hset("user:1": {"name": "Alice", "age": '30'})
+            >>> await client.hset("user:2", {"name": "Bob", "age": '25'})
+            >>> await client.lpush("user_ids", ['2', '1'])
             >>> await client.sort("user_ids", by_pattern="user:*->age", get_patterns=["user:*->name"])
-            ['Bob', 'Alice']
+                [b'Bob', b'Alice']
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         result = await self._execute_command(RequestType.Sort, args)
-        return cast(List[Optional[str]], result)
+        return cast(List[Optional[bytes]], result)
 
     async def sort_store(
         self,
@@ -487,11 +488,11 @@ class StandaloneCommands(CoreCommands):
             int: The number of elements in the sorted key stored at `store`.
 
         Examples:
-            >>> await client.lpush("mylist", 3, 1, 2)
+            >>> await client.lpush("mylist", ['3', '1', '2'])
             >>> await client.sort_store("mylist", "sorted_list")
-            3  # Indicates that the sorted list "sorted_list" contains three elements.
+                3  # Indicates that the sorted list "sorted_list" contains three elements.
             >>> await client.lrange("sorted_list", 0, -1)
-            ['1', '2', '3']
+                [b'1', b'2', b'3']
         """
         args = _build_sort_args(
             key, by_pattern, limit, get_patterns, order, alpha, store=destination
@@ -530,11 +531,11 @@ class StandaloneCommands(CoreCommands):
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
 
         Returns:
-            TOK: OK.
+            TOK: A simple OK response.
 
         Examples:
-             >>> await client.flushall(FlushMode.ASYNC)
-                 OK  # This command never fails.
+            >>> await client.flushall(FlushMode.ASYNC)
+                OK  # This command never fails.
         """
         args: List[TEncodable] = []
         if flush_mode is not None:
@@ -555,13 +556,13 @@ class StandaloneCommands(CoreCommands):
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
 
         Returns:
-            TOK: OK.
+            TOK: A simple OK response.
 
         Examples:
-             >>> await client.flushdb()
-                 OK  # The keys of the currently selected database were deleted.
-             >>> await client.flushdb(FlushMode.ASYNC)
-                 OK  # The keys of the currently selected database were deleted asynchronously.
+            >>> await client.flushdb()
+                OK  # The keys of the currently selected database were deleted.
+            >>> await client.flushdb(FlushMode.ASYNC)
+                OK  # The keys of the currently selected database were deleted asynchronously.
         """
         args: List[TEncodable] = []
         if flush_mode is not None:
@@ -574,8 +575,8 @@ class StandaloneCommands(CoreCommands):
 
     async def copy(
         self,
-        source: str,
-        destination: str,
+        source: TEncodable,
+        destination: TEncodable,
         destinationDB: Optional[int] = None,
         replace: Optional[bool] = None,
     ) -> bool:
@@ -588,8 +589,8 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/copy for more details.
 
         Args:
-            source (str): The key to the source value.
-            destination (str): The key where the value should be copied to.
+            source (TEncodable): The key to the source value.
+            destination (TEncodable): The key where the value should be copied to.
             destinationDB (Optional[int]): The alternative logical database index for the destination key.
             replace (Optional[bool]): If the destination key should be removed before copying the value to it.
 
@@ -598,11 +599,11 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> await client.set("source", "sheep")
-            >>> await client.copy("source", "destination", 1, False)
+            >>> await client.copy(b"source", b"destination", 1, False)
                 True # Source was copied
             >>> await client.select(1)
             >>> await client.get("destination")
-                "sheep"
+                b"sheep"
 
         Since: Redis version 6.2.0.
         """
@@ -620,7 +621,7 @@ class StandaloneCommands(CoreCommands):
         self,
         version: Optional[int] = None,
         parameters: Optional[List[int]] = None,
-    ) -> str:
+    ) -> bytes:
         """
         Displays a piece of generative computer art and the Redis version.
 
@@ -633,13 +634,13 @@ class StandaloneCommands(CoreCommands):
                 For version `6`, those are number of columns and number of lines.
 
         Returns:
-            str: A piece of generative computer art along with the current Redis version.
+            bytes: A piece of generative computer art along with the current Redis version.
 
         Examples:
             >>> await client.lolwut(6, [40, 20]);
-            "Redis ver. 7.2.3" # Indicates the current Redis version
+                b"Redis ver. 7.2.3" # Indicates the current Redis version
             >>> await client.lolwut(5, [30, 5, 5]);
-            "Redis ver. 7.2.3" # Indicates the current Redis version
+                b"Redis ver. 7.2.3" # Indicates the current Redis version
         """
         args: List[TEncodable] = []
         if version is not None:
@@ -652,21 +653,21 @@ class StandaloneCommands(CoreCommands):
             await self._execute_command(RequestType.Lolwut, args),
         )
 
-    async def random_key(self) -> Optional[str]:
+    async def random_key(self) -> Optional[bytes]:
         """
         Returns a random existing key name from the currently selected database.
 
         See https://valkey.io/commands/randomkey for more details.
 
         Returns:
-            Optional[str]: A random existing key name from the currently selected database.
+            Optional[bytes]: A random existing key name from the currently selected database.
 
         Examples:
             >>> await client.random_key()
-            "random_key_name"  # "random_key_name" is a random existing key name from the currently selected database.
+                b"random_key_name"  # "random_key_name" is a random existing key name from the currently selected database.
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.RandomKey, []),
         )
 

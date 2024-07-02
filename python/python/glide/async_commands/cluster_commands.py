@@ -58,8 +58,8 @@ class ClusterCommands(CoreCommands):
             case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:
-            TClusterResponse[str]: If a single node route is requested, returns a string containing the information for
-            the required sections. Otherwise, returns a dict of strings, with each key containing the address of
+            TClusterResponse[bytes]: If a single node route is requested, returns a bytes string containing the information for
+            the required sections. Otherwise, returns a dict of bytes strings, with each key containing the address of
             the queried node and value containing the information regarding the requested sections.
         """
         args: List[TEncodable] = (
@@ -151,7 +151,7 @@ class ClusterCommands(CoreCommands):
         Returns:
             TClusterResponse[int]: The id of the client.
             If a single node route is requested, returns a int representing the client's id.
-            Otherwise, returns a dict of [str , int] where each key contains the address of
+            Otherwise, returns a dict of [byte , int] where each key contains the address of
             the queried node and the value contains the client's id.
         """
         return cast(
@@ -168,7 +168,7 @@ class ClusterCommands(CoreCommands):
 
         Args:
             message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
-            the server will respond with "PONG". If provided, the server will respond with a copy of the message
+            the server will respond with b"PONG". If provided, the server will respond with a copy of the message.
 
             route (Optional[Route]): The command will be sent to all primaries, unless `route` is provided, in which
             case the client will route the command to the nodes defined by `route`
@@ -208,9 +208,9 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> await client.config_get(["timeout"] , RandomNode())
-            {b'timeout': b'1000'}
+                {b'timeout': b'1000'}
             >>> await client.config_get(["timeout" , b"maxmemory"])
-            {b'timeout': b'1000', b"maxmemory": b"1GB"}
+                {b'timeout': b'1000', b"maxmemory": b"1GB"}
         """
         return cast(
             TClusterResponse[Dict[bytes, bytes]],
@@ -237,8 +237,8 @@ class ClusterCommands(CoreCommands):
             OK: Returns OK if all configurations have been successfully set. Otherwise, raises an error.
 
         Examples:
-            >>> await client.config_set([("timeout", "1000")], [("maxmemory", "1GB")])
-            OK
+            >>> await client.config_set({"timeout": "1000", b"maxmemory": b"1GB"})
+                OK
         """
         parameters: List[TEncodable] = []
         for pair in parameters_map.items():
@@ -250,7 +250,7 @@ class ClusterCommands(CoreCommands):
 
     async def client_getname(
         self, route: Optional[Route] = None
-    ) -> TClusterResponse[Optional[str]]:
+    ) -> TClusterResponse[Optional[bytes]]:
         """
         Get the name of the connection to which the request is routed.
         See https://redis.io/commands/client-getname/ for more details.
@@ -260,19 +260,19 @@ class ClusterCommands(CoreCommands):
             in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[Optional[str]]: The name of the client connection as a string if a name is set,
+            TClusterResponse[Optional[bytes]]: The name of the client connection as a bytes string if a name is set,
             or None if no name is assigned.
             When specifying a route other than a single node, response will be:
-            {Address (str) : response (Optional[str]) , ... } with type of Dict[str, Optional[str]].
+            {Address (bytes) : response (Optional[bytes]) , ... } with type of Dict[str, Optional[str]].
 
         Examples:
             >>> await client.client_getname()
-            'Connection Name'
+                b'Connection Name'
             >>> await client.client_getname(AllNodes())
-            {'addr': 'Connection Name', 'addr2': 'Connection Name', 'addr3': 'Connection Name'}
+                {b'addr': b'Connection Name', b'addr2': b'Connection Name', b'addr3': b'Connection Name'}
         """
         return cast(
-            TClusterResponse[Optional[str]],
+            TClusterResponse[Optional[bytes]],
             await self._execute_command(RequestType.ClientGetName, [], route),
         )
 
@@ -325,32 +325,35 @@ class ClusterCommands(CoreCommands):
         )
 
     async def function_load(
-        self, library_code: str, replace: bool = False, route: Optional[Route] = None
-    ) -> str:
+        self,
+        library_code: TEncodable,
+        replace: bool = False,
+        route: Optional[Route] = None,
+    ) -> bytes:
         """
         Loads a library to Redis.
 
         See https://valkey.io/docs/latest/commands/function-load/ for more details.
 
         Args:
-            library_code (str): The source code that implements the library.
+            library_code (TEncodable): The source code that implements the library.
             replace (bool): Whether the given library should overwrite a library with the same name if
                 it already exists.
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            str: The library name that was loaded.
+            bytes: The library name that was loaded.
 
         Examples:
             >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
             >>> await client.function_load(code, True, RandomNode())
-                "mylib"
+                b"mylib"
 
         Since: Redis 7.0.0.
         """
         return cast(
-            str,
+            bytes,
             await self._execute_command(
                 RequestType.FunctionLoad,
                 ["REPLACE", library_code] if replace else [library_code],
@@ -390,7 +393,7 @@ class ClusterCommands(CoreCommands):
         )
 
     async def function_delete(
-        self, library_name: str, route: Optional[Route] = None
+        self, library_name: TEncodable, route: Optional[Route] = None
     ) -> TOK:
         """
         Deletes a library and all its functions.
@@ -398,7 +401,7 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/docs/latest/commands/function-delete/ for more details.
 
         Args:
-            library_code (str): The libary name to delete
+            library_code (TEncodable): The library name to delete
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
                 in which case the client will route the command to the nodes defined by `route`.
 
@@ -440,12 +443,12 @@ class ClusterCommands(CoreCommands):
         Returns:
             TClusterResponse[TResult]:
                 If a single node route is requested, returns a Optional[TResult] representing the function's return value.
-                Otherwise, returns a dict of [str , Optional[TResult]] where each key contains the address of
+                Otherwise, returns a dict of [bytes , Optional[TResult]] where each key contains the address of
                 the queried node and the value contains the function's return value.
 
         Example:
             >>> await client.fcall("Deep_Thought", ["Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], RandomNode())
-                'new_value' # Returns the function's return value.
+                b'new_value' # Returns the function's return value.
 
         Since: Redis version 7.0.0.
         """
@@ -459,8 +462,8 @@ class ClusterCommands(CoreCommands):
 
     async def fcall_ro_route(
         self,
-        function: str,
-        arguments: Optional[List[str]] = None,
+        function: TEncodable,
+        arguments: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
     ) -> TClusterResponse[TResult]:
         """
@@ -469,8 +472,8 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/fcall_ro for more details.
 
         Args:
-            function (str): The function name.
-            arguments (List[str]): An `array` of `function` arguments. `arguments` should not
+            function (TEncodable): The function name.
+            arguments (List[TEncodable]): An `array` of `function` arguments. `arguments` should not
                 represent names of keys.
             route (Optional[Route]): Specifies the routing configuration of the command. The client
                 will route the command to the nodes defined by `route`.
@@ -492,7 +495,9 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.FCallReadOnly, args, route),
         )
 
-    async def time(self, route: Optional[Route] = None) -> TClusterResponse[List[str]]:
+    async def time(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[List[bytes]]:
         """
         Returns the server time.
 
@@ -503,20 +508,20 @@ class ClusterCommands(CoreCommands):
             in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[Optional[str]]:  The current server time as a two items `array`:
+            TClusterResponse[Optional[bytes]]:  The current server time as a two items `array`:
             A Unix timestamp and the amount of microseconds already elapsed in the current second.
             The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
             When specifying a route other than a single node, response will be:
-            {Address (str) : response (List[str]) , ... } with type of Dict[str, List[str]].
+            {Address (bytes) : response (List[bytes]) , ... } with type of Dict[bytes, List[bytes]].
 
         Examples:
             >>> await client.time()
-            ['1710925775', '913580']
+                [b'1710925775', b'913580']
             >>> await client.time(AllNodes())
-            {'addr': ['1710925775', '913580'], 'addr2': ['1710925775', '913580'], 'addr3': ['1710925775', '913580']}
+                {b'addr': [b'1710925775', b'913580'], b'addr2': [b'1710925775', b'913580'], b'addr3': [b'1710925775', b'913580']}
         """
         return cast(
-            TClusterResponse[List[str]],
+            TClusterResponse[List[bytes]],
             await self._execute_command(RequestType.Time, [], route),
         )
 
@@ -533,14 +538,14 @@ class ClusterCommands(CoreCommands):
         Returns:
             TClusterResponse[int]: The Unix time of the last successful DB save.
                 If no route is provided, or a single node route is requested, returns an int representing the Unix time
-                of the last successful DB save. Otherwise, returns a dict of [str , int] where each key contains the
+                of the last successful DB save. Otherwise, returns a dict of [bytes , int] where each key contains the
                 address of the queried node and the value contains the Unix time of the last successful DB save.
 
         Examples:
             >>> await client.lastsave()
-            1710925775  # Unix time of the last DB save
+                1710925775  # Unix time of the last DB save
             >>> await client.lastsave(AllNodes())
-            {'addr1': 1710925775, 'addr2': 1710925775, 'addr3': 1710925775}  # Unix time of the last DB save on each node
+                {b'addr1': 1710925775, b'addr2': 1710925775, b'addr3': 1710925775}  # Unix time of the last DB save on each node
         """
         return cast(
             TClusterResponse[int],
@@ -553,7 +558,7 @@ class ClusterCommands(CoreCommands):
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> List[str]:
+    ) -> List[bytes]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         To store the result into a new key, see `sort_store`.
@@ -571,27 +576,27 @@ class ClusterCommands(CoreCommands):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
         Returns:
-            List[str]: A list of sorted elements.
+            List[bytes]: A list of sorted elements.
 
         Examples:
             >>> await client.lpush(b"mylist", [b'3', b'1', b'2'])
             >>> await client.sort("mylist")
-            [b'1', b'2', b'3']
+                [b'1', b'2', b'3']
 
             >>> await client.sort("mylist", order=OrderBy.DESC)
-            ['3', '2', '1']
+                ['3', '2', '1']
 
             >>> await client.lpush(b"mylist", [b'2', b'1', b'2', b'3', b'3', b'1'])
             >>> await client.sort("mylist", limit=Limit(2, 3))
-            [b'2', b'2', b'3']
+                [b'2', b'2', b'3']
 
             >>> await client.lpush(b"mylist", [b"a", b"b", b"c", b"d"])
             >>> await client.sort(b"mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
-            [b'b', b'a']
+                [b'b', b'a']
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         result = await self._execute_command(RequestType.Sort, args)
-        return cast(List[str], result)
+        return cast(List[bytes], result)
 
     async def sort_store(
         self,
@@ -623,9 +628,9 @@ class ClusterCommands(CoreCommands):
         Examples:
             >>> await client.lpush(b"mylist", [b'3', b'1', b'2'])
             >>> await client.sort_store("mylist", b"sorted_list")
-            3  # Indicates that the sorted list "sorted_list" contains three elements.
+                3  # Indicates that the sorted list "sorted_list" contains three elements.
             >>> await client.lrange("sorted_list", 0, -1)
-            ['1', '2', '3']
+                [b'1', b'2', b'3']
         """
         args = _build_sort_args(key, None, limit, None, order, alpha, store=destination)
         result = await self._execute_command(RequestType.Sort, args)
@@ -647,7 +652,7 @@ class ClusterCommands(CoreCommands):
         Args:
             message (TEncodable): Message to publish.
             channel (TEncodable): Channel to publish the message on.
-            sharded (bool): Use sharded pubsub mode.
+            sharded (bool): Use sharded pubsub mode. Available since Redis version 7.0.
 
         Returns:
             int: Number of subscriptions in that node that received the message.
@@ -655,7 +660,7 @@ class ClusterCommands(CoreCommands):
         Examples:
             >>> await client.publish("Hi all!", "global-channel", False)
                 1  # Published 1 instance of "Hi all!" message on global-channel channel using non-sharded mode
-            >>> await client.publish("Hi to sharded channel1!", "channel1, True)
+            >>> await client.publish(b"Hi to sharded channel1!", b"channel1", True)
                 2  # Published 2 instances of "Hi to sharded channel1!" message on channel1 using sharded mode
         """
         result = await self._execute_command(
@@ -665,7 +670,7 @@ class ClusterCommands(CoreCommands):
 
     async def flushall(
         self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
-    ) -> TClusterResponse[TOK]:
+    ) -> TOK:
         """
         Deletes all the keys of all the existing databases. This command never fails.
 
@@ -677,26 +682,26 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[TOK]: OK.
+            TOK: A simple OK response.
 
         Examples:
-             >>> await client.flushall(FlushMode.ASYNC)
-                 OK  # This command never fails.
-             >>> await client.flushall(FlushMode.ASYNC, AllNodes())
-                 OK  # This command never fails.
+            >>> await client.flushall(FlushMode.ASYNC)
+                OK  # This command never fails.
+            >>> await client.flushall(FlushMode.ASYNC, AllNodes())
+                OK  # This command never fails.
         """
         args: List[TEncodable] = []
         if flush_mode is not None:
             args.append(flush_mode.value)
 
         return cast(
-            TClusterResponse[TOK],
+            TOK,
             await self._execute_command(RequestType.FlushAll, args, route),
         )
 
     async def flushdb(
         self, flush_mode: Optional[FlushMode] = None, route: Optional[Route] = None
-    ) -> TClusterResponse[TOK]:
+    ) -> TOK:
         """
         Deletes all the keys of the currently selected database. This command never fails.
 
@@ -708,29 +713,29 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TOK: OK.
+            TOK: A simple OK response.
 
         Examples:
-             >>> await client.flushdb()
-                 OK  # The keys of the currently selected database were deleted.
-             >>> await client.flushdb(FlushMode.ASYNC)
-                 OK  # The keys of the currently selected database were deleted asynchronously.
-             >>> await client.flushdb(FlushMode.ASYNC, AllNodes())
-                 OK  # The keys of the currently selected database were deleted asynchronously on all nodes.
+            >>> await client.flushdb()
+                OK  # The keys of the currently selected database were deleted.
+            >>> await client.flushdb(FlushMode.ASYNC)
+                OK  # The keys of the currently selected database were deleted asynchronously.
+            >>> await client.flushdb(FlushMode.ASYNC, AllNodes())
+                OK  # The keys of the currently selected database were deleted asynchronously on all nodes.
         """
         args: List[TEncodable] = []
         if flush_mode is not None:
             args.append(flush_mode.value)
 
         return cast(
-            TClusterResponse[TOK],
+            TOK,
             await self._execute_command(RequestType.FlushDB, args, route),
         )
 
     async def copy(
         self,
-        source: str,
-        destination: str,
+        source: TEncodable,
+        destination: TEncodable,
         replace: Optional[bool] = None,
     ) -> bool:
         """
@@ -743,8 +748,8 @@ class ClusterCommands(CoreCommands):
             Both `source` and `destination` must map to the same hash slot.
 
         Args:
-            source (str): The key to the source value.
-            destination (str): The key where the value should be copied to.
+            source (TEncodable): The key to the source value.
+            destination (TEncodable): The key where the value should be copied to.
             replace (Optional[bool]): If the destination key should be removed before copying the value to it.
 
         Returns:
@@ -752,10 +757,10 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> await client.set("source", "sheep")
-            >>> await client.copy("source", "destination")
+            >>> await client.copy(b"source", b"destination")
                 True # Source was copied
             >>> await client.get("destination")
-                "sheep"
+                b"sheep"
 
         Since: Redis version 6.2.0.
         """
@@ -772,7 +777,7 @@ class ClusterCommands(CoreCommands):
         version: Optional[int] = None,
         parameters: Optional[List[int]] = None,
         route: Optional[Route] = None,
-    ) -> TClusterResponse[str]:
+    ) -> TClusterResponse[bytes]:
         """
         Displays a piece of generative computer art and the Redis version.
 
@@ -787,11 +792,13 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[str]: A piece of generative computer art along with the current Redis version.
+            TClusterResponse[bytes]: A piece of generative computer art along with the current Redis version.
+            When specifying a route other than a single node, response will be:
+            {Address (bytes) : response (bytes) , ... } with type of Dict[bytes, bytes].
 
         Examples:
-            >>> await client.lolwut(6, [40, 20], ALL_NODES);
-            "Redis ver. 7.2.3" # Indicates the current Redis version
+            >>> await client.lolwut(6, [40, 20], RandomNode());
+                b"Redis ver. 7.2.3" # Indicates the current Redis version
         """
         args: List[TEncodable] = []
         if version is not None:
@@ -800,11 +807,11 @@ class ClusterCommands(CoreCommands):
             for var in parameters:
                 args.extend(str(var))
         return cast(
-            TClusterResponse[str],
+            TClusterResponse[bytes],
             await self._execute_command(RequestType.Lolwut, args, route),
         )
 
-    async def random_key(self, route: Optional[Route] = None) -> Optional[str]:
+    async def random_key(self, route: Optional[Route] = None) -> Optional[bytes]:
         """
         Returns a random existing key name.
 
@@ -815,14 +822,14 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            Optional[str]: A random existing key name.
+            Optional[bytes]: A random existing key name.
 
         Examples:
             >>> await client.random_key()
-            "random_key_name"  # "random_key_name" is a random existing key name.
+                b"random_key_name"  # "random_key_name" is a random existing key name.
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.RandomKey, [], route),
         )
 
@@ -844,6 +851,7 @@ class ClusterCommands(CoreCommands):
             timeout (int): The timeout value specified in milliseconds. A value of 0 will block indefinitely.
             route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
             in which case the client will route the command to the nodes defined by `route`.
+
         Returns:
             int: The number of replicas reached by all the writes performed in the context of the current connection.
 

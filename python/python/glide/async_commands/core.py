@@ -1,5 +1,4 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -9,7 +8,6 @@ from typing import (
     List,
     Optional,
     Protocol,
-    Sequence,
     Set,
     Tuple,
     Type,
@@ -382,7 +380,7 @@ class CoreCommands(Protocol):
                 Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
             expiry (Optional[ExpirySet], optional): set expiriation to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Redis API. Defaults to None.
-            return_old_value (bool, optional): Return the old string stored at key, or None if key did not exist.
+            return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
                 Equivalent to `GET` in the Redis API. Defaults to False.
 
@@ -390,10 +388,10 @@ class CoreCommands(Protocol):
             Optional[bytes]:
                 If the value is successfully set, return OK.
                 If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return None.
-                If return_old_value is set, return the old value as a string.
+                If return_old_value is set, return the old value as a bytes string.
 
         Example:
-            >>> await client.set("key", "value")
+            >>> await client.set(b"key", b"value")
                 'OK'
             >>> await client.set("key", "new_value",conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
                 'OK' # Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
@@ -420,7 +418,7 @@ class CoreCommands(Protocol):
             key (TEncodable): The key to retrieve from the database.
 
         Returns:
-            Optional[bytes]: If the key exists, returns the value of the key as a string. Otherwise, return None.
+            Optional[bytes]: If the key exists, returns the value of the key as a byte string. Otherwise, return None.
 
         Example:
             >>> await client.get("key")
@@ -431,7 +429,7 @@ class CoreCommands(Protocol):
 
     async def getdel(self, key: TEncodable) -> Optional[bytes]:
         """
-        Gets a string value associated with the given `key` and deletes the key.
+        Gets a value associated with the given string `key` and deletes the key.
 
         See https://valkey.io/commands/getdel for more details.
 
@@ -454,12 +452,12 @@ class CoreCommands(Protocol):
 
     async def getrange(self, key: TEncodable, start: int, end: int) -> bytes:
         """
-        Returns the substring of the string value stored at `key`, determined by the offsets `start` and `end` (both are inclusive).
-        Negative offsets can be used in order to provide an offset starting from the end of the string.
+        Returns the substring of the value stored at `key`, determined by the offsets `start` and `end` (both are inclusive).
+        Negative offsets can be used in order to provide an offset starting from the end of the value.
         So `-1` means the last character, `-2` the penultimate and so forth.
 
-        If `key` does not exist, an empty string is returned. If `start` or `end`
-        are out of range, returns the substring within the valid range of the string.
+        If `key` does not exist, an empty byte string is returned. If `start` or `end`
+        are out of range, returns the substring within the valid range of the value.
 
         See https://valkey.io/commands/getrange/ for more details.
 
@@ -501,7 +499,7 @@ class CoreCommands(Protocol):
             value (TEncodable): The value to append.
 
         Returns:
-            int: The length of the string after appending the value.
+            int: The length of the stored value after appending `value`.
 
         Examples:
             >>> await client.append("key", "Hello")
@@ -509,7 +507,7 @@ class CoreCommands(Protocol):
             >>> await client.append("key", " world")
                 11  # Indicates that " world" has been appended to the value of "key", resulting in a new value of "Hello world" with a length of 11.
             >>> await client.get("key")
-                "Hello world"  # Returns the value stored in "key", which is now "Hello world".
+                b"Hello world"  # Returns the value stored in "key", which is now "Hello world".
         """
         return cast(int, await self._execute_command(RequestType.Append, [key, value]))
 
@@ -678,7 +676,7 @@ class CoreCommands(Protocol):
         Args:
             key (TEncodable): The key of the string to update.
             offset (int): The position in the string where `value` should be written.
-            value (TEncodable): The string written with `offset`.
+            value (TEncodable): The value written with `offset`.
 
         Returns:
             int: The length of the string stored at `key` after it was modified.
@@ -1100,7 +1098,7 @@ class CoreCommands(Protocol):
 
         Examples:
            >>> await client.hvals("my_hash")
-               ["value1", "value2", "value3"]  # Returns all the values stored in the hash "my_hash".
+               [b"value1", b"value2", b"value3"]  # Returns all the values stored in the hash "my_hash".
         """
         return cast(List[bytes], await self._execute_command(RequestType.HVals, [key]))
 
@@ -1118,7 +1116,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.hkeys("my_hash")
-                ["field1", "field2", "field3"]  # Returns all the field names stored in the hash "my_hash".
+                [b"field1", b"field2", b"field3"]  # Returns all the field names stored in the hash "my_hash".
         """
         return cast(List[bytes], await self._execute_command(RequestType.HKeys, [key]))
 
@@ -1161,7 +1159,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.hrandfield_count("my_hash", -3)
-                ["field1", "field1", "field2"]  # Non-distinct, random field names stored in the hash "my_hash".
+                [b"field1", b"field1", b"field2"]  # Non-distinct, random field names stored in the hash "my_hash".
             >>> await client.hrandfield_count("non_existing_hash", 3)
                 []  # Empty list
         """
@@ -1191,7 +1189,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.hrandfield_withvalues("my_hash", -3)
-                [["field1", "value1"], ["field1", "value1"], ["field2", "value2"]]
+                [[b"field1", b"value1"], [b"field1", b"value1"], [b"field2", b"value2"]]
         """
         return cast(
             List[List[bytes]],
@@ -1310,7 +1308,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.lpop_count("my_list", 2)
-                ["value1", "value2"]
+                [b"value1", b"value2"]
             >>> await client.lpop_count("non_exiting_key" , 3)
                 None
         """
@@ -1341,7 +1339,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.blpop(["list1", "list2"], 0.5)
-                ["list1", "element"]  # "element" was popped from the head of the list with key "list1"
+                [b"list1", b"element"]  # "element" was popped from the head of the list with key "list1"
         """
         return cast(
             Optional[List[bytes]],
@@ -1372,7 +1370,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.lpush("testKey", ["one", "two", "three"])
             >>> await client.lmpop(["testKey"], ListDirection.LEFT, 2)
-               {"testKey": ["three", "two"]}
+               {b"testKey": [b"three", b"two"]}
 
         Since: Redis version 7.0.0.
         """
@@ -1415,7 +1413,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.lpush("testKey", ["one", "two", "three"])
             >>> await client.blmpop(["testKey"], ListDirection.LEFT, 0.1, 2)
-               {"testKey": ["three", "two"]}
+               {b"testKey": [b"three", b"two"]}
 
         Since: Redis version 7.0.0.
         """
@@ -1449,9 +1447,9 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.lrange("my_list", 0, 2)
-                ["value1", "value2", "value3"]
+                [b"value1", b"value2", b"value3"]
             >>> await client.lrange("my_list", -2, -1)
-                ["value2", "value3"]
+                [b"value2", b"value3"]
             >>> await client.lrange("non_exiting_key", 0, 2)
                 []
         """
@@ -1609,7 +1607,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.rpop_count("my_list", 2)
-                ["value1", "value2"]
+                [b"value1", b"value2"]
             >>> await client.rpop_count("non_exiting_key" , 7)
                 None
         """
@@ -1640,7 +1638,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.brpop(["list1", "list2"], 0.5)
-                ["list1", "element"]  # "element" was popped from the tail of the list with key "list1"
+                [b"list1", b"element"]  # "element" was popped from the tail of the list with key "list1"
         """
         return cast(
             Optional[List[bytes]],
@@ -1711,11 +1709,11 @@ class CoreCommands(Protocol):
             >>> client.lpush("testKey1", ["two", "one"])
             >>> client.lpush("testKey2", ["four", "three"])
             >>> await client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT)
-            b"one"
+                b"one"
             >>> updated_array1 = await client.lrange("testKey1", 0, -1)
-            [b"two"]
+                [b"two"]
             >>> await client.lrange("testKey2", 0, -1)
-            [b"one", b"three", b"four"]
+                [b"one", b"three", b"four"]
 
         Since: Redis version 6.2.0.
         """
@@ -1761,11 +1759,11 @@ class CoreCommands(Protocol):
             >>> await client.lpush("testKey1", ["two", "one"])
             >>> await client.lpush("testKey2", ["four", "three"])
             >>> await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1)
-            b"one"
+                b"one"
             >>> await client.lrange("testKey1", 0, -1)
-            [b"two"]
+                [b"two"]
             >>> updated_array2 = await client.lrange("testKey2", 0, -1)
-            [b"one", b"three", bb"four"]
+                [b"one", b"three", bb"four"]
 
         Since: Redis version 6.2.0.
         """
@@ -2574,7 +2572,7 @@ class CoreCommands(Protocol):
 
     async def type(self, key: TEncodable) -> bytes:
         """
-        Returns the string representation of the type of the value stored at `key`.
+        Returns the bytes string representation of the type of the value stored at `key`.
 
         See https://redis.io/commands/type/ for more details.
 
@@ -2583,7 +2581,7 @@ class CoreCommands(Protocol):
 
         Returns:
             bytes: If the key exists, the type of the stored value is returned.
-            Otherwise, a "none" string is returned.
+            Otherwise, a b"none" bytes string is returned.
 
         Examples:
             >>> await client.set("key", "value")
@@ -3429,23 +3427,23 @@ class CoreCommands(Protocol):
         self, key: TEncodable, members: List[TEncodable]
     ) -> List[Optional[bytes]]:
         """
-        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        Returns the GeoHash bytes strings representing the positions of all the specified members in the sorted set stored at
         `key`.
 
         See https://valkey.io/commands/geohash for more details.
 
         Args:
             key (TEncodable): The key of the sorted set.
-            members (List[TEncodable]): The list of members whose GeoHash strings are to be retrieved.
+            members (List[TEncodable]): The list of members whose GeoHash bytes strings are to be retrieved.
 
         Returns:
-            List[Optional[bytes]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            List[Optional[bytes]]: A list of GeoHash bytes strings representing the positions of the specified members stored at `key`.
             If a member does not exist in the sorted set, a None value is returned for that member.
 
         Examples:
             >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
             >>> await client.geohash("my_geo_sorted_set", ["Palermo", "Catania", "some city])
-                ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash strings for the specified members.
+                ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash bytes strings for the specified members.
         """
         return cast(
             List[Optional[bytes]],
@@ -3944,9 +3942,9 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zpopmin("my_sorted_set")
-                {'member1': 5.0}  # Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
+                {b'member1': 5.0}  # Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
             >>> await client.zpopmin("my_sorted_set", 2)
-                {'member3': 7.5 , 'member2': 8.0}  # Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
+                {b'member3': 7.5 , b'member2': 8.0}  # Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
         """
         args: List[TEncodable] = [key, str(count)] if count else [key]
         return cast(
@@ -4020,9 +4018,9 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.zrange("my_sorted_set", RangeByIndex(0, -1))
-                ['member1', 'member2', 'member3']  # Returns all members in ascending order.
+                [b'member1', b'member2', b'member3']  # Returns all members in ascending order.
             >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
-                ['member2', 'member3'] # Returns members with scores within the range of negative infinity to 3, in ascending order.
+                [b'member2', b'member3'] # Returns members with scores within the range of negative infinity to 3, in ascending order.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=False)
 
@@ -4505,7 +4503,7 @@ class CoreCommands(Protocol):
             >>> await client.zadd("sorted_set2", {"element2": 2.0})
             >>> await client.zadd("sorted_set3", {"element3": 3.0})
             >>> await client.zdiff("sorted_set1", "sorted_set2", "sorted_set3")
-                ["element1"]  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
+                [b"element1"]  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
         """
         args: List[TEncodable] = [str(len(keys))]
         args.extend(keys)
@@ -4601,7 +4599,7 @@ class CoreCommands(Protocol):
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
             >>> await client.zadd("key2", {"member1": 9.5})
             >>> await client.zinter(["key1", "key2"])
-                ['member1']
+                [b'member1']
         """
         args: List[TEncodable] = [str(len(keys))]
         args.extend(keys)
@@ -4638,9 +4636,9 @@ class CoreCommands(Protocol):
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
             >>> await client.zadd("key2", {"member1": 9.5})
             >>> await client.zinter_withscores(["key1", "key2"])
-                {'member1': 20}  # "member1" with score of 20 is the result
+                {b'member1': 20}  # "member1" with score of 20 is the result
             >>> await client.zinter_withscores(["key1", "key2"], AggregationType.MAX)
-                {'member1': 10.5}  # "member1" with score of 10.5 is the result.
+                {b'member1': 10.5}  # "member1" with score of 10.5 is the result.
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
@@ -4681,11 +4679,11 @@ class CoreCommands(Protocol):
             >>> await client.zinterstore("my_sorted_set", ["key1", "key2"])
                 1 # Indicates that the sorted set "my_sorted_set" contains one element.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 20}  # "member1" is now stored in "my_sorted_set" with score of 20.
+                {b'member1': 20}  # "member1" is now stored in "my_sorted_set" with score of 20.
             >>> await client.zinterstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
                 1 # Indicates that the sorted set "my_sorted_set" contains one element, and its score is the maximum score between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
+                {b'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
@@ -4753,9 +4751,9 @@ class CoreCommands(Protocol):
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
             >>> await client.zadd("key2", {"member1": 9.5})
             >>> await client.zunion_withscores(["key1", "key2"])
-                {'member1': 20, 'member2': 8.2}
+                {b'member1': 20, b'member2': 8.2}
             >>> await client.zunion_withscores(["key1", "key2"], AggregationType.MAX)
-                {'member1': 10.5, 'member2': 8.2}
+                {b'member1': 10.5, b'member2': 8.2}
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
@@ -4796,11 +4794,11 @@ class CoreCommands(Protocol):
             >>> await client.zunionstore("my_sorted_set", ["key1", "key2"])
                 2 # Indicates that the sorted set "my_sorted_set" contains two elements.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 20, 'member2': 8.2}
+                {b'member1': 20, b'member2': 8.2}
             >>> await client.zunionstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
                 2 # Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 10.5, 'member2': 8.2}
+                {b'member1': 10.5, b'member2': 8.2}
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
@@ -4853,7 +4851,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.zrandmember("my_sorted_set", -3)
-                ["member1", "member1", "member2"]  # "member1" and "member2" are random members of "my_sorted_set".
+                [b"member1", b"member1", b"member2"]  # "member1" and "member2" are random members of "my_sorted_set".
             >>> await client.zrandmember("non_existing_sorted_set", 3)
                 []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
         """
@@ -4886,7 +4884,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.zrandmember_withscores("my_sorted_set", -3)
-                [["member1", 1.0], ["member1", 1.0], ["member2", 2.0]]  # "member1" and "member2" are random members of "my_sorted_set", and have scores of 1.0 and 2.0, respectively.
+                [[b"member1", 1.0], [b"member1", 1.0], [b"member2", 2.0]]  # "member1" and "member2" are random members of "my_sorted_set", and have scores of 1.0 and 2.0, respectively.
             >>> await client.zrandmember_withscores("non_existing_sorted_set", 3)
                 []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
         """
@@ -4931,7 +4929,7 @@ class CoreCommands(Protocol):
             >>> await client.zadd("zSet1", {"one": 1.0, "two": 2.0, "three": 3.0})
             >>> await client.zadd("zSet2", {"four": 4.0})
             >>> await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2)
-                ['zSet1', {'three': 3.0, 'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
+                [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
 
         Since: Redis version 7.0.0.
         """
@@ -4984,7 +4982,7 @@ class CoreCommands(Protocol):
             >>> await client.zadd("zSet1", {"one": 1.0, "two": 2.0, "three": 3.0})
             >>> await client.zadd("zSet2", {"four": 4.0})
             >>> await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.5, 2)
-                ['zSet1', {'three': 3.0, 'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
+                [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
 
         Since: Redis version 7.0.0.
         """
@@ -5063,7 +5061,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
             >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
-                ["foo", "bar"]
+                [b"foo", b"bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)
 
@@ -5442,7 +5440,7 @@ class CoreCommands(Protocol):
 
         Returns:
             Optional[bytes]: If `key` exists, returns the internal encoding of the object stored at
-                `key` as a string. Otherwise, returns None.
+                `key` as a bytes string. Otherwise, returns None.
 
         Examples:
             >>> await client.object_encoding("my_hash")
@@ -5562,7 +5560,7 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.sadd("my_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.srandmember("my_set", -3)
-                ["member1", "member1", "member2"]  # "member1" and "member2" are random members of "my_set".
+                [b"member1", b"member1", b"member2"]  # "member1" and "member2" are random members of "my_set".
             >>> await client.srandmember("non_existing_set", 3)
                 []  # "non_existing_set" is not an existing key, so an empty list was returned.
         """
@@ -5628,7 +5626,7 @@ class CoreCommands(Protocol):
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
             match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
-                strings that match the pattern specified. If the set is large enough for scan commands to return only a
+                strings or byte strings that match the pattern specified. If the set is large enough for scan commands to return only a
                 subset of the set then there could be a case where the result is empty although there are items that
                 match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
                 only fetch and match `10` items from the list.
@@ -5688,7 +5686,7 @@ class CoreCommands(Protocol):
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
             match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
-                strings that match the pattern specified. If the sorted set is large enough for scan commands to return
+                strings or byte strings that match the pattern specified. If the sorted set is large enough for scan commands to return
                 only a subset of the sorted set then there could be a case where the result is empty although there are
                 items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
                 that it will only fetch and match `10` items from the list.
@@ -5749,7 +5747,7 @@ class CoreCommands(Protocol):
             cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
             match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
-                strings that match the pattern specified. If the hash is large enough for scan commands to return only a
+                strings or byte strings that match the pattern specified. If the hash is large enough for scan commands to return only a
                 subset of the hash then there could be a case where the result is empty although there are items that
                 match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
                 only fetch and match `10` items from the list.
@@ -6016,8 +6014,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lcs for more details.
 
         Args:
-            key1 (TEncodable): The key that stores the first string.
-            key2 (TEncodable): The key that stores the second string.
+            key1 (TEncodable): The key that stores the first string value.
+            key2 (TEncodable): The key that stores the second string value.
 
         Returns:
             The length of the longest common subsequence between the 2 strings.
@@ -6056,8 +6054,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lcs for more details.
 
         Args:
-            key1 (TEncodable): The key that stores the first string.
-            key2 (TEncodable): The key that stores the second string.
+            key1 (TEncodable): The key that stores the first string value.
+            key2 (TEncodable): The key that stores the second string value.
             min_match_len (Optional[int]): The minimum length of matches to include in the result.
             with_match_len (Optional[bool]): If True, include the length of the substring matched for each substring.
 
