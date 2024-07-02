@@ -3120,7 +3120,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param consumer The consumer name.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
-     *     [[field, entry], [field, entry], ...]<code>.
+     *     [[field, entry], [field, entry], ...]</code>.
      *     Returns <code>null</code> if there is no stream that can be served.
      */
     public T xreadgroup(
@@ -3143,8 +3143,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return Command Response - A <code>{@literal Map<String, Map<String, String[][]>>}</code> with
      *     stream keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>
-     *     [[field, entry], [field, entry], ...]<code>.
-     *     Returns <code>null</code> if the {@link StreamReadGroupOptions#block} option is given and a timeout occurs, or if there is no stream that can be served.
+     *     [[field, entry], [field, entry], ...]</code>.
+     *     Returns <code>null</code> if there is no stream that can be served.
      */
     public T xreadgroup(
             @NonNull Map<String, String> keysAndIds,
@@ -3572,7 +3572,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A two-element <code>array</code> containing the <code>key</code>
      *     from which the element was popped and the <code>value</code> of the popped element,
      *     formatted as <code>
-     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns <code>
      *     null</code>.
      */
     public T brpop(@NonNull String[] keys, double timeout) {
@@ -3628,7 +3628,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - A two-element <code>array</code> containing the <code>key</code>
      *     from which the element was popped and the <code>value</code> of the popped element,
      *     formatted as <code>
-     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns <code>
      *     null</code>.
      */
     public T blpop(@NonNull String[] keys, double timeout) {

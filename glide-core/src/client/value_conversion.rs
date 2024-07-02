@@ -612,6 +612,7 @@ pub(crate) fn convert_to_expected_type(
         },
         // `XINFO STREAM` returns nested maps with different types of data
         /* RESP2 response example
+
         1) "length"
         2) (integer) 2
         ...
@@ -658,6 +659,7 @@ pub(crate) fn convert_to_expected_type(
                              3) (integer) 1
         
         RESP3 response example
+
         1# "length" => (integer) 2
         ...
         8# "entries" =>
@@ -694,13 +696,69 @@ pub(crate) fn convert_to_expected_type(
                           2) (integer) 1719710718373
                           3) (integer) 1
         
+        Another RESP3 example on an empty stream
+
+        1# "length" => (integer) 0
+        2# "radix-tree-keys" => (integer) 0
+        3# "radix-tree-nodes" => (integer) 1
+        4# "last-generated-id" => "0-1"
+        5# "max-deleted-entry-id" => "0-1"
+        6# "entries-added" => (integer) 1
+        7# "recorded-first-entry-id" => "0-0"
+        8# "entries" => (empty array)
+        9# "groups" => (empty array)
+
         Without `FULL` keyword, command returns "first-entry" and "last-entry" instead of "entries" in the same format.
 
+        RESP2:
+
+        1) "length"
+        2) (integer) 2
+        3) "radix-tree-keys"
+        4) (integer) 1
+        5) "radix-tree-nodes"
+        6) (integer) 2
+        7) "last-generated-id"
+        8) "1719710688676-0"
+        9) "max-deleted-entry-id"
+        10) "0-0"
+        11) "entries-added"
+        12) (integer) 2
+        13) "recorded-first-entry-id"
+        14) "1719710679916-0"
+        15) "groups"
+        16) (integer) 1
+        17) "first-entry"
+        18) 1) "1719710679916-0"
+            2) 1) "foo"
+               2) "bar"
+               3) "foo"
+               4) "bar2"
+               5) "some"
+               6) "value"
+        19) "last-entry"
+        20) 1) "1719710688676-0"
+            2) 1) "foo"
+               2) "bar2"
+
+        RESP3 on an empty stream:
+
+        1# "length" => (integer) 0
+        2# "radix-tree-keys" => (integer) 0
+        3# "radix-tree-nodes" => (integer) 1
+        4# "last-generated-id" => "0-1"
+        5# "max-deleted-entry-id" => "0-1"
+        6# "entries-added" => (integer) 1
+        7# "recorded-first-entry-id" => "0-0"
+        8# "groups" => (integer) 0
+        9# "first-entry" => (nil)
+        10# "last-entry" => (nil)
+
         So we convert:
-        - Arrays to maps, accroding to RESP2->RESP3 conversion done by the server:
-          - Top level array - unflat to a map
-          - "groups" value - to a `Map<str, obj>[]`
-          - "consumers" value - to `Map<str, obj>[]`
+        - Arrays to maps, accroding to RESP2 -> RESP3 conversion done by the server:
+          - Top level array - unflat an `obj[]` (`[k, v, k, v, ...]`) to a `Map<str, obj>`
+          - "groups" value - `obj[][]` -> `Map<str, obj>[]` - unflat every nested array the same manner as above
+          - "consumers" value - `obj[][]` -> `Map<str, obj>[]` - same as above
         - Additionally we convert some map's values:
           - "entries", "first-entry" and "last-entry" value - to a `Map<str, str[][]>` (similar to `XREAD`)
               no nested maps due to duplicating keys - see example
@@ -744,13 +802,13 @@ pub(crate) fn convert_to_expected_type(
                                         return Err((ErrorKind::TypeError, "Incorrect value type received +++").into());
                                     };
                                     let mut converted = Vec::with_capacity(nested_sub_array.len() / 2);
-
+                                    // convert it to a map, while converting keys to `SimpleString`s
                                     while !nested_sub_array.is_empty() {
                                         let submap_key = convert_to_expected_type(nested_sub_array.remove(0), Some(ExpectedReturnType::SimpleString))?;
                                         let submap_value = nested_sub_array.remove(0);
                                         converted.push((submap_key, submap_value));
                                     }
-    
+                                    // and then recursevly process it
                                     dbg!(converted.clone());
                                     let converted = convert_to_expected_type(
                                         Value::Map(converted),
@@ -760,25 +818,6 @@ pub(crate) fn convert_to_expected_type(
                                 }).collect::<RedisResult<_>>()?;
 
                                 let converted_value = Value::Array(converted_array);
-
-                                //*
-
-                                // */
-                                /*
-                                let converted_array: RedisResult<Vec<_>> = 
-                                nested_array
-                                    .into_iter()
-                                    .map(|item| convert_to_expected_type(item, Some(ExpectedReturnType::XInfoStreamReturnType)))
-                                    .collect();
-
-                                let converted_value = converted_array.map(Value::Array)?;
-                                */
-                                /*
-                                let converted_value = convert_to_expected_type(
-                                    inner_value,
-                                    Some(ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::XInfoStreamReturnType))))?;
-                                dbg!(converted_value.clone());
-                                // */
                                 Ok((converted_key, converted_value))
                             }
                         } else if converted_key == Value::SimpleString("entries".into()) 
@@ -786,66 +825,26 @@ pub(crate) fn convert_to_expected_type(
                         || converted_key == Value::SimpleString("last-entry".into()) {
                             dbg!("entries");
                             dbg!(inner_value.clone());
-                            /*/
-                            let Value::Array(nested_array) = inner_value.clone() else {
-                                return Err((ErrorKind::TypeError, "Incorrect value type received").into());
-                            };
-                            let map : Vec<(Value, Value)> = Vec::with_capacity(nested_array.len());
 
-                            for entry in nested_array {
-                                let Value::Array(entry_as_array) = entry else {
-                                    return Err((ErrorKind::TypeError, "Incorrect value type received").into());
-                                };
-
-                            }
-                            // */
-                            /*
-                            // resuing existing function, but it creates Map<str, Map<str, pair[]>>
-                            // where top-level map has only 1 entry and we need the inner map only
-                            let Value::Map(mut converted_map) = convert_to_expected_type(
-                                    Value::Map(vec![(converted_key.clone(), inner_value)])
-                                    ,
-                                    Some(ExpectedReturnType::Map {
-                                        key_type: &Some(ExpectedReturnType::SimpleString),
-                                        value_type: &Some(ExpectedReturnType::Map {
-                                            key_type: &Some(ExpectedReturnType::SimpleString),
-                                            value_type: &Some(ExpectedReturnType::ArrayOfPairs),
-                                        }),
-                                    })
-                                )? else {
-                                return Err((ErrorKind::TypeError, "Incorrect value type received").into());
-                            };
-                            let converted_value = converted_map.remove(0).1;
-                            // */
-                            //*
                             let converted_value = convert_to_expected_type(
                                 inner_value,
                                 Some(ExpectedReturnType::Map {
                                     key_type: &Some(ExpectedReturnType::SimpleString),
                                     value_type: &Some(ExpectedReturnType::ArrayOfPairs),
                             }))?;
-                            // */
                             Ok((converted_key, converted_value))
                         } else {
                             Ok((converted_key, inner_value))
                         }
                     })
                     .collect::<RedisResult<_>>();
-            
+
                     let res = result.map(Value::Map);
                     dbg!(res)
                 },
                 Value::Array(ref array) => {
                     dbg!("array");
-                    //if array.len() == 0 { return Ok(value); } // todo maybe remove
-                    /*
-                    convert_to_expected_type(
-                        convert_array_to_map_by_type(
-                            array,
-                            Some(ExpectedReturnType::SimpleString),
-                            Some(ExpectedReturnType::XInfoStreamReturnType))?,
-                        Some(ExpectedReturnType::XInfoStreamReturnType))
-                    */
+
                     if (*array).is_empty() {
                         dbg!("arr is empty");
                         return Ok(value);
@@ -862,39 +861,24 @@ pub(crate) fn convert_to_expected_type(
                         dbg!(converted.clone());
                         return Ok(converted);
                     }
-                    
-                    let map = match array.get(0) {
-                        //Some(Value::Array(_)) => convert_to_expected_type(value.clone(), Some(ExpectedReturnType::ArrayOfMaps(&None))),
-                        Some(Value::Array(inner_array)) if inner_array.len() == 2 => {
-                            dbg!("arr of 2");
 
-                            //panic!();
-                            Ok(value)
-                        },
+                    let map = match array.first() {
                         Some(Value::Array(_)) => {
                             dbg!("do nothing");
                             Ok(value)
                         },
                         _ => {
+                            // convert array to a map
                             let mmap = convert_array_to_map_by_type(
                                 (*array).clone(),
                                 Some(ExpectedReturnType::SimpleString),
                                 Some(ExpectedReturnType::XInfoStreamReturnType));
+                            // and then recursevly traverse it to convert nested things
                             convert_to_expected_type(mmap?, Some(ExpectedReturnType::XInfoStreamReturnType))
                         }
                     }?;
                     dbg!(map.clone());
                     Ok(map)
-                    //convert_to_expected_type(map, Some(ExpectedReturnType::XInfoStreamReturnType))
-                    //dbg!(map.clone());
-                    //Ok(map)
-                    
-                    /*
-                    convert_array_to_map_by_type(
-                        array,
-                        Some(ExpectedReturnType::SimpleString),
-                        Some(ExpectedReturnType::XInfoStreamReturnType))
-                    */
                 },
                 Value::Int(_) | Value::BulkString(_) | Value::SimpleString(_)
                 | Value::VerbatimString { .. } | Value::Nil => Ok(value),
@@ -1219,9 +1203,9 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             }
         }
         b"LOLWUT" => Some(ExpectedReturnType::Lolwut),
-        b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMaps(
-            &Some(ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::StringOrSet))),
-        )),
+        b"FUNCTION LIST" => Some(ExpectedReturnType::ArrayOfMaps(&Some(
+            ExpectedReturnType::ArrayOfMaps(&Some(ExpectedReturnType::StringOrSet)),
+        ))),
         b"FUNCTION STATS" => Some(ExpectedReturnType::FunctionStatsReturnType),
         b"GEOSEARCH" => {
             if cmd.position(b"WITHDIST").is_some()
@@ -1232,7 +1216,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             } else {
                 None
             }
-        },
+        }
         b"XINFO STREAM" => Some(ExpectedReturnType::XInfoStreamReturnType),
         _ => None,
     }

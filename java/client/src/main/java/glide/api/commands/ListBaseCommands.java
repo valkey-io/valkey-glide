@@ -505,7 +505,7 @@ public interface ListBaseCommands {
      *     <code>0</code> will block indefinitely.
      * @return A two-element <code>array</code> containing the <code>key</code> from which the element
      *     was popped and the <code>value</code> of the popped element, formatted as <code>
-     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns <code>
      *     null</code>.
      * @example
      *     <pre>{@code
@@ -535,7 +535,7 @@ public interface ListBaseCommands {
      *     <code>0</code> will block indefinitely.
      * @return A two-element <code>array</code> containing the <code>key</code> from which the element
      *     was popped and the <code>value</code> of the popped element, formatted as <code>
-     *     [key, value]</code>. If no element could be popped and the timeout expired, returns </code>
+     *     [key, value]</code>. If no element could be popped and the timeout expired, returns <code>
      *     null</code>.
      * @example
      *     <pre>{@code

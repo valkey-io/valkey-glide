@@ -455,7 +455,7 @@ public interface StreamBaseCommands {
      * @param group The consumer group name.
      * @param consumer The consumer name.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
-     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
      *      Returns <code>null</code> if there is no stream that can be served.
      * @example
      *     <pre>{@code
@@ -490,8 +490,8 @@ public interface StreamBaseCommands {
      * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
-     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
-     *      Returns <code>null</code> if the {@link StreamReadGroupOptions#block} option is given and a timeout occurs, or if there is no stream that can be served.
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]</code>.
+     *      Returns <code>null</code> if there is no stream that can be served.
      * @example
      *     <pre>{@code
      * // create a new stream at "mystream", with stream id "1-0"
@@ -672,4 +672,124 @@ public interface StreamBaseCommands {
             StreamRange end,
             long count,
             StreamPendingOptions options);
+
+    /**
+     * Returns information about the stream stored at key <code>key</code>.<br>
+     * To get more detailed information use {@link #xinfoStreamFull(String)} or {@link #xinfoStreamFull(String, int)}.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Stream information.
+     * @example <pre>{@code
+     * // example of using the API:
+     * Map<String, Object> response = client.xinfoStream("myStream").get();
+     * // the response contains data in the following format:
+     * Map<String, Object> data = Map.of(
+     *     "length", 4L,
+     *     "radix-tree-keys", 1L,
+     *     "radix-tree-nodes", 2L,
+     *     "last-generated-id", "1719877599564-0",
+     *     "max-deleted-entry-id", "0-0",
+     *     "entries-added", 4L,
+     *     "recorded-first-entry-id", "1719710679916-0",
+     *     "groups", 1L,
+     *     "first-entry", Map.of(
+     *         "1719710679916-0",
+     *         new String[][] {
+     *             { "foo", "bar" },
+     *             { "foo", "bar2" },
+     *             { "some_field", "some_value" }
+     *         }),
+     *     "last-entry", Map.of(
+     *         "1719877599564-0",
+     *         new String[][] {
+     *             { "e4_f", "e4_v" }
+     *         })
+     * );
+     * // "first-entry" and "last-entry" could be both `null` if stream is empty
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> xinfoStream(String key);
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Detailed stream information.
+     * @example <pre>{@code
+     * // example of using the API:
+     * Map<String, Object> response = client.xinfoStreamFull("myStream").get();
+     * // the response contains data in the following format:
+     * Map<String, Object> data = Map.of(
+     *     "length", 4L,
+     *     "radix-tree-keys", 1L,
+     *     "radix-tree-nodes", 2L,
+     *     "last-generated-id", "1719877599564-0",
+     *     "max-deleted-entry-id", "0-0",
+     *     "entries-added", 4L,
+     *     "recorded-first-entry-id", "1719710679916-0",
+     *     "entries", Map.of(
+     *         "1719710679916-0",
+     *         new String[][] {
+     *             { "foo", "bar" },
+     *             { "foo", "bar2" },
+     *             { "some_field", "some_value" }
+     *         },
+     *         "1719710688676-0",
+     *         new String[][] {
+     *             { "foo", "bar2" },
+     *         // Up to 10 entries here
+     *     }),
+     *     "groups", new Map[] {
+     *         Map.of(
+     *             "name", "mygroup",
+     *             "last-delivered-id", "1719710688676-0",
+     *             "entries-read", 2L,
+     *             "lag", 0L,
+     *             "pel-count", 2L,
+     *             "pending", new Object[][] { {
+     *                     "1719710679916-0",
+     *                     "Alice",
+     *                     1719710707260L,
+     *                     1L,
+     *                 }, {
+     *                     "1719710688676-0",
+     *                     "Alice",
+     *                     1719710718373L,
+     *                     1L
+     *                 } },
+     *             "consumers", new Map[] {
+     *                "name", "Alice",
+     *                "seen-time", 1719710718373L,
+     *                "active-time", 1719710718373L,
+     *                "pel-count", 2L,
+     *                "pending", new Object[][] { {
+     *                        "1719710679916-0",
+     *                        1719710707260L,
+     *                        1L,
+     *                    }, {
+     *                        "1719710688676-0",
+     *                        1719710718373L,
+     *                        1L
+     *                    } }
+     *             })
+     * });
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>> xinfoStreamFull(String key);
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code> means that all entries will be returned.
+     * @return Detailed stream information.
+     * @example Please, refer to {@link #xinfoStreamFull(String)}.
+     */
+    CompletableFuture<Map<String, Object>> xinfoStreamFull(String key, int count);
 }
