@@ -554,6 +554,10 @@ public abstract class BaseClient
     protected Object[] handleArrayResponse(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
+    
+    protected Object[] handleArrayResponseBinary(Response response) throws RedisException {
+        return handleRedisResponse(Object[].class, EnumSet.noneOf(ResponseFlags.class), response);
+    }
 
     protected Object[] handleArrayOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(
@@ -1157,7 +1161,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 HRandField,
                 new GlideString[] {key, GlideString.of(count)},
-                response -> castArray(handleArrayBinaryResponse(response), GlideString.class));
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
@@ -1175,7 +1179,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 HRandField,
                 new GlideString[] {key, GlideString.of(count), GlideString.of(WITH_VALUES_REDIS_API)},
-                response -> castArrayofArrays(handleArrayBinaryResponse(response), GlideString.class));
+                response -> castArrayofArrays(handleArrayResponseBinary(response), GlideString.class));
     }
 
     @Override
