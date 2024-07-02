@@ -358,8 +358,8 @@ class ClusterCommands(CoreCommands):
         library_name_pattern: Optional[str] = None,
         with_code: bool = False,
         route: Optional[Route] = None,
-    ) -> List[
-        Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]
+    ) -> TClusterResponse[List[
+        Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]
     ]:
         """
         Returns information about the functions and libraries.
@@ -369,7 +369,7 @@ class ClusterCommands(CoreCommands):
         Args:
             library_name_pattern (Optional[str]):  A wildcard pattern for matching library names.
             with_code (bool): Specifies whether to request the library code from the server or not.
-            route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
@@ -397,7 +397,7 @@ class ClusterCommands(CoreCommands):
         if with_code:
             args.append("WITHCODE")
         return cast(
-            List[Mapping[bytes, Any]],
+            TClusterResponse[List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]]
             await self._execute_command(
                 RequestType.FunctionList,
                 args,
