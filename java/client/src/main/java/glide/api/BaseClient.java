@@ -11,7 +11,6 @@ import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
 import static glide.utils.ArrayTransformUtils.castArrayofArrays;
 import static glide.utils.ArrayTransformUtils.castMapOf2DArray;
-import static glide.utils.ArrayTransformUtils.castMapOf2DArrayBinary;
 import static glide.utils.ArrayTransformUtils.castMapOfArrays;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
@@ -2003,8 +2002,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRange,
                 arguments,
-                response ->
-                        castMapOf2DArrayBinary(handleBinaryStringMapResponse(response), GlideString.class));
+                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
     }
 
     @Override
@@ -2025,8 +2023,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRange,
                 arguments,
-                response ->
-                        castMapOf2DArrayBinary(handleBinaryStringMapResponse(response), GlideString.class));
+                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
     }
 
     @Override
@@ -2049,8 +2046,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRevRange,
                 arguments,
-                response ->
-                        castMapOf2DArrayBinary(handleBinaryStringMapResponse(response), GlideString.class));
+                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
     }
 
     @Override
@@ -2073,8 +2069,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XRevRange,
                 arguments,
-                response ->
-                        castMapOf2DArrayBinary(handleBinaryStringMapResponse(response), GlideString.class));
+                response -> castMapOf2DArray(handleBinaryStringMapResponse(response), GlideString.class));
     }
 
     @Override
