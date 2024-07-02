@@ -1887,7 +1887,7 @@ class BaseTransaction:
 
     def function_list(
         self: TTransaction,
-        library_name_pattern: Optional[str] = None,
+        library_name_pattern: Optional[TEncodable] = None,
         with_code: bool = False,
     ) -> TTransaction:
         """
@@ -1896,7 +1896,7 @@ class BaseTransaction:
         See https://valkey.io/commands/function-list/ for more details.
 
         Args:
-            library_name_pattern (Optional[str]):  A wildcard pattern for matching library names.
+            library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
             with_code (bool): Specifies whether to request the library code from the server or not.
 
         Commands response:

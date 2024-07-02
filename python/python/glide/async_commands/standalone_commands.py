@@ -266,7 +266,7 @@ class StandaloneCommands(CoreCommands):
         )
 
     async def function_list(
-        self, library_name_pattern: Optional[str] = None, with_code: bool = False
+        self, library_name_pattern: Optional[TEncodable] = None, with_code: bool = False
     ) -> List[
         Mapping[
             bytes,
@@ -283,7 +283,7 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/function-list/ for more details.
 
         Args:
-            library_name_pattern (Optional[str]):  A wildcard pattern for matching library names.
+            library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
             with_code (bool): Specifies whether to request the library code from the server or not.
 
         Returns:
