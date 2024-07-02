@@ -4338,7 +4338,7 @@ class TestCommands:
         }
         assert compare_maps(zdiff_map, expected_map) is True
         assert (
-            compare_maps(await redis_client.zdiff_withscores([key1, key3]), {}) is True
+            compare_maps(await redis_client.zdiff_withscores([key1, key3]), {}) is True  # type: ignore
         )
         non_exist_res = await redis_client.zdiff_withscores([non_existing_key, key3])
         assert non_exist_res == {}
@@ -8471,7 +8471,7 @@ class TestClusterRoutes:
         # Result contains a subset of the key
         assert await redis_client.sadd(key1, num_members) == len(num_members)
         result_cursor = "0"
-        result_values = set()  # type: set[str]
+        result_values = set()  # type: set[bytes]
         result = cast(
             list,
             convert_bytes_to_string_object(
@@ -8479,7 +8479,7 @@ class TestClusterRoutes:
             ),
         )
         result_cursor = str(result[result_cursor_index])
-        result_values.update(result[result_collection_index])
+        result_values.update(result[result_collection_index])  # type: ignore
 
         # 0 is returned for the cursor of the last iteration.
         while result_cursor != "0":

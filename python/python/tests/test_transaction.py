@@ -405,7 +405,7 @@ async def transaction_test(
     transaction.zpopmax(key8)
     args.append({b"three": 3.0})
     transaction.zpopmin(key8)
-    args.append({})
+    args.append({})  # type: ignore
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(0)
     transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
@@ -438,15 +438,17 @@ async def transaction_test(
     args.append(3)
     transaction.zinter([key14, key15])
     args.append([b"one", b"two"])
-    transaction.zinter_withscores([key14, key15])
+    transaction.zinter_withscores(cast(list[str | bytes], [key14, key15]))
     args.append({b"one": 2.0, b"two": 4.0})
-    transaction.zinterstore(key8, [key14, key15])
+    transaction.zinterstore(key8, cast(list[str | bytes], [key14, key15]))
     args.append(2)
     transaction.zunion([key14, key15])
     args.append([b"one", b"three", b"two"])
-    transaction.zunion_withscores([key14, key15])
+    transaction.zunion_withscores(cast(list[str | bytes], [key14, key15]))
     args.append({b"one": 2.0, b"two": 4.0, b"three": 3.5})
-    transaction.zunionstore(key8, [key14, key15], AggregationType.MAX)
+    transaction.zunionstore(
+        key8, cast(list[str | bytes], [key14, key15]), AggregationType.MAX
+    )
     args.append(3)
 
     transaction.pfadd(key10, ["a", "b", "c"])
