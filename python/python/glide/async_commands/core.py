@@ -426,7 +426,8 @@ class CoreCommands(Protocol):
             >>> await client.get("key")
                 'value'
         """
-        return cast(Optional[str], await self._execute_command(RequestType.Get, [key]))
+        args: List[TEncodable] = [key]
+        return cast(Optional[str], await self._execute_command(RequestType.Get, args))
 
     async def getdel(self, key: TEncodable) -> Optional[bytes]:
         """
@@ -3578,8 +3579,7 @@ class CoreCommands(Protocol):
 
             Args:
                 destination (TEncodable): The key to store the search results.
-                source (Union[str```python
-        , bytes]): The key of the sorted set representing geospatial data to search from.
+                source (Union[str, bytes]): The key of the sorted set representing geospatial data to search from.
                 search_from (Union[str, bytes, GeospatialData]): The location to search from. Can be specified either as a member
                     from the sorted set or as a geospatial data (see `GeospatialData`).
                 search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
@@ -5530,9 +5530,10 @@ class CoreCommands(Protocol):
             >>> await client.srandmember("non_existing_set")
                 None  # "non_existing_set" is not an existing key, so None was returned.
         """
+        args: List[TEncodable] = [key]
         return cast(
             Optional[str],
-            await self._execute_command(RequestType.SRandMember, [key]),
+            await self._execute_command(RequestType.SRandMember, args),
         )
 
     async def srandmember_count(self, key: TEncodable, count: int) -> List[bytes]:
@@ -5783,6 +5784,43 @@ class CoreCommands(Protocol):
         return cast(
             List[Union[bytes, List[bytes]]],
             await self._execute_command(RequestType.HScan, args),
+        )
+    
+    async def fcall(
+        self,
+        function: TEncodable,
+        keys: Optional[List[TEncodable]] = None,
+        arguments: Optional[List[TEncodable]] = None,
+    ) -> TResult:
+        """
+        Invokes a previously loaded function.
+        See https://redis.io/commands/fcall/ for more details.
+        When in cluster mode, all keys in `keys` must map to the same hash slot.
+        Args:
+            function (TEncodable): The function name.
+            keys (Optional[List[TEncodable]]): A list of keys accessed by the function. To ensure the correct
+                execution of functions, both in standalone and clustered deployments, all names of keys
+                that a function accesses must be explicitly provided as `keys`.
+            arguments (Optional[List[TEncodable]]): A list of `function` arguments. `Arguments`
+                should not represent names of keys.
+        Returns:
+            TResult:
+                The invoked function's return value.
+        Example:
+            >>> await client.fcall("Deep_Thought")
+                b'new_value' # Returns the function's return value.
+        Since: Redis version 7.0.0.
+        """
+        args: List[TEncodable] = []
+        if keys is not None:
+            args.extend([function, str(len(keys))] + keys)
+        else:
+            args.extend([function, str(0)])
+        if arguments is not None:
+            args.extend(arguments)
+        return cast(
+            TResult,
+            await self._execute_command(RequestType.FCall, args),
         )
 
     async def fcall_ro(
@@ -6127,7 +6165,7 @@ class CoreCommands(Protocol):
 
         Since: Redis version 6.0.6.
         """
-        args = [key, element]
+        args: List[TEncodable] = [key, element]
 
         if rank is not None:
             args.extend(["RANK", str(rank)])
