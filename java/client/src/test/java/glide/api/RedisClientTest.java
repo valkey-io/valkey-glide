@@ -293,6 +293,7 @@ import glide.api.models.commands.RangeOptions.ScoreBoundary;
 import glide.api.models.commands.RestoreOptions;
 import glide.api.models.commands.ScoreFilter;
 import glide.api.models.commands.ScriptOptions;
+import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.SetOptions.Expiry;
 import glide.api.models.commands.SortBaseOptions;
@@ -1462,7 +1463,46 @@ public class RedisClientTest {
 
         // match on protobuf request
         when(commandManager.submitScript(
-                        eq(script), eq(List.of("key1", "key2")), eq(List.of("arg1", "arg2")), any()))
+                        eq(script),
+                        eq(List.of(gs("key1"), gs("key2"))),
+                        eq(List.of(gs("arg1"), gs("arg2"))),
+                        any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.invokeScript(script, options);
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(payload, response.get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void invokeScript_with_ScriptOptionsGlideString_returns_success() {
+        // setup
+        Script script = mock(Script.class);
+        String hash = UUID.randomUUID().toString();
+        when(script.getHash()).thenReturn(hash);
+        GlideString payload = gs("hello");
+
+        ScriptOptionsGlideString options =
+                ScriptOptionsGlideString.builder()
+                        .key(gs("key1"))
+                        .key(gs("key2"))
+                        .arg(gs("arg1"))
+                        .arg(gs("arg2"))
+                        .build();
+
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(payload);
+
+        // match on protobuf request
+        when(commandManager.submitScript(
+                        eq(script),
+                        eq(List.of(gs("key1"), gs("key2"))),
+                        eq(List.of(gs("arg1"), gs("arg2"))),
+                        any()))
                 .thenReturn(testResponse);
 
         // exercise
