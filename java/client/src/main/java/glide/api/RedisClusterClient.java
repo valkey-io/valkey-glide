@@ -1,6 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api;
 
+import static glide.api.BaseClient.OK;
 import static glide.api.commands.ServerManagementCommands.VERSION_REDIS_API;
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
@@ -157,7 +158,7 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<GlideString> ping(@NonNull GlideString message) {
         return commandManager.submitNewCommand(
-                Ping, new GlideString[] {message}, this::handleStringResponseBinary);
+                Ping, new GlideString[] {message}, this::handleGlideStringResponse);
     }
 
     @Override
@@ -174,7 +175,7 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<GlideString> ping(@NonNull GlideString message, @NonNull Route route) {
         return commandManager.submitNewCommand(
-                Ping, new GlideString[] {message}, route, this::handleStringResponseBinary);
+                Ping, new GlideString[] {message}, route, this::handleGlideStringResponse);
     }
 
     @Override
