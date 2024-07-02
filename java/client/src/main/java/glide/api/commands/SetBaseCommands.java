@@ -668,13 +668,13 @@ public interface SetBaseCommands {
      *     sets exist, an empty set will be returned.
      * @example
      *     <pre>{@code
-     * assert client.sadd(("my_set1"), new GlideString[]{("member1"), ("member2")}).get() == 2;
-     * assert client.sadd(("my_set2"), new GlideString[]{("member2"), ("member3")}).get() == 2;
-     * Set<GlideString> result = client.sunion(new GlideString[] {("my_set1"), ("my_set2")}).get();
-     * assertEquals(Set.of(("member1"), ("member2"), ("member3")), result);
+     * assert client.sadd(gs("my_set1"), new GlideString[]{gs("member1"), gs("member2")}).get() == 2;
+     * assert client.sadd(gs("my_set2"), new GlideString[]{gs("member2"), gs("member3")}).get() == 2;
+     * Set<GlideString> result = client.sunion(new GlideString[] {gs("my_set1"), gs("my_set2")}).get();
+     * assertEquals(Set.of(gs("member1"), gs("member2"), gs("member3")), result);
      *
-     * result = client.sunion(new GlideString[] {("my_set1"), ("non_existent_set")}).get();
-     * assertEquals(Set.of(("member1"), ("member2")), result);
+     * result = client.sunion(new GlideString[] {gs("my_set1"), gs("non_existent_set")}).get();
+     * assertEquals(Set.of(gs("member1"), gs("member2")), result);
      * }</pre>
      */
     CompletableFuture<Set<GlideString>> sunion(GlideString[] keys);
