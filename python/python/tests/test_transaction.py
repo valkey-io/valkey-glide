@@ -471,16 +471,16 @@ async def transaction_test(
     args.append(3)
     transaction.zinter([key14, key15])
     args.append([b"one", b"two"])
-    transaction.zinter_withscores(cast(list[str | bytes], [key14, key15]))
+    transaction.zinter_withscores(cast(List[Union[str, bytes]], [key14, key15]))
     args.append({b"one": 2.0, b"two": 4.0})
-    transaction.zinterstore(key8, cast(list[str | bytes], [key14, key15]))
+    transaction.zinterstore(key8, cast(List[Union[str, bytes]], [key14, key15]))
     args.append(2)
     transaction.zunion([key14, key15])
     args.append([b"one", b"three", b"two"])
-    transaction.zunion_withscores(cast(list[str | bytes], [key14, key15]))
+    transaction.zunion_withscores(cast(List[Union[str, bytes]], [key14, key15]))
     args.append({b"one": 2.0, b"two": 4.0, b"three": 3.5})
     transaction.zunionstore(
-        key8, cast(list[str | bytes], [key14, key15]), AggregationType.MAX
+        key8, cast(List[Union[str, bytes]], [key14, key15]), AggregationType.MAX
     )
     args.append(3)
 
