@@ -371,7 +371,7 @@ def _create_geosearch_args(
     store_dist: bool = False,
 ) -> List[TEncodable]:
     args: List[TEncodable] = keys
-    if isinstance(search_from, str | bytes):
+    if isinstance(search_from, (str, bytes)):
         args.extend(["FROMMEMBER", search_from])
     else:
         args.extend(

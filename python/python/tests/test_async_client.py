@@ -6,9 +6,8 @@ import asyncio
 import copy
 import math
 import time
-from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Tuple, Union, cast
+from typing import Any, Dict, List, Mapping, Tuple, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
@@ -8327,7 +8326,7 @@ class TestMultiKeyCommandCrossSlot:
     async def test_multi_key_command_returns_cross_slot_error(
         self, redis_client: GlideClusterClient
     ):
-        promises: list[Any] = [
+        promises: List[Any] = [
             redis_client.blpop(["abc", "zxy", "lkn"], 0.1),
             redis_client.brpop(["abc", "zxy", "lkn"], 0.1),
             redis_client.rename("abc", "zxy"),
@@ -8866,7 +8865,7 @@ class TestClusterRoutes:
             ),
         )
         result_cursor = str(result[result_cursor_index])
-        result_iteration_collection: dict[str, str] = convert_list_to_dict(
+        result_iteration_collection: Dict[str, str] = convert_list_to_dict(
             result[result_collection_index]
         )
         full_result_map.update(result_iteration_collection)
@@ -8890,7 +8889,8 @@ class TestClusterRoutes:
             full_result_map.update(next_result_collection)
             result_iteration_collection = next_result_collection
             result_cursor = next_result_cursor
-        assert (num_map_with_str_scores | char_map_with_str_scores) == full_result_map
+        num_map_with_str_scores.update(char_map_with_str_scores)
+        assert num_map_with_str_scores == full_result_map
 
         # Test match pattern
         result = await redis_client.zscan(key1, initial_cursor, match="*")
@@ -8978,7 +8978,7 @@ class TestClusterRoutes:
             ),
         )
         result_cursor = str(result[result_cursor_index])
-        result_iteration_collection: dict[str, str] = convert_list_to_dict(
+        result_iteration_collection: Dict[str, str] = convert_list_to_dict(
             result[result_collection_index]
         )
         full_result_map.update(result_iteration_collection)
@@ -9002,7 +9002,8 @@ class TestClusterRoutes:
             full_result_map.update(next_result_collection)
             result_iteration_collection = next_result_collection
             result_cursor = next_result_cursor
-        assert (num_map | char_map) == full_result_map
+        num_map.update(char_map)
+        assert num_map == full_result_map
 
         # Test match pattern
         result = await redis_client.hscan(key1, initial_cursor, match="*")

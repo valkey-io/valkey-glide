@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import cast
+from typing import List, cast
 
 import pytest
 from glide import ClusterScanCursor
@@ -22,11 +22,11 @@ class TestScan:
         await redis_client.mset({k: "value" for k in expected_keys})
         expected_keys_encoded = map(lambda k: k.encode(), expected_keys)
         cursor = ClusterScanCursor()
-        keys: list[str] = []
+        keys: List[str] = []
         while not cursor.is_finished():
             result = await redis_client.scan(cursor)
             cursor = cast(ClusterScanCursor, result[0])
-            result_keys = cast(list[str], result[1])
+            result_keys = cast(List[str], result[1])
             keys.extend(result_keys)
 
         assert set(expected_keys_encoded) == set(keys)
@@ -49,14 +49,14 @@ class TestScan:
         encoded_unexpected_pattern_keys = map(
             lambda k: k.encode(), unexpected_pattern_keys
         )
-        keys: list[str] = []
+        keys: List[str] = []
         cursor = ClusterScanCursor()
         while not cursor.is_finished():
             result = await redis_client.scan(
                 cursor, match=b"key:*", type=ObjectType.STRING
             )
             cursor = cast(ClusterScanCursor, result[0])
-            result_keys = cast(list[str], result[1])
+            result_keys = cast(List[str], result[1])
             keys.extend(result_keys)
 
         assert set(encoded_expected_keys) == set(keys)
@@ -71,18 +71,18 @@ class TestScan:
         await redis_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         cursor = ClusterScanCursor()
-        keys: list[str] = []
+        keys: List[str] = []
         successful_compared_scans = 0
         while not cursor.is_finished():
             result_of_1 = await redis_client.scan(cursor, count=1)
             cursor = cast(ClusterScanCursor, result_of_1[0])
-            result_keys_of_1 = cast(list[str], result_of_1[1])
+            result_keys_of_1 = cast(List[str], result_of_1[1])
             keys.extend(result_keys_of_1)
             if cursor.is_finished():
                 break
             result_of_100 = await redis_client.scan(cursor, count=100)
             cursor = cast(ClusterScanCursor, result_of_100[0])
-            result_keys_of_100 = cast(list[str], result_of_100[1])
+            result_keys_of_100 = cast(List[str], result_of_100[1])
             keys.extend(result_keys_of_100)
             if len(result_keys_of_100) > len(result_keys_of_1):
                 successful_compared_scans += 1
@@ -101,11 +101,11 @@ class TestScan:
         await redis_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         cursor = ClusterScanCursor()
-        keys: list[str] = []
+        keys: List[str] = []
         while not cursor.is_finished():
             result = await redis_client.scan(cursor, match="key:*")
             cursor = cast(ClusterScanCursor, result[0])
-            result_keys = cast(list[str], result[1])
+            result_keys = cast(List[str], result[1])
             keys.extend(result_keys)
         assert set(encoded_expected_keys) == set(keys)
         assert not set(encoded_unexpected_keys).intersection(set(keys))
@@ -171,12 +171,12 @@ class TestScan:
         encoded_stream_keys = list(map(lambda k: k.encode(), stream_keys))
 
         cursor = ClusterScanCursor()
-        keys: list[bytes] = []
+        keys: List[bytes] = []
         while not cursor.is_finished():
             result = await redis_client.scan(cursor, type=ObjectType.STRING)
             cursor = cast(ClusterScanCursor, result[0])
             result_keys = result[1]
-            keys.extend(cast(list[bytes], result_keys))
+            keys.extend(cast(List[bytes], result_keys))
         assert set(encoded_string_keys) == set(keys)
         assert not set(encoded_set_keys).intersection(set(keys))
         assert not set(encoded_hash_keys).intersection(set(keys))
@@ -190,7 +190,7 @@ class TestScan:
             result = await redis_client.scan(cursor, type=ObjectType.SET)
             cursor = cast(ClusterScanCursor, result[0])
             result_keys = result[1]
-            keys.extend(cast(list[bytes], result_keys))
+            keys.extend(cast(List[bytes], result_keys))
         assert set(encoded_set_keys) == set(keys)
         assert not set(encoded_string_keys).intersection(set(keys))
         assert not set(encoded_hash_keys).intersection(set(keys))
@@ -204,7 +204,7 @@ class TestScan:
             result = await redis_client.scan(cursor, type=ObjectType.HASH)
             cursor = cast(ClusterScanCursor, result[0])
             result_keys = result[1]
-            keys.extend(cast(list[bytes], result_keys))
+            keys.extend(cast(List[bytes], result_keys))
         assert set(encoded_hash_keys) == set(keys)
         assert not set(encoded_string_keys).intersection(set(keys))
         assert not set(encoded_set_keys).intersection(set(keys))
@@ -218,7 +218,7 @@ class TestScan:
             result = await redis_client.scan(cursor, type=ObjectType.LIST)
             cursor = cast(ClusterScanCursor, result[0])
             result_keys = result[1]
-            keys.extend(cast(list[bytes], result_keys))
+            keys.extend(cast(List[bytes], result_keys))
         assert set(encoded_list_keys) == set(keys)
         assert not set(encoded_string_keys).intersection(set(keys))
         assert not set(encoded_set_keys).intersection(set(keys))
@@ -232,7 +232,7 @@ class TestScan:
             result = await redis_client.scan(cursor, type=ObjectType.ZSET)
             cursor = cast(ClusterScanCursor, result[0])
             result_keys = result[1]
-            keys.extend(cast(list[bytes], result_keys))
+            keys.extend(cast(List[bytes], result_keys))
         assert set(encoded_zset_keys) == set(keys)
         assert not set(encoded_string_keys).intersection(set(keys))
         assert not set(encoded_set_keys).intersection(set(keys))
@@ -246,7 +246,7 @@ class TestScan:
             result = await redis_client.scan(cursor, type=ObjectType.STREAM)
             cursor = cast(ClusterScanCursor, result[0])
             result_keys = result[1]
-            keys.extend(cast(list[bytes], result_keys))
+            keys.extend(cast(List[bytes], result_keys))
         assert set(encoded_stream_keys) == set(keys)
         assert not set(encoded_string_keys).intersection(set(keys))
         assert not set(encoded_set_keys).intersection(set(keys))
@@ -262,13 +262,13 @@ class TestScan:
         expected_keys = [f"{key}:{i}" for i in range(100)]
         await redis_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
-        keys: list[str] = []
+        keys: List[str] = []
         cursor = b"0"
         while True:
             result = await redis_client.scan(cursor)
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes
-            new_keys = cast(list[str], result[1])
+            new_keys = cast(List[str], result[1])
             keys.extend(new_keys)
             if cursor == b"0":
                 break
@@ -288,14 +288,14 @@ class TestScan:
         unexpected_pattern_keys = [f"{i}" for i in range(200, 300)]
         for key in unexpected_pattern_keys:
             await redis_client.set(key, "value")
-        keys: list[str] = []
+        keys: List[str] = []
         cursor = b"0"
         while True:
             result = await redis_client.scan(
                 cursor, match=b"key:*", type=ObjectType.STRING
             )
             cursor = cast(bytes, result[0])
-            keys.extend(list(map(lambda k: k.decode(), cast(list[bytes], result[1]))))
+            keys.extend(list(map(lambda k: k.decode(), cast(List[bytes], result[1]))))
             if cursor == b"0":
                 break
         assert set(expected_keys) == set(keys)
@@ -310,18 +310,18 @@ class TestScan:
         await redis_client.mset({k: "value" for k in expected_keys})
         encoded_expected_keys = map(lambda k: k.encode(), expected_keys)
         cursor = "0"
-        keys: list[str] = []
+        keys: List[str] = []
         successful_compared_scans = 0
         while True:
             result_of_1 = await redis_client.scan(cursor, count=1)
             cursor_bytes = cast(bytes, result_of_1[0])
             cursor = cursor_bytes.decode()
-            keys_of_1 = cast(list[str], result_of_1[1])
+            keys_of_1 = cast(List[str], result_of_1[1])
             keys.extend(keys_of_1)
             result_of_100 = await redis_client.scan(cursor, count=100)
             cursor_bytes = cast(bytes, result_of_100[0])
             cursor = cursor_bytes.decode()
-            keys_of_100 = cast(list[str], result_of_100[1])
+            keys_of_100 = cast(List[str], result_of_100[1])
             keys.extend(keys_of_100)
             if len(keys_of_100) > len(keys_of_1):
                 successful_compared_scans += 1
@@ -341,12 +341,12 @@ class TestScan:
         await redis_client.mset({k: "value" for k in [f"{i}" for i in range(100)]})
         encoded_unexpected_keys = map(lambda k: k.encode(), unexpected_keys)
         cursor = "0"
-        keys: list[str] = []
+        keys: List[str] = []
         while True:
             result = await redis_client.scan(cursor, match="key:*")
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes.decode()
-            new_keys = cast(list[str], result[1])
+            new_keys = cast(List[str], result[1])
             keys.extend(new_keys)
             if cursor == "0":
                 break
@@ -388,13 +388,13 @@ class TestScan:
         encoded_stream_keys = list(map(lambda k: k.encode(), stream_keys))
 
         cursor = "0"
-        keys: list[bytes] = []
+        keys: List[bytes] = []
         while True:
             result = await redis_client.scan(cursor, type=ObjectType.STRING)
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes.decode()
             new_keys = result[1]
-            keys.extend(cast(list[bytes], new_keys))
+            keys.extend(cast(List[bytes], new_keys))
             if cursor == "0":
                 break
         assert set(encoded_string_keys) == set(keys)
@@ -410,7 +410,7 @@ class TestScan:
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes.decode()
             new_keys = result[1]
-            keys.extend(cast(list[bytes], new_keys))
+            keys.extend(cast(List[bytes], new_keys))
             if cursor == "0":
                 break
         assert set(encoded_set_keys) == set(keys)
@@ -426,7 +426,7 @@ class TestScan:
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes.decode()
             new_keys = result[1]
-            keys.extend(cast(list[bytes], new_keys))
+            keys.extend(cast(List[bytes], new_keys))
             if cursor == "0":
                 break
         assert set(encoded_hash_keys) == set(keys)
@@ -442,7 +442,7 @@ class TestScan:
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes.decode()
             new_keys = result[1]
-            keys.extend(cast(list[bytes], new_keys))
+            keys.extend(cast(List[bytes], new_keys))
             if cursor == "0":
                 break
         assert set(encoded_list_keys) == set(keys)
@@ -458,7 +458,7 @@ class TestScan:
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes.decode()
             new_keys = result[1]
-            keys.extend(cast(list[bytes], new_keys))
+            keys.extend(cast(List[bytes], new_keys))
             if cursor == "0":
                 break
         assert set(encoded_zset_keys) == set(keys)
@@ -474,7 +474,7 @@ class TestScan:
             cursor_bytes = cast(bytes, result[0])
             cursor = cursor_bytes.decode()
             new_keys = result[1]
-            keys.extend(cast(list[bytes], new_keys))
+            keys.extend(cast(List[bytes], new_keys))
             if cursor == "0":
                 break
         assert set(encoded_stream_keys) == set(keys)

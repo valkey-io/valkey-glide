@@ -1,11 +1,11 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
     Dict,
     List,
+    Mapping,
     Optional,
     Protocol,
     Set,
@@ -6049,7 +6049,7 @@ class CoreCommands(Protocol):
         key2: TEncodable,
         min_match_len: Optional[int] = None,
         with_match_len: Optional[bool] = False,
-    ) -> Mapping[bytes, Union[list[list[Union[list[int], int]]], int]]:
+    ) -> Mapping[bytes, Union[List[List[Union[List[int], int]]], int]]:
         """
         Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
 
@@ -6132,7 +6132,7 @@ class CoreCommands(Protocol):
             args.append("WITHMATCHLEN")
 
         return cast(
-            Mapping[bytes, Union[list[list[Union[list[int], int]]], int]],
+            Mapping[bytes, Union[List[List[Union[List[int], int]]], int]],
             await self._execute_command(RequestType.LCS, args),
         )
 
@@ -6143,7 +6143,7 @@ class CoreCommands(Protocol):
         rank: Optional[int] = None,
         count: Optional[int] = None,
         max_len: Optional[int] = None,
-    ) -> Union[int, list[int], None]:
+    ) -> Union[int, List[int], None]:
         """
         Returns the index or indexes of element(s) matching `element` in the `key` list. If no match is found,
         None is returned.
@@ -6159,7 +6159,7 @@ class CoreCommands(Protocol):
                                      in the list. A `max_len` of 0 means unlimited amount of comparisons.
 
         Returns:
-            Union[int, list[int], None]: The index of the first occurrence of `element`,
+            Union[int, List[int], None]: The index of the first occurrence of `element`,
             or None if `element` is not in the list.
             With the `count` option, a list of indices of matching elements will be returned.
 
@@ -6190,6 +6190,6 @@ class CoreCommands(Protocol):
             args.extend(["MAXLEN", str(max_len)])
 
         return cast(
-            Union[int, list[int], None],
+            Union[int, List[int], None],
             await self._execute_command(RequestType.LPos, args),
         )
