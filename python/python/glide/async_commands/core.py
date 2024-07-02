@@ -5521,14 +5521,14 @@ class CoreCommands(Protocol):
             key (TEncodable): The key from which to retrieve the set member.
 
         Returns:
-            str: A random element from the set, or None if 'key' does not exist.
+            Optional[bytes]: A random element from the set, or None if 'key' does not exist.
 
         Examples:
             >>> await client.sadd("my_set", {"member1": 1.0, "member2": 2.0})
-            >>> await client.srandmember("my_set")
-            "member1"  # "member1" is a random member of "my_set".
+            >>> await client.srandmember(b"my_set")
+                b"member1"  # "member1" is a random member of "my_set".
             >>> await client.srandmember("non_existing_set")
-            None  # "non_existing_set" is not an existing key, so None was returned.
+                None  # "non_existing_set" is not an existing key, so None was returned.
         """
         return cast(
             Optional[str],
@@ -5548,7 +5548,7 @@ class CoreCommands(Protocol):
                 If `count` is negative, allows for duplicates members.
 
         Returns:
-            List[str]: A list of members from the set.
+            List[bytes]: A list of members from the set.
                 If the set does not exist or is empty, the response will be an empty list.
 
         Examples:
@@ -5559,7 +5559,7 @@ class CoreCommands(Protocol):
                 []  # "non_existing_set" is not an existing key, so an empty list was returned.
         """
         return cast(
-            List[str],
+            List[bytes],
             await self._execute_command(RequestType.SRandMember, [key, str(count)]),
         )
 
@@ -5567,7 +5567,7 @@ class CoreCommands(Protocol):
         self,
         key: TEncodable,
         expiry: Optional[ExpiryGetEx] = None,
-    ) -> Optional[str]:
+    ) -> Optional[bytes]:
         """
         Get the value of `key` and optionally set its expiration. `GETEX` is similar to `GET`.
         See https://valkey.io/commands/getex for more details.
@@ -5578,7 +5578,7 @@ class CoreCommands(Protocol):
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
 
         Returns:
-            Optional[str]:
+            Optional[bytes]:
                 If `key` exists, return the value stored at `key`
                 If `key` does not exist, return `None`
 
@@ -5586,11 +5586,11 @@ class CoreCommands(Protocol):
             >>> await client.set("key", "value")
                 'OK'
             >>> await client.getex("key")
-                'value'
+                b'value'
             >>> await client.getex("key", ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
-                'value'
+                b'value'
             >>> time.sleep(1)
-            >>> await client.getex("key")
+            >>> await client.getex(b"key")
                 None
 
         Since: Redis version 6.2.0.
@@ -5599,7 +5599,7 @@ class CoreCommands(Protocol):
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.GetEx, args),
         )
 
