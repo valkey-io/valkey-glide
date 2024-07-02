@@ -540,6 +540,29 @@ public interface StringBaseCommands {
     CompletableFuture<Long> setrange(String key, int offset, String value);
 
     /**
+     * Overwrites part of the GlideString stored at <code>key</code>, starting at the specified <code>
+     * offset</code>, for the entire length of <code>value</code>.<br>
+     * If the <code>offset</code> is larger than the current length of the GlideString at <code>key
+     * </code>, the GlideString is padded with zero bytes to make <code>offset</code> fit. Creates the
+     * <code>key
+     * </code> if it doesn't exist.
+     *
+     * @see <a href="https://redis.io/commands/setrange/">redis.io</a> for details.
+     * @param key The key of the GlideString to update.
+     * @param offset The position in the GlideString where <code>value</code> should be written.
+     * @param value The GlideString written with <code>offset</code>.
+     * @return The length of the GlideString stored at <code>key</code> after it was modified.
+     * @example
+     *     <pre>{@code
+     * Long len = client.setrange(gs("key"), 6, gs("GLIDE")).get();
+     * assert len == 11L; // New key was created with length of 11 symbols
+     * GlideString value = client.get(gs("key")).get();
+     * assert value.equals(gs("\0\0\0\0\0\0GLIDE")); // The string was padded with zero bytes
+     * }</pre>
+     */
+    CompletableFuture<Long> setrange(GlideString key, int offset, GlideString value);
+
+    /**
      * Returns the substring of the string value stored at <code>key</code>, determined by the offsets
      * <code>start</code> and <code>end</code> (both are inclusive). Negative offsets can be used in
      * order to provide an offset starting from the end of the string. So <code>-1</code> means the
@@ -560,6 +583,28 @@ public interface StringBaseCommands {
      * }</pre>
      */
     CompletableFuture<String> getrange(String key, int start, int end);
+
+    /**
+     * Returns the subGlideString of the GlideString value stored at <code>key</code>, determined by
+     * the offsets <code>start</code> and <code>end</code> (both are inclusive). Negative offsets can
+     * be used in order to provide an offset starting from the end of the GlideString. So <code>-1
+     * </code> means the last character, <code>-2</code> the penultimate and so forth.
+     *
+     * @see <a href="https://redis.io/commands/getrange/">redis.io</a> for details.
+     * @param key The key of the GlideString.
+     * @param start The starting offset.
+     * @param end The ending offset.
+     * @return A subGlideString extracted from the value stored at <code>key</code>..
+     * @example
+     *     <pre>{@code
+     * client.set(gs("mykey"), gs("This is a GlideString")).get();
+     * GlideString subGlideString = client.getrange(gs("mykey"), 0, 3).get();
+     * assert subGlideString.equals(gs("This"));
+     * GlideString subGlideString = client.getrange(gs("mykey"), -3, -1).get();
+     * assert subGlideString.equals(gs("ing")); // extracted last 3 characters of a GlideString
+     * }</pre>
+     */
+    CompletableFuture<GlideString> getrange(GlideString key, int start, int end);
 
     /**
      * Appends a <code>value</code> to a <code>key</code>. If <code>key</code> does not exist it is

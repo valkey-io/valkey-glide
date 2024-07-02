@@ -17,8 +17,8 @@ import java.util.stream.Stream;
 public class ArrayTransformUtils {
 
     /**
-     * Converts a map of string keys and values of any type in to an array of strings with alternating
-     * keys and values.
+     * Converts a map of string keys and values of any type that can be converted in to an array of
+     * strings with alternating keys and values.
      *
      * @param args Map of string keys to values of any type to convert.
      * @return Array of strings [key1, value1.toString(), key2, value2.toString(), ...].
@@ -177,9 +177,10 @@ public class ArrayTransformUtils {
      * @param clazz The class of the array values to cast to.
      * @return A Map of arrays of type U[][], containing the key/values from the input Map.
      * @param <T> The target type which the elements are cast.
+     * @param <S> String type, could be either {@link String} or {@link GlideString}.
      */
-    public static <T> Map<String, T[][]> castMapOf2DArray(
-            Map<String, Object[][]> mapOfArrays, Class<T> clazz) {
+    public static <S, T> Map<S, T[][]> castMapOf2DArray(
+            Map<S, Object[][]> mapOfArrays, Class<T> clazz) {
         if (mapOfArrays == null) {
             return null;
         }
