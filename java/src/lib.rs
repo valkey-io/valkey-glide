@@ -427,7 +427,10 @@ pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releas
 ) {
     handle_panics(
         move || {
-            fn release_native_cursor(env: &mut JNIEnv<'_>, cursor: JString) -> Result<(), FFIError> {
+            fn release_native_cursor(
+                env: &mut JNIEnv<'_>,
+                cursor: JString,
+            ) -> Result<(), FFIError> {
                 let cursor_str: String = env.get_string(&cursor)?.into();
                 glide_core::cluster_scan_container::remove_scan_state_cursor(cursor_str);
                 Ok(())

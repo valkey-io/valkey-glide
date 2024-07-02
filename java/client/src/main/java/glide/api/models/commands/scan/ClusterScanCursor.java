@@ -16,9 +16,12 @@ import glide.api.commands.GenericClusterCommands;
  *     resources. These resources can be released by calling {@link #releaseCursorHandle()}. However
  *     doing so will disallow the cursor from being used in {@link GenericClusterCommands#scan} to
  *     get more data.
- *     <p>To do this safely, follow this procedure: 1. Call {@link GenericClusterCommands#scan} with
- *     the cursor. 2. Call {@link #releaseCursorHandle()} with the cursor. 3. Reassign the cursor to
- *     the cursor returned by {@link GenericClusterCommands#scan}.
+ *     <p>To do this safely, follow this procedure:
+ *     <ol>
+ *       <li>Call {@link GenericClusterCommands#scan} with the cursor.
+ *       <li>Call {@link #releaseCursorHandle()} with the cursor.
+ *       <li>Reassign the cursor to the cursor returned by {@link GenericClusterCommands#scan}.
+ *     </ol>
  *     <pre>{@code
  * ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
  * Object[] result;

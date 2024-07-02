@@ -34,8 +34,6 @@ public class ScanOptions extends BaseScanOptions {
         STREAM("Stream");
 
         /**
-         * Returns the name of the enum when communicating with the native layer.
-         *
          * @return the name of the enum when communicating with the native layer.
          */
         public String getNativeName() {
@@ -68,8 +66,6 @@ public class ScanOptions extends BaseScanOptions {
     }
 
     /**
-     * Returns the pattern used for the <code>MATCH</code> filter.
-     *
      * @return the pattern used for the <code>MATCH</code> filter.
      */
     public String getMatchPattern() {
@@ -77,8 +73,6 @@ public class ScanOptions extends BaseScanOptions {
     }
 
     /**
-     * Returns the count used for the <code>COUNT</code> field. .
-     *
      * @return the count used for the <code>COUNT</code> field.
      */
     public Long getCount() {
@@ -86,8 +80,6 @@ public class ScanOptions extends BaseScanOptions {
     }
 
     /**
-     * Returns the type used for the <code>TYPE</code> filter.
-     *
      * @return the type used for the <code>TYPE</code> filter.
      */
     public ObjectType getType() {

@@ -50,6 +50,7 @@ import glide.api.commands.PubSubClusterCommands;
 import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
+import glide.api.logging.Logger;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -1011,7 +1012,7 @@ public class RedisClusterClient extends BaseClient
         private boolean isClosed = false;
 
         // This is for internal use only.
-        public NativeClusterScanCursor(String cursorHandle) {
+        public NativeClusterScanCursor(@NonNull String cursorHandle) {
             this.cursorHandle = cursorHandle;
             this.isFinished = FINISHED_CURSOR_MARKER.equals(cursorHandle);
         }
@@ -1043,10 +1044,18 @@ public class RedisClusterClient extends BaseClient
 
         private void internalClose() {
             if (!isClosed) {
-                ClusterScanCursorResolver.releaseNativeCursor(cursorHandle);
-
-                // Mark the cursor as closed to avoid double-free (if close() gets called more than once).
-                isClosed = true;
+                try {
+                    ClusterScanCursorResolver.releaseNativeCursor(cursorHandle);
+                } catch (Exception ex) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "ClusterScanCursor",
+                            () -> "Error releasing cursor " + cursorHandle + ": " + ex.getMessage());
+                    Logger.log(Logger.Level.ERROR, "ClusterScanCursor", ex);
+                } finally {
+                    // Mark the cursor as closed to avoid double-free (if close() gets called more than once).
+                    isClosed = true;
+                }
             }
         }
     }

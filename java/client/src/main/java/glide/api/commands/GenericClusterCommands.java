@@ -162,19 +162,31 @@ public interface GenericClusterCommands {
      * Using the same cursor object for multiple iterations will result in the same keys or unexpected
      * behavior. For more information about the Cluster Scan implementation, see <a
      * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#cluster-scan">Cluster
-     * Scan</a>. As with the SCAN command, the method can be used to iterate over the keys in the
-     * database, to return all keys the database have from the time the scan started till the scan
-     * ends. The same key can be returned in multiple scans iteration.
+     * Scan</a>.
      *
+     * <p>As with the SCAN command, the method can be used to iterate over the keys in the database,
+     * to return all keys that were in the database from the time the scan started until the scan
+     * finishes (that is, {@link ClusterScanCursor#isFinished()} returns true). When the cursor is not
+     * needed, call {@link ClusterScanCursor#releaseCursorHandle()} to immediately free resources tied
+     * to the cursor. Note that this makes the cursor unusable in subsequent calls to scan.
+     *
+     * <p>This method guarantees that all keyslots available when the first SCAN is called will be
+     * scanned before the cursor is finished. Any keys added after the initial scan request is made
+     * are not guaranteed to be scanned.
+     *
+     * <p>The same key can be returned in multiple scans iteration.
+     *
+     * @see ClusterScanCursor for more details about how to use the cursor.
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
-     * @param cursor The cursor object that wraps the scan state. To start a new scan, create a new
-     *     empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
+     * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
+     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
      * @return An <code>Array</code> of <code>Objects</code>. The first element is always the {@link
      *     ClusterScanCursor} for the next iteration of results. To see if there is more data on the
      *     given cursor, call {@link ClusterScanCursor#isFinished()}. To release resources for the
      *     current chunk immediately, call {@link ClusterScanCursor#releaseCursorHandle()} after using
-     *     the cursor in a call to this method. The second element is an <code>Array</code> of Objects
-     *     where each entry is a <code>String</code> representing a key.
+     *     the cursor in a call to this method. The cursor cannot be used in a scan again after {@link
+     *     ClusterScanCursor#releaseCursorHandle()} has been called. The second element is an <code>
+     *     Array</code> of Objects where each entry is a <code>String</code> representing a key.
      * @example
      *     <pre>{@code
      * // Assume key contains a set with 200 keys
@@ -201,20 +213,32 @@ public interface GenericClusterCommands {
      * Using the same cursor object for multiple iterations will result in the same keys or unexpected
      * behavior. For more information about the Cluster Scan implementation, see <a
      * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#cluster-scan">Cluster
-     * Scan</a>. As with the SCAN command, the method can be used to iterate over the keys in the
-     * database, to return all keys the database have from the time the scan started till the scan
-     * ends. The same key can be returned in multiple scans iteration.
+     * Scan</a>.
      *
+     * <p>As with the SCAN command, the method can be used to iterate over the keys in the database,
+     * to return all keys that were in the database from the time the scan started until the scan
+     * finishes (that is, {@link ClusterScanCursor#isFinished()} returns true). When the cursor is not
+     * needed, call {@link ClusterScanCursor#releaseCursorHandle()} to immediately free resources tied
+     * to the cursor. Note that this makes the cursor unusable in subsequent calls to scan.
+     *
+     * <p>This method guarantees that all keyslots available when the first SCAN is called will be
+     * scanned before the cursor is finished. Any keys added after the initial scan request is made
+     * are not guaranteed to be scanned.
+     *
+     * <p>The same key can be returned in multiple scans iteration.
+     *
+     * @see ClusterScanCursor for more details about how to use the cursor.
      * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
-     * @param cursor The cursor object that wraps the scan state. To start a new scan, create a new
-     *     empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
+     * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
+     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
      * @param options The {@link ScanOptions}.
      * @return An <code>Array</code> of <code>Objects</code>. The first element is always the {@link
      *     ClusterScanCursor} for the next iteration of results. To see if there is more data on the
      *     given cursor, call {@link ClusterScanCursor#isFinished()}. To release resources for the
      *     current chunk immediately, call {@link ClusterScanCursor#releaseCursorHandle()} after using
-     *     the cursor in a call to this method. The second element is an <code>Array</code> of Objects
-     *     where each entry is a <code>String</code> representing a key.
+     *     the cursor in a call to this method. The cursor cannot be used in a scan again after {@link
+     *     ClusterScanCursor#releaseCursorHandle()} has been called. The second element is an <code>
+     *     Array</code> of Objects where each entry is a <code>String</code> representing a key.
      * @example
      *     <pre>{@code
      * // Assume key contains a set with 200 keys
