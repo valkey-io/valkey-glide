@@ -231,7 +231,9 @@ class ExclusiveIdBound(StreamRangeBound):
         Args:
             stream_id (TEncodable): The stream ID.
         """
-        self.stream_id = f"{self.EXCLUSIVE_BOUND_REDIS_API}{stream_id!r}"
+        if isinstance(stream_id, bytes):
+            stream_id = stream_id.decode("utf-8")
+        self.stream_id = f"{self.EXCLUSIVE_BOUND_REDIS_API}{stream_id}"
 
     def to_arg(self) -> TEncodable:
         return self.stream_id
