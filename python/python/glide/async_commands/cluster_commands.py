@@ -373,8 +373,8 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]: Info about all or
-                selected libraries and their functions.
+            TClusterResponse[List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]]: Info
+            about all or selected libraries and their functions.
 
         Examples:
             >>> response = await client.function_list("myLib?_backup", True)
@@ -397,7 +397,7 @@ class ClusterCommands(CoreCommands):
         if with_code:
             args.append("WITHCODE")
         return cast(
-            TClusterResponse[List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]]
+            TClusterResponse[List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]],
             await self._execute_command(
                 RequestType.FunctionList,
                 args,

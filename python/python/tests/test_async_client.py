@@ -7222,8 +7222,6 @@ class TestCommands:
         # load library
         await redis_client.function_load(code)
 
-        x = await redis_client.function_list()
-
         check_function_list_response(
             await redis_client.function_list(lib_name),
             lib_name,
