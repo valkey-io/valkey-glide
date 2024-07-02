@@ -46,7 +46,7 @@ public class Transaction extends BaseTransaction<Transaction> {
     /**
      * Changes the currently selected Redis database.
      *
-     * @see <a href="https://redis.io/commands/select/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/select/">redis.io</a> for details.
      * @param index The index of the database to select.
      * @return Command Response - A simple <code>OK</code> response.
      */
@@ -59,7 +59,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
-     * @see <a href="https://redis.io/commands/move/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/move/">redis.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
      * @return Command Response - <code>true</code> if <code>key</code> was moved, or <code>false
@@ -80,7 +80,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @since Redis 6.2.0 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">redis.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
@@ -100,7 +100,7 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @since Redis 6.2.0 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">redis.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.

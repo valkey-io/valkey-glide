@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands and transactions for the "Generic Commands" group for a standalone client.
  *
- * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericCommands {
     /** Redis API keyword used to denote the destination db index. */
@@ -66,7 +66,7 @@ public interface GenericCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
-     * @see <a href="https://redis.io/commands/move/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/move/">redis.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
      * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
@@ -84,7 +84,7 @@ public interface GenericCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
-     * @see <a href="https://redis.io/commands/move/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/move/">redis.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
      * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
@@ -104,7 +104,7 @@ public interface GenericCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">redis.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
@@ -126,7 +126,7 @@ public interface GenericCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">redis.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
@@ -148,7 +148,7 @@ public interface GenericCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">redis.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
@@ -168,7 +168,7 @@ public interface GenericCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">redis.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
