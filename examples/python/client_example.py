@@ -30,9 +30,9 @@ def set_file_logger(level: LogLevel = LogLevel.WARN, file: Optional[str] = None)
 
 async def send_set_and_get(client: Union[GlideClient, GlideClusterClient]):
     set_response = await client.set("foo", "bar")
-    print(f"Set response is = {set_response}")
+    print(f"Set response is = {set_response!r}")
     get_response = await client.get("foo")
-    print(f"Get response is = {get_response}")
+    print(f"Get response is = {get_response!r}")
 
 
 async def test_standalone_client(host: str = "localhost", port: int = 6379):

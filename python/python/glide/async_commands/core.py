@@ -1,5 +1,4 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
@@ -55,7 +54,7 @@ from glide.async_commands.stream import (
     StreamTrimOptions,
     _create_xpending_range_args,
 )
-from glide.constants import TOK, TResult
+from glide.constants import TOK, TEncodable, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
@@ -308,14 +307,14 @@ class FlushMode(Enum):
 
 
 def _build_sort_args(
-    key: str,
-    by_pattern: Optional[str] = None,
+    key: TEncodable,
+    by_pattern: Optional[TEncodable] = None,
     limit: Optional[Limit] = None,
-    get_patterns: Optional[List[str]] = None,
+    get_patterns: Optional[List[TEncodable]] = None,
     order: Optional[OrderBy] = None,
     alpha: Optional[bool] = None,
-    store: Optional[str] = None,
-) -> List[str]:
+    store: Optional[TEncodable] = None,
+) -> List[TEncodable]:
     args = [key]
 
     if by_pattern:
@@ -344,62 +343,62 @@ class CoreCommands(Protocol):
     async def _execute_command(
         self,
         request_type: RequestType.ValueType,
-        args: List[str],
+        args: List[TEncodable],
         route: Optional[Route] = ...,
     ) -> TResult: ...
 
     async def _execute_transaction(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[str]]],
+        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
         route: Optional[Route] = None,
     ) -> List[TResult]: ...
 
     async def _execute_script(
         self,
         hash: str,
-        keys: Optional[List[str]] = None,
-        args: Optional[List[str]] = None,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
     ) -> TResult: ...
 
     async def set(
         self,
-        key: str,
-        value: str,
+        key: TEncodable,
+        value: TEncodable,
         conditional_set: Optional[ConditionalChange] = None,
         expiry: Optional[ExpirySet] = None,
         return_old_value: bool = False,
-    ) -> Optional[str]:
+    ) -> Optional[bytes]:
         """
         Set the given key with the given value. Return value is dependent on the passed options.
         See https://redis.io/commands/set/ for more details.
 
         Args:
-            key (str): the key to store.
-            value (str): the value to store with the given key.
+            key (TEncodable): the key to store.
+            value (TEncodable): the value to store with the given key.
             conditional_set (Optional[ConditionalChange], optional): set the key only if the given condition is met.
                 Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
             expiry (Optional[ExpirySet], optional): set expiriation to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Redis API. Defaults to None.
-            return_old_value (bool, optional): Return the old string stored at key, or None if key did not exist.
+            return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
                 Equivalent to `GET` in the Redis API. Defaults to False.
 
         Returns:
-            Optional[str]:
+            Optional[bytes]:
                 If the value is successfully set, return OK.
                 If value isn't set because of only_if_exists or only_if_does_not_exist conditions, return None.
-                If return_old_value is set, return the old value as a string.
+                If return_old_value is set, return the old value as a bytes string.
 
         Example:
-            >>> await client.set("key", "value")
+            >>> await client.set(b"key", b"value")
                 'OK'
             >>> await client.set("key", "new_value",conditional_set=ConditionalChange.ONLY_IF_EXISTS, expiry=Expiry(ExpiryType.SEC, 5))
                 'OK' # Set "new_value" to "key" only if "key" already exists, and set the key expiration to 5 seconds.
             >>> await client.set("key", "value", conditional_set=ConditionalChange.ONLY_IF_DOES_NOT_EXIST,return_old_value=True)
-                'new_value' # Returns the old value of "key".
+                b'new_value' # Returns the old value of "key".
             >>> await client.get("key")
-                'new_value' # Value wasn't modified back to being "value" because of "NX" flag.
+                b'new_value' # Value wasn't modified back to being "value" because of "NX" flag.
         """
         args = [key, value]
         if conditional_set:
@@ -408,86 +407,87 @@ class CoreCommands(Protocol):
             args.append("GET")
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
-        return cast(Optional[str], await self._execute_command(RequestType.Set, args))
+        return cast(Optional[bytes], await self._execute_command(RequestType.Set, args))
 
-    async def get(self, key: str) -> Optional[str]:
+    async def get(self, key: TEncodable) -> Optional[bytes]:
         """
         Get the value associated with the given key, or null if no such value exists.
         See https://redis.io/commands/get/ for details.
 
         Args:
-            key (str): The key to retrieve from the database.
+            key (TEncodable): The key to retrieve from the database.
 
         Returns:
-            Optional[str]: If the key exists, returns the value of the key as a string. Otherwise, return None.
+            Optional[bytes]: If the key exists, returns the value of the key as a byte string. Otherwise, return None.
 
         Example:
             >>> await client.get("key")
-                'value'
+                b'value'
         """
-        return cast(Optional[str], await self._execute_command(RequestType.Get, [key]))
+        args: List[TEncodable] = [key]
+        return cast(Optional[bytes], await self._execute_command(RequestType.Get, args))
 
-    async def getdel(self, key: str) -> Optional[str]:
+    async def getdel(self, key: TEncodable) -> Optional[bytes]:
         """
-        Gets a string value associated with the given `key` and deletes the key.
+        Gets a value associated with the given string `key` and deletes the key.
 
         See https://valkey.io/commands/getdel for more details.
 
         Args:
-            key (str): The `key` to retrieve from the database.
+            key (TEncodable): The `key` to retrieve from the database.
 
         Returns:
-            Optional[str]: If `key` exists, returns the `value` of `key`. Otherwise, returns `None`.
+            Optional[bytes]: If `key` exists, returns the `value` of `key`. Otherwise, returns `None`.
 
         Examples:
             >>> await client.set("key", "value")
             >>> await client.getdel("key")
-               'value'
+                b'value'
             >>> await client.getdel("key")
                 None
         """
         return cast(
-            Optional[str], await self._execute_command(RequestType.GetDel, [key])
+            Optional[bytes], await self._execute_command(RequestType.GetDel, [key])
         )
 
-    async def getrange(self, key: str, start: int, end: int) -> str:
+    async def getrange(self, key: TEncodable, start: int, end: int) -> bytes:
         """
-        Returns the substring of the string value stored at `key`, determined by the offsets `start` and `end` (both are inclusive).
-        Negative offsets can be used in order to provide an offset starting from the end of the string.
+        Returns the substring of the value stored at `key`, determined by the offsets `start` and `end` (both are inclusive).
+        Negative offsets can be used in order to provide an offset starting from the end of the value.
         So `-1` means the last character, `-2` the penultimate and so forth.
 
-        If `key` does not exist, an empty string is returned. If `start` or `end`
-        are out of range, returns the substring within the valid range of the string.
+        If `key` does not exist, an empty byte string is returned. If `start` or `end`
+        are out of range, returns the substring within the valid range of the value.
 
         See https://valkey.io/commands/getrange/ for more details.
 
         Args:
-            key (str): The key of the string.
+            key (TEncodable): The key of the string.
             start (int): The starting offset.
             end (int): The ending offset.
 
         Returns:
-            str: A substring extracted from the value stored at `key`.
+            bytes: A substring extracted from the value stored at `key`.
 
         Examples:
             >>> await client.set("mykey", "This is a string")
             >>> await client.getrange("mykey", 0, 3)
-                "This"
+                b"This"
             >>> await client.getrange("mykey", -3, -1)
-                "ing"  # extracted last 3 characters of a string
+                b"ing"  # extracted last 3 characters of a string
             >>> await client.getrange("mykey", 0, 100)
-                "This is a string"
+                b"This is a string"
             >>> await client.getrange("non_existing", 5, 6)
-                ""
+                b""
         """
         return cast(
-            str,
+            bytes,
             await self._execute_command(
                 RequestType.GetRange, [key, str(start), str(end)]
             ),
         )
 
-    async def append(self, key: str, value: str) -> int:
+    async def append(self, key: TEncodable, value: TEncodable) -> int:
         """
         Appends a value to a key.
         If `key` does not exist it is created and set as an empty string, so `APPEND` will be similar to `SET` in this special case.
@@ -495,11 +495,11 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/append for more details.
 
         Args:
-            key (str): The key to which the value will be appended.
-            value (str): The value to append.
+            key (TEncodable): The key to which the value will be appended.
+            value (TEncodable): The value to append.
 
         Returns:
-            int: The length of the string after appending the value.
+            int: The length of the stored value after appending `value`.
 
         Examples:
             >>> await client.append("key", "Hello")
@@ -507,17 +507,17 @@ class CoreCommands(Protocol):
             >>> await client.append("key", " world")
                 11  # Indicates that " world" has been appended to the value of "key", resulting in a new value of "Hello world" with a length of 11.
             >>> await client.get("key")
-                "Hello world"  # Returns the value stored in "key", which is now "Hello world".
+                b"Hello world"  # Returns the value stored in "key", which is now "Hello world".
         """
         return cast(int, await self._execute_command(RequestType.Append, [key, value]))
 
-    async def strlen(self, key: str) -> int:
+    async def strlen(self, key: TEncodable) -> int:
         """
         Get the length of the string value stored at `key`.
         See https://redis.io/commands/strlen/ for more details.
 
         Args:
-            key (str): The key to return its length.
+            key (TEncodable): The key to return its length.
 
         Returns:
             int: The length of the string value stored at `key`.
@@ -528,9 +528,10 @@ class CoreCommands(Protocol):
             >>> await client.strlen("key")
                 5  # Indicates that the length of the string value stored at `key` is 5.
         """
-        return cast(int, await self._execute_command(RequestType.Strlen, [key]))
+        args: List[TEncodable] = [key]
+        return cast(int, await self._execute_command(RequestType.Strlen, args))
 
-    async def rename(self, key: str, new_key: str) -> TOK:
+    async def rename(self, key: TEncodable, new_key: TEncodable) -> TOK:
         """
         Renames `key` to `new_key`.
         If `newkey` already exists it is overwritten.
@@ -540,8 +541,8 @@ class CoreCommands(Protocol):
             When in cluster mode, both `key` and `newkey` must map to the same hash slot.
 
         Args:
-            key (str) : The key to rename.
-            new_key (str) : The new name of the key.
+            key (TEncodable) : The key to rename.
+            new_key (TEncodable) : The new name of the key.
 
         Returns:
             OK: If the `key` was successfully renamed, return "OK". If `key` does not exist, an error is thrown.
@@ -550,7 +551,7 @@ class CoreCommands(Protocol):
             TOK, await self._execute_command(RequestType.Rename, [key, new_key])
         )
 
-    async def renamenx(self, key: str, new_key: str) -> bool:
+    async def renamenx(self, key: TEncodable, new_key: TEncodable) -> bool:
         """
         Renames `key` to `new_key` if `new_key` does not yet exist.
 
@@ -560,8 +561,8 @@ class CoreCommands(Protocol):
             When in cluster mode, both `key` and `new_key` must map to the same hash slot.
 
         Args:
-            key (str): The key to rename.
-            new_key (str): The new key name.
+            key (TEncodable): The key to rename.
+            new_key (TEncodable): The new key name.
 
         Returns:
             bool: True if `key` was renamed to `new_key`, or False if `new_key` already exists.
@@ -575,7 +576,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.RenameNX, [key, new_key]),
         )
 
-    async def delete(self, keys: List[str]) -> int:
+    async def delete(self, keys: List[TEncodable]) -> int:
         """
         Delete one or more keys from the database. A key is ignored if it does not exist.
         See https://redis.io/commands/del/ for details.
@@ -584,7 +585,7 @@ class CoreCommands(Protocol):
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
-            keys (List[str]): A list of keys to be deleted from the database.
+            keys (List[TEncodable]): A list of keys to be deleted from the database.
 
         Returns:
             int: The number of keys that were deleted.
@@ -598,14 +599,14 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Del, keys))
 
-    async def incr(self, key: str) -> int:
+    async def incr(self, key: TEncodable) -> int:
         """
         Increments the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
         See https://redis.io/commands/incr/ for more details.
 
         Args:
-          key (str): The key to increment its value.
+          key (TEncodable): The key to increment its value.
 
         Returns:
             int: The value of `key` after the increment.
@@ -617,13 +618,13 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Incr, [key]))
 
-    async def incrby(self, key: str, amount: int) -> int:
+    async def incrby(self, key: TEncodable, amount: int) -> int:
         """
         Increments the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation. See https://redis.io/commands/incrby/ for more details.
 
         Args:
-          key (str): The key to increment its value.
+          key (TEncodable): The key to increment its value.
           amount (int) : The amount to increment.
 
         Returns:
@@ -638,7 +639,7 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.IncrBy, [key, str(amount)])
         )
 
-    async def incrbyfloat(self, key: str, amount: float) -> float:
+    async def incrbyfloat(self, key: TEncodable, amount: float) -> float:
         """
         Increment the string representing a floating point number stored at `key` by `amount`.
         By using a negative increment value, the value stored at the `key` is decremented.
@@ -646,7 +647,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/incrbyfloat/ for more details.
 
         Args:
-          key (str): The key to increment its value.
+          key (TEncodable): The key to increment its value.
           amount (float) : The amount to increment.
 
         Returns:
@@ -662,7 +663,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.IncrByFloat, [key, str(amount)]),
         )
 
-    async def setrange(self, key: str, offset: int, value: str) -> int:
+    async def setrange(self, key: TEncodable, offset: int, value: TEncodable) -> int:
         """
         Overwrites part of the string stored at `key`, starting at the specified
         `offset`, for the entire length of `value`.
@@ -673,9 +674,9 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/setrange for more details.
 
         Args:
-            key (str): The key of the string to update.
+            key (TEncodable): The key of the string to update.
             offset (int): The position in the string where `value` should be written.
-            value (str): The string written with `offset`.
+            value (TEncodable): The value written with `offset`.
 
         Returns:
             int: The length of the string stored at `key` after it was modified.
@@ -692,7 +693,7 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def mset(self, key_value_map: Mapping[str, str]) -> TOK:
+    async def mset(self, key_value_map: Mapping[TEncodable, TEncodable]) -> TOK:
         """
         Set multiple keys to multiple values in a single atomic operation.
         See https://redis.io/commands/mset/ for more details.
@@ -701,7 +702,7 @@ class CoreCommands(Protocol):
             When in cluster mode, the command may route to multiple nodes when keys in `key_value_map` map to different hash slots.
 
         Args:
-            key_value_map (Mapping[str, str]): A map of key value pairs.
+            key_value_map (Mapping[TEncodable, TEncodable]): A map of key value pairs.
 
         Returns:
             OK: a simple OK response.
@@ -710,12 +711,12 @@ class CoreCommands(Protocol):
             >>> await client.mset({"key" : "value", "key2": "value2"})
                 'OK'
         """
-        parameters: List[str] = []
+        parameters: List[TEncodable] = []
         for pair in key_value_map.items():
             parameters.extend(pair)
         return cast(TOK, await self._execute_command(RequestType.MSet, parameters))
 
-    async def msetnx(self, key_value_map: Mapping[str, str]) -> bool:
+    async def msetnx(self, key_value_map: Mapping[TEncodable, TEncodable]) -> bool:
         """
         Sets multiple keys to values if the key does not exist. The operation is atomic, and if one or
         more keys already exist, the entire operation fails.
@@ -726,7 +727,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/msetnx/ for more details.
 
         Args:
-            key_value_map (Mapping[str, str]): A key-value map consisting of keys and their respective values to set.
+            key_value_map (Mapping[TEncodable, TEncodable]): A key-value map consisting of keys and their respective values to set.
 
         Returns:
             bool: True if all keys were set. False if no key was set.
@@ -737,7 +738,7 @@ class CoreCommands(Protocol):
             >>> await client.msetnx({"key2": "value4", "key3": "value5"})
                 False
         """
-        parameters: List[str] = []
+        parameters: List[TEncodable] = []
         for pair in key_value_map.items():
             parameters.extend(pair)
         return cast(
@@ -745,7 +746,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.MSetNX, parameters),
         )
 
-    async def mget(self, keys: List[str]) -> List[Optional[str]]:
+    async def mget(self, keys: List[TEncodable]) -> List[Optional[bytes]]:
         """
         Retrieve the values of multiple keys.
         See https://redis.io/commands/mget/ for more details.
@@ -754,30 +755,30 @@ class CoreCommands(Protocol):
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
-            keys (List[str]): A list of keys to retrieve values for.
+            keys (List[TEncodable]): A list of keys to retrieve values for.
 
         Returns:
-            List[Optional[str]]: A list of values corresponding to the provided keys. If a key is not found,
+            List[Optional[bytes]]: A list of values corresponding to the provided keys. If a key is not found,
             its corresponding value in the list will be None.
 
         Examples:
             >>> await client.set("key1", "value1")
             >>> await client.set("key2", "value2")
             >>> await client.mget(["key1", "key2"])
-                ['value1' , 'value2']
+                [b'value1' , b'value2']
         """
         return cast(
-            List[Optional[str]], await self._execute_command(RequestType.MGet, keys)
+            List[Optional[bytes]], await self._execute_command(RequestType.MGet, keys)
         )
 
-    async def decr(self, key: str) -> int:
+    async def decr(self, key: TEncodable) -> int:
         """
         Decrement the number stored at `key` by one. If the key does not exist, it is set to 0 before performing the
         operation.
         See https://redis.io/commands/decr/ for more details.
 
         Args:
-          key (str): The key to increment its value.
+          key (TEncodable): The key to increment its value.
 
         Returns:
             int: The value of key after the decrement.
@@ -789,14 +790,14 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Decr, [key]))
 
-    async def decrby(self, key: str, amount: int) -> int:
+    async def decrby(self, key: TEncodable, amount: int) -> int:
         """
         Decrements the number stored at `key` by `amount`. If the key does not exist, it is set to 0 before performing
         the operation.
         See https://redis.io/commands/decrby/ for more details.
 
         Args:
-          key (str): The key to decrement its value.
+          key (TEncodable): The key to decrement its value.
           amount (int) : The amount to decrement.
 
         Returns:
@@ -811,7 +812,7 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.DecrBy, [key, str(amount)])
         )
 
-    async def touch(self, keys: List[str]) -> int:
+    async def touch(self, keys: List[TEncodable]) -> int:
         """
         Updates the last access time of specified keys.
 
@@ -821,7 +822,7 @@ class CoreCommands(Protocol):
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
-            keys (List[str]): The keys to update last access time.
+            keys (List[TEncodable]): The keys to update last access time.
 
         Returns:
             int: The number of keys that were updated, a key is ignored if it doesn't exist.
@@ -834,14 +835,18 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Touch, keys))
 
-    async def hset(self, key: str, field_value_map: Mapping[str, str]) -> int:
+    async def hset(
+        self,
+        key: TEncodable,
+        field_value_map: Mapping[TEncodable, TEncodable],
+    ) -> int:
         """
         Sets the specified fields to their respective values in the hash stored at `key`.
         See https://redis.io/commands/hset/ for more details.
 
         Args:
-            key (str): The key of the hash.
-            field_value_map (Mapping[str, str]): A field-value map consisting of fields and their corresponding values
+            key (TEncodable): The key of the hash.
+            field_value_map (Mapping[TEncodable, TEncodable]): A field-value map consisting of fields and their corresponding values
             to be set in the hash stored at the specified key.
 
         Returns:
@@ -851,7 +856,7 @@ class CoreCommands(Protocol):
             >>> await client.hset("my_hash", {"field": "value", "field2": "value2"})
                 2 # Indicates that 2 fields were successfully set in the hash "my_hash".
         """
-        field_value_list: List[str] = [key]
+        field_value_list: List[TEncodable] = [key]
         for pair in field_value_map.items():
             field_value_list.extend(pair)
         return cast(
@@ -859,36 +864,36 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.HSet, field_value_list),
         )
 
-    async def hget(self, key: str, field: str) -> Optional[str]:
+    async def hget(self, key: TEncodable, field: TEncodable) -> Optional[bytes]:
         """
         Retrieves the value associated with `field` in the hash stored at `key`.
         See https://redis.io/commands/hget/ for more details.
 
         Args:
-            key (str): The key of the hash.
-            field (str): The field whose value should be retrieved.
+            key (TEncodable): The key of the hash.
+            field (TEncodable): The field whose value should be retrieved.
 
         Returns:
-            Optional[str]: The value associated `field` in the hash.
+            Optional[bytes]: The value associated `field` in the hash.
             Returns None if `field` is not presented in the hash or `key` does not exist.
 
         Examples:
             >>> await client.hset("my_hash", "field", "value")
             >>> await client.hget("my_hash", "field")
-                "value"
+                b"value"
             >>> await client.hget("my_hash", "nonexistent_field")
                 None
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.HGet, [key, field]),
         )
 
     async def hsetnx(
         self,
-        key: str,
-        field: str,
-        value: str,
+        key: TEncodable,
+        field: TEncodable,
+        value: TEncodable,
     ) -> bool:
         """
         Sets `field` in the hash stored at `key` to `value`, only if `field` does not yet exist.
@@ -897,9 +902,9 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/hsetnx/ for more details.
 
         Args:
-            key (str): The key of the hash.
-            field (str): The field to set the value for.
-            value (str): The value to set.
+            key (TEncodable): The key of the hash.
+            field (TEncodable): The field to set the value for.
+            value (TEncodable): The value to set.
 
         Returns:
             bool: True if the field was set, False if the field already existed and was not set.
@@ -915,7 +920,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.HSetNX, [key, field, value]),
         )
 
-    async def hincrby(self, key: str, field: str, amount: int) -> int:
+    async def hincrby(self, key: TEncodable, field: TEncodable, amount: int) -> int:
         """
         Increment or decrement the value of a `field` in the hash stored at `key` by the specified amount.
         By using a negative increment value, the value stored at `field` in the hash stored at `key` is decremented.
@@ -923,8 +928,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/hincrby/ for more details.
 
         Args:
-            key (str): The key of the hash.
-            field (str): The field in the hash stored at `key` to increment or decrement its value.
+            key (TEncodable): The key of the hash.
+            field (TEncodable): The field in the hash stored at `key` to increment or decrement its value.
             amount (int): The amount by which to increment or decrement the field's value.
                 Use a negative value to decrement.
 
@@ -940,7 +945,9 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.HIncrBy, [key, field, str(amount)]),
         )
 
-    async def hincrbyfloat(self, key: str, field: str, amount: float) -> float:
+    async def hincrbyfloat(
+        self, key: TEncodable, field: TEncodable, amount: float
+    ) -> float:
         """
         Increment or decrement the floating-point value stored at `field` in the hash stored at `key` by the specified
         amount.
@@ -949,8 +956,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/hincrbyfloat/ for more details.
 
         Args:
-            key (str): The key of the hash.
-            field (str): The field in the hash stored at `key` to increment or decrement its value.
+            key (TEncodable): The key of the hash.
+            field (TEncodable): The field in the hash stored at `key` to increment or decrement its value.
             amount (float): The amount by which to increment or decrement the field's value.
                 Use a negative value to decrement.
 
@@ -968,14 +975,14 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def hexists(self, key: str, field: str) -> bool:
+    async def hexists(self, key: TEncodable, field: TEncodable) -> bool:
         """
         Check if a field exists in the hash stored at `key`.
         See https://redis.io/commands/hexists/ for more details.
 
         Args:
-            key (str): The key of the hash.
-            field (str): The field to check in the hash stored at `key`.
+            key (TEncodable): The key of the hash.
+            field (TEncodable): The field to check in the hash stored at `key`.
 
         Returns:
             bool: Returns 'True' if the hash contains the specified field. If the hash does not contain the field,
@@ -991,58 +998,60 @@ class CoreCommands(Protocol):
             bool, await self._execute_command(RequestType.HExists, [key, field])
         )
 
-    async def hgetall(self, key: str) -> Dict[str, str]:
+    async def hgetall(self, key: TEncodable) -> Dict[bytes, bytes]:
         """
         Returns all fields and values of the hash stored at `key`.
         See https://redis.io/commands/hgetall/ for details.
 
         Args:
-            key (str): The key of the hash.
+            key (TEncodable): The key of the hash.
 
         Returns:
-            Dict[str, str]: A dictionary of fields and their values stored in the hash. Every field name in the list is followed by
+            Dict[bytes, bytes]: A dictionary of fields and their values stored in the hash. Every field name in the list is followed by
             its value.
             If `key` does not exist, it returns an empty dictionary.
 
         Examples:
             >>> await client.hgetall("my_hash")
-                {"field1": "value1", "field2": "value2"}
+                {b"field1": b"value1", b"field2": b"value2"}
         """
         return cast(
-            Dict[str, str], await self._execute_command(RequestType.HGetAll, [key])
+            Dict[bytes, bytes], await self._execute_command(RequestType.HGetAll, [key])
         )
 
-    async def hmget(self, key: str, fields: List[str]) -> List[Optional[str]]:
+    async def hmget(
+        self, key: TEncodable, fields: List[TEncodable]
+    ) -> List[Optional[bytes]]:
         """
         Retrieve the values associated with specified fields in the hash stored at `key`.
         See https://redis.io/commands/hmget/ for details.
 
         Args:
-            key (str): The key of the hash.
-            fields (List[str]): The list of fields in the hash stored at `key` to retrieve from the database.
+            key (TEncodable): The key of the hash.
+            fields (List[TEncodable]): The list of fields in the hash stored at `key` to retrieve from the database.
 
         Returns:
-            List[Optional[str]]: A list of values associated with the given fields, in the same order as they are requested.
+            List[Optional[bytes]]: A list of values associated with the given fields, in the same order as they are requested.
             For every field that does not exist in the hash, a null value is returned.
             If `key` does not exist, it is treated as an empty hash, and the function returns a list of null values.
 
         Examples:
             >>> await client.hmget("my_hash", ["field1", "field2"])
-                ["value1", "value2"]  # A list of values associated with the specified fields.
+                [b"value1", b"value2"]  # A list of values associated with the specified fields.
         """
         return cast(
-            List[Optional[str]],
+            List[Optional[bytes]],
             await self._execute_command(RequestType.HMGet, [key] + fields),
         )
 
-    async def hdel(self, key: str, fields: List[str]) -> int:
+    async def hdel(self, key: TEncodable, fields: List[TEncodable]) -> int:
         """
         Remove specified fields from the hash stored at `key`.
         See https://redis.io/commands/hdel/ for more details.
 
         Args:
-            key (str): The key of the hash.
-            fields (List[str]): The list of fields to remove from the hash stored at `key`.
+            key (TEncodable): The key of the hash.
+            fields (List[TEncodable]): The list of fields to remove from the hash stored at `key`.
 
         Returns:
             int: The number of fields that were removed from the hash, excluding specified but non-existing fields.
@@ -1054,14 +1063,14 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.HDel, [key] + fields))
 
-    async def hlen(self, key: str) -> int:
+    async def hlen(self, key: TEncodable) -> int:
         """
         Returns the number of fields contained in the hash stored at `key`.
 
         See https://redis.io/commands/hlen/ for more details.
 
         Args:
-            key (str): The key of the hash.
+            key (TEncodable): The key of the hash.
 
         Returns:
             int: The number of fields in the hash, or 0 when the key does not exist.
@@ -1075,127 +1084,129 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.HLen, [key]))
 
-    async def hvals(self, key: str) -> List[str]:
+    async def hvals(self, key: TEncodable) -> List[bytes]:
         """
         Returns all values in the hash stored at `key`.
 
         See https://redis.io/commands/hvals/ for more details.
 
         Args:
-            key (str): The key of the hash.
+            key (TEncodable): The key of the hash.
 
         Returns:
-            List[str]: A list of values in the hash, or an empty list when the key does not exist.
+            List[bytes]: A list of values in the hash, or an empty list when the key does not exist.
 
         Examples:
            >>> await client.hvals("my_hash")
-               ["value1", "value2", "value3"]  # Returns all the values stored in the hash "my_hash".
+               [b"value1", b"value2", b"value3"]  # Returns all the values stored in the hash "my_hash".
         """
-        return cast(List[str], await self._execute_command(RequestType.HVals, [key]))
+        return cast(List[bytes], await self._execute_command(RequestType.HVals, [key]))
 
-    async def hkeys(self, key: str) -> List[str]:
+    async def hkeys(self, key: TEncodable) -> List[bytes]:
         """
         Returns all field names in the hash stored at `key`.
 
         See https://redis.io/commands/hkeys/ for more details.
 
         Args:
-            key (str): The key of the hash.
+            key (TEncodable): The key of the hash.
 
         Returns:
-            List[str]: A list of field names for the hash, or an empty list when the key does not exist.
+            List[bytes]: A list of field names for the hash, or an empty list when the key does not exist.
 
         Examples:
             >>> await client.hkeys("my_hash")
-                ["field1", "field2", "field3"]  # Returns all the field names stored in the hash "my_hash".
+                [b"field1", b"field2", b"field3"]  # Returns all the field names stored in the hash "my_hash".
         """
-        return cast(List[str], await self._execute_command(RequestType.HKeys, [key]))
+        return cast(List[bytes], await self._execute_command(RequestType.HKeys, [key]))
 
-    async def hrandfield(self, key: str) -> Optional[str]:
+    async def hrandfield(self, key: TEncodable) -> Optional[bytes]:
         """
         Returns a random field name from the hash value stored at `key`.
 
         See https://valkey.io/commands/hrandfield for more details.
 
         Args:
-            key (str): The key of the hash.
+            key (TEncodable): The key of the hash.
 
         Returns:
-            Optional[str]: A random field name from the hash stored at `key`.
+            Optional[bytes]: A random field name from the hash stored at `key`.
             If the hash does not exist or is empty, None will be returned.
 
         Examples:
             >>> await client.hrandfield("my_hash")
-                "field1"  # A random field name stored in the hash "my_hash".
+                b"field1"  # A random field name stored in the hash "my_hash".
         """
         return cast(
-            Optional[str], await self._execute_command(RequestType.HRandField, [key])
+            Optional[bytes], await self._execute_command(RequestType.HRandField, [key])
         )
 
-    async def hrandfield_count(self, key: str, count: int) -> List[str]:
+    async def hrandfield_count(self, key: TEncodable, count: int) -> List[bytes]:
         """
         Retrieves up to `count` random field names from the hash value stored at `key`.
 
         See https://valkey.io/commands/hrandfield for more details.
 
         Args:
-            key (str): The key of the hash.
+            key (TEncodable): The key of the hash.
             count (int): The number of field names to return.
                 If `count` is positive, returns unique elements.
                 If `count` is negative, allows for duplicates elements.
 
         Returns:
-            List[str]: A list of random field names from the hash.
+            List[bytes]: A list of random field names from the hash.
             If the hash does not exist or is empty, the response will be an empty list.
 
         Examples:
             >>> await client.hrandfield_count("my_hash", -3)
-                ["field1", "field1", "field2"]  # Non-distinct, random field names stored in the hash "my_hash".
+                [b"field1", b"field1", b"field2"]  # Non-distinct, random field names stored in the hash "my_hash".
             >>> await client.hrandfield_count("non_existing_hash", 3)
                 []  # Empty list
         """
         return cast(
-            List[str],
+            List[bytes],
             await self._execute_command(RequestType.HRandField, [key, str(count)]),
         )
 
-    async def hrandfield_withvalues(self, key: str, count: int) -> List[List[str]]:
+    async def hrandfield_withvalues(
+        self, key: TEncodable, count: int
+    ) -> List[List[bytes]]:
         """
         Retrieves up to `count` random field names along with their values from the hash value stored at `key`.
 
         See https://valkey.io/commands/hrandfield for more details.
 
         Args:
-            key (str): The key of the hash.
+            key (TEncodable): The key of the hash.
             count (int): The number of field names to return.
                 If `count` is positive, returns unique elements.
                 If `count` is negative, allows for duplicates elements.
 
         Returns:
-            List[List[str]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
+            List[List[bytes]]: A list of `[field_name, value]` lists, where `field_name` is a random field name from the
             hash and `value` is the associated value of the field name.
             If the hash does not exist or is empty, the response will be an empty list.
 
         Examples:
             >>> await client.hrandfield_withvalues("my_hash", -3)
-                [["field1", "value1"], ["field1", "value1"], ["field2", "value2"]]
+                [[b"field1", b"value1"], [b"field1", b"value1"], [b"field2", b"value2"]]
         """
         return cast(
-            List[List[str]],
+            List[List[bytes]],
             await self._execute_command(
                 RequestType.HRandField, [key, str(count), "WITHVALUES"]
             ),
         )
 
-    async def hstrlen(self, key: str, field: str) -> int:
+    async def hstrlen(self, key: TEncodable, field: TEncodable) -> int:
         """
         Returns the string length of the value associated with `field` in the hash stored at `key`.
 
         See https://valkey.io/commands/hstrlen/ for more details.
 
         Args:
-            key (str): The key of the hash.
-            field (str): The field in the hash.
+            key (TEncodable): The key of the hash.
+            field (TEncodable): The field in the hash.
 
         Returns:
             int: The string length or 0 if `field` or `key` does not exist.
@@ -1210,7 +1221,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.HStrlen, [key, field]),
         )
 
-    async def lpush(self, key: str, elements: List[str]) -> int:
+    async def lpush(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
         Insert all the specified values at the head of the list stored at `key`.
         `elements` are inserted one after the other to the head of the list, from the leftmost element
@@ -1218,8 +1229,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/lpush/ for more details.
 
         Args:
-            key (str): The key of the list.
-            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+            key (TEncodable): The key of the list.
+            elements (List[TEncodable]): The elements to insert at the head of the list stored at `key`.
 
         Returns:
             int: The length of the list after the push operations.
@@ -1234,7 +1245,7 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.LPush, [key] + elements)
         )
 
-    async def lpushx(self, key: str, elements: List[str]) -> int:
+    async def lpushx(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
         Inserts all the specified values at the head of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
@@ -1242,8 +1253,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/lpushx/ for more details.
 
         Args:
-            key (str): The key of the list.
-            elements (List[str]): The elements to insert at the head of the list stored at `key`.
+            key (TEncodable): The key of the list.
+            elements (List[TEncodable]): The elements to insert at the head of the list stored at `key`.
 
         Returns:
             int: The length of the list after the push operation.
@@ -1258,55 +1269,57 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.LPushX, [key] + elements)
         )
 
-    async def lpop(self, key: str) -> Optional[str]:
+    async def lpop(self, key: TEncodable) -> Optional[bytes]:
         """
         Remove and return the first elements of the list stored at `key`.
         The command pops a single element from the beginning of the list.
         See https://redis.io/commands/lpop/ for details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
 
         Returns:
-            Optional[str]: The value of the first element.
+            Optional[bytes]: The value of the first element.
             If `key` does not exist, None will be returned.
 
         Examples:
             >>> await client.lpop("my_list")
-                "value1"
+                b"value1"
             >>> await client.lpop("non_exiting_key")
                 None
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.LPop, [key]),
         )
 
-    async def lpop_count(self, key: str, count: int) -> Optional[List[str]]:
+    async def lpop_count(self, key: TEncodable, count: int) -> Optional[List[bytes]]:
         """
         Remove and return up to `count` elements from the list stored at `key`, depending on the list's length.
         See https://redis.io/commands/lpop/ for details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
             count (int): The count of elements to pop from the list.
 
         Returns:
-            Optional[List[str]]: A a list of popped elements will be returned depending on the list's length.
+            Optional[List[bytes]]: A a list of popped elements will be returned depending on the list's length.
             If `key` does not exist, None will be returned.
 
         Examples:
             >>> await client.lpop_count("my_list", 2)
-                ["value1", "value2"]
+                [b"value1", b"value2"]
             >>> await client.lpop_count("non_exiting_key" , 3)
                 None
         """
         return cast(
-            Optional[List[str]],
+            Optional[List[bytes]],
             await self._execute_command(RequestType.LPop, [key, str(count)]),
         )
 
-    async def blpop(self, keys: List[str], timeout: float) -> Optional[List[str]]:
+    async def blpop(
+        self, keys: List[TEncodable], timeout: float
+    ) -> Optional[List[bytes]]:
         """
         Pops an element from the head of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
@@ -1317,25 +1330,28 @@ class CoreCommands(Protocol):
             2. `BLPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
-            keys (List[str]): The keys of the lists to pop from.
+            keys (List[TEncodable]): The keys of the lists to pop from.
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 
         Returns:
-            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+            Optional[List[bytes]]: A two-element list containing the key from which the element was popped and the value of the
                 popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
 
         Examples:
             >>> await client.blpop(["list1", "list2"], 0.5)
-                ["list1", "element"]  # "element" was popped from the head of the list with key "list1"
+                [b"list1", b"element"]  # "element" was popped from the head of the list with key "list1"
         """
         return cast(
-            Optional[List[str]],
+            Optional[List[bytes]],
             await self._execute_command(RequestType.BLPop, keys + [str(timeout)]),
         )
 
     async def lmpop(
-        self, keys: List[str], direction: ListDirection, count: Optional[int] = None
-    ) -> Optional[Mapping[str, List[str]]]:
+        self,
+        keys: List[TEncodable],
+        direction: ListDirection,
+        count: Optional[int] = None,
+    ) -> Optional[Mapping[bytes, List[bytes]]]:
         """
         Pops one or more elements from the first non-empty list from the provided `keys`.
 
@@ -1344,17 +1360,17 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lmpop/ for details.
 
         Args:
-            keys (List[str]): An array of keys of lists.
+            keys (List[TEncodable]): An array of keys of lists.
             direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
             count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
 
         Returns:
-            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
+            Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
 
         Examples:
             >>> await client.lpush("testKey", ["one", "two", "three"])
             >>> await client.lmpop(["testKey"], ListDirection.LEFT, 2)
-               {"testKey": ["three", "two"]}
+               {b"testKey": [b"three", b"two"]}
 
         Since: Redis version 7.0.0.
         """
@@ -1363,17 +1379,17 @@ class CoreCommands(Protocol):
             args += ["COUNT", str(count)]
 
         return cast(
-            Optional[Mapping[str, List[str]]],
+            Optional[Mapping[bytes, List[bytes]]],
             await self._execute_command(RequestType.LMPop, args),
         )
 
     async def blmpop(
         self,
-        keys: List[str],
+        keys: List[TEncodable],
         direction: ListDirection,
         timeout: float,
         count: Optional[int] = None,
-    ) -> Optional[Mapping[str, List[str]]]:
+    ) -> Optional[Mapping[bytes, List[bytes]]]:
         """
         Blocks the connection until it pops one or more elements from the first non-empty list from the provided `keys`.
 
@@ -1386,18 +1402,18 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/blmpop/ for details.
 
         Args:
-            keys (List[str]): An array of keys of lists.
+            keys (List[TEncodable]): An array of keys of lists.
             direction (ListDirection): The direction based on which elements are popped from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
             count (Optional[int]): The maximum number of popped elements. If not provided, defaults to popping a single element.
 
         Returns:
-            Optional[Mapping[str, List[str]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
+            Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
 
         Examples:
             >>> await client.lpush("testKey", ["one", "two", "three"])
             >>> await client.blmpop(["testKey"], ListDirection.LEFT, 0.1, 2)
-               {"testKey": ["three", "two"]}
+               {b"testKey": [b"three", b"two"]}
 
         Since: Redis version 7.0.0.
         """
@@ -1406,11 +1422,11 @@ class CoreCommands(Protocol):
             args += ["COUNT", str(count)]
 
         return cast(
-            Optional[Mapping[str, List[str]]],
+            Optional[Mapping[bytes, List[bytes]]],
             await self._execute_command(RequestType.BLMPop, args),
         )
 
-    async def lrange(self, key: str, start: int, end: int) -> List[str]:
+    async def lrange(self, key: TEncodable, start: int, end: int) -> List[bytes]:
         """
         Retrieve the specified elements of the list stored at `key` within the given range.
         The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
@@ -1419,26 +1435,26 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/lrange/ for details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
             start (int): The starting point of the range.
             end (int): The end of the range.
 
         Returns:
-            List[str]: A list of elements within the specified range.
+            List[bytes]: A list of elements within the specified range.
             If `start` exceeds the `end` of the list, or if `start` is greater than `end`, an empty list will be returned.
             If `end` exceeds the actual end of the list, the range will stop at the actual end of the list.
             If `key` does not exist an empty list will be returned.
 
         Examples:
             >>> await client.lrange("my_list", 0, 2)
-                ["value1", "value2", "value3"]
+                [b"value1", b"value2", b"value3"]
             >>> await client.lrange("my_list", -2, -1)
-                ["value2", "value3"]
+                [b"value2", b"value3"]
             >>> await client.lrange("non_exiting_key", 0, 2)
                 []
         """
         return cast(
-            List[str],
+            List[bytes],
             await self._execute_command(
                 RequestType.LRange, [key, str(start), str(end)]
             ),
@@ -1446,9 +1462,9 @@ class CoreCommands(Protocol):
 
     async def lindex(
         self,
-        key: str,
+        key: TEncodable,
         index: int,
-    ) -> Optional[str]:
+    ) -> Optional[bytes]:
         """
         Returns the element at `index` in the list stored at `key`.
 
@@ -1459,25 +1475,25 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/lindex/ for more details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
             index (int): The index of the element in the list to retrieve.
 
         Returns:
-            Optional[str]: The element at `index` in the list stored at `key`.
+            Optional[bytes]: The element at `index` in the list stored at `key`.
                 If `index` is out of range or if `key` does not exist, None is returned.
 
         Examples:
             >>> await client.lindex("my_list", 0)
-                'value1'  # Returns the first element in the list stored at 'my_list'.
+                b'value1'  # Returns the first element in the list stored at 'my_list'.
             >>> await client.lindex("my_list", -1)
-                'value3'  # Returns the last element in the list stored at 'my_list'.
+                b'value3'  # Returns the last element in the list stored at 'my_list'.
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.LIndex, [key, str(index)]),
         )
 
-    async def lset(self, key: str, index: int, element: str) -> TOK:
+    async def lset(self, key: TEncodable, index: int, element: TEncodable) -> TOK:
         """
         Sets the list element at `index` to `element`.
 
@@ -1488,9 +1504,9 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lset/ for details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
             index (int): The index of the element in the list to be set.
-            element (str): The new element to set at the specified index.
+            element (TEncodable): The new element to set at the specified index.
 
         Returns:
             TOK: A simple `OK` response.
@@ -1504,7 +1520,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.LSet, [key, str(index), element]),
         )
 
-    async def rpush(self, key: str, elements: List[str]) -> int:
+    async def rpush(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
         Inserts all the specified values at the tail of the list stored at `key`.
         `elements` are inserted one after the other to the tail of the list, from the leftmost element
@@ -1512,8 +1528,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/rpush/ for more details.
 
         Args:
-            key (str): The key of the list.
-            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+            key (TEncodable): The key of the list.
+            elements (List[TEncodable]): The elements to insert at the tail of the list stored at `key`.
 
         Returns:
             int: The length of the list after the push operations.
@@ -1528,7 +1544,7 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.RPush, [key] + elements)
         )
 
-    async def rpushx(self, key: str, elements: List[str]) -> int:
+    async def rpushx(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
         Inserts all the specified values at the tail of the list stored at `key`, only if `key` exists and holds a list.
         If `key` is not a list, this performs no operation.
@@ -1536,8 +1552,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/rpushx/ for more details.
 
         Args:
-            key (str): The key of the list.
-            elements (List[str]): The elements to insert at the tail of the list stored at `key`.
+            key (TEncodable): The key of the list.
+            elements (List[TEncodable]): The elements to insert at the tail of the list stored at `key`.
 
         Returns:
             int: The length of the list after the push operation.
@@ -1552,55 +1568,57 @@ class CoreCommands(Protocol):
             int, await self._execute_command(RequestType.RPushX, [key] + elements)
         )
 
-    async def rpop(self, key: str, count: Optional[int] = None) -> Optional[str]:
+    async def rpop(self, key: TEncodable) -> Optional[bytes]:
         """
         Removes and returns the last elements of the list stored at `key`.
         The command pops a single element from the end of the list.
         See https://redis.io/commands/rpop/ for details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
 
         Returns:
-            Optional[str]: The value of the last element.
+            Optional[bytes]: The value of the last element.
             If `key` does not exist, None will be returned.
 
         Examples:
             >>> await client.rpop("my_list")
-                "value1"
+                b"value1"
             >>> await client.rpop("non_exiting_key")
                 None
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.RPop, [key]),
         )
 
-    async def rpop_count(self, key: str, count: int) -> Optional[List[str]]:
+    async def rpop_count(self, key: TEncodable, count: int) -> Optional[List[bytes]]:
         """
         Removes and returns up to `count` elements from the list stored at `key`, depending on the list's length.
         See https://redis.io/commands/rpop/ for details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
             count (int): The count of elements to pop from the list.
 
         Returns:
-            Optional[List[str]: A list of popped elements will be returned depending on the list's length.
+            Optional[List[bytes]: A list of popped elements will be returned depending on the list's length.
             If `key` does not exist, None will be returned.
 
         Examples:
             >>> await client.rpop_count("my_list", 2)
-                ["value1", "value2"]
+                [b"value1", b"value2"]
             >>> await client.rpop_count("non_exiting_key" , 7)
                 None
         """
         return cast(
-            Optional[List[str]],
+            Optional[List[bytes]],
             await self._execute_command(RequestType.RPop, [key, str(count)]),
         )
 
-    async def brpop(self, keys: List[str], timeout: float) -> Optional[List[str]]:
+    async def brpop(
+        self, keys: List[TEncodable], timeout: float
+    ) -> Optional[List[bytes]]:
         """
         Pops an element from the tail of the first list that is non-empty, with the given keys being checked in the
         order that they are given. Blocks the connection when there are no elements to pop from any of the given lists.
@@ -1611,24 +1629,28 @@ class CoreCommands(Protocol):
             2. `BRPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
-            keys (List[str]): The keys of the lists to pop from.
+            keys (List[TEncodable]): The keys of the lists to pop from.
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will block indefinitely.
 
         Returns:
-            Optional[List[str]]: A two-element list containing the key from which the element was popped and the value of the
+            Optional[List[bytes]]: A two-element list containing the key from which the element was popped and the value of the
                 popped element, formatted as `[key, value]`. If no element could be popped and the `timeout` expired, returns None.
 
         Examples:
             >>> await client.brpop(["list1", "list2"], 0.5)
-                ["list1", "element"]  # "element" was popped from the tail of the list with key "list1"
+                [b"list1", b"element"]  # "element" was popped from the tail of the list with key "list1"
         """
         return cast(
-            Optional[List[str]],
+            Optional[List[bytes]],
             await self._execute_command(RequestType.BRPop, keys + [str(timeout)]),
         )
 
     async def linsert(
-        self, key: str, position: InsertPosition, pivot: str, element: str
+        self,
+        key: TEncodable,
+        position: InsertPosition,
+        pivot: TEncodable,
+        element: TEncodable,
     ) -> int:
         """
         Inserts `element` in the list at `key` either before or after the `pivot`.
@@ -1636,11 +1658,11 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/linsert/ for details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
             position (InsertPosition): The relative position to insert into - either `InsertPosition.BEFORE` or
                 `InsertPosition.AFTER` the `pivot`.
-            pivot (str): An element of the list.
-            element (str): The new element to insert.
+            pivot (TEncodable): An element of the list.
+            element (TEncodable): The new element to insert.
 
         Returns:
             int: The list length after a successful insert operation.
@@ -1660,11 +1682,11 @@ class CoreCommands(Protocol):
 
     async def lmove(
         self,
-        source: str,
-        destination: str,
+        source: TEncodable,
+        destination: TEncodable,
         where_from: ListDirection,
         where_to: ListDirection,
-    ) -> Optional[str]:
+    ) -> Optional[bytes]:
         """
         Atomically pops and removes the left/right-most element to the list stored at `source`
         depending on `where_from`, and pushes the element at the first/last element of the list
@@ -1675,28 +1697,28 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lmove/ for details.
 
         Args:
-            source (str): The key to the source list.
-            destination (str): The key to the destination list.
+            source (TEncodable): The key to the source list.
+            destination (TEncodable): The key to the destination list.
             where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
             where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
 
         Returns:
-            Optional[str]: The popped element, or None if `source` does not exist.
+            Optional[bytes]: The popped element, or None if `source` does not exist.
 
         Examples:
             >>> client.lpush("testKey1", ["two", "one"])
             >>> client.lpush("testKey2", ["four", "three"])
             >>> await client.lmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT)
-            "one"
+                b"one"
             >>> updated_array1 = await client.lrange("testKey1", 0, -1)
-            ["two"]
+                [b"two"]
             >>> await client.lrange("testKey2", 0, -1)
-            ["one", "three", "four"]
+                [b"one", b"three", b"four"]
 
         Since: Redis version 6.2.0.
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(
                 RequestType.LMove,
                 [source, destination, where_from.value, where_to.value],
@@ -1705,12 +1727,12 @@ class CoreCommands(Protocol):
 
     async def blmove(
         self,
-        source: str,
-        destination: str,
+        source: TEncodable,
+        destination: TEncodable,
         where_from: ListDirection,
         where_to: ListDirection,
         timeout: float,
-    ) -> Optional[str]:
+    ) -> Optional[bytes]:
         """
         Blocks the connection until it pops atomically and removes the left/right-most element to the
         list stored at `source` depending on `where_from`, and pushes the element at the first/last element
@@ -1724,36 +1746,36 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/blmove/ for details.
 
         Args:
-            source (str): The key to the source list.
-            destination (str): The key to the destination list.
+            source (TEncodable): The key to the source list.
+            destination (TEncodable): The key to the destination list.
             where_from (ListDirection): The direction to remove the element from (`ListDirection.LEFT` or `ListDirection.RIGHT`).
             where_to (ListDirection): The direction to add the element to (`ListDirection.LEFT` or `ListDirection.RIGHT`).
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of `0` will block indefinitely.
 
         Returns:
-            Optional[str]: The popped element, or None if `source` does not exist or if the operation timed-out.
+            Optional[bytes]: The popped element, or None if `source` does not exist or if the operation timed-out.
 
         Examples:
             >>> await client.lpush("testKey1", ["two", "one"])
             >>> await client.lpush("testKey2", ["four", "three"])
             >>> await client.blmove("testKey1", "testKey2", ListDirection.LEFT, ListDirection.LEFT, 0.1)
-            "one"
+                b"one"
             >>> await client.lrange("testKey1", 0, -1)
-            ["two"]
+                [b"two"]
             >>> updated_array2 = await client.lrange("testKey2", 0, -1)
-            ["one", "three", "four"]
+                [b"one", b"three", bb"four"]
 
         Since: Redis version 6.2.0.
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(
                 RequestType.BLMove,
                 [source, destination, where_from.value, where_to.value, str(timeout)],
             ),
         )
 
-    async def sadd(self, key: str, members: List[str]) -> int:
+    async def sadd(self, key: TEncodable, members: List[TEncodable]) -> int:
         """
         Add specified members to the set stored at `key`.
         Specified members that are already a member of this set are ignored.
@@ -1761,8 +1783,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/sadd/ for more details.
 
         Args:
-            key (str): The key where members will be added to its set.
-            members (List[str]): A list of members to add to the set stored at `key`.
+            key (TEncodable): The key where members will be added to its set.
+            members (List[TEncodable]): A list of members to add to the set stored at `key`.
 
         Returns:
             int: The number of members that were added to the set, excluding members already present.
@@ -1773,15 +1795,15 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SAdd, [key] + members))
 
-    async def srem(self, key: str, members: List[str]) -> int:
+    async def srem(self, key: TEncodable, members: List[TEncodable]) -> int:
         """
         Remove specified members from the set stored at `key`.
         Specified members that are not a member of this set are ignored.
         See https://redis.io/commands/srem/ for details.
 
         Args:
-            key (str): The key from which members will be removed.
-            members (List[str]): A list of members to remove from the set stored at `key`.
+            key (TEncodable): The key from which members will be removed.
+            members (List[TEncodable]): A list of members to remove from the set stored at `key`.
 
         Returns:
             int: The number of members that were removed from the set, excluding non-existing members.
@@ -1793,31 +1815,33 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SRem, [key] + members))
 
-    async def smembers(self, key: str) -> Set[str]:
+    async def smembers(self, key: TEncodable) -> Set[bytes]:
         """
         Retrieve all the members of the set value stored at `key`.
         See https://redis.io/commands/smembers/ for details.
 
         Args:
-            key (str): The key from which to retrieve the set members.
+            key (TEncodable): The key from which to retrieve the set members.
 
         Returns:
-            Set[str]: A set of all members of the set.
+            Set[bytes]: A set of all members of the set.
                 If `key` does not exist an empty set will be returned.
 
         Examples:
             >>> await client.smembers("my_set")
-                {"member1", "member2", "member3"}
+                {b"member1", b"member2", b"member3"}
         """
-        return cast(Set[str], await self._execute_command(RequestType.SMembers, [key]))
+        return cast(
+            Set[bytes], await self._execute_command(RequestType.SMembers, [key])
+        )
 
-    async def scard(self, key: str) -> int:
+    async def scard(self, key: TEncodable) -> int:
         """
         Retrieve the set cardinality (number of elements) of the set stored at `key`.
         See https://redis.io/commands/scard/ for details.
 
         Args:
-            key (str): The key from which to retrieve the number of set members.
+            key (TEncodable): The key from which to retrieve the number of set members.
 
         Returns:
             int: The cardinality (number of elements) of the set, or 0 if the key does not exist.
@@ -1828,7 +1852,7 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.SCard, [key]))
 
-    async def spop(self, key: str) -> Optional[str]:
+    async def spop(self, key: TEncodable) -> Optional[bytes]:
         """
         Removes and returns one random member from the set stored at `key`.
 
@@ -1836,21 +1860,23 @@ class CoreCommands(Protocol):
         To pop multiple members, see `spop_count`.
 
         Args:
-            key (str): The key of the set.
+            key (TEncodable): The key of the set.
 
         Returns:
-            Optional[str]: The value of the popped member.
+            Optional[bytes]: The value of the popped member.
             If `key` does not exist, None will be returned.
 
         Examples:
             >>> await client.spop("my_set")
-                "value1" # Removes and returns a random member from the set "my_set".
+                b"value1" # Removes and returns a random member from the set "my_set".
             >>> await client.spop("non_exiting_key")
                 None
         """
-        return cast(Optional[str], await self._execute_command(RequestType.SPop, [key]))
+        return cast(
+            Optional[bytes], await self._execute_command(RequestType.SPop, [key])
+        )
 
-    async def spop_count(self, key: str, count: int) -> Set[str]:
+    async def spop_count(self, key: TEncodable, count: int) -> Set[bytes]:
         """
         Removes and returns up to `count` random members from the set stored at `key`, depending on the set's length.
 
@@ -1858,27 +1884,27 @@ class CoreCommands(Protocol):
         To pop a single member, see `spop`.
 
         Args:
-            key (str): The key of the set.
+            key (TEncodable): The key of the set.
             count (int): The count of the elements to pop from the set.
 
         Returns:
-            Set[str]: A set of popped elements will be returned depending on the set's length.
+            Set[bytes]: A set of popped elements will be returned depending on the set's length.
                 If `key` does not exist, an empty set will be returned.
 
         Examples:
             >>> await client.spop_count("my_set", 2)
-                {"value1", "value2"} # Removes and returns 2 random members from the set "my_set".
+                {b"value1", b"value2"} # Removes and returns 2 random members from the set "my_set".
             >>> await client.spop_count("non_exiting_key", 2)
                 Set()
         """
         return cast(
-            Set[str], await self._execute_command(RequestType.SPop, [key, str(count)])
+            Set[bytes], await self._execute_command(RequestType.SPop, [key, str(count)])
         )
 
     async def sismember(
         self,
-        key: str,
-        member: str,
+        key: TEncodable,
+        member: TEncodable,
     ) -> bool:
         """
         Returns if `member` is a member of the set stored at `key`.
@@ -1886,8 +1912,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/sismember/ for more details.
 
         Args:
-            key (str): The key of the set.
-            member (str): The member to check for existence in the set.
+            key (TEncodable): The key of the set.
+            member (TEncodable): The member to check for existence in the set.
 
         Returns:
             bool: True if the member exists in the set, False otherwise.
@@ -1906,9 +1932,9 @@ class CoreCommands(Protocol):
 
     async def smove(
         self,
-        source: str,
-        destination: str,
-        member: str,
+        source: TEncodable,
+        destination: TEncodable,
+        member: TEncodable,
     ) -> bool:
         """
         Moves `member` from the set at `source` to the set at `destination`, removing it from the source set. Creates a
@@ -1920,9 +1946,9 @@ class CoreCommands(Protocol):
             When in cluster mode, `source` and `destination` must map to the same hash slot.
 
         Args:
-            source (str): The key of the set to remove the element from.
-            destination (str): The key of the set to add the element to.
-            member (str): The set element to move.
+            source (TEncodable): The key of the set to remove the element from.
+            destination (TEncodable): The key of the set to add the element to.
+            member (TEncodable): The set element to move.
 
         Returns:
             bool: True on success, or False if the `source` set does not exist or the element is not a member of the source set.
@@ -1938,7 +1964,7 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def sunion(self, keys: List[str]) -> Set[str]:
+    async def sunion(self, keys: List[TEncodable]) -> Set[bytes]:
         """
         Gets the union of all the given sets.
 
@@ -1948,26 +1974,26 @@ class CoreCommands(Protocol):
             When in cluster mode, all `keys` must map to the same hash slot.
 
         Args:
-            keys (List[str]): The keys of the sets.
+            keys (List[TEncodable]): The keys of the sets.
 
         Returns:
-            Set[str]: A set of members which are present in at least one of the given sets.
+            Set[bytes]: A set of members which are present in at least one of the given sets.
                 If none of the sets exist, an empty set will be returned.
 
         Examples:
             >>> await client.sadd("my_set1", ["member1", "member2"])
             >>> await client.sadd("my_set2", ["member2", "member3"])
             >>> await client.sunion(["my_set1", "my_set2"])
-                {"member1", "member2", "member3"} # sets "my_set1" and "my_set2" have three unique members
+                {b"member1", b"member2", b"member3"} # sets "my_set1" and "my_set2" have three unique members
             >>> await client.sunion(["my_set1", "non_existing_set"])
-                {"member1", "member2"}
+                {b"member1", b"member2"}
         """
-        return cast(Set[str], await self._execute_command(RequestType.SUnion, keys))
+        return cast(Set[bytes], await self._execute_command(RequestType.SUnion, keys))
 
     async def sunionstore(
         self,
-        destination: str,
-        keys: List[str],
+        destination: TEncodable,
+        keys: List[TEncodable],
     ) -> int:
         """
         Stores the members of the union of all given sets specified by `keys` into a new set at `destination`.
@@ -1978,8 +2004,8 @@ class CoreCommands(Protocol):
             When in cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
 
         Args:
-            destination (str): The key of the destination set.
-            keys (List[str]): The keys from which to retrieve the set members.
+            destination (TEncodable): The key of the destination set.
+            keys (List[TEncodable]): The keys from which to retrieve the set members.
 
         Returns:
             int: The number of elements in the resulting set.
@@ -1995,7 +2021,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SUnionStore, [destination] + keys),
         )
 
-    async def sdiffstore(self, destination: str, keys: List[str]) -> int:
+    async def sdiffstore(self, destination: TEncodable, keys: List[TEncodable]) -> int:
         """
         Stores the difference between the first set and all the successive sets in `keys` into a new set at
         `destination`.
@@ -2006,8 +2032,8 @@ class CoreCommands(Protocol):
             When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
 
         Args:
-            destination (str): The key of the destination set.
-            keys (List[str]): The keys of the sets to diff.
+            destination (TEncodable): The key of the destination set.
+            keys (List[TEncodable]): The keys of the sets to diff.
 
         Returns:
             int: The number of elements in the resulting set.
@@ -2023,7 +2049,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SDiffStore, [destination] + keys),
         )
 
-    async def sinter(self, keys: List[str]) -> Set[str]:
+    async def sinter(self, keys: List[TEncodable]) -> Set[bytes]:
         """
         Gets the intersection of all the given sets.
 
@@ -2033,23 +2059,23 @@ class CoreCommands(Protocol):
             When in cluster mode, all `keys` must map to the same hash slot.
 
         Args:
-            keys (List[str]): The keys of the sets.
+            keys (List[TEncodable]): The keys of the sets.
 
         Returns:
-            Set[str]: A set of members which are present in all given sets.
+            Set[bytes]: A set of members which are present in all given sets.
                 If one or more sets do no exist, an empty set will be returned.
 
         Examples:
             >>> await client.sadd("my_set1", ["member1", "member2"])
             >>> await client.sadd("my_set2", ["member2", "member3"])
             >>> await client.sinter(["my_set1", "my_set2"])
-                 {"member2"} # sets "my_set1" and "my_set2" have one commom member
+                 {b"member2"} # sets "my_set1" and "my_set2" have one commom member
             >>> await client.sinter([my_set1", "non_existing_set"])
                 None
         """
-        return cast(Set[str], await self._execute_command(RequestType.SInter, keys))
+        return cast(Set[bytes], await self._execute_command(RequestType.SInter, keys))
 
-    async def sinterstore(self, destination: str, keys: List[str]) -> int:
+    async def sinterstore(self, destination: TEncodable, keys: List[TEncodable]) -> int:
         """
         Stores the members of the intersection of all given sets specified by `keys` into a new set at `destination`.
 
@@ -2059,8 +2085,8 @@ class CoreCommands(Protocol):
             When in Cluster mode, all `keys` and `destination` must map to the same hash slot.
 
         Args:
-            destination (str): The key of the destination set.
-            keys (List[str]): The keys from which to retrieve the set members.
+            destination (TEncodable): The key of the destination set.
+            keys (List[TEncodable]): The keys from which to retrieve the set members.
 
         Returns:
             int: The number of elements in the resulting set.
@@ -2076,7 +2102,9 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SInterStore, [destination] + keys),
         )
 
-    async def sintercard(self, keys: List[str], limit: Optional[int] = None) -> int:
+    async def sintercard(
+        self, keys: List[TEncodable], limit: Optional[int] = None
+    ) -> int:
         """
         Gets the cardinality of the intersection of all the given sets.
         Optionally, a `limit` can be specified to stop the computation early if the intersection cardinality reaches the specified limit.
@@ -2086,7 +2114,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/sintercard for more details.
 
         Args:
-            keys (List[str]): A list of keys representing the sets to intersect.
+            keys (List[TEncodable]): A list of keys representing the sets to intersect.
             limit (Optional[int]): An optional limit to the maximum number of intersecting elements to count.
                 If specified, the computation stops as soon as the cardinality reaches this limit.
 
@@ -2102,8 +2130,8 @@ class CoreCommands(Protocol):
             >>> await client.sintercard(["set1", "set2"], limit=1)
             1  # The computation stops early as the intersection cardinality reaches the limit of 1.
         """
-        args = [str(len(keys))]
-        args += keys
+        args: List[TEncodable] = [str(len(keys))]
+        args.extend(keys)
         if limit is not None:
             args += ["LIMIT", str(limit)]
         return cast(
@@ -2111,7 +2139,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SInterCard, args),
         )
 
-    async def sdiff(self, keys: List[str]) -> Set[str]:
+    async def sdiff(self, keys: List[TEncodable]) -> Set[bytes]:
         """
         Computes the difference between the first set and all the successive sets in `keys`.
 
@@ -2121,32 +2149,34 @@ class CoreCommands(Protocol):
             When in cluster mode, all `keys` must map to the same hash slot.
 
         Args:
-            keys (List[str]): The keys of the sets to diff.
+            keys (List[TEncodable]): The keys of the sets to diff
 
         Returns:
-            Set[str]: A set of elements representing the difference between the sets.
+            Set[bytes]: A set of elements representing the difference between the sets.
                 If any of the keys in `keys` do not exist, they are treated as empty sets.
 
         Examples:
             >>> await client.sadd("set1", ["member1", "member2"])
             >>> await client.sadd("set2", ["member1"])
             >>> await client.sdiff("set1", "set2")
-                {"member2"}  # "member2" is in "set1" but not "set2"
+                {b"member2"}  # "member2" is in "set1" but not "set2"
         """
         return cast(
-            Set[str],
+            Set[bytes],
             await self._execute_command(RequestType.SDiff, keys),
         )
 
-    async def smismember(self, key: str, members: List[str]) -> List[bool]:
+    async def smismember(
+        self, key: TEncodable, members: List[TEncodable]
+    ) -> List[bool]:
         """
         Checks whether each member is contained in the members of the set stored at `key`.
 
         See https://valkey.io/commands/smismember for more details.
 
         Args:
-            key (str): The key of the set to check.
-            members (List[str]): A list of members to check for existence in the set.
+            key (TEncodable): The key of the set to check.
+            members (List[TEncodable]): A list of members to check for existence in the set.
 
         Returns:
             List[bool]: A list of bool values, each indicating if the respective member exists in the set.
@@ -2161,7 +2191,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.SMIsMember, [key] + members),
         )
 
-    async def ltrim(self, key: str, start: int, end: int) -> TOK:
+    async def ltrim(self, key: TEncodable, start: int, end: int) -> TOK:
         """
         Trim an existing list so that it will contain only the specified range of elements specified.
         The offsets `start` and `end` are zero-based indexes, with 0 being the first element of the list, 1 being the next
@@ -2171,7 +2201,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/ltrim/ for more details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
             start (int): The starting point of the range.
             end (int): The end of the range.
 
@@ -2191,7 +2221,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.LTrim, [key, str(start), str(end)]),
         )
 
-    async def lrem(self, key: str, count: int, element: str) -> int:
+    async def lrem(self, key: TEncodable, count: int, element: TEncodable) -> int:
         """
         Removes the first `count` occurrences of elements equal to `element` from the list stored at `key`.
         If `count` is positive, it removes elements equal to `element` moving from head to tail.
@@ -2201,9 +2231,9 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/lrem/ for more details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
             count (int): The count of occurrences of elements equal to `element` to remove.
-            element (str): The element to remove from the list.
+            element (TEncodable): The element to remove from the list.
 
         Returns:
             int: The number of removed elements.
@@ -2218,13 +2248,13 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.LRem, [key, str(count), element]),
         )
 
-    async def llen(self, key: str) -> int:
+    async def llen(self, key: TEncodable) -> int:
         """
         Get the length of the list stored at `key`.
         See https://redis.io/commands/llen/ for details.
 
         Args:
-            key (str): The key of the list.
+            key (TEncodable): The key of the list.
 
         Returns:
             int: The length of the list at the specified key.
@@ -2236,7 +2266,7 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.LLen, [key]))
 
-    async def exists(self, keys: List[str]) -> int:
+    async def exists(self, keys: List[TEncodable]) -> int:
         """
         Returns the number of keys in `keys` that exist in the database.
         See https://redis.io/commands/exists/ for more details.
@@ -2245,7 +2275,7 @@ class CoreCommands(Protocol):
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
-            keys (List[str]): The list of keys to check.
+            keys (List[TEncodable]): The list of keys to check.
 
         Returns:
             int: The number of keys that exist. If the same existing key is mentioned in `keys` multiple times,
@@ -2257,7 +2287,7 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.Exists, keys))
 
-    async def unlink(self, keys: List[str]) -> int:
+    async def unlink(self, keys: List[TEncodable]) -> int:
         """
         Unlink (delete) multiple keys from the database.
         A key is ignored if it does not exist.
@@ -2269,7 +2299,7 @@ class CoreCommands(Protocol):
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
-            keys (List[str]): The list of keys to unlink.
+            keys (List[TEncodable]): The list of keys to unlink.
 
         Returns:
             int: The number of keys that were unlinked.
@@ -2281,7 +2311,10 @@ class CoreCommands(Protocol):
         return cast(int, await self._execute_command(RequestType.Unlink, keys))
 
     async def expire(
-        self, key: str, seconds: int, option: Optional[ExpireOptions] = None
+        self,
+        key: TEncodable,
+        seconds: int,
+        option: Optional[ExpireOptions] = None,
     ) -> bool:
         """
         Sets a timeout on `key` in seconds. After the timeout has expired, the key will automatically be deleted.
@@ -2291,7 +2324,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/expire/ for more details.
 
         Args:
-            key (str): The key to set a timeout on.
+            key (TEncodable): The key to set a timeout on.
             seconds (int): The timeout in seconds.
             option (ExpireOptions, optional): The expire option.
 
@@ -2303,13 +2336,16 @@ class CoreCommands(Protocol):
             >>> await client.expire("my_key", 60)
                 True  # Indicates that a timeout of 60 seconds has been set for "my_key."
         """
-        args: List[str] = (
+        args: List[TEncodable] = (
             [key, str(seconds)] if option is None else [key, str(seconds), option.value]
         )
         return cast(bool, await self._execute_command(RequestType.Expire, args))
 
     async def expireat(
-        self, key: str, unix_seconds: int, option: Optional[ExpireOptions] = None
+        self,
+        key: TEncodable,
+        unix_seconds: int,
+        option: Optional[ExpireOptions] = None,
     ) -> bool:
         """
         Sets a timeout on `key` using an absolute Unix timestamp (seconds since January 1, 1970) instead of specifying the
@@ -2321,7 +2357,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/expireat/ for more details.
 
         Args:
-            key (str): The key to set a timeout on.
+            key (TEncodable): The key to set a timeout on.
             unix_seconds (int): The timeout in an absolute Unix timestamp.
             option (Optional[ExpireOptions]): The expire option.
 
@@ -2341,7 +2377,10 @@ class CoreCommands(Protocol):
         return cast(bool, await self._execute_command(RequestType.ExpireAt, args))
 
     async def pexpire(
-        self, key: str, milliseconds: int, option: Optional[ExpireOptions] = None
+        self,
+        key: TEncodable,
+        milliseconds: int,
+        option: Optional[ExpireOptions] = None,
     ) -> bool:
         """
         Sets a timeout on `key` in milliseconds. After the timeout has expired, the key will automatically be deleted.
@@ -2351,7 +2390,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/pexpire/ for more details.
 
         Args:
-            key (str): The key to set a timeout on.
+            key (TEncodable): The key to set a timeout on.
             milliseconds (int): The timeout in milliseconds.
             option (Optional[ExpireOptions]): The expire option.
 
@@ -2371,7 +2410,10 @@ class CoreCommands(Protocol):
         return cast(bool, await self._execute_command(RequestType.PExpire, args))
 
     async def pexpireat(
-        self, key: str, unix_milliseconds: int, option: Optional[ExpireOptions] = None
+        self,
+        key: TEncodable,
+        unix_milliseconds: int,
+        option: Optional[ExpireOptions] = None,
     ) -> bool:
         """
         Sets a timeout on `key` using an absolute Unix timestamp in milliseconds (milliseconds since January 1, 1970) instead
@@ -2383,7 +2425,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/pexpireat/ for more details.
 
         Args:
-            key (str): The key to set a timeout on.
+            key (TEncodable): The key to set a timeout on.
             unix_milliseconds (int): The timeout in an absolute Unix timestamp in milliseconds.
             option (Optional[ExpireOptions]): The expire option.
 
@@ -2402,7 +2444,7 @@ class CoreCommands(Protocol):
         )
         return cast(bool, await self._execute_command(RequestType.PExpireAt, args))
 
-    async def expiretime(self, key: str) -> int:
+    async def expiretime(self, key: TEncodable) -> int:
         """
         Returns the absolute Unix timestamp (since January 1, 1970) at which
         the given `key` will expire, in seconds.
@@ -2411,7 +2453,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/expiretime/ for details.
 
         Args:
-            key (str): The `key` to determine the expiration value of.
+            key (TEncodable): The `key` to determine the expiration value of.
 
         Returns:
             int: The expiration Unix timestamp in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
@@ -2430,7 +2472,7 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.ExpireTime, [key]))
 
-    async def pexpiretime(self, key: str) -> int:
+    async def pexpiretime(self, key: TEncodable) -> int:
         """
         Returns the absolute Unix timestamp (since January 1, 1970) at which
         the given `key` will expire, in milliseconds.
@@ -2438,7 +2480,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/pexpiretime/ for details.
 
         Args:
-            key (str): The `key` to determine the expiration value of.
+            key (TEncodable): The `key` to determine the expiration value of.
 
         Returns:
             int: The expiration Unix timestamp in milliseconds, -2 if `key` does not exist, or -1 if `key` exists but has no associated expiration.
@@ -2457,13 +2499,13 @@ class CoreCommands(Protocol):
         """
         return cast(int, await self._execute_command(RequestType.PExpireTime, [key]))
 
-    async def ttl(self, key: str) -> int:
+    async def ttl(self, key: TEncodable) -> int:
         """
         Returns the remaining time to live of `key` that has a timeout.
         See https://redis.io/commands/ttl/ for more details.
 
         Args:
-            key (str): The key to return its timeout.
+            key (TEncodable): The key to return its timeout.
 
         Returns:
             int: TTL in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
@@ -2480,14 +2522,14 @@ class CoreCommands(Protocol):
 
     async def pttl(
         self,
-        key: str,
+        key: TEncodable,
     ) -> int:
         """
         Returns the remaining time to live of `key` that has a timeout, in milliseconds.
         See https://redis.io/commands/pttl for more details.
 
         Args:
-            key (str): The key to return its timeout.
+            key (TEncodable): The key to return its timeout.
 
         Returns:
             int: TTL in milliseconds. -2 if `key` does not exist, -1 if `key` exists but has no associated expire.
@@ -2505,7 +2547,7 @@ class CoreCommands(Protocol):
 
     async def persist(
         self,
-        key: str,
+        key: TEncodable,
     ) -> bool:
         """
         Remove the existing timeout on `key`, turning the key from volatile (a key with an expire set) to
@@ -2514,7 +2556,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/persist/ for more details.
 
         Args:
-            key (str): TThe key to remove the existing timeout on.
+            key (TEncodable): The key to remove the existing timeout on.
 
         Returns:
             bool: False if `key` does not exist or does not have an associated timeout, True if the timeout has been removed.
@@ -2528,74 +2570,76 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.Persist, [key]),
         )
 
-    async def type(self, key: str) -> str:
+    async def type(self, key: TEncodable) -> bytes:
         """
-        Returns the string representation of the type of the value stored at `key`.
+        Returns the bytes string representation of the type of the value stored at `key`.
 
         See https://redis.io/commands/type/ for more details.
 
         Args:
-            key (str): The key to check its data type.
+            key (TEncodable): The key to check its data type.
 
         Returns:
-            str: If the key exists, the type of the stored value is returned.
-            Otherwise, a "none" string is returned.
+            bytes: If the key exists, the type of the stored value is returned.
+            Otherwise, a b"none" bytes string is returned.
 
         Examples:
             >>> await client.set("key", "value")
             >>> await client.type("key")
-                'string'
+                b'string'
             >>> await client.lpush("key", ["value"])
             >>> await client.type("key")
-                'list'
+                b'list'
         """
-        return cast(str, await self._execute_command(RequestType.Type, [key]))
+        return cast(bytes, await self._execute_command(RequestType.Type, [key]))
 
     async def xadd(
         self,
-        key: str,
-        values: List[Tuple[str, str]],
+        key: TEncodable,
+        values: List[Tuple[TEncodable, TEncodable]],
         options: Optional[StreamAddOptions] = None,
-    ) -> Optional[str]:
+    ) -> Optional[bytes]:
         """
         Adds an entry to the specified stream stored at `key`. If the `key` doesn't exist, the stream is created.
 
         See https://valkey.io/commands/xadd for more details.
 
         Args:
-            key (str): The key of the stream.
-            values (List[Tuple[str, str]]): Field-value pairs to be added to the entry.
-            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. sSee `StreamAddOptions`.
+            key (TEncodable): The key of the stream.
+            values (List[Tuple[TEncodable, TEncodable]]): Field-value pairs to be added to the entry.
+            options (Optional[StreamAddOptions]): Additional options for adding entries to the stream. Default to None. See `StreamAddOptions`.
 
         Returns:
-            str: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
+            bytes: The id of the added entry, or None if `options.make_stream` is set to False and no stream with the matching `key` exists.
 
         Example:
             >>> await client.xadd("mystream", [("field", "value"), ("field2", "value2")])
-                "1615957011958-0"  # Example stream entry ID.
+                b"1615957011958-0"  # Example stream entry ID.
             >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1", make_stream=False))
                 None  # The key doesn't exist, therefore, None is returned.
             >>> await client.xadd("non_existing_stream", [(field, "foo1"), (field2, "bar1")], StreamAddOptions(id="0-1"))
-                "0-1"  # Returns the stream id.
+                b"0-1"  # Returns the stream id.
         """
-        args = [key]
+        args: List[TEncodable] = [key]
         if options:
             args.extend(options.to_args())
         else:
             args.append("*")
         args.extend([field for pair in values for field in pair])
 
-        return cast(Optional[str], await self._execute_command(RequestType.XAdd, args))
+        return cast(
+            Optional[bytes], await self._execute_command(RequestType.XAdd, args)
+        )
 
-    async def xdel(self, key: str, ids: List[str]) -> int:
+    async def xdel(self, key: TEncodable, ids: List[TEncodable]) -> int:
         """
         Removes the specified entries by id from a stream, and returns the number of entries deleted.
 
         See https://valkey.io/commands/xdel for more details.
 
         Args:
-            key (str): The key of the stream.
-            ids (List[str]): An array of entry ids.
+            key (TEncodable): The key of the stream.
+            ids (List[TEncodable]): An array of entry ids.
 
         Returns:
             int: The number of entries removed from the stream. This number may be less than the number of entries in
@@ -2605,6 +2649,8 @@ class CoreCommands(Protocol):
             >>> await client.xdel("key", ["1538561698944-0", "1538561698944-1"])
                 2  # Stream marked 2 entries as deleted.
         """
+        args: List[TEncodable] = [key]
+        args.extend(ids)
         return cast(
             int,
             await self._execute_command(RequestType.XDel, [key] + ids),
@@ -2612,7 +2658,7 @@ class CoreCommands(Protocol):
 
     async def xtrim(
         self,
-        key: str,
+        key: TEncodable,
         options: StreamTrimOptions,
     ) -> int:
         """
@@ -2621,7 +2667,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/xtrim for more details.
 
         Args:
-            key (str): The key of the stream.
+            key (TEncodable): The key of the stream.
             options (StreamTrimOptions): Options detailing how to trim the stream. See `StreamTrimOptions`.
 
         Returns:
@@ -2638,14 +2684,14 @@ class CoreCommands(Protocol):
 
         return cast(int, await self._execute_command(RequestType.XTrim, args))
 
-    async def xlen(self, key: str) -> int:
+    async def xlen(self, key: TEncodable) -> int:
         """
         Returns the number of entries in the stream stored at `key`.
 
         See https://valkey.io/commands/xlen for more details.
 
         Args:
-            key (str): The key of the stream.
+            key (TEncodable): The key of the stream.
 
         Returns:
             int: The number of entries in the stream. If `key` does not exist, returns 0.
@@ -2663,18 +2709,18 @@ class CoreCommands(Protocol):
 
     async def xrange(
         self,
-        key: str,
+        key: TEncodable,
         start: StreamRangeBound,
         end: StreamRangeBound,
         count: Optional[int] = None,
-    ) -> Optional[Mapping[str, List[List[str]]]]:
+    ) -> Optional[Mapping[bytes, List[List[bytes]]]]:
         """
         Returns stream entries matching a given range of IDs.
 
         See https://valkey.io/commands/xrange for more details.
 
         Args:
-            key (str): The key of the stream.
+            key (TEncodable): The key of the stream.
             start (StreamRangeBound): The starting stream ID bound for the range.
                 - Use `IdBound` to specify a stream ID.
                 - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
@@ -2687,7 +2733,7 @@ class CoreCommands(Protocol):
                 If `count` is not provided, all stream entries in the range will be returned.
 
         Returns:
-            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream IDs to stream entry data, where entry data is a
                 list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range
                 arguments are not applicable.
 
@@ -2696,26 +2742,26 @@ class CoreCommands(Protocol):
             >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
             >>> await client.xrange("mystream", MinId(), MaxId())
                 {
-                    "0-1": [["field1", "value1"]],
-                    "0-2": [["field2", "value2"], ["field2", "value3"]],
+                    b"0-1": [[b"field1", b"value1"]],
+                    b"0-2": [[b"field2", b"value2"], [b"field2", b"value3"]],
                 }  # Indicates the stream IDs and their associated field-value pairs for all stream entries in "mystream".
         """
-        args = [key, start.to_arg(), end.to_arg()]
+        args: List[TEncodable] = [key, start.to_arg(), end.to_arg()]
         if count is not None:
             args.extend(["COUNT", str(count)])
 
         return cast(
-            Optional[Mapping[str, List[List[str]]]],
+            Optional[Mapping[bytes, List[List[bytes]]]],
             await self._execute_command(RequestType.XRange, args),
         )
 
     async def xrevrange(
         self,
-        key: str,
+        key: TEncodable,
         end: StreamRangeBound,
         start: StreamRangeBound,
         count: Optional[int] = None,
-    ) -> Optional[Mapping[str, List[List[str]]]]:
+    ) -> Optional[Mapping[bytes, List[List[bytes]]]]:
         """
         Returns stream entries matching a given range of IDs in reverse order. Equivalent to `XRANGE` but returns the
         entries in reverse order.
@@ -2723,7 +2769,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/xrevrange for more details.
 
         Args:
-            key (str): The key of the stream.
+            key (TEncodable): The key of the stream.
             end (StreamRangeBound): The ending stream ID bound for the range.
                 - Use `IdBound` to specify a stream ID.
                 - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
@@ -2736,7 +2782,7 @@ class CoreCommands(Protocol):
                 If `count` is not provided, all stream entries in the range will be returned.
 
         Returns:
-            Optional[Mapping[str, List[List[str]]]]: A mapping of stream IDs to stream entry data, where entry data is a
+            Optional[Mapping[bytes, List[List[bytes]]]]: A mapping of stream IDs to stream entry data, where entry data is a
                 list of pairings with format `[[field, entry], [field, entry], ...]`. Returns None if the range
                 arguments are not applicable.
 
@@ -2749,20 +2795,20 @@ class CoreCommands(Protocol):
                     "0-1": [["field1", "value1"]],
                 }  # Indicates the stream IDs and their associated field-value pairs for all stream entries in "mystream".
         """
-        args = [key, end.to_arg(), start.to_arg()]
+        args: List[TEncodable] = [key, end.to_arg(), start.to_arg()]
         if count is not None:
             args.extend(["COUNT", str(count)])
 
         return cast(
-            Optional[Mapping[str, List[List[str]]]],
+            Optional[Mapping[bytes, List[List[bytes]]]],
             await self._execute_command(RequestType.XRevRange, args),
         )
 
     async def xread(
         self,
-        keys_and_ids: Mapping[str, str],
+        keys_and_ids: Mapping[TEncodable, TEncodable],
         options: Optional[StreamReadOptions] = None,
-    ) -> Optional[Mapping[str, Mapping[str, List[List[str]]]]]:
+    ) -> Optional[Mapping[bytes, Mapping[bytes, List[List[bytes]]]]]:
         """
         Reads entries from the given streams.
 
@@ -2772,12 +2818,12 @@ class CoreCommands(Protocol):
             When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
 
         Args:
-            keys_and_ids (Mapping[str, str]): A mapping of keys and entry IDs to read from. The mapping is composed of a
+            keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of keys and entry IDs to read from. The mapping is composed of a
                 stream's key and the ID of the entry after which the stream will be read.
             options (Optional[StreamReadOptions]): Options detailing how to read the stream.
 
         Returns:
-            Optional[Mapping[str, Mapping[str, List[List[str]]]]]: A mapping of stream keys, to a mapping of stream IDs,
+            Optional[Mapping[bytes, Mapping[bytes, List[List[bytes]]]]]: A mapping of stream keys, to a mapping of stream IDs,
                 to a list of pairings with format `[[field, entry], [field, entry], ...]`.
                 None will be returned under the following conditions:
                 - All key-ID pairs in `keys_and_ids` have either a non-existing key or a non-existing ID, or there are no entries after the given ID.
@@ -2788,29 +2834,29 @@ class CoreCommands(Protocol):
             >>> await client.xadd("mystream", [("field2", "value2"), ("field2", "value3")], StreamAddOptions(id="0-2"))
             >>> await client.xread({"mystream": "0-0"}, StreamReadOptions(block_ms=1000))
                 {
-                    "mystream": {
-                        "0-1": [["field1", "value1"]],
-                        "0-2": [["field2", "value2"], ["field2", "value3"]],
+                    b"mystream": {
+                        b"0-1": [[b"field1", b"value1"]],
+                        b"0-2": [[b"field2", b"value2"], [b"field2", b"value3"]],
                     }
                 }
                 # Indicates the stream entries for "my_stream" with IDs greater than "0-0". The operation blocks up to
                 # 1000ms if there is no stream data.
         """
-        args = [] if options is None else options.to_args()
+        args: List[TEncodable] = [] if options is None else options.to_args()
         args.append("STREAMS")
         args.extend([key for key in keys_and_ids.keys()])
         args.extend([value for value in keys_and_ids.values()])
 
         return cast(
-            Optional[Mapping[str, Mapping[str, List[List[str]]]]],
+            Optional[Mapping[bytes, Mapping[bytes, List[List[bytes]]]]],
             await self._execute_command(RequestType.XRead, args),
         )
 
     async def xgroup_create(
         self,
-        key: str,
-        group_name: str,
-        group_id: str,
+        key: TEncodable,
+        group_name: TEncodable,
+        group_id: TEncodable,
         options: Optional[StreamGroupOptions] = None,
     ) -> TOK:
         """
@@ -2819,9 +2865,9 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/xgroup-create for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The newly created consumer group name.
-            group_id (str): The stream entry ID that specifies the last delivered entry in the stream from the new
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The newly created consumer group name.
+            group_id (TEncodable): The stream entry ID that specifies the last delivered entry in the stream from the new
                 group’s perspective. The special ID "$" can be used to specify the last entry in the stream.
             options (Optional[StreamGroupOptions]): Options for creating the stream group.
 
@@ -2834,7 +2880,7 @@ class CoreCommands(Protocol):
                 # Created the consumer group "mygroup" for the stream "mystream", which will track entries created after
                 # the most recent entry. The stream was created with length 0 if it did not already exist.
         """
-        args = [key, group_name, group_id]
+        args: List[TEncodable] = [key, group_name, group_id]
         if options is not None:
             args.extend(options.to_args())
 
@@ -2843,15 +2889,15 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.XGroupCreate, args),
         )
 
-    async def xgroup_destroy(self, key: str, group_name: str) -> bool:
+    async def xgroup_destroy(self, key: TEncodable, group_name: TEncodable) -> bool:
         """
         Destroys the consumer group `group_name` for the stream stored at `key`.
 
         See https://valkey.io/commands/xgroup-destroy for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The consumer group name to delete.
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name to delete.
 
         Returns:
             bool: True if the consumer group was destroyed. Otherwise, returns False.
@@ -2866,7 +2912,10 @@ class CoreCommands(Protocol):
         )
 
     async def xgroup_create_consumer(
-        self, key: str, group_name: str, consumer_name: str
+        self,
+        key: TEncodable,
+        group_name: TEncodable,
+        consumer_name: TEncodable,
     ) -> bool:
         """
         Creates a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
@@ -2874,9 +2923,9 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/xgroup-createconsumer for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The consumer group name.
-            consumer_name (str): The newly created consumer.
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+            consumer_name (TEncodable): The newly created consumer.
 
         Returns:
             bool: True if the consumer is created. Otherwise, returns False.
@@ -2893,7 +2942,10 @@ class CoreCommands(Protocol):
         )
 
     async def xgroup_del_consumer(
-        self, key: str, group_name: str, consumer_name: str
+        self,
+        key: TEncodable,
+        group_name: TEncodable,
+        consumer_name: TEncodable,
     ) -> int:
         """
         Deletes a consumer named `consumer_name` in the consumer group `group_name` for the stream stored at `key`.
@@ -2901,9 +2953,9 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/xgroup-delconsumer for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The consumer group name.
-            consumer_name (str): The consumer to delete.
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+            consumer_name (TEncodable): The consumer to delete.
 
         Returns:
             int: The number of pending messages the `consumer` had before it was deleted.
@@ -2921,10 +2973,10 @@ class CoreCommands(Protocol):
 
     async def xgroup_set_id(
         self,
-        key: str,
-        group_name: str,
-        stream_id: str,
-        entries_read_id: Optional[str] = None,
+        key: TEncodable,
+        group_name: TEncodable,
+        stream_id: TEncodable,
+        entries_read_id: Optional[TEncodable] = None,
     ) -> TOK:
         """
         Set the last delivered ID for a consumer group.
@@ -2932,10 +2984,10 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/xgroup-setid for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The consumer group name.
-            stream_id (str): The stream entry ID that should be set as the last delivered ID for the consumer group.
-            entries_read_id (Optional[str]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+            stream_id (TEncodable): The stream entry ID that should be set as the last delivered ID for the consumer group.
+            entries_read_id (Optional[TEncodable]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
                 used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last
                 entry. This argument can only be specified if you are using Redis version 7.0.0 or above.
 
@@ -2946,7 +2998,7 @@ class CoreCommands(Protocol):
             >>> await client.xgroup_set_id("mystream", "mygroup", "0")
                 OK  # The last delivered ID for consumer group "mygroup" was set to 0.
         """
-        args = [key, group_name, stream_id]
+        args: List[TEncodable] = [key, group_name, stream_id]
         if entries_read_id is not None:
             args.extend(["ENTRIESREAD", entries_read_id])
 
@@ -2957,11 +3009,11 @@ class CoreCommands(Protocol):
 
     async def xreadgroup(
         self,
-        keys_and_ids: Mapping[str, str],
-        group_name: str,
-        consumer_name: str,
+        keys_and_ids: Mapping[TEncodable, TEncodable],
+        group_name: TEncodable,
+        consumer_name: TEncodable,
         options: Optional[StreamReadGroupOptions] = None,
-    ) -> Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]:
+    ) -> Optional[Mapping[bytes, Mapping[bytes, Optional[List[List[bytes]]]]]]:
         """
         Reads entries from the given streams owned by a consumer group.
 
@@ -2971,15 +3023,15 @@ class CoreCommands(Protocol):
             When in cluster mode, all keys in `keys_and_ids` must map to the same hash slot.
 
         Args:
-            keys_and_ids (Mapping[str, str]): A mapping of stream keys to stream entry IDs to read from. The special ">"
+            keys_and_ids (Mapping[TEncodable, TEncodable]): A mapping of stream keys to stream entry IDs to read from. The special ">"
                 ID returns messages that were never delivered to any other consumer. Any other valid ID will return
                 entries pending for the consumer with IDs greater than the one provided.
-            group_name (str): The consumer group name.
-            consumer_name (str): The consumer name. The consumer will be auto-created if it does not already exist.
+            group_name (TEncodable): The consumer group name.
+            consumer_name (TEncodable): The consumer name. The consumer will be auto-created if it does not already exist.
             options (Optional[StreamReadGroupOptions]): Options detailing how to read the stream.
 
         Returns:
-            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]]: A mapping of stream keys, to a mapping of
+            Optional[Mapping[bytes, Mapping[bytes, Optional[List[List[bytes]]]]]]: A mapping of stream keys, to a mapping of
                 stream IDs, to a list of pairings with format `[[field, entry], [field, entry], ...]`.
                 Returns None if the BLOCK option is given and a timeout occurs, or if there is no stream that can be served.
 
@@ -2988,12 +3040,12 @@ class CoreCommands(Protocol):
             >>> await client.xgroup_create("mystream", "mygroup", "0-0")
             >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "myconsumer", StreamReadGroupOptions(count=1))
                 {
-                    "mystream": {
-                        "1-0": [["field1", "value1"]],
+                    b"mystream": {
+                        b"1-0": [[b"field1", b"value1"]],
                     }
                 }  # Read one stream entry from "mystream" using "myconsumer" in the consumer group "mygroup".
         """
-        args = ["GROUP", group_name, consumer_name]
+        args: List[TEncodable] = ["GROUP", group_name, consumer_name]
         if options is not None:
             args.extend(options.to_args())
 
@@ -3002,15 +3054,15 @@ class CoreCommands(Protocol):
         args.extend([value for value in keys_and_ids.values()])
 
         return cast(
-            Optional[Mapping[str, Mapping[str, Optional[List[List[str]]]]]],
+            Optional[Mapping[bytes, Mapping[bytes, Optional[List[List[bytes]]]]]],
             await self._execute_command(RequestType.XReadGroup, args),
         )
 
     async def xack(
         self,
-        key: str,
-        group_name: str,
-        ids: List[str],
+        key: TEncodable,
+        group_name: TEncodable,
+        ids: List[TEncodable],
     ) -> int:
         """
         Removes one or multiple messages from the Pending Entries List (PEL) of a stream consumer group.
@@ -3020,9 +3072,9 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/xack for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The consumer group name.
-            ids (List[str]): The stream entry IDs to acknowledge and consume for the given consumer group.
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+            ids (List[TEncodable]): The stream entry IDs to acknowledge and consume for the given consumer group.
 
         Returns:
             int: The number of messages that were successfully acknowledged.
@@ -3039,7 +3091,8 @@ class CoreCommands(Protocol):
             >>> await client.xack("mystream", "mygroup", ["1-0"])
                 1  # 1 pending message was acknowledged and removed from the Pending Entries List for "mygroup".
         """
-
+        args: List[TEncodable] = [key, group_name]
+        args.extend(ids)
         return cast(
             int,
             await self._execute_command(RequestType.XAck, [key, group_name] + ids),
@@ -3047,20 +3100,20 @@ class CoreCommands(Protocol):
 
     async def xpending(
         self,
-        key: str,
-        group_name: str,
-    ) -> List[Union[int, str, List[List[str]], None]]:
+        key: TEncodable,
+        group_name: TEncodable,
+    ) -> List[Union[int, bytes, List[List[bytes]], None]]:
         """
         Returns stream message summary information for pending messages for the given consumer group.
 
         See https://valkey.io/commands/xpending for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The consumer group name.
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
 
         Returns:
-            List[Union[int, str, List[List[str]], None]]: A list that includes the summary of pending messages, with the
+            List[Union[int, bytes, List[List[bytes]], None]]: A list that includes the summary of pending messages, with the
                 format `[num_group_messages, start_id, end_id, [[consumer_name, num_consumer_messages]]]`, where:
                 - `num_group_messages`: The total number of pending messages for this consumer group.
                 - `start_id`: The smallest ID among the pending messages.
@@ -3075,27 +3128,27 @@ class CoreCommands(Protocol):
                 [4, "1-0", "1-3", [["my_consumer1", "3"], ["my_consumer2", "1"]]
         """
         return cast(
-            List[Union[int, str, List[List[str]], None]],
+            List[Union[int, bytes, List[List[bytes]], None]],
             await self._execute_command(RequestType.XPending, [key, group_name]),
         )
 
     async def xpending_range(
         self,
-        key: str,
-        group_name: str,
+        key: TEncodable,
+        group_name: TEncodable,
         start: StreamRangeBound,
         end: StreamRangeBound,
         count: int,
         options: Optional[StreamPendingOptions] = None,
-    ) -> List[List[Union[str, int]]]:
+    ) -> List[List[Union[bytes, int]]]:
         """
         Returns an extended form of stream message information for pending messages matching a given range of IDs.
 
         See https://valkey.io/commands/xpending for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The consumer group name.
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
             start (StreamRangeBound): The starting stream ID bound for the range.
                 - Use `IdBound` to specify a stream ID.
                 - Use `ExclusiveIdBound` to specify an exclusive bounded stream ID.
@@ -3108,7 +3161,7 @@ class CoreCommands(Protocol):
             options (Optional[StreamPendingOptions]): The stream pending options.
 
         Returns:
-            List[List[Union[str, int]]]: A list of lists, where each inner list is a length 4 list containing extended
+            List[List[Union[bytes, int]]]: A list of lists, where each inner list is a length 4 list containing extended
                 message information with the format `[[id, consumer_name, time_elapsed, num_delivered]]`, where:
                 - `id`: The ID of the message.
                 - `consumer_name`: The name of the consumer that fetched the message and has still to acknowledge it. We
@@ -3119,40 +3172,40 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.xpending_range("my_stream", "my_group", MinId(), MaxId(), 10, StreamPendingOptions(consumer_name="my_consumer"))
-                [["1-0", "my_consumer", 1234, 1], ["1-1", "my_consumer", 1123, 1]]
+                [[b"1-0", b"my_consumer", 1234, 1], [b"1-1", b"my_consumer", 1123, 1]]
                 # Extended stream entry information for the pending entries associated with "my_consumer".
         """
         args = _create_xpending_range_args(key, group_name, start, end, count, options)
         return cast(
-            List[List[Union[str, int]]],
+            List[List[Union[bytes, int]]],
             await self._execute_command(RequestType.XPending, args),
         )
 
     async def xautoclaim(
         self,
-        key: str,
-        group_name: str,
-        consumer_name: str,
+        key: TEncodable,
+        group_name: TEncodable,
+        consumer_name: TEncodable,
         min_idle_time_ms: int,
-        start: str,
+        start: TEncodable,
         count: Optional[int] = None,
-    ) -> List[Union[str, Mapping[str, List[List[str]]], List[str]]]:
+    ) -> List[Union[bytes, Mapping[bytes, List[List[bytes]]], List[bytes]]]:
         """
         Transfers ownership of pending stream entries that match the specified criteria.
 
         See https://valkey.io/commands/xautoclaim for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The consumer group name.
-            consumer_name (str): The consumer name.
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+            consumer_name (TEncodable): The consumer name.
             min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
                 value.
-            start (str): Filters the claimed entries to those that have an ID equal or greater than the specified value.
+            start (TEncodable): Filters the claimed entries to those that have an ID equal or greater than the specified value.
             count (Optional[int]): Limits the number of claimed entries to the specified value.
 
         Returns:
-            List[Union[str, Mapping[str, List[List[str]]], List[str]]]: A list containing the following elements:
+            List[Union[bytes, Mapping[bytes, List[List[bytes]]], List[bytes]]]: A list containing the following elements:
                 - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
                 to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
                 scanned.
@@ -3166,11 +3219,11 @@ class CoreCommands(Protocol):
             # Redis version < 7.0.0:
             >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [
-                    "0-0",
+                    b"0-0",
                     {
-                        "1-1": [
-                            ["field1", "value1"],
-                            ["field2", "value2"],
+                        b"1-1": [
+                            [b"field1", b"value1"],
+                            [b"field2", b"value2"],
                         ]
                     }
                 ]
@@ -3180,14 +3233,14 @@ class CoreCommands(Protocol):
             # Redis version 7.0.0 and above:
             >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [
-                    "0-0",
+                    b"0-0",
                     {
-                        "1-1": [
-                            ["field1", "value1"],
-                            ["field2", "value2"],
+                        b"1-1": [
+                            [b"field1", b"value1"],
+                            [b"field2", b"value2"],
                         ]
                     },
-                    ["1-2"]
+                    [b"1-2"]
                 ]
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
@@ -3195,24 +3248,30 @@ class CoreCommands(Protocol):
 
         Since: Redis version 6.2.0.
         """
-        args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
+        args: List[TEncodable] = [
+            key,
+            group_name,
+            consumer_name,
+            str(min_idle_time_ms),
+            start,
+        ]
         if count is not None:
             args.extend(["COUNT", str(count)])
 
         return cast(
-            List[Union[str, Mapping[str, List[List[str]]], List[str]]],
+            List[Union[bytes, Mapping[bytes, List[List[bytes]]], List[bytes]]],
             await self._execute_command(RequestType.XAutoClaim, args),
         )
 
     async def xautoclaim_just_id(
         self,
-        key: str,
-        group_name: str,
-        consumer_name: str,
+        key: TEncodable,
+        group_name: TEncodable,
+        consumer_name: TEncodable,
         min_idle_time_ms: int,
-        start: str,
+        start: TEncodable,
         count: Optional[int] = None,
-    ) -> List[Union[str, List[str]]]:
+    ) -> List[Union[bytes, List[bytes]]]:
         """
         Transfers ownership of pending stream entries that match the specified criteria. This command uses the JUSTID
         argument to further specify that the return value should contain a list of claimed IDs without their
@@ -3221,16 +3280,16 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/xautoclaim for more details.
 
         Args:
-            key (str): The key of the stream.
-            group_name (str): The consumer group name.
-            consumer_name (str): The consumer name.
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+            consumer_name (TEncodable): The consumer name.
             min_idle_time_ms (int): Filters the claimed entries to those that have been idle for more than the specified
                 value.
-            start (str): Filters the claimed entries to those that have an ID equal or greater than the specified value.
+            start (TEncodable): Filters the claimed entries to those that have an ID equal or greater than the specified value.
             count (Optional[int]): Limits the number of claimed entries to the specified value.
 
         Returns:
-            List[Union[str, List[str]]]: A list containing the following elements:
+            List[Union[bytes, List[bytes]]]: A list containing the following elements:
                 - A stream ID to be used as the start argument for the next call to `XAUTOCLAIM`. This ID is equivalent
                 to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
                 scanned.
@@ -3242,34 +3301,40 @@ class CoreCommands(Protocol):
         Examples:
             # Redis version < 7.0.0:
             >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
-                ["0-0", ["1-1"]]
+                [b"0-0", [b"1-1"]]
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned.
 
             # Redis version 7.0.0 and above:
             >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
-                ["0-0", ["1-1"], ["1-2"]]
+                [b"0-0", [b"1-1"], [b"1-2"]]
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
                 # exists in the stream.
 
         Since: Redis version 6.2.0.
         """
-        args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
+        args: List[TEncodable] = [
+            key,
+            group_name,
+            consumer_name,
+            str(min_idle_time_ms),
+            start,
+        ]
         if count is not None:
             args.extend(["COUNT", str(count)])
 
         args.append("JUSTID")
 
         return cast(
-            List[Union[str, List[str]]],
+            List[Union[bytes, List[bytes]]],
             await self._execute_command(RequestType.XAutoClaim, args),
         )
 
     async def geoadd(
         self,
-        key: str,
-        members_geospatialdata: Mapping[str, GeospatialData],
+        key: TEncodable,
+        members_geospatialdata: Mapping[TEncodable, GeospatialData],
         existing_options: Optional[ConditionalChange] = None,
         changed: bool = False,
     ) -> int:
@@ -3280,8 +3345,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/geoadd for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            members_geospatialdata (Mapping[str, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
+            key (TEncodable): The key of the sorted set.
+            members_geospatialdata (Mapping[TEncodable, GeospatialData]): A mapping of member names to their corresponding positions. See `GeospatialData`.
             The command will report an error when the user attempts to index coordinates outside the specified ranges.
             existing_options (Optional[ConditionalChange]): Options for handling existing members.
                 - NX: Only add new elements.
@@ -3319,9 +3384,9 @@ class CoreCommands(Protocol):
 
     async def geodist(
         self,
-        key: str,
-        member1: str,
-        member2: str,
+        key: TEncodable,
+        member1: TEncodable,
+        member2: TEncodable,
         unit: Optional[GeoUnit] = None,
     ) -> Optional[float]:
         """
@@ -3330,9 +3395,9 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/geodist for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            member1 (str): The name of the first member.
-            member2 (str): The name of the second member.
+            key (TEncodable): The key of the sorted set.
+            member1 (TEncodable): The name of the first member.
+            member2 (TEncodable): The name of the second member.
             unit (Optional[GeoUnit]): The unit of distance measurement. See `GeoUnit`.
                 If not specified, the default unit is `METERS`.
 
@@ -3358,35 +3423,37 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GeoDist, args),
         )
 
-    async def geohash(self, key: str, members: List[str]) -> List[Optional[str]]:
+    async def geohash(
+        self, key: TEncodable, members: List[TEncodable]
+    ) -> List[Optional[bytes]]:
         """
-        Returns the GeoHash strings representing the positions of all the specified members in the sorted set stored at
+        Returns the GeoHash bytes strings representing the positions of all the specified members in the sorted set stored at
         `key`.
 
         See https://valkey.io/commands/geohash for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            members (List[str]): The list of members whose GeoHash strings are to be retrieved.
+            key (TEncodable): The key of the sorted set.
+            members (List[TEncodable]): The list of members whose GeoHash bytes strings are to be retrieved.
 
         Returns:
-            List[Optional[str]]: A list of GeoHash strings representing the positions of the specified members stored at `key`.
+            List[Optional[bytes]]: A list of GeoHash bytes strings representing the positions of the specified members stored at `key`.
             If a member does not exist in the sorted set, a None value is returned for that member.
 
         Examples:
             >>> await client.geoadd("my_geo_sorted_set", {"Palermo": GeospatialData(13.361389, 38.115556), "Catania": GeospatialData(15.087269, 37.502669)})
             >>> await client.geohash("my_geo_sorted_set", ["Palermo", "Catania", "some city])
-                ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash strings for the specified members.
+                ["sqc8b49rny0", "sqdtr74hyu0", None]  # Indicates the GeoHash bytes strings for the specified members.
         """
         return cast(
-            List[Optional[str]],
+            List[Optional[bytes]],
             await self._execute_command(RequestType.GeoHash, [key] + members),
         )
 
     async def geopos(
         self,
-        key: str,
-        members: List[str],
+        key: TEncodable,
+        members: List[TEncodable],
     ) -> List[Optional[List[float]]]:
         """
         Returns the positions (longitude and latitude) of all the given members of a geospatial index in the sorted set stored at
@@ -3395,8 +3462,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/geopos for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            members (List[str]): The members for which to get the positions.
+            key (TEncodable): The key of the sorted set.
+            members (List[TEncodable]): The members for which to get the positions.
 
         Returns:
             List[Optional[List[float]]]: A list of positions (longitude and latitude) corresponding to the given members.
@@ -3414,23 +3481,23 @@ class CoreCommands(Protocol):
 
     async def geosearch(
         self,
-        key: str,
-        search_from: Union[str, GeospatialData],
-        seach_by: Union[GeoSearchByRadius, GeoSearchByBox],
+        key: TEncodable,
+        search_from: Union[str, bytes, GeospatialData],
+        search_by: Union[GeoSearchByRadius, GeoSearchByBox],
         order_by: Optional[OrderBy] = None,
         count: Optional[GeoSearchCount] = None,
         with_coord: bool = False,
         with_dist: bool = False,
         with_hash: bool = False,
-    ) -> List[Union[str, List[Union[str, float, int, List[float]]]]]:
+    ) -> List[Union[bytes, List[Union[bytes, float, int, List[float]]]]]:
         """
         Searches for members in a sorted set stored at `key` representing geospatial data within a circular or rectangular area.
 
         See https://valkey.io/commands/geosearch/ for more details.
 
         Args:
-            key (str): The key of the sorted set representing geospatial data.
-            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
+            key (TEncodable): The key of the sorted set representing geospatial data.
+            search_from (Union[str, bytes, GeospatialData]): The location to search from. Can be specified either as a member
                 from the sorted set or as a geospatial data (see `GeospatialData`).
             search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
                 For circular area search, see `GeoSearchByRadius`.
@@ -3447,9 +3514,9 @@ class CoreCommands(Protocol):
             with_hash (bool): Whether to include geohash of the returned items. Defaults to False.
 
         Returns:
-            List[Union[str, List[Union[str, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
+            List[Union[bytes, List[Union[bytes, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
             If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, we're each sub array represents a single item in the following order:
-                (str): The member (location) name.
+                (bytes): The member (location) name.
                 (float): The distance from the center as a floating point number, in the same unit specified in the radius, if `with_dist` is set to True.
                 (int): The Geohash integer, if `with_hash` is set to True.
                 List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
@@ -3462,19 +3529,19 @@ class CoreCommands(Protocol):
             >>> await client.geosearch("my_geo_sorted_set", GeospatialData(15, 37), GeoSearchByBox(400, 400, GeoUnit.KILOMETERS), OrderBy.DESC, with_coord=true, with_dist=true, with_hash=true)
                 [
                     [
-                        "Catania",
+                        b"Catania",
                         [56.4413, 3479447370796909, [15.087267458438873, 37.50266842333162]],
                     ],
                     [
-                        "Palermo",
+                        b"Palermo",
                         [190.4424, 3479099956230698, [13.361389338970184, 38.1155563954963]],
                     ],
                     [
-                        "edge2",
+                        b"edge2",
                         [279.7403, 3481342659049484, [17.241510450839996, 38.78813451624225]],
                     ],
                     [
-                        "edge1",
+                        b"edge1",
                         [279.7405, 3479273021651468, [12.75848776102066, 38.78813451624225]],
                     ],
                 ]  # Returns locations within the square box of 400 km, with the center being a specific point, from nearest to farthest with the dist, hash and coords.
@@ -3484,7 +3551,7 @@ class CoreCommands(Protocol):
         args = _create_geosearch_args(
             [key],
             search_from,
-            seach_by,
+            search_by,
             order_by,
             count,
             with_coord,
@@ -3493,15 +3560,15 @@ class CoreCommands(Protocol):
         )
 
         return cast(
-            List[Union[str, List[Union[str, float, int, List[float]]]]],
+            List[Union[bytes, List[Union[bytes, float, int, List[float]]]]],
             await self._execute_command(RequestType.GeoSearch, args),
         )
 
     async def geosearchstore(
         self,
-        destination: str,
-        source: str,
-        search_from: Union[str, GeospatialData],
+        destination: TEncodable,
+        source: TEncodable,
+        search_from: Union[str, bytes, GeospatialData],
         search_by: Union[GeoSearchByRadius, GeoSearchByBox],
         count: Optional[GeoSearchCount] = None,
         store_dist: bool = False,
@@ -3515,20 +3582,20 @@ class CoreCommands(Protocol):
         Note:
             When in cluster mode, both `source` and `destination` must map to the same hash slot.
 
-        Args:
-            destination (str): The key to store the search results.
-            source (str): The key of the sorted set representing geospatial data to search from.
-            search_from (Union[str, GeospatialData]): The location to search from. Can be specified either as a member
-                from the sorted set or as a geospatial data (see `GeospatialData`).
-            search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
-                For circular area search, see `GeoSearchByRadius`.
-                For rectangular area search, see `GeoSearchByBox`.
-            count (Optional[GeoSearchCount]): Specifies the maximum number of results to store. See `GeoSearchCount`.
-                If not specified, stores all results.
-            store_dist (bool): Determines what is stored as the sorted set score. Defaults to False.
-                - If set to False, the geohash of the location will be stored as the sorted set score.
-                - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted set score.
-                    The distance is represented as a floating-point number in the same unit specified for that shape.
+            Args:
+                destination (TEncodable): The key to store the search results.
+                source (TEncodable): The key of the sorted set representing geospatial data to search from.
+                search_from (Union[str, bytes, GeospatialData]): The location to search from. Can be specified either as a member
+                    from the sorted set or as a geospatial data (see `GeospatialData`).
+                search_by (Union[GeoSearchByRadius, GeoSearchByBox]): The search criteria.
+                    For circular area search, see `GeoSearchByRadius`.
+                    For rectangular area search, see `GeoSearchByBox`.
+                count (Optional[GeoSearchCount]): Specifies the maximum number of results to store. See `GeoSearchCount`.
+                    If not specified, stores all results.
+                store_dist (bool): Determines what is stored as the sorted set score. Defaults to False.
+                    - If set to False, the geohash of the location will be stored as the sorted set score.
+                    - If set to True, the distance from the center of the shape (circle or box) will be stored as the sorted set score.
+                        The distance is represented as a floating-point number in the same unit specified for that shape.
 
         Returns:
             int: The number of elements in the resulting sorted set stored at `destination`.
@@ -3538,11 +3605,11 @@ class CoreCommands(Protocol):
             >>> await client.geosearchstore("my_dest_sorted_set", "my_geo_sorted_set", "Catania", GeoSearchByRadius(175, GeoUnit.MILES))
                 2 # Number of elements stored in "my_dest_sorted_set".
             >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
-                {"Palermo": 3479099956230698.0, "Catania": 3479447370796909.0} # The elements within te search area, with their geohash as score.
+                {b"Palermo": 3479099956230698.0, b"Catania": 3479447370796909.0} # The elements within te search area, with their geohash as score.
             >>> await client.geosearchstore("my_dest_sorted_set", "my_geo_sorted_set", GeospatialData(15, 37), GeoSearchByBox(400, 400, GeoUnit.KILOMETERS), store_dist=True)
                 2 # Number of elements stored in "my_dest_sorted_set", with distance as score.
             >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
-                {"Catania": 56.4412578701582, "Palermo": 190.44242984775784} # The elements within te search area, with the distance as score.
+                {b"Catania": 56.4412578701582, b"Palermo": 190.44242984775784} # The elements within te search area, with the distance as score.
 
         Since: Redis version 6.2.0.
         """
@@ -3565,8 +3632,8 @@ class CoreCommands(Protocol):
 
     async def zadd(
         self,
-        key: str,
-        members_scores: Mapping[str, float],
+        key: TEncodable,
+        members_scores: Mapping[TEncodable, float],
         existing_options: Optional[ConditionalChange] = None,
         update_condition: Optional[UpdateOptions] = None,
         changed: bool = False,
@@ -3578,8 +3645,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zadd/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            members_scores (Mapping[str, float]): A mapping of members to their corresponding scores.
+            key (TEncodable): The key of the sorted set.
+            members_scores (Mapping[TEncodable, float]): A mapping of members to their corresponding scores.
             existing_options (Optional[ConditionalChange]): Options for handling existing members.
                 - NX: Only add new elements.
                 - XX: Only update existing elements.
@@ -3627,8 +3694,8 @@ class CoreCommands(Protocol):
 
     async def zadd_incr(
         self,
-        key: str,
-        member: str,
+        key: TEncodable,
+        member: TEncodable,
         increment: float,
         existing_options: Optional[ConditionalChange] = None,
         update_condition: Optional[UpdateOptions] = None,
@@ -3641,8 +3708,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zadd/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            member (str): A member in the sorted set to increment.
+            key (TEncodable): The key of the sorted set.
+            member (TEncodable): A member in the sorted set to increment.
             increment (float): The score to increment the member.
             existing_options (Optional[ConditionalChange]): Options for handling the member's existence.
                 - NX: Only increment a member that doesn't exist.
@@ -3683,14 +3750,14 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ZAdd, args),
         )
 
-    async def zcard(self, key: str) -> int:
+    async def zcard(self, key: TEncodable) -> int:
         """
         Returns the cardinality (number of elements) of the sorted set stored at `key`.
 
         See https://redis.io/commands/zcard/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
 
         Returns:
             int: The number of elements in the sorted set.
@@ -3706,7 +3773,7 @@ class CoreCommands(Protocol):
 
     async def zcount(
         self,
-        key: str,
+        key: TEncodable,
         min_score: Union[InfBound, ScoreBoundary],
         max_score: Union[InfBound, ScoreBoundary],
     ) -> int:
@@ -3716,7 +3783,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zcount/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             min_score (Union[InfBound, ScoreBoundary]): The minimum score to count from.
                 Can be an instance of InfBound representing positive/negative infinity,
                 or ScoreBoundary representing a specific score and inclusivity.
@@ -3752,7 +3819,9 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def zincrby(self, key: str, increment: float, member: str) -> float:
+    async def zincrby(
+        self, key: TEncodable, increment: float, member: TEncodable
+    ) -> float:
         """
         Increments the score of `member` in the sorted set stored at `key` by `increment`.
         If `member` does not exist in the sorted set, it is added with `increment` as its score.
@@ -3761,9 +3830,9 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zincrby/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             increment (float): The score increment.
-            member (str): A member of the sorted set.
+            member (TEncodable): A member of the sorted set.
 
         Returns:
             float: The new score of `member`.
@@ -3785,8 +3854,8 @@ class CoreCommands(Protocol):
         )
 
     async def zpopmax(
-        self, key: str, count: Optional[int] = None
-    ) -> Mapping[str, float]:
+        self, key: TEncodable, count: Optional[int] = None
+    ) -> Mapping[bytes, float]:
         """
         Removes and returns the members with the highest scores from the sorted set stored at `key`.
         If `count` is provided, up to `count` members with the highest scores are removed and returned.
@@ -3795,30 +3864,30 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zpopmax for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             count (Optional[int]): Specifies the quantity of members to pop. If not specified, pops one member.
             If `count` is higher than the sorted set's cardinality, returns all members and their scores, ordered from highest to lowest.
 
         Returns:
-            Mapping[str, float]: A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
+            Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the highest score to the one with the lowest.
             If `key` doesn't exist, it will be treated as an empy sorted set and the command returns an empty map.
 
         Examples:
             >>> await client.zpopmax("my_sorted_set")
-                {'member1': 10.0}  # Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
+                {b'member1': 10.0}  # Indicates that 'member1' with a score of 10.0 has been removed from the sorted set.
             >>> await client.zpopmax("my_sorted_set", 2)
-                {'member2': 8.0, 'member3': 7.5}  # Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
+                {b'member2': 8.0, b'member3': 7.5}  # Indicates that 'member2' with a score of 8.0 and 'member3' with a score of 7.5 have been removed from the sorted set.
         """
         return cast(
-            Mapping[str, float],
+            Mapping[bytes, float],
             await self._execute_command(
                 RequestType.ZPopMax, [key, str(count)] if count else [key]
             ),
         )
 
     async def bzpopmax(
-        self, keys: List[str], timeout: float
-    ) -> Optional[List[Union[str, float]]]:
+        self, keys: List[TEncodable], timeout: float
+    ) -> Optional[List[Union[bytes, float]]]:
         """
         Pops the member with the highest score from the first non-empty sorted set, with the given keys being checked in
         the order that they are given. Blocks the connection when there are no members to remove from any of the given
@@ -3833,28 +3902,28 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/bzpopmax for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted sets.
+            keys (List[TEncodable]): The keys of the sorted sets.
             timeout (float): The number of seconds to wait for a blocking operation to complete.
                 A value of 0 will block indefinitely.
 
         Returns:
-            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+            Optional[List[Union[bytes, float]]]: An array containing the key where the member was popped out, the member itself,
                 and the member score. If no member could be popped and the `timeout` expired, returns None.
 
         Examples:
             >>> await client.zadd("my_sorted_set1", {"member1": 10.0, "member2": 5.0})
                 2  # Two elements have been added to the sorted set at "my_sorted_set1".
             >>> await client.bzpopmax(["my_sorted_set1", "my_sorted_set2"], 0.5)
-                ['my_sorted_set1', 'member1', 10.0]  # "member1" with a score of 10.0 has been removed from "my_sorted_set1".
+                [b'my_sorted_set1', b'member1', 10.0]  # "member1" with a score of 10.0 has been removed from "my_sorted_set1".
         """
         return cast(
-            Optional[List[Union[str, float]]],
+            Optional[List[Union[bytes, float]]],
             await self._execute_command(RequestType.BZPopMax, keys + [str(timeout)]),
         )
 
     async def zpopmin(
-        self, key: str, count: Optional[int] = None
-    ) -> Mapping[str, float]:
+        self, key: TEncodable, count: Optional[int] = None
+    ) -> Mapping[bytes, float]:
         """
         Removes and returns the members with the lowest scores from the sorted set stored at `key`.
         If `count` is provided, up to `count` members with the lowest scores are removed and returned.
@@ -3863,30 +3932,29 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zpopmin for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             count (Optional[int]): Specifies the quantity of members to pop. If not specified, pops one member.
             If `count` is higher than the sorted set's cardinality, returns all members and their scores.
 
         Returns:
-            Mapping[str, float]: A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
+            Mapping[bytes, float]: A map of the removed members and their scores, ordered from the one with the lowest score to the one with the highest.
             If `key` doesn't exist, it will be treated as an empy sorted set and the command returns an empty map.
 
         Examples:
             >>> await client.zpopmin("my_sorted_set")
-                {'member1': 5.0}  # Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
+                {b'member1': 5.0}  # Indicates that 'member1' with a score of 5.0 has been removed from the sorted set.
             >>> await client.zpopmin("my_sorted_set", 2)
-                {'member3': 7.5 , 'member2': 8.0}  # Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
+                {b'member3': 7.5 , b'member2': 8.0}  # Indicates that 'member3' with a score of 7.5 and 'member2' with a score of 8.0 have been removed from the sorted set.
         """
+        args: List[TEncodable] = [key, str(count)] if count else [key]
         return cast(
-            Mapping[str, float],
-            await self._execute_command(
-                RequestType.ZPopMin, [key, str(count)] if count else [key]
-            ),
+            Mapping[bytes, float],
+            await self._execute_command(RequestType.ZPopMin, args),
         )
 
     async def bzpopmin(
-        self, keys: List[str], timeout: float
-    ) -> Optional[List[Union[str, float]]]:
+        self, keys: List[TEncodable], timeout: float
+    ) -> Optional[List[Union[bytes, float]]]:
         """
         Pops the member with the lowest score from the first non-empty sorted set, with the given keys being checked in
         the order that they are given. Blocks the connection when there are no members to remove from any of the given
@@ -3901,31 +3969,32 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/bzpopmin for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted sets.
+            keys (List[TEncodable]): The keys of the sorted sets.
             timeout (float): The number of seconds to wait for a blocking operation to complete.
                 A value of 0 will block indefinitely.
 
         Returns:
-            Optional[List[Union[str, float]]]: An array containing the key where the member was popped out, the member itself,
+            Optional[List[Union[bytes, float]]]: An array containing the key where the member was popped out, the member itself,
                 and the member score. If no member could be popped and the `timeout` expired, returns None.
 
         Examples:
             >>> await client.zadd("my_sorted_set1", {"member1": 10.0, "member2": 5.0})
                 2  # Two elements have been added to the sorted set at "my_sorted_set1".
             >>> await client.bzpopmin(["my_sorted_set1", "my_sorted_set2"], 0.5)
-                ['my_sorted_set1', 'member2', 5.0]  # "member2" with a score of 5.0 has been removed from "my_sorted_set1".
+                [b'my_sorted_set1', b'member2', 5.0]  # "member2" with a score of 5.0 has been removed from "my_sorted_set1".
         """
+        args: List[TEncodable] = keys + [str(timeout)]
         return cast(
-            Optional[List[Union[str, float]]],
-            await self._execute_command(RequestType.BZPopMin, keys + [str(timeout)]),
+            Optional[List[Union[bytes, float]]],
+            await self._execute_command(RequestType.BZPopMin, args),
         )
 
     async def zrange(
         self,
-        key: str,
+        key: TEncodable,
         range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
         reverse: bool = False,
-    ) -> List[str]:
+    ) -> List[bytes]:
         """
         Returns the specified range of elements in the sorted set stored at `key`.
 
@@ -3936,7 +4005,7 @@ class CoreCommands(Protocol):
         To get the elements with their scores, see zrange_withscores.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
                 - For range queries by index (rank), use RangeByIndex.
                 - For range queries by lexicographical order, use RangeByLex.
@@ -3944,25 +4013,25 @@ class CoreCommands(Protocol):
             reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
 
         Returns:
-            List[str]: A list of elements within the specified range.
+            List[bytes]: A list of elements within the specified range.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty array.
 
         Examples:
             >>> await client.zrange("my_sorted_set", RangeByIndex(0, -1))
-                ['member1', 'member2', 'member3']  # Returns all members in ascending order.
+                [b'member1', b'member2', b'member3']  # Returns all members in ascending order.
             >>> await client.zrange("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
-                ['member2', 'member3'] # Returns members with scores within the range of negative infinity to 3, in ascending order.
+                [b'member2', b'member3'] # Returns members with scores within the range of negative infinity to 3, in ascending order.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=False)
 
-        return cast(List[str], await self._execute_command(RequestType.ZRange, args))
+        return cast(List[bytes], await self._execute_command(RequestType.ZRange, args))
 
     async def zrange_withscores(
         self,
-        key: str,
+        key: TEncodable,
         range_query: Union[RangeByIndex, RangeByScore],
         reverse: bool = False,
-    ) -> Mapping[str, float]:
+    ) -> Mapping[bytes, float]:
         """
         Returns the specified range of elements with their scores in the sorted set stored at `key`.
         Similar to ZRANGE but with a WITHSCORE flag.
@@ -3970,32 +4039,32 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zrange/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             range_query (Union[RangeByIndex, RangeByScore]): The range query object representing the type of range query to perform.
                 - For range queries by index (rank), use RangeByIndex.
                 - For range queries by score, use RangeByScore.
             reverse (bool): If True, reverses the sorted set, with index 0 as the element with the highest score.
 
         Returns:
-            Mapping[str , float]: A map of elements and their scores within the specified range.
+            Mapping[bytes , float]: A map of elements and their scores within the specified range.
             If `key` does not exist, it is treated as an empty sorted set, and the command returns an empty map.
 
         Examples:
             >>> await client.zrange_withscores("my_sorted_set", RangeByScore(ScoreBoundary(10), ScoreBoundary(20)))
-                {'member1': 10.5, 'member2': 15.2}  # Returns members with scores between 10 and 20 with their scores.
+                {b'member1': 10.5, b'member2': 15.2}  # Returns members with scores between 10 and 20 with their scores.
            >>> await client.zrange_withscores("my_sorted_set", RangeByScore(start=InfBound.NEG_INF, stop=ScoreBoundary(3)))
-                {'member4': -2.0, 'member7': 1.5} # Returns members with with scores within the range of negative infinity to 3, with their scores.
+                {b'member4': -2.0, b'member7': 1.5} # Returns members with with scores within the range of negative infinity to 3, with their scores.
         """
         args = _create_zrange_args(key, range_query, reverse, with_scores=True)
 
         return cast(
-            Mapping[str, float], await self._execute_command(RequestType.ZRange, args)
+            Mapping[bytes, float], await self._execute_command(RequestType.ZRange, args)
         )
 
     async def zrangestore(
         self,
-        destination: str,
-        source: str,
+        destination: TEncodable,
+        source: TEncodable,
         range_query: Union[RangeByIndex, RangeByLex, RangeByScore],
         reverse: bool = False,
     ) -> int:
@@ -4012,8 +4081,8 @@ class CoreCommands(Protocol):
             When in Cluster mode, `source` and `destination` must map to the same hash slot.
 
         Args:
-            destination (str): The key for the destination sorted set.
-            source (str): The key of the source sorted set.
+            destination (TEncodable): The key for the destination sorted set.
+            source (TEncodable): The key of the source sorted set.
             range_query (Union[RangeByIndex, RangeByLex, RangeByScore]): The range query object representing the type of range query to perform.
                 - For range queries by index (rank), use RangeByIndex.
                 - For range queries by lexicographical order, use RangeByLex.
@@ -4035,8 +4104,8 @@ class CoreCommands(Protocol):
 
     async def zrank(
         self,
-        key: str,
-        member: str,
+        key: TEncodable,
+        member: TEncodable,
     ) -> Optional[int]:
         """
         Returns the rank of `member` in the sorted set stored at `key`, with scores ordered from low to high.
@@ -4046,8 +4115,8 @@ class CoreCommands(Protocol):
         To get the rank of `member` with its score, see `zrank_withscore`.
 
         Args:
-            key (str): The key of the sorted set.
-            member (str): The member whose rank is to be retrieved.
+            key (TEncodable): The key of the sorted set.
+            member (TEncodable): The member whose rank is to be retrieved.
 
         Returns:
             Optional[int]: The rank of `member` in the sorted set.
@@ -4065,8 +4134,8 @@ class CoreCommands(Protocol):
 
     async def zrank_withscore(
         self,
-        key: str,
-        member: str,
+        key: TEncodable,
+        member: TEncodable,
     ) -> Optional[List[Union[int, float]]]:
         """
         Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the lowest to highest.
@@ -4074,8 +4143,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zrank for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            member (str): The member whose rank is to be retrieved.
+            key (TEncodable): The key of the sorted set.
+            member (TEncodable): The member whose rank is to be retrieved.
 
         Returns:
             Optional[List[Union[int, float]]]: A list containing the rank and score of `member` in the sorted set.
@@ -4094,7 +4163,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ZRank, [key, member, "WITHSCORE"]),
         )
 
-    async def zrevrank(self, key: str, member: str) -> Optional[int]:
+    async def zrevrank(self, key: TEncodable, member: TEncodable) -> Optional[int]:
         """
         Returns the rank of `member` in the sorted set stored at `key`, where scores are ordered from the highest to
         lowest, starting from `0`.
@@ -4104,8 +4173,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zrevrank for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            member (str): The member whose rank is to be retrieved.
+            key (TEncodable): The key of the sorted set.
+            member (TEncodable): The member whose rank is to be retrieved.
 
         Returns:
             Optional[int]: The rank of `member` in the sorted set, where ranks are ordered from high to low based on scores.
@@ -4122,7 +4191,7 @@ class CoreCommands(Protocol):
         )
 
     async def zrevrank_withscore(
-        self, key: str, member: str
+        self, key: TEncodable, member: TEncodable
     ) -> Optional[List[Union[int, float]]]:
         """
         Returns the rank of `member` in the sorted set stored at `key` with its score, where scores are ordered from the
@@ -4131,8 +4200,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zrevrank for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            member (str): The member whose rank is to be retrieved.
+            key (TEncodable): The key of the sorted set.
+            member (TEncodable): The member whose rank is to be retrieved.
 
         Returns:
             Optional[List[Union[int, float]]]: A list containing the rank (as `int`) and score (as `float`) of `member`
@@ -4155,8 +4224,8 @@ class CoreCommands(Protocol):
 
     async def zrem(
         self,
-        key: str,
-        members: List[str],
+        key: TEncodable,
+        members: List[TEncodable],
     ) -> int:
         """
         Removes the specified members from the sorted set stored at `key`.
@@ -4165,8 +4234,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zrem/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            members (List[str]): A list of members to remove from the sorted set.
+            key (TEncodable): The key of the sorted set.
+            members (List[TEncodable]): A list of members to remove from the sorted set.
 
         Returns:
             int: The number of members that were removed from the sorted set, not including non-existing members.
@@ -4185,7 +4254,7 @@ class CoreCommands(Protocol):
 
     async def zremrangebyscore(
         self,
-        key: str,
+        key: TEncodable,
         min_score: Union[InfBound, ScoreBoundary],
         max_score: Union[InfBound, ScoreBoundary],
     ) -> int:
@@ -4195,7 +4264,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zremrangebyscore/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             min_score (Union[InfBound, ScoreBoundary]): The minimum score to remove from.
                 Can be an instance of InfBound representing positive/negative infinity,
                 or ScoreBoundary representing a specific score and inclusivity.
@@ -4233,7 +4302,7 @@ class CoreCommands(Protocol):
 
     async def zremrangebylex(
         self,
-        key: str,
+        key: TEncodable,
         min_lex: Union[InfBound, LexBoundary],
         max_lex: Union[InfBound, LexBoundary],
     ) -> int:
@@ -4244,7 +4313,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zremrangebylex/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             min_lex (Union[InfBound, LexBoundary]): The minimum bound of the lexicographical range.
                 Can be an instance of `InfBound` representing positive/negative infinity, or `LexBoundary`
                 representing a specific lex and inclusivity.
@@ -4279,7 +4348,7 @@ class CoreCommands(Protocol):
 
     async def zremrangebyrank(
         self,
-        key: str,
+        key: TEncodable,
         start: int,
         end: int,
     ) -> int:
@@ -4291,7 +4360,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zremrangebyrank/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             start (int): The starting point of the range.
             end (int): The end of the range.
 
@@ -4316,7 +4385,7 @@ class CoreCommands(Protocol):
 
     async def zlexcount(
         self,
-        key: str,
+        key: TEncodable,
         min_lex: Union[InfBound, LexBoundary],
         max_lex: Union[InfBound, LexBoundary],
     ) -> int:
@@ -4326,7 +4395,7 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/zlexcount/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             min_lex (Union[InfBound, LexBoundary]): The minimum lexicographical value to count from.
                 Can be an instance of InfBound representing positive/negative infinity,
                 or LexBoundary representing a specific lexicographical value and inclusivity.
@@ -4359,15 +4428,15 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def zscore(self, key: str, member: str) -> Optional[float]:
+    async def zscore(self, key: TEncodable, member: TEncodable) -> Optional[float]:
         """
         Returns the score of `member` in the sorted set stored at `key`.
 
         See https://redis.io/commands/zscore/ for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            member (str): The member whose score is to be retrieved.
+            key (TEncodable): The key of the sorted set.
+            member (TEncodable): The member whose score is to be retrieved.
 
         Returns:
             Optional[float]: The score of the member.
@@ -4387,8 +4456,8 @@ class CoreCommands(Protocol):
 
     async def zmscore(
         self,
-        key: str,
-        members: List[str],
+        key: TEncodable,
+        members: List[TEncodable],
     ) -> List[Optional[float]]:
         """
         Returns the scores associated with the specified `members` in the sorted set stored at `key`.
@@ -4396,8 +4465,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zmscore for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            members (List[str]): A list of members in the sorted set.
+            key (TEncodable): The key of the sorted set.
+            members (List[TEncodable]): A list of members in the sorted set.
 
         Returns:
             List[Optional[float]]: A list of scores corresponding to `members`.
@@ -4412,7 +4481,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ZMScore, [key] + members),
         )
 
-    async def zdiff(self, keys: List[str]) -> List[str]:
+    async def zdiff(self, keys: List[TEncodable]) -> List[bytes]:
         """
         Returns the difference between the first sorted set and all the successive sorted sets.
         To get the elements with their scores, see `zdiff_withscores`.
@@ -4422,10 +4491,10 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zdiff for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted sets.
+            keys (List[TEncodable]): The keys of the sorted sets.
 
         Returns:
-            List[str]: A list of elements representing the difference between the sorted sets.
+            List[bytes]: A list of elements representing the difference between the sorted sets.
                 If the first key does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
 
@@ -4434,14 +4503,16 @@ class CoreCommands(Protocol):
             >>> await client.zadd("sorted_set2", {"element2": 2.0})
             >>> await client.zadd("sorted_set3", {"element3": 3.0})
             >>> await client.zdiff("sorted_set1", "sorted_set2", "sorted_set3")
-                ["element1"]  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
+                [b"element1"]  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
         """
+        args: List[TEncodable] = [str(len(keys))]
+        args.extend(keys)
         return cast(
-            List[str],
-            await self._execute_command(RequestType.ZDiff, [str(len(keys))] + keys),
+            List[bytes],
+            await self._execute_command(RequestType.ZDiff, args),
         )
 
-    async def zdiff_withscores(self, keys: List[str]) -> Mapping[str, float]:
+    async def zdiff_withscores(self, keys: List[TEncodable]) -> Mapping[bytes, float]:
         """
         Returns the difference between the first sorted set and all the successive sorted sets, with the associated scores.
         When in Cluster mode, all keys must map to the same hash slot.
@@ -4449,10 +4520,10 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zdiff for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted sets.
+            keys (List[TEncodable]): The keys of the sorted sets.
 
         Returns:
-            Mapping[str, float]: A mapping of elements and their scores representing the difference between the sorted
+            Mapping[bytes, float]: A mapping of elements and their scores representing the difference between the sorted
                 sets.
                 If the first `key` does not exist, it is treated as an empty sorted set, and the command returns an
                 empty list.
@@ -4462,16 +4533,16 @@ class CoreCommands(Protocol):
             >>> await client.zadd("sorted_set2", {"element2": 2.0})
             >>> await client.zadd("sorted_set3", {"element3": 3.0})
             >>> await client.zdiff_withscores("sorted_set1", "sorted_set2", "sorted_set3")
-                {"element1": 1.0}  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
+                {b"element1": 1.0}  # Indicates that "element1" is in "sorted_set1" but not "sorted_set2" or "sorted_set3".
         """
         return cast(
-            Mapping[str, float],
+            Mapping[bytes, float],
             await self._execute_command(
                 RequestType.ZDiff, [str(len(keys))] + keys + ["WITHSCORES"]
             ),
         )
 
-    async def zdiffstore(self, destination: str, keys: List[str]) -> int:
+    async def zdiffstore(self, destination: TEncodable, keys: List[TEncodable]) -> int:
         """
         Calculates the difference between the first sorted set and all the successive sorted sets at `keys` and stores
         the difference as a sorted set to `destination`, overwriting it if it already exists. Non-existent keys are
@@ -4482,8 +4553,8 @@ class CoreCommands(Protocol):
             When in Cluster mode, all keys in `keys` and `destination` must map to the same hash slot.
 
         Args:
-            destination (str): The key for the resulting sorted set.
-            keys (List[str]): The keys of the sorted sets to compare.
+            destination (TEncodable): The key for the resulting sorted set.
+            keys (List[TEncodable]): The keys of the sorted sets to compare.
 
         Returns:
             int: The number of members in the resulting sorted set stored at `destination`.
@@ -4507,8 +4578,8 @@ class CoreCommands(Protocol):
 
     async def zinter(
         self,
-        keys: List[str],
-    ) -> List[str]:
+        keys: List[TEncodable],
+    ) -> List[bytes]:
         """
         Computes the intersection of sorted sets given by the specified `keys` and returns a list of intersecting elements.
         To get the scores as well, see `zinter_withscores`.
@@ -4519,27 +4590,29 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zinter/ for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted sets.
+            keys (List[TEncodable]): The keys of the sorted sets.
 
         Returns:
-            List[str]: The resulting array of intersecting elements.
+            List[bytes]: The resulting array of intersecting elements.
 
         Examples:
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
             >>> await client.zadd("key2", {"member1": 9.5})
             >>> await client.zinter(["key1", "key2"])
-                ['member1']
+                [b'member1']
         """
+        args: List[TEncodable] = [str(len(keys))]
+        args.extend(keys)
         return cast(
-            List[str],
-            await self._execute_command(RequestType.ZInter, [str(len(keys))] + keys),
+            List[bytes],
+            await self._execute_command(RequestType.ZInter, args),
         )
 
     async def zinter_withscores(
         self,
-        keys: Union[List[str], List[Tuple[str, float]]],
+        keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
         aggregation_type: Optional[AggregationType] = None,
-    ) -> Mapping[str, float]:
+    ) -> Mapping[bytes, float]:
         """
         Computes the intersection of sorted sets given by the specified `keys` and returns a sorted set of intersecting elements with scores.
         To get the elements only, see `zinter`.
@@ -4550,34 +4623,34 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zinter/ for more details.
 
         Args:
-            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
-                List[str] - for keys only.
-                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            keys (Union[List[TEncodable], List[Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
+                List[TEncodable] - for keys only.
+                List[Tuple[TEncodable, float]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
         Returns:
-            Mapping[str, float]: The resulting sorted set with scores.
+            Mapping[bytes, float]: The resulting sorted set with scores.
 
         Examples:
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
             >>> await client.zadd("key2", {"member1": 9.5})
             >>> await client.zinter_withscores(["key1", "key2"])
-                {'member1': 20}  # "member1" with score of 20 is the result
+                {b'member1': 20}  # "member1" with score of 20 is the result
             >>> await client.zinter_withscores(["key1", "key2"], AggregationType.MAX)
-                {'member1': 10.5}  # "member1" with score of 10.5 is the result.
+                {b'member1': 10.5}  # "member1" with score of 10.5 is the result.
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
         return cast(
-            Mapping[str, float],
+            Mapping[bytes, float],
             await self._execute_command(RequestType.ZInter, args),
         )
 
     async def zinterstore(
         self,
-        destination: str,
-        keys: Union[List[str], List[Tuple[str, float]]],
+        destination: TEncodable,
+        keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
         aggregation_type: Optional[AggregationType] = None,
     ) -> int:
         """
@@ -4590,10 +4663,10 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zinterstore/ for more details.
 
         Args:
-            destination (str): The key of the destination sorted set.
-            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
-                List[str] - for keys only.
-                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            destination (TEncodable): The key of the destination sorted set.
+            keys (Union[List[TEncodable], List[Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
+                List[TEncodable] - for keys only.
+                List[Tuple[TEncodable, float]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
@@ -4606,11 +4679,11 @@ class CoreCommands(Protocol):
             >>> await client.zinterstore("my_sorted_set", ["key1", "key2"])
                 1 # Indicates that the sorted set "my_sorted_set" contains one element.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 20}  # "member1" is now stored in "my_sorted_set" with score of 20.
+                {b'member1': 20}  # "member1" is now stored in "my_sorted_set" with score of 20.
             >>> await client.zinterstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
                 1 # Indicates that the sorted set "my_sorted_set" contains one element, and its score is the maximum score between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
+                {b'member1': 10.5}  # "member1" is now stored in "my_sorted_set" with score of 10.5.
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
@@ -4620,8 +4693,8 @@ class CoreCommands(Protocol):
 
     async def zunion(
         self,
-        keys: List[str],
-    ) -> List[str]:
+        keys: List[TEncodable],
+    ) -> List[bytes]:
         """
         Computes the union of sorted sets given by the specified `keys` and returns a list of union elements.
         To get the scores as well, see `zunion_withscores`.
@@ -4632,27 +4705,29 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zunion/ for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted sets.
+            keys (List[TEncodable]): The keys of the sorted sets.
 
         Returns:
-            List[str]: The resulting array of union elements.
+            List[bytes]: The resulting array of union elements.
 
         Examples:
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
             >>> await client.zadd("key2", {"member1": 9.5})
             >>> await client.zunion(["key1", "key2"])
-                ['member1', 'member2']
+                [b'member1', b'member2']
         """
+        args: List[TEncodable] = [str(len(keys))]
+        args.extend(keys)
         return cast(
-            List[str],
-            await self._execute_command(RequestType.ZUnion, [str(len(keys))] + keys),
+            List[bytes],
+            await self._execute_command(RequestType.ZUnion, args),
         )
 
     async def zunion_withscores(
         self,
-        keys: Union[List[str], List[Tuple[str, float]]],
+        keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
         aggregation_type: Optional[AggregationType] = None,
-    ) -> Mapping[str, float]:
+    ) -> Mapping[bytes, float]:
         """
         Computes the union of sorted sets given by the specified `keys` and returns a sorted set of union elements with scores.
         To get the elements only, see `zunion`.
@@ -4663,34 +4738,34 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zunion/ for more details.
 
         Args:
-            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
-                List[str] - for keys only.
-                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            keys (Union[List[TEncodable], List[Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
+                List[TEncodable] - for keys only.
+                List[Tuple[TEncodable, float]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
         Returns:
-            Mapping[str, float]: The resulting sorted set with scores.
+            Mapping[bytes, float]: The resulting sorted set with scores.
 
         Examples:
             >>> await client.zadd("key1", {"member1": 10.5, "member2": 8.2})
             >>> await client.zadd("key2", {"member1": 9.5})
             >>> await client.zunion_withscores(["key1", "key2"])
-                {'member1': 20, 'member2': 8.2}
+                {b'member1': 20, b'member2': 8.2}
             >>> await client.zunion_withscores(["key1", "key2"], AggregationType.MAX)
-                {'member1': 10.5, 'member2': 8.2}
+                {b'member1': 10.5, b'member2': 8.2}
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type)
         args.append("WITHSCORES")
         return cast(
-            Mapping[str, float],
+            Mapping[bytes, float],
             await self._execute_command(RequestType.ZUnion, args),
         )
 
     async def zunionstore(
         self,
-        destination: str,
-        keys: Union[List[str], List[Tuple[str, float]]],
+        destination: TEncodable,
+        keys: Union[List[TEncodable], List[Tuple[TEncodable, float]]],
         aggregation_type: Optional[AggregationType] = None,
     ) -> int:
         """
@@ -4703,10 +4778,10 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zunionstore/ for more details.
 
         Args:
-            destination (str): The key of the destination sorted set.
-            keys (Union[List[str], List[Tuple[str, float]]]): The keys of the sorted sets with possible formats:
-                List[str] - for keys only.
-                List[Tuple[str, float]] - for weighted keys with score multipliers.
+            destination (TEncodable): The key of the destination sorted set.
+            keys (Union[List[TEncodable], List[Tuple[TEncodable, float]]]): The keys of the sorted sets with possible formats:
+                List[TEncodable] - for keys only.
+                List[Tuple[TEncodable, float]] - for weighted keys with score multipliers.
             aggregation_type (Optional[AggregationType]): Specifies the aggregation strategy to apply
                 when combining the scores of elements. See `AggregationType`.
 
@@ -4719,11 +4794,11 @@ class CoreCommands(Protocol):
             >>> await client.zunionstore("my_sorted_set", ["key1", "key2"])
                 2 # Indicates that the sorted set "my_sorted_set" contains two elements.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 20, 'member2': 8.2}
+                {b'member1': 20, b'member2': 8.2}
             >>> await client.zunionstore("my_sorted_set", ["key1", "key2"], AggregationType.MAX)
                 2 # Indicates that the sorted set "my_sorted_set" contains two elements, and each score is the maximum score between the sets.
             >>> await client.zrange_withscores("my_sorted_set", RangeByIndex(0, -1))
-                {'member1': 10.5, 'member2': 8.2}
+                {b'member1': 10.5, b'member2': 8.2}
         """
         args = _create_zinter_zunion_cmd_args(keys, aggregation_type, destination)
         return cast(
@@ -4731,62 +4806,64 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ZUnionStore, args),
         )
 
-    async def zrandmember(self, key: str) -> Optional[str]:
+    async def zrandmember(self, key: TEncodable) -> Optional[bytes]:
         """
         Returns a random member from the sorted set stored at 'key'.
 
         See https://valkey.io/commands/zrandmember for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
 
         Returns:
-            Optional[str]: A random member from the sorted set.
+            Optional[bytes]: A random member from the sorted set.
                 If the sorted set does not exist or is empty, the response will be None.
 
         Examples:
             >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.zrandmember("my_sorted_set")
-                "member1"  # "member1" is a random member of "my_sorted_set".
+                b"member1"  # "member1" is a random member of "my_sorted_set".
             >>> await client.zrandmember("non_existing_sorted_set")
                 None  # "non_existing_sorted_set" is not an existing key, so None was returned.
         """
+        args: List[TEncodable] = [key]
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.ZRandMember, [key]),
         )
 
-    async def zrandmember_count(self, key: str, count: int) -> List[str]:
+    async def zrandmember_count(self, key: TEncodable, count: int) -> List[bytes]:
         """
         Retrieves up to the absolute value of `count` random members from the sorted set stored at 'key'.
 
         See https://valkey.io/commands/zrandmember for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             count (int): The number of members to return.
                 If `count` is positive, returns unique members.
                 If `count` is negative, allows for duplicates members.
 
         Returns:
-            List[str]: A list of members from the sorted set.
+            List[bytes]: A list of members from the sorted set.
                 If the sorted set does not exist or is empty, the response will be an empty list.
 
         Examples:
             >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.zrandmember("my_sorted_set", -3)
-                ["member1", "member1", "member2"]  # "member1" and "member2" are random members of "my_sorted_set".
+                [b"member1", b"member1", b"member2"]  # "member1" and "member2" are random members of "my_sorted_set".
             >>> await client.zrandmember("non_existing_sorted_set", 3)
                 []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
         """
+        args: List[TEncodable] = [key, str(count)]
         return cast(
-            List[str],
-            await self._execute_command(RequestType.ZRandMember, [key, str(count)]),
+            List[bytes],
+            await self._execute_command(RequestType.ZRandMember, args),
         )
 
     async def zrandmember_withscores(
-        self, key: str, count: int
-    ) -> List[List[Union[str, float]]]:
+        self, key: TEncodable, count: int
+    ) -> List[List[Union[bytes, float]]]:
         """
         Retrieves up to the absolute value of `count` random members along with their scores from the sorted set
         stored at 'key'.
@@ -4794,33 +4871,35 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zrandmember for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             count (int): The number of members to return.
                 If `count` is positive, returns unique members.
                 If `count` is negative, allows for duplicates members.
 
         Returns:
-            List[List[Union[str, float]]]: A list of `[member, score]` lists, where `member` is a random member from
+            List[List[Union[bytes, float]]]: A list of `[member, score]` lists, where `member` is a random member from
                 the sorted set and `score` is the associated score.
                 If the sorted set does not exist or is empty, the response will be an empty list.
 
         Examples:
             >>> await client.zadd("my_sorted_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.zrandmember_withscores("my_sorted_set", -3)
-                [["member1", 1.0], ["member1", 1.0], ["member2", 2.0]]  # "member1" and "member2" are random members of "my_sorted_set", and have scores of 1.0 and 2.0, respectively.
+                [[b"member1", 1.0], [b"member1", 1.0], [b"member2", 2.0]]  # "member1" and "member2" are random members of "my_sorted_set", and have scores of 1.0 and 2.0, respectively.
             >>> await client.zrandmember_withscores("non_existing_sorted_set", 3)
                 []  # "non_existing_sorted_set" is not an existing key, so an empty list was returned.
         """
+        args: List[TEncodable] = [key, str(count), "WITHSCORES"]
         return cast(
-            List[List[Union[str, float]]],
-            await self._execute_command(
-                RequestType.ZRandMember, [key, str(count), "WITHSCORES"]
-            ),
+            List[List[Union[bytes, float]]],
+            await self._execute_command(RequestType.ZRandMember, args),
         )
 
     async def zmpop(
-        self, keys: List[str], filter: ScoreFilter, count: Optional[int] = None
-    ) -> Optional[List[Union[str, Mapping[str, float]]]]:
+        self,
+        keys: List[TEncodable],
+        filter: ScoreFilter,
+        count: Optional[int] = None,
+    ) -> Optional[List[Union[bytes, Mapping[bytes, float]]]]:
         """
         Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
         that they are given.
@@ -4836,13 +4915,13 @@ class CoreCommands(Protocol):
             When in cluster mode, all `keys` must map to the same hash slot.
 
         Args:
-            keys (List[str]): The keys of the sorted sets.
-            modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
+            keys (List[TEncodable]): The keys of the sorted sets.
+            filter (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
                 members with the lowest/highest scores accordingly.
             count (Optional[int]): The number of elements to pop.
 
         Returns:
-            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+            Optional[List[Union[bytes, Mapping[bytes, float]]]]: A two-element list containing the key name of the set from
                 which elements were popped, and a member-score mapping of the popped elements. If no members could be
                 popped, returns None.
 
@@ -4850,26 +4929,26 @@ class CoreCommands(Protocol):
             >>> await client.zadd("zSet1", {"one": 1.0, "two": 2.0, "three": 3.0})
             >>> await client.zadd("zSet2", {"four": 4.0})
             >>> await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2)
-                ['zSet1', {'three': 3.0, 'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
+                [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
 
         Since: Redis version 7.0.0.
         """
-        args = [str(len(keys))] + keys + [filter.value]
+        args: List[TEncodable] = [str(len(keys))] + keys + [filter.value]
         if count is not None:
-            args = args + ["COUNT", str(count)]
+            args.extend(["COUNT", str(count)])
 
         return cast(
-            Optional[List[Union[str, Mapping[str, float]]]],
+            Optional[List[Union[bytes, Mapping[bytes, float]]]],
             await self._execute_command(RequestType.ZMPop, args),
         )
 
     async def bzmpop(
         self,
-        keys: List[str],
+        keys: List[TEncodable],
         modifier: ScoreFilter,
         timeout: float,
         count: Optional[int] = None,
-    ) -> Optional[List[Union[str, Mapping[str, float]]]]:
+    ) -> Optional[List[Union[bytes, Mapping[bytes, float]]]]:
         """
         Pops a member-score pair from the first non-empty sorted set, with the given keys being checked in the order
         that they are given. Blocks the connection when there are no members to pop from any of the given sorted sets.
@@ -4887,7 +4966,7 @@ class CoreCommands(Protocol):
             2. `BZMPOP` is a client blocking command, see https://github.com/aws/glide-for-redis/wiki/General-Concepts#blocking-commands for more details and best practices.
 
         Args:
-            keys (List[str]): The keys of the sorted sets.
+            keys (List[TEncodable]): The keys of the sorted sets.
             modifier (ScoreFilter): The element pop criteria - either ScoreFilter.MIN or ScoreFilter.MAX to pop
                 members with the lowest/highest scores accordingly.
             timeout (float): The number of seconds to wait for a blocking operation to complete. A value of 0 will
@@ -4895,7 +4974,7 @@ class CoreCommands(Protocol):
             count (Optional[int]): The number of elements to pop.
 
         Returns:
-            Optional[List[Union[str, Mapping[str, float]]]]: A two-element list containing the key name of the set from
+            Optional[List[Union[bytes, Mapping[bytes, float]]]]: A two-element list containing the key name of the set from
                 which elements were popped, and a member-score mapping of the popped elements. If no members could be
                 popped and the timeout expired, returns None.
 
@@ -4903,7 +4982,7 @@ class CoreCommands(Protocol):
             >>> await client.zadd("zSet1", {"one": 1.0, "two": 2.0, "three": 3.0})
             >>> await client.zadd("zSet2", {"four": 4.0})
             >>> await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.5, 2)
-                ['zSet1', {'three': 3.0, 'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
+                [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
 
         Since: Redis version 7.0.0.
         """
@@ -4912,11 +4991,13 @@ class CoreCommands(Protocol):
             args = args + ["COUNT", str(count)]
 
         return cast(
-            Optional[List[Union[str, Mapping[str, float]]]],
+            Optional[List[Union[bytes, Mapping[bytes, float]]]],
             await self._execute_command(RequestType.BZMPop, args),
         )
 
-    async def zintercard(self, keys: List[str], limit: Optional[int] = None) -> int:
+    async def zintercard(
+        self, keys: List[TEncodable], limit: Optional[int] = None
+    ) -> int:
         """
         Returns the cardinality of the intersection of the sorted sets specified by `keys`. When provided with the
         optional `limit` argument, if the intersection cardinality reaches `limit` partway through the computation, the
@@ -4925,7 +5006,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/zintercard for more details.
 
         Args:
-            keys (List[str]): The keys of the sorted sets to intersect.
+            keys (List[TEncodable]): The keys of the sorted sets to intersect.
             limit (Optional[int]): An optional argument that can be used to specify a maximum number for the
                 intersection cardinality. If limit is not supplied, or if it is set to 0, there will be no limit.
 
@@ -4957,8 +5038,8 @@ class CoreCommands(Protocol):
     async def invoke_script(
         self,
         script: Script,
-        keys: Optional[List[str]] = None,
-        args: Optional[List[str]] = None,
+        keys: Optional[List[TEncodable]] = None,
+        args: Optional[List[TEncodable]] = None,
     ) -> TResult:
         """
         Invokes a Lua script with its keys and arguments.
@@ -4971,8 +5052,8 @@ class CoreCommands(Protocol):
 
         Args:
             script (Script): The Lua script to execute.
-            keys (List[str]): The keys that are used in the script.
-            args (List[str]): The arguments for the script.
+            keys (Optional[List[TEncodable]]): The keys that are used in the script.
+            args (Optional[List[TEncodable]]): The arguments for the script.
 
         Returns:
             TResult: a value that depends on the script that was executed.
@@ -4980,11 +5061,11 @@ class CoreCommands(Protocol):
         Examples:
             >>> lua_script = Script("return { KEYS[1], ARGV[1] }")
             >>> await invoke_script(lua_script, keys=["foo"], args=["bar"] );
-                ["foo", "bar"]
+                [b"foo", b"bar"]
         """
         return await self._execute_script(script.get_hash(), keys, args)
 
-    async def pfadd(self, key: str, elements: List[str]) -> int:
+    async def pfadd(self, key: TEncodable, elements: List[TEncodable]) -> int:
         """
         Adds all elements to the HyperLogLog data structure stored at the specified `key`.
         Creates a new structure if the `key` does not exist.
@@ -4993,8 +5074,8 @@ class CoreCommands(Protocol):
         See https://redis.io/commands/pfadd/ for more details.
 
         Args:
-            key (str): The key of the HyperLogLog data structure to add elements into.
-            elements (List[str]): A list of members to add to the HyperLogLog stored at `key`.
+            key (TEncodable): The key of the HyperLogLog data structure to add elements into.
+            elements (List[TEncodable]): A list of members to add to the HyperLogLog stored at `key`.
 
         Returns:
             int: If the HyperLogLog is newly created, or if the HyperLogLog approximated cardinality is
@@ -5011,7 +5092,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.PfAdd, [key] + elements),
         )
 
-    async def pfcount(self, keys: List[str]) -> int:
+    async def pfcount(self, keys: List[TEncodable]) -> int:
         """
         Estimates the cardinality of the data stored in a HyperLogLog structure for a single key or
         calculates the combined cardinality of multiple keys by merging their HyperLogLogs temporarily.
@@ -5022,7 +5103,7 @@ class CoreCommands(Protocol):
             When in Cluster mode, all `keys` must map to the same hash slot.
 
         Args:
-            keys (List[str]): The keys of the HyperLogLog data structures to be analyzed.
+            keys (List[TEncodable]): The keys of the HyperLogLog data structures to be analyzed.
 
         Returns:
             int: The approximated cardinality of given HyperLogLog data structures.
@@ -5037,7 +5118,9 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.PfCount, keys),
         )
 
-    async def pfmerge(self, destination: str, source_keys: List[str]) -> TOK:
+    async def pfmerge(
+        self, destination: TEncodable, source_keys: List[TEncodable]
+    ) -> TOK:
         """
         Merges multiple HyperLogLog values into a unique value. If the destination variable exists, it is treated as one
         of the source HyperLogLog data sets, otherwise a new HyperLogLog is created.
@@ -5048,8 +5131,8 @@ class CoreCommands(Protocol):
             When in Cluster mode, all keys in `source_keys` and `destination` must map to the same hash slot.
 
         Args:
-            destination (str): The key of the destination HyperLogLog where the merged data sets will be stored.
-            source_keys (List[str]): The keys of the HyperLogLog structures to be merged.
+            destination (TEncodable): The key of the destination HyperLogLog where the merged data sets will be stored.
+            source_keys (List[TEncodable]): The keys of the HyperLogLog structures to be merged.
 
         Returns:
             OK: A simple OK response.
@@ -5069,7 +5152,9 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def bitcount(self, key: str, options: Optional[OffsetOptions] = None) -> int:
+    async def bitcount(
+        self, key: TEncodable, options: Optional[OffsetOptions] = None
+    ) -> int:
         """
         Counts the number of set bits (population counting) in the string stored at `key`. The `options` argument can
         optionally be provided to count the number of bits in a specific string interval.
@@ -5077,7 +5162,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/bitcount for more details.
 
         Args:
-            key (str): The key for the string to count the set bits of.
+            key (TEncodable): The key for the string to count the set bits of.
             options (Optional[OffsetOptions]): The offset options.
 
         Returns:
@@ -5095,16 +5180,16 @@ class CoreCommands(Protocol):
             >>> await client.bitcount("my_key3", OffsetOptions(-1, -1, BitmapIndexType.BIT))
                 1  # Indicates that the last bit of the string stored at "my_key3" is set.
         """
-        args = [key]
+        args: List[TEncodable] = [key]
         if options is not None:
-            args = args + options.to_args()
+            args.extend(options.to_args())
 
         return cast(
             int,
             await self._execute_command(RequestType.BitCount, args),
         )
 
-    async def setbit(self, key: str, offset: int, value: int) -> int:
+    async def setbit(self, key: TEncodable, offset: int, value: int) -> int:
         """
         Sets or clears the bit at `offset` in the string value stored at `key`. The `offset` is a zero-based index,
         with `0` being the first element of the list, `1` being the next element, and so on. The `offset` must be less
@@ -5114,7 +5199,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/setbit for more details.
 
         Args:
-            key (str): The key of the string.
+            key (TEncodable): The key of the string.
             offset (int): The index of the bit to be set.
             value (int): The bit value to set at `offset`. The value must be `0` or `1`.
 
@@ -5132,7 +5217,7 @@ class CoreCommands(Protocol):
             ),
         )
 
-    async def getbit(self, key: str, offset: int) -> int:
+    async def getbit(self, key: TEncodable, offset: int) -> int:
         """
         Returns the bit value at `offset` in the string value stored at `key`.
         `offset` should be greater than or equal to zero.
@@ -5140,7 +5225,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/getbit for more details.
 
         Args:
-            key (str): The key of the string.
+            key (TEncodable): The key of the string.
             offset (int): The index of the bit to return.
 
         Returns:
@@ -5156,7 +5241,9 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.GetBit, [key, str(offset)]),
         )
 
-    async def bitpos(self, key: str, bit: int, start: Optional[int] = None) -> int:
+    async def bitpos(
+        self, key: TEncodable, bit: int, start: Optional[int] = None
+    ) -> int:
         """
         Returns the position of the first bit matching the given `bit` value. The optional starting offset
         `start` is a zero-based index, with `0` being the first byte of the list, `1` being the next byte and so on.
@@ -5166,7 +5253,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/bitpos for more details.
 
         Args:
-            key (str): The key of the string.
+            key (TEncodable): The key of the string.
             bit (int): The bit value to match. Must be `0` or `1`.
             start (Optional[int]): The starting offset.
 
@@ -5189,7 +5276,7 @@ class CoreCommands(Protocol):
 
     async def bitpos_interval(
         self,
-        key: str,
+        key: TEncodable,
         bit: int,
         start: int,
         end: int,
@@ -5209,7 +5296,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/bitpos for more details.
 
         Args:
-            key (str): The key of the string.
+            key (TEncodable): The key of the string.
             bit (int): The bit value to match. Must be `0` or `1`.
             start (int): The starting offset.
             end (int): The ending offset.
@@ -5239,7 +5326,10 @@ class CoreCommands(Protocol):
         )
 
     async def bitop(
-        self, operation: BitwiseOperation, destination: str, keys: List[str]
+        self,
+        operation: BitwiseOperation,
+        destination: TEncodable,
+        keys: List[TEncodable],
     ) -> int:
         """
         Perform a bitwise operation between multiple keys (containing string values) and store the result in the
@@ -5252,8 +5342,8 @@ class CoreCommands(Protocol):
 
         Args:
             operation (BitwiseOperation): The bitwise operation to perform.
-            destination (str): The key that will store the resulting string.
-            keys (List[str]): The list of keys to perform the bitwise operation on.
+            destination (TEncodable): The key that will store the resulting string.
+            keys (List[TEncodable]): The list of keys to perform the bitwise operation on.
 
         Returns:
             int: The size of the string stored in `destination`.
@@ -5274,7 +5364,7 @@ class CoreCommands(Protocol):
         )
 
     async def bitfield(
-        self, key: str, subcommands: List[BitFieldSubCommands]
+        self, key: TEncodable, subcommands: List[BitFieldSubCommands]
     ) -> List[Optional[int]]:
         """
         Reads or modifies the array of bits representing the string that is held at `key` based on the specified
@@ -5283,7 +5373,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/bitfield for more details.
 
         Args:
-            key (str): The key of the string.
+            key (TEncodable): The key of the string.
             subcommands (List[BitFieldSubCommands]): The subcommands to be performed on the binary value of the string
                 at `key`, which could be any of the following:
                     - `BitFieldGet`
@@ -5312,7 +5402,7 @@ class CoreCommands(Protocol):
         )
 
     async def bitfield_read_only(
-        self, key: str, subcommands: List[BitFieldGet]
+        self, key: TEncodable, subcommands: List[BitFieldGet]
     ) -> List[int]:
         """
         Reads the array of bits representing the string that is held at `key` based on the specified `subcommands`.
@@ -5320,7 +5410,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/bitfield_ro for more details.
 
         Args:
-            key (str): The key of the string.
+            key (TEncodable): The key of the string.
             subcommands (List[BitFieldGet]): The "GET" subcommands to be performed.
 
         Returns:
@@ -5339,36 +5429,36 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.BitFieldReadOnly, args),
         )
 
-    async def object_encoding(self, key: str) -> Optional[str]:
+    async def object_encoding(self, key: TEncodable) -> Optional[bytes]:
         """
         Returns the internal encoding for the Redis object stored at `key`.
 
         See https://valkey.io/commands/object-encoding for more details.
 
         Args:
-            key (str): The `key` of the object to get the internal encoding of.
+            key (TEncodable): The `key` of the object to get the internal encoding of.
 
         Returns:
-            Optional[str]: If `key` exists, returns the internal encoding of the object stored at
-                `key` as a string. Otherwise, returns None.
+            Optional[bytes]: If `key` exists, returns the internal encoding of the object stored at
+                `key` as a bytes string. Otherwise, returns None.
 
         Examples:
             >>> await client.object_encoding("my_hash")
-                "listpack"  # The hash stored at "my_hash" has an internal encoding of "listpack".
+                b"listpack"  # The hash stored at "my_hash" has an internal encoding of "listpack".
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.ObjectEncoding, [key]),
         )
 
-    async def object_freq(self, key: str) -> Optional[int]:
+    async def object_freq(self, key: TEncodable) -> Optional[int]:
         """
         Returns the logarithmic access frequency counter of a Redis object stored at `key`.
 
         See https://valkey.io/commands/object-freq for more details.
 
         Args:
-            key (str): The key of the object to get the logarithmic access frequency counter of.
+            key (TEncodable): The key of the object to get the logarithmic access frequency counter of.
 
         Returns:
             Optional[int]: If `key` exists, returns the logarithmic access frequency counter of the object stored at `key` as an
@@ -5383,14 +5473,14 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ObjectFreq, [key]),
         )
 
-    async def object_idletime(self, key: str) -> Optional[int]:
+    async def object_idletime(self, key: TEncodable) -> Optional[int]:
         """
         Returns the time in seconds since the last access to the value stored at `key`.
 
         See https://valkey.io/commands/object-idletime for more details.
 
         Args:
-            key (str): The key of the object to get the idle time of.
+            key (TEncodable): The key of the object to get the idle time of.
 
         Returns:
             Optional[int]: If `key` exists, returns the idle time in seconds. Otherwise, returns None.
@@ -5404,14 +5494,14 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ObjectIdleTime, [key]),
         )
 
-    async def object_refcount(self, key: str) -> Optional[int]:
+    async def object_refcount(self, key: TEncodable) -> Optional[int]:
         """
         Returns the reference count of the object stored at `key`.
 
         See https://valkey.io/commands/object-refcount for more details.
 
         Args:
-            key (str): The key of the object to get the reference count of.
+            key (TEncodable): The key of the object to get the reference count of.
 
         Returns:
             Optional[int]: If `key` exists, returns the reference count of the object stored at `key` as an integer.
@@ -5426,74 +5516,75 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.ObjectRefCount, [key]),
         )
 
-    async def srandmember(self, key: str) -> Optional[str]:
+    async def srandmember(self, key: TEncodable) -> Optional[bytes]:
         """
         Returns a random element from the set value stored at 'key'.
 
         See https://valkey.io/commands/srandmember for more details.
 
         Args:
-            key (str): The key from which to retrieve the set member.
+            key (TEncodable): The key from which to retrieve the set member.
 
         Returns:
-            str: A random element from the set, or None if 'key' does not exist.
+            Optional[bytes]: A random element from the set, or None if 'key' does not exist.
 
         Examples:
             >>> await client.sadd("my_set", {"member1": 1.0, "member2": 2.0})
-            >>> await client.srandmember("my_set")
-            "member1"  # "member1" is a random member of "my_set".
+            >>> await client.srandmember(b"my_set")
+                b"member1"  # "member1" is a random member of "my_set".
             >>> await client.srandmember("non_existing_set")
-            None  # "non_existing_set" is not an existing key, so None was returned.
+                None  # "non_existing_set" is not an existing key, so None was returned.
         """
+        args: List[TEncodable] = [key]
         return cast(
-            Optional[str],
-            await self._execute_command(RequestType.SRandMember, [key]),
+            Optional[bytes],
+            await self._execute_command(RequestType.SRandMember, args),
         )
 
-    async def srandmember_count(self, key: str, count: int) -> List[str]:
+    async def srandmember_count(self, key: TEncodable, count: int) -> List[bytes]:
         """
         Returns one or more random elements from the set value stored at 'key'.
 
         See https://valkey.io/commands/srandmember for more details.
 
         Args:
-            key (str): The key of the sorted set.
+            key (TEncodable): The key of the sorted set.
             count (int): The number of members to return.
                 If `count` is positive, returns unique members.
                 If `count` is negative, allows for duplicates members.
 
         Returns:
-            List[str]: A list of members from the set.
+            List[bytes]: A list of members from the set.
                 If the set does not exist or is empty, the response will be an empty list.
 
         Examples:
             >>> await client.sadd("my_set", {"member1": 1.0, "member2": 2.0})
             >>> await client.srandmember("my_set", -3)
-                ["member1", "member1", "member2"]  # "member1" and "member2" are random members of "my_set".
+                [b"member1", b"member1", b"member2"]  # "member1" and "member2" are random members of "my_set".
             >>> await client.srandmember("non_existing_set", 3)
                 []  # "non_existing_set" is not an existing key, so an empty list was returned.
         """
         return cast(
-            List[str],
+            List[bytes],
             await self._execute_command(RequestType.SRandMember, [key, str(count)]),
         )
 
     async def getex(
         self,
-        key: str,
+        key: TEncodable,
         expiry: Optional[ExpiryGetEx] = None,
-    ) -> Optional[str]:
+    ) -> Optional[bytes]:
         """
         Get the value of `key` and optionally set its expiration. `GETEX` is similar to `GET`.
         See https://valkey.io/commands/getex for more details.
 
         Args:
-            key (str): The key to get.
-            expiry (Optional[ExpirySet], optional): set expiriation to the given key.
+            key (TEncodable): The key to get.
+            expiry (Optional[ExpiryGetEx], optional): set expiriation to the given key.
                 Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
 
         Returns:
-            Optional[str]:
+            Optional[bytes]:
                 If `key` exists, return the value stored at `key`
                 If `key` does not exist, return `None`
 
@@ -5501,11 +5592,11 @@ class CoreCommands(Protocol):
             >>> await client.set("key", "value")
                 'OK'
             >>> await client.getex("key")
-                'value'
+                b'value'
             >>> await client.getex("key", ExpiryGetEx(ExpiryTypeGetEx.SEC, 1))
-                'value'
+                b'value'
             >>> time.sleep(1)
-            >>> await client.getex("key")
+            >>> await client.getex(b"key")
                 None
 
         Since: Redis version 6.2.0.
@@ -5514,28 +5605,28 @@ class CoreCommands(Protocol):
         if expiry is not None:
             args.extend(expiry.get_cmd_args())
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.GetEx, args),
         )
 
     async def sscan(
         self,
-        key: str,
-        cursor: str,
-        match: Optional[str] = None,
+        key: TEncodable,
+        cursor: TEncodable,
+        match: Optional[TEncodable] = None,
         count: Optional[int] = None,
-    ) -> List[Union[str, List[str]]]:
+    ) -> List[Union[bytes, List[bytes]]]:
         """
         Iterates incrementally over a set.
 
         See https://valkey.io/commands/sscan for more details.
 
         Args:
-            key (str): The key of the set.
-            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+            key (TEncodable): The key of the set.
+            cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
-            match (Optional[str]): The match filter is applied to the result of the command and will only include
-                strings that match the pattern specified. If the set is large enough for scan commands to return only a
+            match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
+                strings or byte strings that match the pattern specified. If the set is large enough for scan commands to return only a
                 subset of the set then there could be a case where the result is empty although there are items that
                 match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
                 only fetch and match `10` items from the list.
@@ -5544,7 +5635,7 @@ class CoreCommands(Protocol):
                 as compact single-allocation packed encoding.
 
         Returns:
-            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the set held by `key`.
+            List[Union[bytes, List[bytes]]]: An `Array` of the `cursor` and the subset of the set held by `key`.
                 The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
                 returned on the last iteration of the set. The second element is always an `Array` of the subset of the
                 set held in `key`.
@@ -5561,41 +5652,41 @@ class CoreCommands(Protocol):
             ...         break
             ...     result_cursor = new_cursor
             Cursor:  48
-            Members:  ['3', '118', '120', '86', '76', '13', '61', '111', '55', '45']
-            Cursor:  24
-            Members:  ['38', '109', '11', '119', '34', '24', '40', '57', '20', '17']
-            Cursor:  0
-            Members:  ['47', '122', '1', '53', '10', '14', '80']
+            Members: [b'3', b'118', b'120', b'86', b'76', b'13', b'61', b'111', b'55', b'45']
+            Cursor: 24
+            Members: [b'38', b'109', b'11', b'119', b'34', b'24', b'40', b'57', b'20', b'17']
+            Cursor: 0
+            Members: [b'47', b'122', b'1', b'53', b'10', b'14', b'80']
         """
-        args = [key, cursor]
+        args: List[TEncodable] = [key, cursor]
         if match is not None:
             args += ["MATCH", match]
         if count is not None:
             args += ["COUNT", str(count)]
 
         return cast(
-            List[Union[str, List[str]]],
+            List[Union[bytes, List[bytes]]],
             await self._execute_command(RequestType.SScan, args),
         )
 
     async def zscan(
         self,
-        key: str,
-        cursor: str,
-        match: Optional[str] = None,
+        key: TEncodable,
+        cursor: TEncodable,
+        match: Optional[TEncodable] = None,
         count: Optional[int] = None,
-    ) -> List[Union[str, List[str]]]:
+    ) -> List[Union[bytes, List[bytes]]]:
         """
         Iterates incrementally over a sorted set.
 
         See https://valkey.io/commands/zscan for more details.
 
         Args:
-            key (str): The key of the sorted set.
-            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+            key (TEncodable): The key of the sorted set.
+            cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
-            match (Optional[str]): The match filter is applied to the result of the command and will only include
-                strings that match the pattern specified. If the sorted set is large enough for scan commands to return
+            match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
+                strings or byte strings that match the pattern specified. If the sorted set is large enough for scan commands to return
                 only a subset of the sorted set then there could be a case where the result is empty although there are
                 items that match the pattern specified. This is due to the default `COUNT` being `10` which indicates
                 that it will only fetch and match `10` items from the list.
@@ -5604,7 +5695,7 @@ class CoreCommands(Protocol):
                 represent the results as compact single-allocation packed encoding.
 
         Returns:
-            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the sorted set held by `key`.
+            List[Union[bytes, List[bytes]]]: An `Array` of the `cursor` and the subset of the sorted set held by `key`.
                 The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
                 returned on the last iteration of the sorted set. The second element is always an `Array` of the subset
                 of the sorted set held in `key`. The `Array` in the second element is always a flattened series of
@@ -5621,42 +5712,42 @@ class CoreCommands(Protocol):
             ...     if new_cursor == "0":
             ...         break
             ...     result_cursor = new_cursor
-            Cursor:  123
-            Members:  ['value 163', '163', 'value 114', '114', 'value 25', '25', 'value 82', '82', 'value 64', '64']
-            Cursor:  47
-            Members:  ['value 39', '39', 'value 127', '127', 'value 43', '43', 'value 139', '139', 'value 211', '211']
-            Cursor:  0
-            Members:  ['value 55', '55', 'value 24', '24', 'value 90', '90', 'value 113', '113']
+            Cursor: 123
+            Members: [b'value 163', b'163', b'value 114', b'114', b'value 25', b'25', b'value 82', b'82', b'value 64', b'64']
+            Cursor: 47
+            Members: [b'value 39', b'39', b'value 127', b'127', b'value 43', b'43', b'value 139', b'139', b'value 211', b'211']
+            Cursor: 0
+            Members: [b'value 55', b'55', b'value 24', b'24', b'value 90', b'90', b'value 113', b'113']
         """
-        args = [key, cursor]
+        args: List[TEncodable] = [key, cursor]
         if match is not None:
             args += ["MATCH", match]
         if count is not None:
             args += ["COUNT", str(count)]
 
         return cast(
-            List[Union[str, List[str]]],
+            List[Union[bytes, List[bytes]]],
             await self._execute_command(RequestType.ZScan, args),
         )
 
     async def hscan(
         self,
-        key: str,
-        cursor: str,
-        match: Optional[str] = None,
+        key: TEncodable,
+        cursor: TEncodable,
+        match: Optional[TEncodable] = None,
         count: Optional[int] = None,
-    ) -> List[Union[str, List[str]]]:
+    ) -> List[Union[bytes, List[bytes]]]:
         """
         Iterates incrementally over a hash.
 
         See https://valkey.io/commands/hscan for more details.
 
         Args:
-            key (str): The key of the set.
-            cursor (str): The cursor that points to the next iteration of results. A value of "0" indicates the start of
+            key (TEncodable): The key of the set.
+            cursor (TEncodable): The cursor that points to the next iteration of results. A value of "0" indicates the start of
                 the search.
-            match (Optional[str]): The match filter is applied to the result of the command and will only include
-                strings that match the pattern specified. If the hash is large enough for scan commands to return only a
+            match (Optional[TEncodable]): The match filter is applied to the result of the command and will only include
+                strings or byte strings that match the pattern specified. If the hash is large enough for scan commands to return only a
                 subset of the hash then there could be a case where the result is empty although there are items that
                 match the pattern specified. This is due to the default `COUNT` being `10` which indicates that it will
                 only fetch and match `10` items from the list.
@@ -5665,7 +5756,7 @@ class CoreCommands(Protocol):
                 as compact single-allocation packed encoding.
 
         Returns:
-            List[Union[str, List[str]]]: An `Array` of the `cursor` and the subset of the hash held by `key`.
+            List[Union[bytes, List[bytes]]]: An `Array` of the `cursor` and the subset of the hash held by `key`.
                 The first element is always the `cursor` for the next iteration of results. `0` will be the `cursor`
                 returned on the last iteration of the hash. The second element is always an `Array` of the subset of the
                 hash held in `key`. The `Array` in the second element is always a flattened series of `String` pairs,
@@ -5682,55 +5773,50 @@ class CoreCommands(Protocol):
             ...     if new_cursor == "0":
             ...         break
             ...     result_cursor = new_cursor
-            Cursor:  31
-            Members:  ['field 79', 'value 79', 'field 20', 'value 20', 'field 115', 'value 115']
-            Cursor:  39
-            Members:  ['field 63', 'value 63', 'field 293', 'value 293', 'field 162', 'value 162']
-            Cursor:  0
-            Members:  ['field 420', 'value 420', 'field 221', 'value 221']
+            Cursor: 1
+            Members: [b'field 79', b'value 79', b'field 20', b'value 20', b'field 115', b'value 115']
+            Cursor: 39
+            Members: [b'field 63', b'value 63', b'field 293', b'value 293', b'field 162', b'value 162']
+            Cursor: 0
+            Members: [b'field 420', b'value 420', b'field 221', b'value 221']
         """
-        args = [key, cursor]
+        args: List[TEncodable] = [key, cursor]
         if match is not None:
             args += ["MATCH", match]
         if count is not None:
             args += ["COUNT", str(count)]
 
         return cast(
-            List[Union[str, List[str]]],
+            List[Union[bytes, List[bytes]]],
             await self._execute_command(RequestType.HScan, args),
         )
 
     async def fcall(
         self,
-        function: str,
-        keys: Optional[List[str]] = None,
-        arguments: Optional[List[str]] = None,
+        function: TEncodable,
+        keys: Optional[List[TEncodable]] = None,
+        arguments: Optional[List[TEncodable]] = None,
     ) -> TResult:
         """
         Invokes a previously loaded function.
         See https://redis.io/commands/fcall/ for more details.
-
         When in cluster mode, all keys in `keys` must map to the same hash slot.
-
         Args:
-            function (str): The function name.
-            keys (Optional[List[str]]): A list of keys accessed by the function. To ensure the correct
+            function (TEncodable): The function name.
+            keys (Optional[List[TEncodable]]): A list of keys accessed by the function. To ensure the correct
                 execution of functions, both in standalone and clustered deployments, all names of keys
                 that a function accesses must be explicitly provided as `keys`.
-            arguments (Optional[List[str]]): A list of `function` arguments. `Arguments`
+            arguments (Optional[List[TEncodable]]): A list of `function` arguments. `Arguments`
                 should not represent names of keys.
-
         Returns:
             TResult:
                 The invoked function's return value.
-
         Example:
             >>> await client.fcall("Deep_Thought")
-                'new_value' # Returns the function's return value.
-
+                b'new_value' # Returns the function's return value.
         Since: Redis version 7.0.0.
         """
-        args = []
+        args: List[TEncodable] = []
         if keys is not None:
             args.extend([function, str(len(keys))] + keys)
         else:
@@ -5744,9 +5830,9 @@ class CoreCommands(Protocol):
 
     async def fcall_ro(
         self,
-        function: str,
-        keys: Optional[List[str]] = None,
-        arguments: Optional[List[str]] = None,
+        function: TEncodable,
+        keys: Optional[List[TEncodable]] = None,
+        arguments: Optional[List[TEncodable]] = None,
     ) -> TResult:
         """
         Invokes a previously loaded read-only function.
@@ -5756,11 +5842,11 @@ class CoreCommands(Protocol):
         When in cluster mode, all keys in `keys` must map to the same hash slot.
 
         Args:
-            function (str): The function name.
-            keys (List[str]): An `array` of keys accessed by the function. To ensure the correct
+            function (TEncodable): The function name.
+            keys (List[TEncodable]): An `array` of keys accessed by the function. To ensure the correct
                 execution of functions, all names of keys that a function accesses must be
                 explicitly provided as `keys`.
-            arguments (List[str]): An `array` of `function` arguments. `arguments` should not
+            arguments (List[TEncodable]): An `array` of `function` arguments. `arguments` should not
                 represent names of keys.
 
         Returns:
@@ -5773,7 +5859,7 @@ class CoreCommands(Protocol):
 
         Since: Redis version 7.0.0.
         """
-        args = []
+        args: List[TEncodable] = []
         if keys is not None:
             args.extend([function, str(len(keys))] + keys)
         else:
@@ -5785,7 +5871,7 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.FCallReadOnly, args),
         )
 
-    async def watch(self, keys: List[str]) -> TOK:
+    async def watch(self, keys: List[TEncodable]) -> TOK:
         """
         Marks the given keys to be watched for conditional execution of a transaction. Transactions
         will only execute commands if the watched keys are not modified before execution of the
@@ -5797,7 +5883,7 @@ class CoreCommands(Protocol):
             When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
-            keys (List[str]): The keys to watch.
+            keys (List[TEncodable]): The keys to watch.
 
         Returns:
             TOK: A simple "OK" response.
@@ -5829,14 +5915,14 @@ class CoreCommands(Protocol):
         Describes the incoming pubsub message
 
         Attributes:
-            message (str): Incoming message.
-            channel (str): Name of an channel that triggered the message.
-            pattern (Optional[str]): Pattern that triggered the message.
+            message (TEncodable): Incoming message.
+            channel (TEncodable): Name of an channel that triggered the message.
+            pattern (Optional[TEncodable]): Pattern that triggered the message.
         """
 
-        message: str
-        channel: str
-        pattern: Optional[str]
+        message: TEncodable
+        channel: TEncodable
+        pattern: Optional[TEncodable]
 
     async def get_pubsub_message(self) -> PubSubMsg:
         """
@@ -5874,9 +5960,9 @@ class CoreCommands(Protocol):
 
     async def lcs(
         self,
-        key1: str,
-        key2: str,
-    ) -> str:
+        key1: TEncodable,
+        key2: TEncodable,
+    ) -> bytes:
         """
         Returns the longest common subsequence between strings stored at key1 and key2.
 
@@ -5889,32 +5975,32 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lcs for more details.
 
         Args:
-            key1 (str): The key that stores the first string.
-            key2 (str): The key that stores the second string.
+            key1 (TEncodable): The key that stores the first string.
+            key2 (TEncodable): The key that stores the second string.
 
         Returns:
-            A String containing the longest common subsequence between the 2 strings.
+            A Bytes String containing the longest common subsequence between the 2 strings.
             An empty String is returned if the keys do not exist or have no common subsequences.
 
         Examples:
             >>> await client.mset({"testKey1" : "abcd", "testKey2": "axcd"})
-                'OK'
+                b'OK'
             >>> await client.lcs("testKey1", "testKey2")
-                'acd'
+                b'acd'
 
         Since: Redis version 7.0.0.
         """
-        args = [key1, key2]
+        args: List[TEncodable] = [key1, key2]
 
         return cast(
-            str,
+            bytes,
             await self._execute_command(RequestType.LCS, args),
         )
 
     async def lcs_len(
         self,
-        key1: str,
-        key2: str,
+        key1: TEncodable,
+        key2: TEncodable,
     ) -> int:
         """
         Returns the length of the longest common subsequence between strings stored at key1 and key2.
@@ -5928,8 +6014,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lcs for more details.
 
         Args:
-            key1 (str): The key that stores the first string.
-            key2 (str): The key that stores the second string.
+            key1 (TEncodable): The key that stores the first string value.
+            key2 (TEncodable): The key that stores the second string value.
 
         Returns:
             The length of the longest common subsequence between the 2 strings.
@@ -5938,11 +6024,11 @@ class CoreCommands(Protocol):
             >>> await client.mset({"testKey1" : "abcd", "testKey2": "axcd"})
                 'OK'
             >>> await client.lcs_len("testKey1", "testKey2")
-                3  # the length of the longest common subsequence between these 2 strings ("acd") is 3.
+                3  # the length of the longest common subsequence between these 2 strings (b"acd") is 3.
 
         Since: Redis version 7.0.0.
         """
-        args = [key1, key2, "LEN"]
+        args: List[TEncodable] = [key1, key2, "LEN"]
 
         return cast(
             int,
@@ -5951,11 +6037,11 @@ class CoreCommands(Protocol):
 
     async def lcs_idx(
         self,
-        key1: str,
-        key2: str,
+        key1: TEncodable,
+        key2: TEncodable,
         min_match_len: Optional[int] = None,
         with_match_len: Optional[bool] = False,
-    ) -> Mapping[str, Union[list[list[Union[list[int], int]]], int]]:
+    ) -> Mapping[bytes, Union[list[list[Union[list[int], int]]], int]]:
         """
         Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
 
@@ -5968,8 +6054,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lcs for more details.
 
         Args:
-            key1 (str): The key that stores the first string.
-            key2 (str): The key that stores the second string.
+            key1 (TEncodable): The key that stores the first string value.
+            key2 (TEncodable): The key that stores the second string value.
             min_match_len (Optional[int]): The minimum length of matches to include in the result.
             with_match_len (Optional[bool]): If True, include the length of the substring matched for each substring.
 
@@ -5987,49 +6073,49 @@ class CoreCommands(Protocol):
                 'OK'
             >>> await client.lcs_idx("testKey1", "testKey2")
                 {
-                    'matches': [
+                    b'matches': [
                         [
-                            [4, 7],  # starting and ending indices of the subsequence "1234" in "abcd1234" (testKey1)
-                            [5, 8],  # starting and ending indices of the subsequence "1234" in "bcdef1234" (testKey2)
+                            [4, 7],  # starting and ending indices of the subsequence b"1234" in b"abcd1234" (testKey1)
+                            [5, 8],  # starting and ending indices of the subsequence b"1234" in b"bcdef1234" (testKey2)
                         ],
                         [
-                            [1, 3],  # starting and ending indices of the subsequence "bcd" in "abcd1234" (testKey1)
-                            [0, 2],  # starting and ending indices of the subsequence "bcd" in "bcdef1234" (testKey2)
+                            [1, 3],  # starting and ending indices of the subsequence b"bcd" in b"abcd1234" (testKey1)
+                            [0, 2],  # starting and ending indices of the subsequence b"bcd" in b"bcdef1234" (testKey2)
                         ],
                     ],
-                    'len': 7  # length of the entire longest common subsequence
+                    b'len': 7  # length of the entire longest common subsequence
                 }
             >>> await client.lcs_idx("testKey1", "testKey2", min_match_len=4)
                 {
-                    'matches': [
+                    b'matches': [
                         [
                             [4, 7],
                             [5, 8],
                         ],
                         # the other match with a length of 3 is excluded
                     ],
-                    'len': 7
+                    b'len': 7
                 }
             >>> await client.lcs_idx("testKey1", "testKey2", with_match_len=True)
                 {
-                    'matches': [
+                    b'matches': [
                         [
                             [4, 7],
                             [5, 8],
-                            4,  # length of this match ("1234")
+                            4,  # length of this match (b"1234")
                         ],
                         [
                             [1, 3],
                             [0, 2],
-                            3,  # length of this match ("bcd")
+                            3,  # length of this match (b"bcd")
                         ],
                     ],
-                    'len': 7
+                    b'len': 7
                 }
 
         Since: Redis version 7.0.0.
         """
-        args = [key1, key2, "IDX"]
+        args: List[TEncodable] = [key1, key2, "IDX"]
 
         if min_match_len is not None:
             args.extend(["MINMATCHLEN", str(min_match_len)])
@@ -6038,14 +6124,14 @@ class CoreCommands(Protocol):
             args.append("WITHMATCHLEN")
 
         return cast(
-            Mapping[str, Union[list[list[Union[list[int], int]]], int]],
+            Mapping[bytes, Union[list[list[Union[list[int], int]]], int]],
             await self._execute_command(RequestType.LCS, args),
         )
 
     async def lpos(
         self,
-        key: str,
-        element: str,
+        key: TEncodable,
+        element: TEncodable,
         rank: Optional[int] = None,
         count: Optional[int] = None,
         max_len: Optional[int] = None,
@@ -6057,8 +6143,8 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/lpos for more details.
 
         Args:
-            key (str): The name of the list.
-            element (str): The value to search for within the list.
+            key (TEncodable): The name of the list.
+            element (TEncodable): The value to search for within the list.
             rank (Optional[int]): The rank of the match to return.
             count (Optional[int]): The number of matches wanted. A `count` of 0 returns all the matches.
             max_len (Optional[int]): The maximum number of comparisons to make between the element and the items
@@ -6084,7 +6170,7 @@ class CoreCommands(Protocol):
 
         Since: Redis version 6.0.6.
         """
-        args = [key, element]
+        args: List[TEncodable] = [key, element]
 
         if rank is not None:
             args.extend(["RANK", str(rank)])
