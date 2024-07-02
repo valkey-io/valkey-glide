@@ -6689,19 +6689,21 @@ public class RedisClientTest {
                     gs("5"),
                     gs(FORCE_REDIS_API)
                 };
-        Map<String, String[][]> mockResult = Map.of("1234-0", new String[][] {{"message", "log"}});
+        Map<GlideString, GlideString[][]> mockResult =
+                Map.of(gs("1234-0"), new GlideString[][] {{gs("message"), gs("log")}});
 
-        CompletableFuture<Map<String, String[][]>> testResponse = new CompletableFuture<>();
+        CompletableFuture<Map<GlideString, GlideString[][]>> testResponse = new CompletableFuture<>();
         testResponse.complete(mockResult);
 
         // match on protobuf request
-        when(commandManager.<Map<String, String[][]>>submitNewCommand(eq(XClaim), eq(arguments), any()))
+        when(commandManager.<Map<GlideString, GlideString[][]>>submitNewCommand(
+                        eq(XClaim), eq(arguments), any()))
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<Map<String, String[][]>> response =
+        CompletableFuture<Map<GlideString, GlideString[][]>> response =
                 service.xclaim(key, groupName, consumer, minIdleTime, ids, options);
-        Map<String, String[][]> payload = response.get();
+        Map<GlideString, GlideString[][]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -6969,7 +6971,9 @@ public class RedisClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString groupName = gs("testGroupName");
-        GlideString[] arguments = {key, groupName, EXCLUSIVE_RANGE_REDIS_API + "1234-0", "2345-5", "4"};
+        GlideString[] arguments = {
+            key, groupName, gs(EXCLUSIVE_RANGE_REDIS_API + "1234-0"), gs("2345-5"), gs("4")
+        };
         StreamRange start = IdBound.ofExclusive("1234-0");
         StreamRange end = IdBound.of("2345-5");
         Long count = 4L;
@@ -7042,7 +7046,7 @@ public class RedisClientTest {
         // setup
         GlideString key = gs("testKey");
         GlideString groupName = gs("testGroupName");
-        GlideString consumer = gs("testConsumer");
+        String consumer = "testConsumer";
         GlideString[] arguments = {
             key,
             groupName,
@@ -7051,7 +7055,7 @@ public class RedisClientTest {
             gs(MINIMUM_RANGE_REDIS_API),
             gs(MAXIMUM_RANGE_REDIS_API),
             gs("4"),
-            consumer
+            gs(consumer)
         };
         StreamRange start = InfRangeBound.MIN;
         StreamRange end = InfRangeBound.MAX;
