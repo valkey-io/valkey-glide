@@ -9,7 +9,6 @@ import glide.managers.BaseResponseResolver;
 import java.util.Arrays;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.stream.Collectors;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -34,7 +33,7 @@ public class MessageHandler {
     private final BaseResponseResolver responseResolver;
 
     /** A message queue wrapper. */
-    private final ConcurrentLinkedDeque<PubSubMessage> queue = new ConcurrentLinkedDeque<>();
+    private final PubSubMessageQueue queue = new PubSubMessageQueue();
 
     /** Process a push (PUBSUB) message received as a part of {@link Response} from GLIDE. */
     public void handle(Response response) {

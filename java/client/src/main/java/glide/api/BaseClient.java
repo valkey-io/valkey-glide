@@ -3,8 +3,6 @@ package glide.api;
 
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
-import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldGlideStringArgs;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
@@ -250,6 +248,7 @@ import glide.api.models.exceptions.RedisException;
 import glide.connectors.handlers.CallbackDispatcher;
 import glide.connectors.handlers.ChannelHandler;
 import glide.connectors.handlers.MessageHandler;
+import glide.connectors.handlers.PubSubMessageQueue;
 import glide.connectors.resources.Platform;
 import glide.connectors.resources.ThreadPoolResource;
 import glide.connectors.resources.ThreadPoolResourceAllocator;
@@ -265,14 +264,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.NotImplementedException;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -298,7 +295,7 @@ public abstract class BaseClient
 
     protected final CommandManager commandManager;
     protected final ConnectionManager connectionManager;
-    protected final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+    protected final PubSubMessageQueue messageQueue;
     protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
@@ -322,7 +319,7 @@ public abstract class BaseClient
     protected static class ClientBuilder {
         private final ConnectionManager connectionManager;
         private final CommandManager commandManager;
-        private final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+        private final PubSubMessageQueue messageQueue;
         private final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
     }
 
@@ -366,7 +363,7 @@ public abstract class BaseClient
     }
 
     /**
-     * Tries to return a next pubsub message.
+     * A <b>blocking</b> call to return a next pubsub message.
      *
      * @throws ConfigurationError If client is not subscribed to any channel or if client configured
      *     with a callback.
@@ -383,7 +380,12 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        return messageQueue.poll();
+        try {
+            return messageQueue.pop().get();
+        } catch (Exception unreachable) {
+            // should be never happen
+            return null;
+        }
     }
 
     /**
@@ -405,8 +407,7 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        throw new NotImplementedException(
-                "This feature will be supported in a future release of the GLIDE java client");
+        return messageQueue.pop();
     }
 
     /**

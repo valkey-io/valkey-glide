@@ -835,9 +835,10 @@ public class PubSubTests {
             boolean standalone, boolean useCallback) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         skipTestsOnMac();
-        assumeTrue(
-                standalone, // TODO activate tests after fix
-                "Test doesn't work on cluster due to Cross Slot error, probably a bug in `redis-rs`");
+        //        assumeTrue(
+        //                standalone, // TODO activate tests after fix
+        //                "Test doesn't work on cluster due to Cross Slot error, probably a bug in
+        // `redis-rs`");
 
         String prefix = "channel";
         String pattern = prefix + "*";
