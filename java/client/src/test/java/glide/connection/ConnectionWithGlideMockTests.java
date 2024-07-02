@@ -38,6 +38,7 @@ public class ConnectionWithGlideMockTests extends RustCoreLibMockTestBase {
     @BeforeEach
     @SneakyThrows
     public void createTestClient() {
+        // TODO: Add DISABLED level to logger-core
         Logger.setLoggerConfig(Logger.Level.DISABLED);
         channelHandler =
                 new ChannelHandler(

@@ -75,12 +75,13 @@ public class MessageHandler {
                 Logger.log(
                         Logger.Level.INFO,
                         "subscribe/unsubscribe notification",
-                        () -> String.format(
-                                "Received push notification of type '%s': %s",
-                                pushType,
-                                Arrays.stream(values)
-                                        .map(v -> v instanceof Number ? v.toString() : String.format("'%s'", v))
-                                        .collect(Collectors.joining(" "))));
+                        () ->
+                                String.format(
+                                        "Received push notification of type '%s': %s",
+                                        pushType,
+                                        Arrays.stream(values)
+                                                .map(v -> v instanceof Number ? v.toString() : String.format("'%s'", v))
+                                                .collect(Collectors.joining(" "))));
                 break;
             default:
                 Logger.log(
