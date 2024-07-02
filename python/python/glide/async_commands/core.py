@@ -5611,7 +5611,7 @@ class CoreCommands(Protocol):
 
     async def dump(
         self,
-        key: str,
+        key: TEncodable,
     ) -> Optional[bytes]:
         """
         Serialize the value stored at `key` in a Valkey-specific format and return it to the user.
@@ -5619,7 +5619,7 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/dump for more details.
 
         Args:
-            key (str): The `key` to serialize.
+            key (TEncodable): The `key` to serialize.
 
         Returns:
             Optional[bytes]: The serialized value of the data stored at `key`.
@@ -5638,11 +5638,11 @@ class CoreCommands(Protocol):
 
     async def restore(
         self,
-        key: str,
+        key: TEncodable,
         ttl: int,
-        value: bytes,
-        replace: Optional[str] = None,
-        absttl: Optional[str] = None,
+        value: TEncodable,
+        replace: Optional[TEncodable] = None,
+        absttl: Optional[TEncodable] = None,
         idletime: Optional[int] = None,
         frequency: Optional[int] = None,
     ) -> TOK:
@@ -5653,11 +5653,11 @@ class CoreCommands(Protocol):
         See https://valkey.io/commands/restore for more details.
 
         Args:
-            key (str): The `key` to create.
+            key (TEncodable): The `key` to create.
             ttl (int): The expiry time (in milliseconds). If `0`, the `key` will persist.
-            value (bytes) The serialized value to deserialiez and assign to `key`.
-            replace (Optional[str]): Set the `REPLACE` option to the given key.
-            absttl (Optional[str]): Set the `ABSTTL` option to the given key.
+            value (TEncodable) The serialized value to deserialize and assign to `key`.
+            replace (Optional[TEncodable]): Set the `REPLACE` option to the given key.
+            absttl (Optional[TEncodable]): Set the `ABSTTL` option to the given key.
             idletime (Optional[int]): Set the `IDLETIME` option with object idletime to the given key.
             frequency (Optional[int]): Set the `FREQ` option with object frequency to the given key.
 
