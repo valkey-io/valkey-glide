@@ -362,7 +362,7 @@ def _create_zinter_zunion_cmd_args(
 def _create_geosearch_args(
     keys: List[TEncodable],
     search_from: Union[str, bytes, GeospatialData],
-    seach_by: Union[GeoSearchByRadius, GeoSearchByBox],
+    search_by: Union[GeoSearchByRadius, GeoSearchByBox],
     order_by: Optional[OrderBy] = None,
     count: Optional[GeoSearchCount] = None,
     with_coord: bool = False,
@@ -370,17 +370,17 @@ def _create_geosearch_args(
     with_hash: bool = False,
     store_dist: bool = False,
 ) -> List[TEncodable]:
-    args = keys
-    if isinstance(search_from, str):
-        args += ["FROMMEMBER", search_from]
+    args: List[TEncodable] = keys
+    if isinstance(search_from, str | bytes) :
+        args.extend(["FROMMEMBER", search_from])
     else:
-        args += [
+        args.extend([
             "FROMLONLAT",
             str(search_from.longitude),
             str(search_from.latitude),
-        ]
+        ])
 
-    args += seach_by.to_args()
+    args.extend(search_by.to_args())
 
     if order_by:
         args.append(order_by.value)
