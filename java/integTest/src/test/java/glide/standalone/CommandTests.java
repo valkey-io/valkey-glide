@@ -587,11 +587,13 @@ public class CommandTests {
         assertEquals(libName, regularClient.functionLoad(code, false).get());
 
         var functionResult =
-                regularClient.fcall(funcName.toString(), new String[0], new String[] {"one", "two"}).get();
+                regularClient
+                        .fcall(funcName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
+                        .get();
         assertEquals("one", functionResult);
         functionResult =
                 regularClient
-                        .fcallReadOnly(funcName.toString(), new String[0], new String[] {"one", "two"})
+                        .fcallReadOnly(funcName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
                         .get();
         assertEquals("one", functionResult);
 
@@ -665,12 +667,13 @@ public class CommandTests {
 
         functionResult =
                 regularClient
-                        .fcall(newFuncName.toString(), new String[0], new String[] {"one", "two"})
+                        .fcall(newFuncName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
                         .get();
         assertEquals(2L, functionResult);
         functionResult =
                 regularClient
-                        .fcallReadOnly(newFuncName.toString(), new String[0], new String[] {"one", "two"})
+                        .fcallReadOnly(
+                                newFuncName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
                         .get();
         assertEquals(2L, functionResult);
 
