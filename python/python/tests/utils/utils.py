@@ -100,8 +100,8 @@ def compare_maps(
     Compare two maps by converting them to JSON strings and checking for equality, including property order.
 
     Args:
-        map1 (Optional[Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]]): The first map to compare.
-        map2 (Optional[Union[Mapping[Union[str, bytes], TResult], Dict[Union[str, bytes], TResult]]]): The second map to compare.
+        map1 (Optional[Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]]): The first map to compare.
+        map2 (Optional[Union[Mapping[str, TResult], Dict[str, TResult], Mapping[bytes, TResult], Dict[bytes, TResult]]]): The second map to compare.
 
     Returns:
         bool: True if the maps are equal, False otherwise.
@@ -174,7 +174,6 @@ def convert_bytes_to_string_object(
 
 
 def convert_string_to_bytes_object(
-    # TODO: remove the bytes options
     string_structure: Optional[
         Union[
             List[Any],
