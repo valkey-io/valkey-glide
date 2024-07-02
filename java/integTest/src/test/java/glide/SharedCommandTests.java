@@ -842,6 +842,35 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void setrange_binary(BaseClient client) {
+        GlideString stringKey = gs(UUID.randomUUID().toString());
+        GlideString nonStringKey = gs(UUID.randomUUID().toString());
+        // new key
+        assertEquals(11L, client.setrange(stringKey, 0, gs("Hello world")).get());
+        // existing key
+        assertEquals(11L, client.setrange(stringKey, 6, gs("GLIDE")).get());
+        assertEquals(gs("Hello GLIDE"), client.get(stringKey).get());
+
+        // offset > len
+        assertEquals(20L, client.setrange(stringKey, 15, gs("GLIDE")).get());
+        assertEquals(gs("Hello GLIDE\0\0\0\0GLIDE"), client.get(stringKey).get());
+
+        // non-string key
+        assertEquals(1, client.lpush(nonStringKey, new GlideString[] {gs("_")}).get());
+        Exception exception =
+                assertThrows(
+                        ExecutionException.class, () -> client.setrange(nonStringKey, 0, gs("_")).get());
+        assertTrue(exception.getCause() instanceof RequestException);
+        exception =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.setrange(stringKey, Integer.MAX_VALUE, gs("_")).get());
+        assertTrue(exception.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void getrange(BaseClient client) {
         String stringKey = UUID.randomUUID().toString();
         String nonStringKey = UUID.randomUUID().toString();
@@ -870,6 +899,43 @@ public class SharedCommandTests {
 
         // non-string key
         assertEquals(1, client.lpush(nonStringKey, new String[] {"_"}).get());
+        Exception exception =
+                assertThrows(ExecutionException.class, () -> client.getrange(nonStringKey, 0, -1).get());
+        assertTrue(exception.getCause() instanceof RequestException);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void getrange_binary(BaseClient client) {
+        GlideString stringKey = gs(UUID.randomUUID().toString());
+        GlideString nonStringKey = gs(UUID.randomUUID().toString());
+
+        assertEquals(OK, client.set(stringKey, gs("This is a string")).get());
+        assertEquals(gs("This"), client.getrange(stringKey, 0, 3).get());
+        assertEquals(gs("ing"), client.getrange(stringKey, -3, -1).get());
+        assertEquals(gs("This is a string"), client.getrange(stringKey, 0, -1).get());
+
+        // out of range
+        assertEquals(gs("string"), client.getrange(stringKey, 10, 100).get());
+        assertEquals(gs("This is a stri"), client.getrange(stringKey, -200, -3).get());
+        assertEquals(gs(""), client.getrange(stringKey, 100, 200).get());
+
+        // incorrect range
+        assertEquals(gs(""), client.getrange(stringKey, -1, -3).get());
+
+        // a redis bug, fixed in version 8: https://github.com/redis/redis/issues/13207
+        assertEquals(
+                gs(REDIS_VERSION.isLowerThan("8.0.0") ? "T" : ""),
+                client.getrange(stringKey, -200, -100).get());
+
+        // empty key (returning null isn't implemented)
+        assertEquals(
+                gs(REDIS_VERSION.isLowerThan("8.0.0") ? "" : null),
+                client.getrange(nonStringKey, 0, -1).get());
+
+        // non-string key
+        assertEquals(1, client.lpush(nonStringKey, new GlideString[] {gs("_")}).get());
         Exception exception =
                 assertThrows(ExecutionException.class, () -> client.getrange(nonStringKey, 0, -1).get());
         assertTrue(exception.getCause() instanceof RequestException);
@@ -4134,6 +4200,7 @@ public class SharedCommandTests {
         }
     }
 
+    // TODO: add binary version
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
@@ -4532,6 +4599,151 @@ public class SharedCommandTests {
 
         // xrange against a non-stream value
         assertEquals(OK, client.set(key2, "not_a_stream").get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xrange(key2, InfRangeBound.MIN, InfRangeBound.MAX).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        // ...and xrevrange
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xrevrange(key2, InfRangeBound.MAX, InfRangeBound.MIN).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // xrange when range bound is not valid ID
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xrange(key, IdBound.ofExclusive("not_a_stream_id"), InfRangeBound.MAX)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xrange(key, InfRangeBound.MIN, IdBound.ofExclusive("not_a_stream_id"))
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        // ... and xrevrange
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xrevrange(key, IdBound.ofExclusive("not_a_stream_id"), InfRangeBound.MIN)
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () ->
+                                client
+                                        .xrevrange(key, InfRangeBound.MAX, IdBound.ofExclusive("not_a_stream_id"))
+                                        .get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xrange_and_xrevrange_binary(BaseClient client) {
+
+        GlideString key = gs(UUID.randomUUID().toString());
+        GlideString key2 = gs(UUID.randomUUID().toString());
+        String streamId1 = "0-1";
+        String streamId2 = "0-2";
+        String streamId3 = "0-3";
+
+        assertEquals(
+                gs(streamId1),
+                client
+                        .xadd(
+                                key,
+                                Map.of(gs("f1"), gs("foo1"), gs("f2"), gs("bar2")),
+                                StreamAddOptions.builder().id(streamId1).build())
+                        .get());
+        assertEquals(
+                gs(streamId2),
+                client
+                        .xadd(
+                                key,
+                                Map.of(gs("f1"), gs("foo1"), gs("f2"), gs("bar2")),
+                                StreamAddOptions.builder().id(streamId2).build())
+                        .get());
+        assertEquals(2L, client.xlen(key).get());
+
+        // get everything from the stream
+        Map<GlideString, GlideString[][]> result =
+                client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(2, result.size());
+        assertNotNull(result.get(gs(streamId1)));
+        assertNotNull(result.get(gs(streamId2)));
+
+        // get everything from the stream using a reverse range search
+        Map<GlideString, GlideString[][]> revResult =
+                client.xrevrange(key, InfRangeBound.MAX, InfRangeBound.MIN).get();
+        assertEquals(2, revResult.size());
+        assertNotNull(revResult.get(gs(streamId1)));
+        assertNotNull(revResult.get(gs(streamId2)));
+
+        // returns empty if + before -
+        Map<GlideString, GlideString[][]> emptyResult =
+                client.xrange(key, InfRangeBound.MAX, InfRangeBound.MIN).get();
+        assertEquals(0, emptyResult.size());
+
+        // rev search returns empty if - before +
+        Map<GlideString, GlideString[][]> emptyRevResult =
+                client.xrevrange(key, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(0, emptyRevResult.size());
+
+        assertEquals(
+                gs(streamId3),
+                client
+                        .xadd(
+                                key,
+                                Map.of(gs("f3"), gs("foo3"), gs("f4"), gs("bar3")),
+                                StreamAddOptions.builder().id(streamId3).build())
+                        .get());
+
+        // get the newest entry
+        Map<GlideString, GlideString[][]> newResult =
+                client.xrange(key, IdBound.ofExclusive(streamId2), IdBound.ofExclusive(5), 1L).get();
+        assertEquals(1, newResult.size());
+        assertNotNull(newResult.get(gs(streamId3)));
+        // ...and from xrevrange
+        Map<GlideString, GlideString[][]> newRevResult =
+                client.xrevrange(key, IdBound.ofExclusive(5), IdBound.ofExclusive(streamId2), 1L).get();
+        assertEquals(1, newRevResult.size());
+        assertNotNull(newRevResult.get(gs(streamId3)));
+
+        // xrange against an emptied stream
+        assertEquals(
+                3, client.xdel(key, new GlideString[] {gs(streamId1), gs(streamId2), gs(streamId3)}).get());
+        Map<GlideString, GlideString[][]> emptiedResult =
+                client.xrange(key, InfRangeBound.MIN, InfRangeBound.MAX, 10L).get();
+        assertEquals(0, emptiedResult.size());
+        // ...and xrevrange
+        Map<GlideString, GlideString[][]> emptiedRevResult =
+                client.xrevrange(key, InfRangeBound.MAX, InfRangeBound.MIN, 10L).get();
+        assertEquals(0, emptiedRevResult.size());
+
+        // xrange against a non-existent stream
+        emptyResult = client.xrange(key2, InfRangeBound.MIN, InfRangeBound.MAX).get();
+        assertEquals(0, emptyResult.size());
+        // ...and xrevrange
+        emptiedRevResult = client.xrevrange(key2, InfRangeBound.MAX, InfRangeBound.MIN).get();
+        assertEquals(0, emptiedRevResult.size());
+
+        // xrange against a non-stream value
+        assertEquals(OK, client.set(key2, gs("not_a_stream")).get());
         ExecutionException executionException =
                 assertThrows(
                         ExecutionException.class,
