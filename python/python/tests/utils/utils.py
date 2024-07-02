@@ -4,7 +4,7 @@ import string
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 from glide.async_commands.core import InfoSection
-from glide.constants import TResult
+from glide.constants import TClusterResponse, TFunctionListResponse, TResult
 from glide.glide_client import TGlideClient
 from packaging import version
 
@@ -228,9 +228,7 @@ def generate_lua_lib_code(
 
 
 def check_function_list_response(
-    response: Union[
-        List[Mapping[bytes, Any]], Mapping[bytes, List[Mapping[bytes, Any]]]
-    ],
+    response: TClusterResponse[TFunctionListResponse],
     lib_name: str,
     function_descriptions: Mapping[str, Optional[bytes]],
     function_flags: Mapping[str, Set[bytes]],
@@ -247,7 +245,7 @@ def check_function_list_response(
         functionFlags (Mapping[bytes, Set[bytes]]): Expected function flags. Key - function name, value - flags set.
         libCode (Optional[bytes]): Expected library to check if given.
     """
-    response = cast(List[Mapping[bytes, Any]], response)
+    response = cast(TFunctionListResponse, response)
     assert len(response) > 0
     has_lib = False
     for lib in response:

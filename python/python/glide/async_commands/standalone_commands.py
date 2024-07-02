@@ -12,7 +12,7 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, Transaction
-from glide.constants import OK, TOK, TEncodable, TResult
+from glide.constants import OK, TOK, TEncodable, TFunctionListResponse, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 
 
@@ -267,16 +267,7 @@ class StandaloneCommands(CoreCommands):
 
     async def function_list(
         self, library_name_pattern: Optional[TEncodable] = None, with_code: bool = False
-    ) -> List[
-        Mapping[
-            bytes,
-            List[
-                Mapping[
-                    bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]
-                ]
-            ],
-        ]
-    ]:
+    ) -> TFunctionListResponse:
         """
         Returns information about the functions and libraries.
 
@@ -287,7 +278,7 @@ class StandaloneCommands(CoreCommands):
             with_code (bool): Specifies whether to request the library code from the server or not.
 
         Returns:
-            List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]: Info about all or
+            TFunctionListResponse: Info about all or
                 selected libraries and their functions.
 
         Examples:
@@ -311,19 +302,7 @@ class StandaloneCommands(CoreCommands):
         if with_code:
             args.append("WITHCODE")
         return cast(
-            List[
-                Mapping[
-                    bytes,
-                    List[
-                        Mapping[
-                            bytes,
-                            Union[
-                                bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]
-                            ],
-                        ]
-                    ],
-                ]
-            ],
+            TFunctionListResponse,
             await self._execute_command(
                 RequestType.FunctionList,
                 args,

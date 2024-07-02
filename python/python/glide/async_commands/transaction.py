@@ -1900,7 +1900,7 @@ class BaseTransaction:
             with_code (bool): Specifies whether to request the library code from the server or not.
 
         Commands response:
-            List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]: Info about all or
+            TFunctionListResponse: Info about all or
                 selected libraries and their functions.
 
         Since: Redis 7.0.0.

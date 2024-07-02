@@ -12,7 +12,14 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
-from glide.constants import TOK, TClusterResponse, TEncodable, TResult, TSingleNodeRoute
+from glide.constants import (
+    TOK,
+    TClusterResponse,
+    TEncodable,
+    TFunctionListResponse,
+    TResult,
+    TSingleNodeRoute,
+)
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
@@ -366,11 +373,7 @@ class ClusterCommands(CoreCommands):
         library_name_pattern: Optional[TEncodable] = None,
         with_code: bool = False,
         route: Optional[Route] = None,
-    ) -> TClusterResponse[
-        List[
-            Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]
-        ]
-    ]:
+    ) -> TClusterResponse[TFunctionListResponse]:
         """
         Returns information about the functions and libraries.
 
@@ -383,7 +386,7 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]]: Info
+            TClusterResponse[TFunctionListResponse]: Info
             about all or selected libraries and their functions.
 
         Examples:
@@ -407,14 +410,7 @@ class ClusterCommands(CoreCommands):
         if with_code:
             args.append("WITHCODE")
         return cast(
-            TClusterResponse[
-                List[
-                    Mapping[
-                        bytes,
-                        Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]],
-                    ]
-                ]
-            ],
+            TClusterResponse[TFunctionListResponse],
             await self._execute_command(
                 RequestType.FunctionList,
                 args,
