@@ -813,6 +813,16 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> sort(
+            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
+        GlideString[] arguments = ArrayUtils.addFirst(sortClusterOptions.toGlideStringArgs(), key);
+        return commandManager.submitNewCommand(
+                Sort,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<String[]> sortReadOnly(
             @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
         String[] arguments = ArrayUtils.addFirst(sortClusterOptions.toArgs(), key);
@@ -823,6 +833,16 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> sortReadOnly(
+            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
+        GlideString[] arguments = ArrayUtils.addFirst(sortClusterOptions.toGlideStringArgs(), key);
+        return commandManager.submitNewCommand(
+                SortReadOnly,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<Long> sortStore(
             @NonNull String key,
             @NonNull String destination,
@@ -830,6 +850,18 @@ public class RedisClusterClient extends BaseClient
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         String[] arguments =
                 concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments);
+        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sortStore(
+            @NonNull GlideString key,
+            @NonNull GlideString destination,
+            @NonNull SortClusterOptions sortClusterOptions) {
+        GlideString[] storeArguments = new GlideString[] {gs(STORE_COMMAND_STRING), destination};
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key}, sortClusterOptions.toGlideStringArgs(), storeArguments);
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 }
