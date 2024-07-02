@@ -49,7 +49,7 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[bytes]:
         """
         Get information and statistics about the Redis server.
-        See https://redis.io/commands/info/ for details.
+        See https://valkey.io/commands/info/ for details.
 
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
@@ -100,7 +100,7 @@ class ClusterCommands(CoreCommands):
     ) -> TOK:
         """
         Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
-        See https://redis.io/commands/config-resetstat/ for details.
+        See https://valkey.io/commands/config-resetstat/ for details.
 
         Args:
             route (Optional[Route]): The command will be routed automatically to all nodes, unless `route` is provided, in which
@@ -119,7 +119,7 @@ class ClusterCommands(CoreCommands):
     ) -> TOK:
         """
         Rewrite the configuration file with the current configuration.
-        See https://redis.io/commands/config-rewrite/ for details.
+        See https://valkey.io/commands/config-rewrite/ for details.
 
         Args:
             route (Optional[TRoute]): The command will be routed automatically to all nodes, unless `route` is provided, in which
@@ -142,7 +142,7 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[int]:
         """
         Returns the current connection id.
-        See https://redis.io/commands/client-id/ for more information.
+        See https://valkey.io/commands/client-id/ for more information.
 
         Args:
             route (Optional[Route]): The command will be sent to a random node, unless `route` is provided, in which
@@ -164,7 +164,7 @@ class ClusterCommands(CoreCommands):
     ) -> bytes:
         """
         Ping the Redis server.
-        See https://redis.io/commands/ping/ for more details.
+        See https://valkey.io/commands/ping/ for more details.
 
         Args:
             message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
@@ -192,7 +192,7 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[Dict[bytes, bytes]]:
         """
         Get the values of configuration parameters.
-        See https://redis.io/commands/config-get/ for details.
+        See https://valkey.io/commands/config-get/ for details.
 
         Args:
             parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
@@ -224,7 +224,7 @@ class ClusterCommands(CoreCommands):
     ) -> TOK:
         """
         Set configuration parameters to the specified values.
-        See https://redis.io/commands/config-set/ for details.
+        See https://valkey.io/commands/config-set/ for details.
 
         Args:
             parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
@@ -253,7 +253,7 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[Optional[bytes]]:
         """
         Get the name of the connection to which the request is routed.
-        See https://redis.io/commands/client-getname/ for more details.
+        See https://valkey.io/commands/client-getname/ for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
@@ -279,7 +279,7 @@ class ClusterCommands(CoreCommands):
     async def dbsize(self, route: Optional[Route] = None) -> int:
         """
         Returns the number of keys in the database.
-        See https://redis.io/commands/dbsize for more details.
+        See https://valkey.io/commands/dbsize for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
@@ -301,7 +301,7 @@ class ClusterCommands(CoreCommands):
         """
         Echoes the provided `message` back.
 
-        See https://redis.io/commands/echo for more details.
+        See https://valkey.io/commands/echo for more details.
 
         Args:
             message (TEncodable): The message to be echoed back.
@@ -431,7 +431,7 @@ class ClusterCommands(CoreCommands):
     ) -> TClusterResponse[TResult]:
         """
         Invokes a previously loaded function.
-        See https://redis.io/commands/fcall/ for more details.
+        See https://valkey.io/commands/fcall/ for more details.
 
         Args:
             function (TEncodable): The function name.
@@ -501,7 +501,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns the server time.
 
-        See https://redis.io/commands/time/ for more details.
+        See https://valkey.io/commands/time/ for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
