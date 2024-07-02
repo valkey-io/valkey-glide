@@ -121,6 +121,13 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void ping_binary_with_message() {
+        GlideString data = regularClient.ping(gs("H3LL0")).get();
+        assertEquals(gs("H3LL0"), data);
+    }
+
+    @Test
+    @SneakyThrows
     public void info_without_options() {
         String data = regularClient.info().get();
         for (String section : DEFAULT_INFO_SECTIONS) {
