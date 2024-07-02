@@ -823,19 +823,19 @@ public class CommandTests {
                 Arguments.of(
                         "bzpopmin", "5.0.0", clusterClient.bzpopmin(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of(
-                        "bzpopmin",
+                        "bzpopmin binary",
                         "5.0.0",
                         clusterClient.bzpopmin(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
                 Arguments.of(
                         "zmpop", "7.0.0", clusterClient.zmpop(new String[] {"abc", "zxy", "lkn"}, MAX)),
                 Arguments.of(
-                        "zmpop",
+                        "zmpop binary",
                         "7.0.0",
                         clusterClient.zmpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, MAX)),
                 Arguments.of(
                         "bzmpop", "7.0.0", clusterClient.bzmpop(new String[] {"abc", "zxy", "lkn"}, MAX, .1)),
                 Arguments.of(
-                        "bzmpop",
+                        "bzmpop binary",
                         "7.0.0",
                         clusterClient.bzmpop(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, MAX, .1)),
                 Arguments.of(
@@ -843,7 +843,7 @@ public class CommandTests {
                         "7.0.0",
                         clusterClient.lmpop(new String[] {"abc", "def"}, ListDirection.LEFT, 1L)),
                 Arguments.of(
-                        "lmpop",
+                        "lmpop binary",
                         "7.0.0",
                         clusterClient.lmpop(new GlideString[] {gs("abc"), gs("def")}, ListDirection.LEFT, 1L)),
                 Arguments.of(
@@ -855,7 +855,7 @@ public class CommandTests {
                         "7.0.0",
                         clusterClient.blmpop(new String[] {"abc", "def"}, ListDirection.LEFT, 1L, 0.1)),
                 Arguments.of(
-                        "blmpop",
+                        "blmpop binary",
                         "7.0.0",
                         clusterClient.blmpop(
                                 new GlideString[] {gs("abc"), gs("def")}, ListDirection.LEFT, 1L, 0.1)),
