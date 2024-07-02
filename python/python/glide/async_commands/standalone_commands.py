@@ -284,8 +284,8 @@ class StandaloneCommands(CoreCommands):
             with_code (bool): Specifies whether to request the library code from the server or not.
 
         Returns:
-            List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]: Info about all
-                libraries and their functions.
+            List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]: Info about all or
+                selected libraries and their functions.
 
         Examples:
             >>> response = await client.function_list("myLib?_backup", True)
