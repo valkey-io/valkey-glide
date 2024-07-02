@@ -817,7 +817,7 @@ public class CommandTests {
                 Arguments.of(
                         "bzpopmax", "5.0.0", clusterClient.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of(
-                        "bzpopmax",
+                        "bzpopmax binary",
                         "5.0.0",
                         clusterClient.bzpopmax(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")}, .1)),
                 Arguments.of(
