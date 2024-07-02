@@ -10,7 +10,7 @@ from glide.async_commands.cluster_commands import ClusterCommands
 from glide.async_commands.core import CoreCommands
 from glide.async_commands.standalone_commands import StandaloneCommands
 from glide.config import BaseClientConfiguration
-from glide.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
+from glide.constants import DEFAULT_READ_BYTES_SIZE, OK, TEncodable, TRequest, TResult
 from glide.exceptions import (
     ClosingError,
     ConfigurationError,
@@ -197,7 +197,7 @@ class BaseClient(CoreCommands):
         self._writer.write(b_arr)
         await self._writer.drain()
 
-    def _encode_arg(self, arg: Union[str, bytes]) -> bytes:
+    def _encode_arg(self, arg: TEncodable) -> bytes:
         """
         Converts a string argument to bytes.
 
@@ -212,17 +212,16 @@ class BaseClient(CoreCommands):
             return bytes(arg, encoding="utf8")
         return arg
 
-    # TODO: change `List[str]` to `List[TEncodable]` where `TEncodable = Union[str, bytes]`
     def _encode_and_sum_size(
         self,
-        args_list: Optional[List[str]],
+        args_list: Optional[List[TEncodable]],
     ) -> Tuple[List[bytes], int]:
         """
         Encodes the list and calculates the total memory size.
 
         Args:
-            args_list (Optional[List[str]]): A list of strings to be converted to bytes.
-                                                    If None or empty, returns ([], 0).
+            args_list (Optional[List[TEncodable]]): A list of strings to be converted to bytes.
+                                                           If None or empty, returns ([], 0).
 
         Returns:
             int: The total memory size of the encoded arguments in bytes.
@@ -232,7 +231,7 @@ class BaseClient(CoreCommands):
         if not args_list:
             return (encoded_args_list, args_size)
         for arg in args_list:
-            encoded_arg = self._encode_arg(arg)
+            encoded_arg = self._encode_arg(arg) if isinstance(arg, str) else arg
             encoded_args_list.append(encoded_arg)
             args_size += sys.getsizeof(encoded_arg)
         return (encoded_args_list, args_size)
@@ -240,7 +239,7 @@ class BaseClient(CoreCommands):
     async def _execute_command(
         self,
         request_type: RequestType.ValueType,
-        args: List[str],
+        args: List[TEncodable],
         route: Optional[Route] = None,
     ) -> TResult:
         if self._is_closed:
@@ -266,7 +265,7 @@ class BaseClient(CoreCommands):
 
     async def _execute_transaction(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[str]]],
+        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
         route: Optional[Route] = None,
     ) -> List[TResult]:
         if self._is_closed:
