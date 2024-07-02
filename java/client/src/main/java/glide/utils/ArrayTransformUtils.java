@@ -178,7 +178,7 @@ public class ArrayTransformUtils {
      * @return A Map of arrays of type U[][], containing the key/values from the input Map.
      * @param <T> The target type which the elements are cast.
      */
-    public static <T> Map<GlideString, T[][]> castMapOf2DArrayBinary(
+    public static <T> Map<S, T[][]> castMapOf2DArrayBinary(
             Map<GlideString, Object[][]> mapOfArrays, Class<T> clazz) {
         if (mapOfArrays == null) {
             return null;
