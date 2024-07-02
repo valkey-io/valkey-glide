@@ -7847,55 +7847,43 @@ class TestCommands:
         assert await redis_client.restore(key2, 0, bytesData) == OK
 
         # Restore with REPLACE option
-        assert await redis_client.restore(key2, 0, bytesData, replace="REPLACE") == OK
+        assert await redis_client.restore(key2, 0, bytesData, replace=True) == OK
 
         # Restore to an existing key holding different value with REPLACE option
         assert await redis_client.sadd(key3, ["a"]) == 1
-        assert await redis_client.restore(key3, 0, bytesData, replace="REPLACE") == OK
+        assert await redis_client.restore(key3, 0, bytesData, replace=True) == OK
 
         # Restore with REPLACE, ABSTTL, and positive TTL
         assert (
-            await redis_client.restore(
-                key2, 1000, bytesData, replace="REPLACE", absttl="ABSTTL"
-            )
+            await redis_client.restore(key2, 1000, bytesData, replace=True, absttl=True)
             == OK
         )
 
         # Restore with REPLACE, ABSTTL, and negative TTL
         with pytest.raises(RequestError) as e:
-            await redis_client.restore(
-                key2, -10, bytesData, replace="REPLACE", absttl="ABSTTL"
-            )
+            await redis_client.restore(key2, -10, bytesData, replace=True, absttl=True)
         assert "Invalid TTL value" in str(e)
 
         # Restore with REPLACE and positive idletime
         assert (
-            await redis_client.restore(
-                key2, 0, bytesData, replace="REPLACE", idletime=10
-            )
+            await redis_client.restore(key2, 0, bytesData, replace=True, idletime=10)
             == OK
         )
 
         # Restore with REPLACE and negative idletime
         with pytest.raises(RequestError) as e:
-            await redis_client.restore(
-                key2, 0, bytesData, replace="REPLACE", idletime=-10
-            )
+            await redis_client.restore(key2, 0, bytesData, replace=True, idletime=-10)
         assert "Invalid IDLETIME value" in str(e)
 
         # Restore with REPLACE and positive frequency
         assert (
-            await redis_client.restore(
-                key2, 0, bytesData, replace="REPLACE", frequency=10
-            )
+            await redis_client.restore(key2, 0, bytesData, replace=True, frequency=10)
             == OK
         )
 
         # Restore with REPLACE and negative frequency
         with pytest.raises(RequestError) as e:
-            await redis_client.restore(
-                key2, 0, bytesData, replace="REPLACE", frequency=-10
-            )
+            await redis_client.restore(key2, 0, bytesData, replace=True, frequency=-10)
         assert "Invalid FREQ value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [False])

@@ -5641,8 +5641,8 @@ class CoreCommands(Protocol):
         key: TEncodable,
         ttl: int,
         value: TEncodable,
-        replace: Optional[TEncodable] = None,
-        absttl: Optional[TEncodable] = None,
+        replace: bool = False,
+        absttl: bool = False,
         idletime: Optional[int] = None,
         frequency: Optional[int] = None,
     ) -> TOK:
@@ -5656,8 +5656,9 @@ class CoreCommands(Protocol):
             key (TEncodable): The `key` to create.
             ttl (int): The expiry time (in milliseconds). If `0`, the `key` will persist.
             value (TEncodable) The serialized value to deserialize and assign to `key`.
-            replace (Optional[TEncodable]): Set the `REPLACE` option to the given key.
-            absttl (Optional[TEncodable]): Set the `ABSTTL` option to the given key.
+            replace (bool): Set to `True` to replace the key if it exists.
+            absttl (bool): Set to `True` to specify that `ttl` represents an absolute Unix
+                timestamp (in milliseconds).
             idletime (Optional[int]): Set the `IDLETIME` option with object idletime to the given key.
             frequency (Optional[int]): Set the `FREQ` option with object frequency to the given key.
 
@@ -5667,9 +5668,9 @@ class CoreCommands(Protocol):
         Examples:
             >>> await client.restore("newKey", 0, value)
                 OK # Indicates restore `newKey` without any ttl expiry nor any option
-            >>> await client.restore("newKey", 0, value, replace="REPLACE")
+            >>> await client.restore("newKey", 0, value, replace=True)
                 OK # Indicates restore `newKey` with `REPLACE` option
-            >>> await client.restore("newKey", 0, value, absttl="ABSTTL")
+            >>> await client.restore("newKey", 0, value, absttl=True)
                 OK # Indicates restore `newKey` with `ABSTTL` option
             >>> await client.restore("newKey", 0, value, idletime=10)
                 OK # Indicates restore `newKey` with `IDLETIME` option
@@ -5677,9 +5678,9 @@ class CoreCommands(Protocol):
                 OK # Indicates restore `newKey` with `FREQ` option
         """
         args = [key, str(ttl), value]
-        if replace is not None:
+        if replace is True:
             args.append("REPLACE")
-        if absttl is not None:
+        if absttl is True:
             args.append("ABSTTL")
         if idletime is not None:
             args.extend(["IDLETIME", str(idletime)])
