@@ -1053,7 +1053,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn convert_xinfo_groups_xinfo_consumers() {
+    fn xinfo_groups_xinfo_consumers_expected_return_type() {
         assert!(matches!(
             expected_type_for_cmd(redis::cmd("XINFO").arg("GROUPS").arg("key")),
             Some(ExpectedReturnType::ArrayOfMaps(&None))
@@ -1063,7 +1063,10 @@ mod tests {
             expected_type_for_cmd(redis::cmd("XINFO").arg("CONSUMERS").arg("key").arg("group")),
             Some(ExpectedReturnType::ArrayOfMaps(&None))
         ));
+    }
 
+    #[test]
+    fn convert_xinfo_groups_xinfo_consumers() {
         // The format of the XINFO GROUPS and XINFO CONSUMERS responses are essentially the same, so we only need to
         // test one of them here.
         let groups_resp2_response = Value::Array(vec![

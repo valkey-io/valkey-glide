@@ -6414,7 +6414,10 @@ class TestCommands:
         }
 
         # verify that xinfo_consumers contains info for 2 consumers now
-        consumers_result = await redis_client.xinfo_consumers(key, group_name1)
+        # test with byte string args
+        consumers_result = await redis_client.xinfo_consumers(
+            key.encode(), group_name1.encode()
+        )
         assert len(consumers_result) == 2
 
         # add one more entry
@@ -6442,7 +6445,8 @@ class TestCommands:
 
         # verify xgroup_set_id effects the returned value from xinfo_groups
         assert await redis_client.xgroup_set_id(key, group_name1, stream_id1_1) == OK
-        groups = await redis_client.xinfo_groups(key)
+        # test with byte string arg
+        groups = await redis_client.xinfo_groups(key.encode())
         assert len(groups) == 1
         group1_info = groups[0]
         assert group1_info.get(b"name") == group_name1.encode()
