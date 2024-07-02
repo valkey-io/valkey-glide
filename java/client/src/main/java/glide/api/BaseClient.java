@@ -554,7 +554,7 @@ public abstract class BaseClient
     protected Object[] handleArrayResponse(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
-    
+
     protected Object[] handleArrayResponseBinary(Response response) throws RedisException {
         return handleRedisResponse(Object[].class, EnumSet.noneOf(ResponseFlags.class), response);
     }
