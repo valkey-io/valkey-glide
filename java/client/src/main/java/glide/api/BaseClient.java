@@ -269,14 +269,12 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.ArrayUtils;
-import org.apache.commons.lang3.NotImplementedException;
 import response.ResponseOuterClass.ConstantResponse;
 import response.ResponseOuterClass.Response;
 
@@ -302,7 +300,7 @@ public abstract class BaseClient
 
     protected final CommandManager commandManager;
     protected final ConnectionManager connectionManager;
-    protected final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+    protected final MessageHandler messageHandler;
     protected final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
 
     /** Helper which extracts data from received {@link Response}s from GLIDE. */
@@ -317,7 +315,7 @@ public abstract class BaseClient
     protected BaseClient(ClientBuilder builder) {
         this.connectionManager = builder.connectionManager;
         this.commandManager = builder.commandManager;
-        this.messageQueue = builder.messageQueue;
+        this.messageHandler = builder.messageHandler;
         this.subscriptionConfiguration = builder.subscriptionConfiguration;
     }
 
@@ -326,7 +324,7 @@ public abstract class BaseClient
     protected static class ClientBuilder {
         private final ConnectionManager connectionManager;
         private final CommandManager commandManager;
-        private final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
+        private final MessageHandler messageHandler;
         private final Optional<BaseSubscriptionConfiguration> subscriptionConfiguration;
     }
 
@@ -359,7 +357,7 @@ public abstract class BaseClient
                                             new ClientBuilder(
                                                     connectionManager,
                                                     commandManager,
-                                                    messageHandler.getQueue(),
+                                                    messageHandler,
                                                     Optional.ofNullable(config.getSubscriptionConfiguration()))));
         } catch (InterruptedException e) {
             // Something bad happened while we were establishing netty connection to UDS
@@ -370,7 +368,7 @@ public abstract class BaseClient
     }
 
     /**
-     * Tries to return a next pubsub message.
+     * Return a next pubsub message if it is present.
      *
      * @throws ConfigurationError If client is not subscribed to any channel or if client configured
      *     with a callback.
@@ -387,16 +385,16 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        return messageQueue.poll();
+        return messageHandler.getQueue().popSync();
     }
 
     /**
-     * Returns a promise for a next pubsub message.
+     * Returns a promise for a next pubsub message.<br>
+     * Message gets unrecoverable lost if future is cancelled or reference to this future is lost.
      *
-     * @apiNote <b>Not implemented!</b>
      * @throws ConfigurationError If client is not subscribed to any channel or if client configured
      *     with a callback.
-     * @return A <code>Future</code> which resolved with the next incoming message.
+     * @return A {@link CompletableFuture} which will asynchronously hold the next available message.
      */
     public CompletableFuture<PubSubMessage> getPubSubMessage() {
         if (subscriptionConfiguration.isEmpty()) {
@@ -409,8 +407,7 @@ public abstract class BaseClient
                     "The operation will never complete since messages will be passed to the configured"
                             + " callback.");
         }
-        throw new NotImplementedException(
-                "This feature will be supported in a future release of the GLIDE java client");
+        return messageHandler.getQueue().popAsync();
     }
 
     /**
