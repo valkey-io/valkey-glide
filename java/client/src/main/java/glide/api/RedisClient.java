@@ -117,6 +117,12 @@ public class RedisClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> ping(@NonNull GlideString message) {
+        return commandManager.submitNewCommand(
+                Ping, new GlideString[] {message}, this::handleStringResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<String> info() {
         return commandManager.submitNewCommand(Info, new String[0], this::handleStringResponse);
     }

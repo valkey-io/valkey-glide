@@ -199,6 +199,13 @@ public class CommandTests {
 
     @Test
     @SneakyThrows
+    public void ping_binary_with_message() {
+        GlideString data = clusterClient.ping(gs("H3LL0")).get();
+        assertEquals(gs("H3LL0"), data);
+    }
+
+    @Test
+    @SneakyThrows
     public void ping_with_route() {
         String data = clusterClient.ping(ALL_NODES).get();
         assertEquals("PONG", data);
@@ -209,6 +216,13 @@ public class CommandTests {
     public void ping_with_message_with_route() {
         String data = clusterClient.ping("H3LL0", ALL_PRIMARIES).get();
         assertEquals("H3LL0", data);
+    }
+
+    @Test
+    @SneakyThrows
+    public void ping_binary_with_message_with_route() {
+        GlideString data = clusterClient.ping(gs("H3LL0"), ALL_PRIMARIES).get();
+        assertEquals(gs("H3LL0"), data);
     }
 
     @Test
@@ -773,6 +787,10 @@ public class CommandTests {
                         clusterClient.sinter(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
                 Arguments.of(
                         "sunionstore", null, clusterClient.sunionstore("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "sunionstore binary",
+                        null,
+                        clusterClient.sunionstore(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of("zdiff", null, clusterClient.zdiff(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of(
                         "zdiffWithScores",
@@ -865,6 +883,10 @@ public class CommandTests {
                 Arguments.of(
                         "lcsIdxWithMatchLen", "7.0.0", clusterClient.lcsIdxWithMatchLen("abc", "def", 10)),
                 Arguments.of("sunion", "1.0.0", clusterClient.sunion(new String[] {"abc", "def", "ghi"})),
+                Arguments.of(
+                        "sunion binary",
+                        "1.0.0",
+                        clusterClient.sunion(new GlideString[] {gs("abc"), gs("def"), gs("ghi")})),
                 Arguments.of("sortStore", "1.0.0", clusterClient.sortStore("abc", "def")),
                 Arguments.of(
                         "sortStore",
@@ -903,6 +925,9 @@ public class CommandTests {
                 Arguments.of("mget", clusterClient.mget(new String[] {"abc", "zxy", "lkn"})),
                 Arguments.of("mset", clusterClient.mset(Map.of("abc", "1", "zxy", "2", "lkn", "3"))),
                 Arguments.of("touch", clusterClient.touch(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "touch binary",
+                        clusterClient.touch(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
                 Arguments.of("watch", clusterClient.watch(new String[] {"ghi", "zxy", "lkn"})));
     }
 

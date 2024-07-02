@@ -1487,6 +1487,13 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> sunionstore(
+            @NonNull GlideString destination, @NonNull GlideString[] keys) {
+        GlideString[] arguments = ArrayUtils.addFirst(keys, destination);
+        return commandManager.submitNewCommand(SUnionStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> exists(@NonNull String[] keys) {
         return commandManager.submitNewCommand(Exists, keys, this::handleLongResponse);
     }
@@ -2683,6 +2690,11 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Long> touch(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(Touch, keys, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> geoadd(
             @NonNull String key,
             @NonNull Map<String, GeospatialData> membersToGeospatialData,
@@ -3308,6 +3320,11 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Set<String>> sunion(@NonNull String[] keys) {
         return commandManager.submitNewCommand(SUnion, keys, this::handleSetResponse);
+    }
+
+    @Override
+    public CompletableFuture<Set<GlideString>> sunion(@NonNull GlideString[] keys) {
+        return commandManager.submitNewCommand(SUnion, keys, this::handleSetBinaryResponse);
     }
 
     // Hack: convert all `byte[]` -> `GlideString`. Better doing it here in the Java realm

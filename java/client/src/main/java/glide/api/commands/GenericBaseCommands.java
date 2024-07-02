@@ -1041,6 +1041,22 @@ public interface GenericBaseCommands {
     CompletableFuture<Long> touch(String[] keys);
 
     /**
+     * Updates the last access time of specified <code>keys</code>.
+     *
+     * @apiNote When in cluster mode, the command may route to multiple nodes when <code>keys</code>
+     *     map to different hash slots.
+     * @see <a href="https://redis.io/commands/touch/">redis.io</a> for details.
+     * @param keys The keys to update last access time.
+     * @return The number of keys that were updated.
+     * @example
+     *     <pre>{@code
+     * Long payload = client.touch(new GlideString[] {gs("myKey1"), gs("myKey2"), gs("nonExistentKey")}).get();
+     * assert payload == 2L; // Last access time of 2 keys has been updated.
+     * }</pre>
+     */
+    CompletableFuture<Long> touch(GlideString[] keys);
+
+    /**
      * Copies the value stored at the <code>source</code> to the <code>destination</code> key if the
      * <code>destination</code> key does not yet exist.
      *
