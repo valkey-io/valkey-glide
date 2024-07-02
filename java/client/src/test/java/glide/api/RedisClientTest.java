@@ -512,6 +512,28 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void ping_binary_with_message_returns_success() {
+        // setup
+        GlideString message = gs("RETURN OF THE PONG");
+        GlideString[] arguments = new GlideString[] {message};
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(message);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(Ping), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.ping(message);
+        GlideString pong = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(message, pong);
+    }
+
+    @SneakyThrows
+    @Test
     public void select_returns_success() {
         // setup
         CompletableFuture<String> testResponse = new CompletableFuture<>();
@@ -3916,6 +3938,31 @@ public class RedisClientTest {
         String destination = "key";
         String[] keys = new String[] {"set1", "set2"};
         String[] args = new String[] {"key", "set1", "set2"};
+        Long value = 2L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(SUnionStore), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.sunionstore(destination, keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sunionstore_binary_returns_success() {
+        // setup
+        GlideString destination = gs("key");
+        GlideString[] keys = new GlideString[] {gs("set1"), gs("set2")};
+        GlideString[] args = new GlideString[] {gs("key"), gs("set1"), gs("set2")};
         Long value = 2L;
 
         CompletableFuture<Long> testResponse = new CompletableFuture<>();
@@ -8047,6 +8094,28 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void touch_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("testKey1"), gs("testKey2")};
+        Long value = 2L;
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(Touch), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.touch(keys);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void geoadd_returns_success() {
         // setup
         String key = "testKey";
@@ -10422,6 +10491,28 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Set<String>> response = service.sunion(keys);
         Set<String> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void sunion_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        Set<GlideString> value = Set.of(gs("1"), gs("2"));
+        CompletableFuture<Set<GlideString>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Set<GlideString>>submitNewCommand(eq(SUnion), eq(keys), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Set<GlideString>> response = service.sunion(keys);
+        Set<GlideString> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
