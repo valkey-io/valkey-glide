@@ -20,6 +20,8 @@ import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArg
 import static glide.api.models.commands.function.FunctionListOptions.LIBRARY_NAME_REDIS_API;
 import static glide.api.models.commands.function.FunctionListOptions.WITH_CODE_REDIS_API;
 import static glide.api.models.commands.function.FunctionLoadOptions.REPLACE;
+import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
+import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
@@ -166,6 +168,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -3285,6 +3288,48 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
             @NonNull StreamPendingOptions options) {
         String[] args = concatenateArrays(new String[] {key, group}, options.toArgs(start, end, count));
         protobufTransaction.addCommands(buildCommand(XPending, buildArgs(args)));
+        return getThis();
+    }
+
+    /**
+     * Returns information about the stream stored at key <code>key</code>.<br>
+     * To get more detailed information use {@link #xinfoStreamFull(String)} or {@link #xinfoStreamFull(String, int)}.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - Stream information.
+     */
+    public T xinfoStream(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(XInfoStream, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - Detailed stream information.
+     */
+    public T xinfoStreamFull(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(XInfoStream, buildArgs(key, FULL)));
+        return getThis();
+    }
+
+    /**
+     * Returns verbose information about the stream stored at key <code>key</code>.<br>
+     * The output is limited by first <code>10</code> PEL entries.
+     *
+     * @since Redis 6.0 and above.
+     * @see <a href="https://valkey.io/commands/xinfo-stream/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param count The number of stream and PEL entries that are returned. Value of <code>0</code> means that all entries will be returned.
+     * @return Command Response - Detailed stream information.
+     */
+    public T xinfoStreamFull(@NonNull String key, int count) {
+        protobufTransaction.addCommands(buildCommand(XInfoStream, buildArgs(key, FULL, COUNT, Integer.toString(count))));
         return getThis();
     }
 

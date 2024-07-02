@@ -741,8 +741,8 @@ public interface StreamBaseCommands {
      *         "1719710688676-0",
      *         new String[][] {
      *             { "foo", "bar2" },
-     *         // Up to 10 entries here
-     *     }),
+     *         },
+     *     ),
      *     "groups", new Map[] {
      *         Map.of(
      *             "name", "mygroup",
@@ -762,19 +762,21 @@ public interface StreamBaseCommands {
      *                     1L
      *                 } },
      *             "consumers", new Map[] {
-     *                "name", "Alice",
-     *                "seen-time", 1719710718373L,
-     *                "active-time", 1719710718373L,
-     *                "pel-count", 2L,
-     *                "pending", new Object[][] { {
-     *                        "1719710679916-0",
-     *                        1719710707260L,
-     *                        1L,
-     *                    }, {
-     *                        "1719710688676-0",
-     *                        1719710718373L,
-     *                        1L
-     *                    } }
+     *                 Map.of(
+     *                     "name", "Alice",
+     *                     "seen-time", 1719710718373L,
+     *                     "active-time", 1719710718373L,
+     *                     "pel-count", 2L,
+     *                     "pending", new Object[][] { {
+     *                             "1719710679916-0",
+     *                             1719710707260L,
+     *                             1L,
+     *                         }, {
+     *                             "1719710688676-0",
+     *                             1719710718373L,
+     *                             1L
+     *                         } }
+     *                 )
      *             })
      * });
      * }</pre>
@@ -789,7 +791,11 @@ public interface StreamBaseCommands {
      * @param key The key of the stream.
      * @param count The number of stream and PEL entries that are returned. Value of <code>0</code> means that all entries will be returned.
      * @return Detailed stream information.
-     * @example Please, refer to {@link #xinfoStreamFull(String)}.
+     * @example <pre>{@code
+     * // example of using the API:
+     * Map<String, Object> response = client.xinfoStreamFull("myStream", 42).get();
+     * }</pre>
+     * The response has the same format as {@link #xinfoStreamFull(String)}.
      */
     CompletableFuture<Map<String, Object>> xinfoStreamFull(String key, int count);
 }

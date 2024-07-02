@@ -45,6 +45,8 @@ import static glide.api.models.commands.stream.StreamReadOptions.READ_COUNT_REDI
 import static glide.api.models.commands.stream.StreamReadOptions.READ_STREAMS_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_EXACT_REDIS_API;
 import static glide.api.models.commands.stream.StreamTrimOptions.TRIM_MINID_REDIS_API;
+import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
+import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
 import static redis_request.RedisRequestOuterClass.RequestType.BLMPop;
@@ -187,6 +189,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -886,6 +889,11 @@ public class TransactionTests {
                                 EXCLUSIVE_RANGE_REDIS_API + "1234-0",
                                 "99",
                                 "consumer")));
+
+        transaction.xinfoStream("key").xinfoStreamFull("key").xinfoStreamFull("key", 42);
+        results.add(Pair.of(XInfoStream, buildArgs("key")));
+        results.add(Pair.of(XInfoStream, buildArgs("key", FULL)));
+        results.add(Pair.of(XInfoStream, buildArgs("key", FULL, COUNT, "42")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));

@@ -6,6 +6,8 @@ import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
+import static glide.api.models.commands.stream.XInfoStreamOptions.COUNT;
+import static glide.api.models.commands.stream.XInfoStreamOptions.FULL;
 import static glide.ffi.resolvers.SocketListenerResolver.getSocket;
 import static glide.utils.ArrayTransformUtils.cast3DArray;
 import static glide.utils.ArrayTransformUtils.castArray;
@@ -139,6 +141,7 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreate;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoStream;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -484,23 +487,6 @@ public abstract class BaseClient
                 Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
     }
 
-    /**
-     * @param response A Protobuf response
-     * @return A map of a map of <code>String[][]</code>
-     */
-    protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
-            throws RedisException {
-        Map<String, Object> mapResponse = handleMapOrNullResponse(response);
-        if (mapResponse == null) {
-            return null;
-        }
-        return mapResponse.entrySet().stream()
-                .collect(
-                        Collectors.toMap(
-                                Map.Entry::getKey,
-                                e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
-    }
-
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
     protected Set<String> handleSetResponse(Response response) throws RedisException {
         return handleRedisResponse(Set.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
@@ -547,6 +533,51 @@ public abstract class BaseClient
 
         response.put("matches", convertedMatchesObject);
         return response;
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of a map of <code>String[][]</code>
+     */
+    @SuppressWarnings("unchecked")
+    protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
+        throws RedisException {
+        Map<String, Object> mapResponse = handleMapOrNullResponse(response);
+        if (mapResponse == null) {
+            return null;
+        }
+        return mapResponse.entrySet().stream()
+            .collect(
+                Collectors.toMap(
+                    Map.Entry::getKey,
+                    e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
+    }
+
+    /** Converts array types in the response from `XINFO STREAM` to be more user-friendly. */
+    @SuppressWarnings("unchecked")
+    protected Map<String, Object> handleXInfoStreamResponse(Map<String, Object> map) {
+        // convert entries from `Object[][]` to `String[][]` inside a map
+        for (var keyName : List.of("entries", "first-entry", "last-entry")) {
+            if (!map.containsKey(keyName)) continue;
+            var entries = (Map<String, Object[][]>) map.get(keyName);
+            map.put(keyName, castMapOf2DArray(entries, String.class));
+        }
+        for (var keyName : List.of("groups", "consumers")) {
+            if (!map.containsKey(keyName)) continue;
+            var value = map.get(keyName);
+            // simple response (no `FULL` keyword) - groups mapped to a number, not to a collection
+            if (value instanceof Long) {
+                return map;
+            }
+            // convert `Object[]` to `Map[]`
+            value = castArray((Object[]) value, Map.class);
+            for (var subMap : (Map<String, Object>[]) value) {
+                // recursively inline update the map
+                handleXInfoStreamResponse(subMap);
+            }
+            map.put(keyName, value);
+        }
+        return map;
     }
 
     @Override
@@ -2011,6 +2042,21 @@ public abstract class BaseClient
         String[] args = concatenateArrays(new String[] {key, group}, options.toArgs(start, end, count));
         return commandManager.submitNewCommand(
                 XPending, args, response -> castArray(handleArrayResponse(response), Object[].class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStream(@NonNull String key) {
+        return commandManager.submitNewCommand(XInfoStream, new String[] { key }, response -> handleXInfoStreamResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key) {
+        return commandManager.submitNewCommand(XInfoStream, new String[] { key, FULL }, response -> handleXInfoStreamResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> xinfoStreamFull(@NonNull String key, int count) {
+        return commandManager.submitNewCommand(XInfoStream, new String[] { key, FULL, COUNT, Integer.toString(count) }, response -> handleXInfoStreamResponse(handleMapResponse(response)));
     }
 
     @Override

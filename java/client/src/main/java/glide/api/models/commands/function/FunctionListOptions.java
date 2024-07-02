@@ -5,8 +5,8 @@ import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 
 /**
- * Option for {@link ScriptingAndFunctionsCommands#functionList()} and {@link
- * ScriptingAndFunctionsClusterCommands#functionList()} command.
+ * Option for {@link ScriptingAndFunctionsCommands#functionList} and {@link
+ * ScriptingAndFunctionsClusterCommands#functionList} command.
  *
  * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a>
  */

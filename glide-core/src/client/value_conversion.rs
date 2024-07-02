@@ -767,7 +767,7 @@ pub(crate) fn convert_to_expected_type(
         ExpectedReturnType::XInfoStreamReturnType => {
             dbg!(value.clone());
             match value {
-                // a RESP3 response
+                // a RESP3 response or uncompleted converstion of RESP2
                 Value::Map(map) => {
                     dbg!("map");
                     let result = map
