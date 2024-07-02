@@ -1802,7 +1802,9 @@ class BaseTransaction:
         )
 
     def function_list(
-        self: TTransaction, library_name_pattern: Optional[str] = None, with_code: bool = False
+        self: TTransaction,
+        library_name_pattern: Optional[str] = None,
+        with_code: bool = False,
     ) -> TTransaction:
         # TODO Doc comment
         args = []
