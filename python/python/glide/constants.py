@@ -35,3 +35,4 @@ TSingleNodeRoute = Union[RandomNode, SlotKeyRoute, SlotIdRoute, ByAddressRoute]
 # Otherwise, (when specifying JSONPath), response will be List[Optional[T]].
 # For more information, see: https://redis.io/docs/data-types/json/path/ .
 TJsonResponse = Union[T, List[Optional[T]]]
+TEncodable = Union[str, bytes]

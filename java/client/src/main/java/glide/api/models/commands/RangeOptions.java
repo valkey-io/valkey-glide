@@ -316,7 +316,7 @@ public class RangeOptions {
                 new String[] {destination, source}, createZRangeBaseArgs(rangeQuery, reverse));
     }
 
-    private static String[] createZRangeBaseArgs(RangeQuery rangeQuery, boolean reverse) {
+    public static String[] createZRangeBaseArgs(RangeQuery rangeQuery, boolean reverse) {
         String[] arguments = new String[] {rangeQuery.getStart(), rangeQuery.getEnd()};
 
         if (rangeQuery instanceof RangeByScore) {

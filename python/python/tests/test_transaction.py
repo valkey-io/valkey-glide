@@ -91,6 +91,7 @@ async def transaction_test(
     key22 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # getex
     key23 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # string
     key24 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # string
+    key25 = "{{{}}}:{}".format(keyslot, get_random_string(3))  # list
 
     value = datetime.now(timezone.utc).strftime("%m/%d/%Y, %H:%M:%S")
     value_bytes = value.encode()
@@ -108,6 +109,10 @@ async def transaction_test(
         args.append(lib_name.encode())
         transaction.function_load(code, True)
         args.append(lib_name.encode())
+        transaction.fcall(func_name, [], arguments=["one", "two"])
+        args.append(b"one")
+        transaction.fcall(func_name, [key], arguments=["one", "two"])
+        args.append(b"one")
         transaction.fcall_ro(func_name, [], arguments=["one", "two"])
         args.append(b"one")
         transaction.fcall_ro(func_name, [key], arguments=["one", "two"])
@@ -400,7 +405,7 @@ async def transaction_test(
     transaction.zpopmax(key8)
     args.append({b"three": 3.0})
     transaction.zpopmin(key8)
-    args.append({})
+    args.append({})  # type: ignore
     transaction.zremrangebyscore(key8, InfBound.NEG_INF, InfBound.POS_INF)
     args.append(0)
     transaction.zremrangebylex(key8, InfBound.NEG_INF, InfBound.POS_INF)
@@ -433,15 +438,17 @@ async def transaction_test(
     args.append(3)
     transaction.zinter([key14, key15])
     args.append([b"one", b"two"])
-    transaction.zinter_withscores([key14, key15])
+    transaction.zinter_withscores(cast(list[str | bytes], [key14, key15]))
     args.append({b"one": 2.0, b"two": 4.0})
-    transaction.zinterstore(key8, [key14, key15])
+    transaction.zinterstore(key8, cast(list[str | bytes], [key14, key15]))
     args.append(2)
     transaction.zunion([key14, key15])
     args.append([b"one", b"three", b"two"])
-    transaction.zunion_withscores([key14, key15])
+    transaction.zunion_withscores(cast(list[str | bytes], [key14, key15]))
     args.append({b"one": 2.0, b"two": 4.0, b"three": 3.5})
-    transaction.zunionstore(key8, [key14, key15], AggregationType.MAX)
+    transaction.zunionstore(
+        key8, cast(list[str | bytes], [key14, key15]), AggregationType.MAX
+    )
     args.append(3)
 
     transaction.pfadd(key10, ["a", "b", "c"])
@@ -633,6 +640,15 @@ async def transaction_test(
     args.append(OK)
     transaction.random_key()
     args.append(key.encode())
+
+    min_version = "6.0.6"
+    if not await check_if_server_version_lt(redis_client, min_version):
+        transaction.rpush(key25, ["a", "a", "b", "c", "a", "b"])
+        args.append(6)
+        transaction.lpos(key25, "a")
+        args.append(0)
+        transaction.lpos(key25, "a", 1, 0, 0)
+        args.append([0, 1, 4])
 
     min_version = "6.2.0"
     if not await check_if_server_version_lt(redis_client, min_version):
