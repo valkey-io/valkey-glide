@@ -7317,7 +7317,9 @@ class TestCommands:
         )
 
         no_args_response = await redis_client.function_list()
-        wildcard_pattern_response = await redis_client.function_list("*".encode(), False)
+        wildcard_pattern_response = await redis_client.function_list(
+            "*".encode(), False
+        )
         assert len(no_args_response) == original_functions_count + 1
         assert len(wildcard_pattern_response) == original_functions_count + 1
         check_function_list_response(
