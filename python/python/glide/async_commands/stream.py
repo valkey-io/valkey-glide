@@ -301,7 +301,7 @@ class StreamGroupOptions:
             args.append(self.MAKE_STREAM_REDIS_API)
 
         if self.entries_read is not None:
-            args.extend([self.ENTRIES_READ_REDIS_API, self.entries_read])
+            args.extend([self.ENTRIES_READ_REDIS_API, str(self.entries_read)])
 
         return args
 

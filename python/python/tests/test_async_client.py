@@ -6456,10 +6456,10 @@ class TestCommands:
             )
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            # verify xgroup_set_id with entries_read_id effects the returned value from xinfo_groups
+            # verify xgroup_set_id with entries_read effects the returned value from xinfo_groups
             assert (
                 await redis_client.xgroup_set_id(
-                    key, group_name1, stream_id1_1, entries_read_id="1"
+                    key, group_name1, stream_id1_1, entries_read=1
                 )
                 == OK
             )

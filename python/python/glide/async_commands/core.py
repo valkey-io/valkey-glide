@@ -3007,7 +3007,7 @@ class CoreCommands(Protocol):
         """
         args: List[TEncodable] = [key, group_name, stream_id]
         if entries_read is not None:
-            args.extend(["ENTRIESREAD", entries_read])
+            args.extend(["ENTRIESREAD", str(entries_read)])
 
         return cast(
             TOK,
