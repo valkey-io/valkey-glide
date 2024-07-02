@@ -57,7 +57,7 @@ public final class StreamGroupOptions {
 
         if (this.entriesRead != null) {
             optionArgs.add(ENTRIES_READ_VALKEY_API);
-            optionArgs.add(Long.toString(this.entriesRead));
+            optionArgs.add(entriesRead.toString());
         }
 
         return optionArgs.toArray(new String[0]);

@@ -2382,10 +2382,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<String> xgroupSetId(
-            @NonNull String key,
-            @NonNull String groupName,
-            @NonNull String id,
-            @NonNull Long entriesRead) {
+            @NonNull String key, @NonNull String groupName, @NonNull String id, long entriesRead) {
         String[] arguments =
                 new String[] {key, groupName, id, "ENTRIESREAD", Long.toString(entriesRead)};
         return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
