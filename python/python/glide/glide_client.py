@@ -7,10 +7,11 @@ from typing import Any, Dict, List, Optional, Tuple, Type, Union, cast
 
 import async_timeout
 from glide.async_commands.cluster_commands import ClusterCommands
+from glide.async_commands.command_args import ObjectType
 from glide.async_commands.core import CoreCommands
 from glide.async_commands.standalone_commands import StandaloneCommands
 from glide.config import BaseClientConfiguration
-from glide.constants import DEFAULT_READ_BYTES_SIZE, OK, TRequest, TResult
+from glide.constants import DEFAULT_READ_BYTES_SIZE, OK, TEncodable, TRequest, TResult
 from glide.exceptions import (
     ClosingError,
     ConfigurationError,
@@ -31,6 +32,7 @@ from typing_extensions import Self
 from .glide import (
     DEFAULT_TIMEOUT_IN_MILLISECONDS,
     MAX_REQUEST_ARGS_LEN,
+    ClusterScanCursor,
     create_leaked_bytes_vec,
     start_socket_listener_external,
     value_from_pointer,
@@ -197,8 +199,7 @@ class BaseClient(CoreCommands):
         self._writer.write(b_arr)
         await self._writer.drain()
 
-    # TODO: change `str` to `TEncodable` where `TEncodable = Union[str, bytes]`
-    def _encode_arg(self, arg: str) -> bytes:
+    def _encode_arg(self, arg: TEncodable) -> bytes:
         """
         Converts a string argument to bytes.
 
@@ -208,21 +209,21 @@ class BaseClient(CoreCommands):
         Returns:
             bytes: The encoded argument as bytes.
         """
+        if isinstance(arg, str):
+            # TODO: Allow passing different encoding options
+            return bytes(arg, encoding="utf8")
+        return arg
 
-        # TODO: Allow passing different encoding options
-        return bytes(arg, encoding="utf8")
-
-    # TODO: change `List[str]` to `List[TEncodable]` where `TEncodable = Union[str, bytes]`
     def _encode_and_sum_size(
         self,
-        args_list: Optional[List[str]],
+        args_list: Optional[List[TEncodable]],
     ) -> Tuple[List[bytes], int]:
         """
         Encodes the list and calculates the total memory size.
 
         Args:
-            args_list (Optional[List[str]]): A list of strings to be converted to bytes.
-                                                    If None or empty, returns ([], 0).
+            args_list (Optional[List[TEncodable]]): A list of strings to be converted to bytes.
+                                                           If None or empty, returns ([], 0).
 
         Returns:
             int: The total memory size of the encoded arguments in bytes.
@@ -232,7 +233,7 @@ class BaseClient(CoreCommands):
         if not args_list:
             return (encoded_args_list, args_size)
         for arg in args_list:
-            encoded_arg = self._encode_arg(arg)
+            encoded_arg = self._encode_arg(arg) if isinstance(arg, str) else arg
             encoded_args_list.append(encoded_arg)
             args_size += sys.getsizeof(encoded_arg)
         return (encoded_args_list, args_size)
@@ -240,7 +241,7 @@ class BaseClient(CoreCommands):
     async def _execute_command(
         self,
         request_type: RequestType.ValueType,
-        args: List[str],
+        args: List[TEncodable],
         route: Optional[Route] = None,
     ) -> TResult:
         if self._is_closed:
@@ -266,7 +267,7 @@ class BaseClient(CoreCommands):
 
     async def _execute_transaction(
         self,
-        commands: List[Tuple[RequestType.ValueType, List[str]]],
+        commands: List[Tuple[RequestType.ValueType, List[TEncodable]]],
         route: Optional[Route] = None,
     ) -> List[TResult]:
         if self._is_closed:
@@ -294,8 +295,8 @@ class BaseClient(CoreCommands):
     async def _execute_script(
         self,
         hash: str,
-        keys: Optional[List[str]] = None,
-        args: Optional[List[str]] = None,
+        keys: Optional[List[Union[str, bytes]]] = None,
+        args: Optional[List[Union[str, bytes]]] = None,
         route: Optional[Route] = None,
     ) -> TResult:
         if self._is_closed:
@@ -305,8 +306,12 @@ class BaseClient(CoreCommands):
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
         request.script_invocation.hash = hash
-        request.script_invocation.args[:] = args if args is not None else []
-        request.script_invocation.keys[:] = keys if keys is not None else []
+        request.script_invocation.args[:] = (
+            [self._encode_arg(elem) for elem in args] if args is not None else []
+        )
+        request.script_invocation.keys[:] = (
+            [self._encode_arg(elem) for elem in keys] if keys is not None else []
+        )
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 
@@ -521,6 +526,35 @@ class GlideClusterClient(BaseClient, ClusterCommands):
     For full documentation, see
     https://github.com/aws/babushka/wiki/Python-wrapper#redis-cluster
     """
+
+    async def _cluster_scan(
+        self,
+        cursor: ClusterScanCursor,
+        match: Optional[TEncodable] = None,
+        count: Optional[int] = None,
+        type: Optional[ObjectType] = None,
+    ) -> List[Union[ClusterScanCursor, List[bytes]]]:
+        if self._is_closed:
+            raise ClosingError(
+                "Unable to execute requests; the client is closed. Please create a new client."
+            )
+        request = RedisRequest()
+        request.callback_idx = self._get_callback_index()
+        # Take out the id string from the wrapping object
+        cursor_string = cursor.get_cursor()
+        request.cluster_scan.cursor = cursor_string
+        if match is not None:
+            request.cluster_scan.match_pattern = (
+                match
+                if isinstance(match, str)
+                else match.decode() if isinstance(match, bytes) else match
+            )
+        if count is not None:
+            request.cluster_scan.count = count
+        if type is not None:
+            request.cluster_scan.object_type = type.value
+        response = await self._write_request_await_response(request)
+        return [ClusterScanCursor(bytes(response[0]).decode()), response[1]]
 
     def _get_protobuf_conn_request(self) -> ConnectionRequest:
         return self.config._create_a_protobuf_conn_request(cluster_mode=True)
