@@ -1130,7 +1130,7 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
 
         var fcallResult =
-                clusterClient.fcall(funcName.toString(), new String[] {"one", "two"}, route).get();
+                clusterClient.fcall(funcName, new GlideString[] {gs("one"), gs("two")}, route).get();
         if (route instanceof SingleNodeRoute) {
             assertEquals("one", fcallResult.getSingleValue());
         } else {
@@ -1139,7 +1139,9 @@ public class CommandTests {
             }
         }
         fcallResult =
-                clusterClient.fcallReadOnly(funcName.toString(), new String[] {"one", "two"}, route).get();
+                clusterClient
+                        .fcallReadOnly(funcName, new GlideString[] {gs("one"), gs("two")}, route)
+                        .get();
         if (route instanceof SingleNodeRoute) {
             assertEquals("one", fcallResult.getSingleValue());
         } else {
@@ -1262,7 +1264,7 @@ public class CommandTests {
         }
 
         fcallResult =
-                clusterClient.fcall(newFuncName.toString(), new String[] {"one", "two"}, route).get();
+                clusterClient.fcall(newFuncName, new GlideString[] {gs("one"), gs("two")}, route).get();
         if (route instanceof SingleNodeRoute) {
             assertEquals(2L, fcallResult.getSingleValue());
         } else {
@@ -1272,7 +1274,7 @@ public class CommandTests {
         }
         fcallResult =
                 clusterClient
-                        .fcallReadOnly(newFuncName.toString(), new String[] {"one", "two"}, route)
+                        .fcallReadOnly(newFuncName, new GlideString[] {gs("one"), gs("two")}, route)
                         .get();
         if (route instanceof SingleNodeRoute) {
             assertEquals(2L, fcallResult.getSingleValue());
@@ -1386,9 +1388,10 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
         assertEquals(
-                "one", clusterClient.fcall(funcName.toString(), new String[] {"one", "two"}).get());
+                "one", clusterClient.fcall(funcName, new GlideString[] {gs("one"), gs("two")}).get());
         assertEquals(
-                "one", clusterClient.fcallReadOnly(funcName.toString(), new String[] {"one", "two"}).get());
+                "one",
+                clusterClient.fcallReadOnly(funcName, new GlideString[] {gs("one"), gs("two")}).get());
 
         var flist = clusterClient.functionList(false).get();
         var expectedDescription =
@@ -1460,9 +1463,10 @@ public class CommandTests {
                 Optional.of(newCode.toString()));
 
         assertEquals(
-                2L, clusterClient.fcall(newFuncName.toString(), new String[] {"one", "two"}).get());
+                2L, clusterClient.fcall(newFuncName, new GlideString[] {gs("one"), gs("two")}).get());
         assertEquals(
-                2L, clusterClient.fcallReadOnly(newFuncName.toString(), new String[] {"one", "two"}).get());
+                2L,
+                clusterClient.fcallReadOnly(newFuncName, new GlideString[] {gs("one"), gs("two")}).get());
 
         assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
     }
