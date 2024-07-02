@@ -4492,7 +4492,7 @@ class BaseTransaction:
                                      in the list. A `max_len` of 0 means unlimited amount of comparisons.
 
         Command Response:
-            Union[int, list[int], None]: The index of the first occurrence of `element`,
+            Union[int, List[int], None]: The index of the first occurrence of `element`,
             or None if `element` is not in the list.
             With the `count` option, a list of indices of matching elements will be returned.
 
