@@ -214,10 +214,25 @@ public interface HashBaseCommands {
      * @example
      *     <pre>{@code
      * String[] values = client.hvals("myHash").get();
-     * assert values.equals(new String[] {"value1", "value2", "value3"}); // Returns all the values stored in the hash "myHash".
+     * assert Arrays.equals(values, new String[] {"value1", "value2", "value3"}); // Returns all the values stored in the hash "myHash".
      * }</pre>
      */
     CompletableFuture<String[]> hvals(String key);
+
+    /**
+     * Returns all values in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hvals/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @return An <code>array</code> of values in the hash, or an <code>empty array</code> when the
+     *     key does not exist.
+     * @example
+     *     <pre>{@code
+     * GlideString[] values = client.hvals(gs("myHash")).get();
+     * assert Arrays.equals(values, new GlideString[] {gs("value1"), gs("value2"), gs("value3")}); // Returns all the values stored in the hash "myHash".
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> hvals(GlideString key);
 
     /**
      * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
@@ -233,10 +248,29 @@ public interface HashBaseCommands {
      * @example
      *     <pre>{@code
      * String[] values = client.hmget("my_hash", new String[] {"field1", "field2"}).get()
-     * assert values.equals(new String[] {"value1", "value2"});
+     * assert Arrays.equals(values, new String[] {"value1", "value2"});
      * }</pre>
      */
     CompletableFuture<String[]> hmget(String key, String[] fields);
+
+    /**
+     * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
+     * @param key The key of the hash.
+     * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
+     * @return An array of values associated with the given fields, in the same order as they are
+     *     requested.<br>
+     *     For every field that does not exist in the hash, a null value is returned.<br>
+     *     If <code>key</code> does not exist, it is treated as an empty hash, and it returns an array
+     *     of null values.<br>
+     * @example
+     *     <pre>{@code
+     * GlideString[] values = client.hmget(gs("my_hash"), new GlideString[] {gs("field1"), gs("field2")}).get()
+     * assert Arrays.equals(values, new GlideString[] {gs("value1"), gs("value2")});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> hmget(GlideString key, GlideString[] fields);
 
     /**
      * Returns if <code>field</code> is an existing field in the hash stored at <code>key</code>.
@@ -408,10 +442,25 @@ public interface HashBaseCommands {
      * @example
      *     <pre>{@code
      * String[] names = client.hkeys("my_hash").get();
-     * assert names.equals(new String[] { "field_1", "field_2" });
+     * assert Arrays.equals(names, new String[] { "field_1", "field_2" });
      * }</pre>
      */
     CompletableFuture<String[]> hkeys(String key);
+
+    /**
+     * Returns all field names in the hash stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/hkeys/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return An <code>array</code> of field names in the hash, or an <code>empty array</code> when
+     *     the key does not exist.
+     * @example
+     *     <pre>{@code
+     * GlideString[] names = client.hkeys(gs("my_hash")).get();
+     * assert Arrays.equals(names, new GlideString[] { gs("field_1"), gs("field_2") });
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> hkeys(GlideString key);
 
     /**
      * Returns the string length of the value associated with <code>field</code> in the hash stored at
