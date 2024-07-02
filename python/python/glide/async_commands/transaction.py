@@ -2627,7 +2627,7 @@ class BaseTransaction:
         Command Response:
             List[Union[str, List[Union[str, float, int, List[float]]]]]: By default, returns a list of members (locations) names.
             If any of `with_coord`, `with_dist` or `with_hash` are True, returns an array of arrays, we're each sub array represents a single item in the following order:
-                (str): The member (location) name.
+                (bytes): The member (location) name.
                 (float): The distance from the center as a floating point number, in the same unit specified in the radius, if `with_dist` is set to True.
                 (int): The Geohash integer, if `with_hash` is set to True.
                 List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
@@ -2637,7 +2637,7 @@ class BaseTransaction:
         args = _create_geosearch_args(
             [key],
             search_from,
-            seach_by,
+            search_by,
             order_by,
             count,
             with_coord,

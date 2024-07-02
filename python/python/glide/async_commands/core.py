@@ -3545,7 +3545,7 @@ class CoreCommands(Protocol):
         args = _create_geosearch_args(
             [key],
             search_from,
-            seach_by,
+            search_by,
             order_by,
             count,
             with_coord,
