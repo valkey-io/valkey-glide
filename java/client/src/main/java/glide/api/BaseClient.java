@@ -506,10 +506,6 @@ public abstract class BaseClient
         return handleRedisResponse(String.class, EnumSet.of(ResponseFlags.ENCODING_UTF8), response);
     }
 
-    protected GlideString handleStringResponseBinary(Response response) throws RedisException {
-        return handleRedisResponse(GlideString.class, EnumSet.noneOf(ResponseFlags.class), response);
-    }
-
     protected String handleStringOrNullResponse(Response response) throws RedisException {
         return handleRedisResponse(
                 String.class, EnumSet.of(ResponseFlags.IS_NULLABLE, ResponseFlags.ENCODING_UTF8), response);
@@ -948,7 +944,7 @@ public abstract class BaseClient
     public CompletableFuture<GlideString> getrange(@NonNull GlideString key, int start, int end) {
         GlideString[] arguments =
                 new GlideString[] {key, gs(Integer.toString(start)), gs(Integer.toString(end))};
-        return commandManager.submitNewCommand(GetRange, arguments, this::handleStringResponseBinary);
+        return commandManager.submitNewCommand(GetRange, arguments, this::handleGlideStringResponse);
     }
 
     @Override
