@@ -1833,7 +1833,9 @@ class CoreCommands(Protocol):
             >>> await client.smembers("my_set")
                 {b"member1", b"member2", b"member3"}
         """
-        return cast(Set[bytes], await self._execute_command(RequestType.SMembers, [key]))
+        return cast(
+            Set[bytes], await self._execute_command(RequestType.SMembers, [key])
+        )
 
     async def scard(self, key: TEncodable) -> int:
         """
@@ -1872,7 +1874,9 @@ class CoreCommands(Protocol):
             >>> await client.spop("non_exiting_key")
                 None
         """
-        return cast(Optional[bytes], await self._execute_command(RequestType.SPop, [key]))
+        return cast(
+            Optional[bytes], await self._execute_command(RequestType.SPop, [key])
+        )
 
     async def spop_count(self, key: TEncodable, count: int) -> Set[bytes]:
         """
@@ -2625,7 +2629,9 @@ class CoreCommands(Protocol):
             args.append("*")
         args.extend([field for pair in values for field in pair])
 
-        return cast(Optional[bytes], await self._execute_command(RequestType.XAdd, args))
+        return cast(
+            Optional[bytes], await self._execute_command(RequestType.XAdd, args)
+        )
 
     async def xdel(self, key: TEncodable, ids: List[TEncodable]) -> int:
         """
@@ -3945,9 +3951,7 @@ class CoreCommands(Protocol):
         args: List[TEncodable] = [key, str(count)] if count else [key]
         return cast(
             Mapping[bytes, float],
-            await self._execute_command(
-                RequestType.ZPopMin, args
-            ),
+            await self._execute_command(RequestType.ZPopMin, args),
         )
 
     async def bzpopmin(
@@ -4889,9 +4893,7 @@ class CoreCommands(Protocol):
         args: List[TEncodable] = [key, str(count), "WITHSCORES"]
         return cast(
             List[List[Union[bytes, float]]],
-            await self._execute_command(
-                RequestType.ZRandMember, args
-            ),
+            await self._execute_command(RequestType.ZRandMember, args),
         )
 
     async def zmpop(
@@ -5790,7 +5792,7 @@ class CoreCommands(Protocol):
             List[Union[bytes, List[bytes]]],
             await self._execute_command(RequestType.HScan, args),
         )
-    
+
     async def fcall(
         self,
         function: TEncodable,

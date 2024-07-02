@@ -4475,7 +4475,7 @@ class TestCommands:
         result = await redis_client.bzmpop([key2], ScoreFilter.MIN, 0.1, 10)
         assert result is not None
         result_map = cast(Mapping[bytes, float], result[1])
-        assert compare_maps(entries, result_map) is True # type: ignore
+        assert compare_maps(entries, result_map) is True  # type: ignore
 
         async def endless_bzmpop_call():
             await redis_client.bzmpop(["non_existent_key"], ScoreFilter.MAX, 0)
@@ -4659,7 +4659,7 @@ class TestCommands:
         result = await redis_client.zmpop([key2], ScoreFilter.MIN, 10)
         assert result is not None
         result_map = cast(Mapping[bytes, float], result[1])
-        assert compare_maps(entries, result_map) is True # type: ignore
+        assert compare_maps(entries, result_map) is True  # type: ignore
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -8000,7 +8000,7 @@ class TestCommands:
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
         key = f"{{key}}-1{get_random_string(5)}"
         non_list_key = f"{{key}}-2{get_random_string(5)}"
-        mylist : List[TEncodable] = ["a", "a", "b", "c", "a", "b"]
+        mylist: List[TEncodable] = ["a", "a", "b", "c", "a", "b"]
 
         # basic case
         await redis_client.rpush(key, mylist)
@@ -8684,7 +8684,7 @@ class TestClusterRoutes:
         assert result[result_cursor_index] == initial_cursor.encode()
         assert len(result_collection) == len(char_map) * 2
         assert convert_list_to_dict(result_collection) == cast(
-            dict, convert_string_to_bytes_object(char_map) # type: ignore
+            dict, convert_string_to_bytes_object(char_map)  # type: ignore
         )
 
         result = await redis_client.hscan(key1, initial_cursor, match="field a")
