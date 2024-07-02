@@ -8655,7 +8655,7 @@ class TestClusterRoutes:
         num_map: dict[TEncodable, TEncodable] = {}
         for i in range(50000):  # Use large dataset to force an iterative cursor.
             num_map.update({"field " + str(i): "value " + str(i)})
-        char_map: Mapping[TEncodable, TEncodable] = {
+        char_map: Dict[TEncodable, TEncodable] = {
             "field a": "value a",
             "field b": "value b",
             "field c": "value c",
@@ -8726,7 +8726,7 @@ class TestClusterRoutes:
             full_result_map.update(next_result_collection)
             result_iteration_collection = next_result_collection
             result_cursor = next_result_cursor
-        assert (num_map or char_map) == full_result_map
+        assert (num_map | char_map) == full_result_map
 
         # Test match pattern
         result = await redis_client.hscan(key1, initial_cursor, match="*")
