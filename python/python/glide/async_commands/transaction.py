@@ -4446,8 +4446,8 @@ class BaseTransaction:
 
     def lpos(
         self: TTransaction,
-        key: str,
-        element: str,
+        key: TEncodable,
+        element: TEncodable,
         rank: Optional[int] = None,
         count: Optional[int] = None,
         max_len: Optional[int] = None,
@@ -4459,8 +4459,8 @@ class BaseTransaction:
         See https://valkey.io/commands/lpos for more details.
 
         Args:
-            key (str): The name of the list.
-            element (str): The value to search for within the list.
+            key (TEncodable): The name of the list.
+            element (TEncodable): The value to search for within the list.
             rank (Optional[int]): The rank of the match to return.
             count (Optional[int]): The number of matches wanted. A `count` of 0 returns all the matches.
             max_len (Optional[int]): The maximum number of comparisons to make between the element and the items
