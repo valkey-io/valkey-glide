@@ -3339,6 +3339,91 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.XAutoClaim, args),
         )
 
+    async def xinfo_groups(
+        self,
+        key: TEncodable,
+    ) -> List[Mapping[bytes, Union[bytes, int, None]]]:
+        """
+        Returns the list of all consumer groups and their attributes for the stream stored at `key`.
+
+        See https://valkey.io/commands/xinfo-groups for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+
+        Returns:
+            List[Mapping[bytes, Union[bytes, int, None]]]: A list of mappings, where each mapping represents the
+                attributes of a consumer group for the stream at `key`.
+
+        Examples:
+            >>> await client.xinfo_groups("my_stream")
+                [
+                    {
+                        b"name": b"mygroup",
+                        b"consumers": 2,
+                        b"pending": 2,
+                        b"last-delivered-id": b"1638126030001-0",
+                        b"entries-read": 2,  # The "entries-read" field was added in Redis version 7.0.0.
+                        b"lag": 0,  # The "lag" field was added in Redis version 7.0.0.
+                    },
+                    {
+                        b"name": b"some-other-group",
+                        b"consumers": 1,
+                        b"pending": 0,
+                        b"last-delivered-id": b"1638126028070-0",
+                        b"entries-read": 1,
+                        b"lag": 1,
+                    }
+                ]
+                # The list of consumer groups and their attributes for stream "my_stream".
+        """
+        return cast(
+            List[Mapping[bytes, Union[bytes, int, None]]],
+            await self._execute_command(RequestType.XInfoGroups, [key]),
+        )
+
+    async def xinfo_consumers(
+        self,
+        key: TEncodable,
+        group_name: TEncodable,
+    ) -> List[Mapping[bytes, Union[bytes, int]]]:
+        """
+        Returns the list of all consumers and their attributes for the given consumer group of the stream stored at
+        `key`.
+
+        See https://valkey.io/commands/xinfo-consumers for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+
+        Returns:
+            List[Mapping[bytes, Union[bytes, int]]]: A list of mappings, where each mapping contains the attributes of a
+                consumer for the given consumer group of the stream at `key`.
+
+        Examples:
+            >>> await client.xinfo_consumers("my_stream", "my_group")
+                [
+                    {
+                        b"name": b"Alice",
+                        b"pending": 1,
+                        b"idle": 9104628,
+                        b"inactive": 18104698,  # The "inactive" field was added in Redis version 7.2.0.
+                    },
+                    {
+                        b"name": b"Bob",
+                        b"pending": 1,
+                        b"idle": 83841983,
+                        b"inactive": 993841998,
+                    }
+                ]
+                # The list of consumers and their attributes for consumer group "my_group" of stream "my_stream".
+        """
+        return cast(
+            List[Mapping[bytes, Union[bytes, int]]],
+            await self._execute_command(RequestType.XInfoConsumers, [key, group_name]),
+        )
+
     async def geoadd(
         self,
         key: TEncodable,
