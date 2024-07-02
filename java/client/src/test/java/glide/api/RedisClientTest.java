@@ -8736,10 +8736,57 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void fcall_with_keys_and_args_binary_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        GlideString[] arguments = new GlideString[] {gs("1"), gs("2")};
+        GlideString[] args =
+                new GlideString[] {function, gs("2"), gs("key1"), gs("key2"), gs("1"), gs("2")};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCall), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcall(function, keys, arguments);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void fcall_returns_success() {
         // setup
         String function = "func";
         String[] args = new String[] {function, "0"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCall), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcall(function);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcall_binary_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] args = new GlideString[] {function, gs("0")};
         Object value = "42";
         CompletableFuture<Object> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
@@ -8783,10 +8830,59 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void fcallReadOnly_with_keys_and_args_binary_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        GlideString[] arguments = new GlideString[] {gs("1"), gs("2")};
+        GlideString[] args =
+                new GlideString[] {function, gs("2"), gs("key1"), gs("key2"), gs("1"), gs("2")};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCallReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcallReadOnly(function, keys, arguments);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void fcallReadOnly_returns_success() {
         // setup
         String function = "func";
         String[] args = new String[] {function, "0"};
+        Object value = "42";
+        CompletableFuture<Object> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.submitNewCommand(eq(FCallReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object> response = service.fcallReadOnly(function);
+        Object payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void fcallReadOnly_binary_returns_success() {
+        // setup
+        GlideString function = gs("func");
+        GlideString[] args = new GlideString[] {function, gs("0")};
         Object value = "42";
         CompletableFuture<Object> testResponse = new CompletableFuture<>();
         testResponse.complete(value);
