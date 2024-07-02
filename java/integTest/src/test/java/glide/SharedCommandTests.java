@@ -8942,15 +8942,15 @@ public class SharedCommandTests {
                 4,
                 client
                         .geoadd(
-                                key1.toString(),
+                                key1,
                                 Map.of(
-                                        members[0].toString(),
+                                        members[0],
                                         members_coordinates[0],
-                                        members[1].toString(),
+                                        members[1],
                                         members_coordinates[1],
-                                        members[2].toString(),
+                                        members[2],
                                         members_coordinates[2],
-                                        members[3].toString(),
+                                        members[3],
                                         members_coordinates[3]))
                         .get());
 
@@ -9496,15 +9496,15 @@ public class SharedCommandTests {
                 4,
                 client
                         .geoadd(
-                                sourceKey.toString(),
+                                sourceKey,
                                 Map.of(
-                                        members[0].toString(),
+                                        members[0],
                                         members_coordinates[0],
-                                        members[1].toString(),
+                                        members[1],
                                         members_coordinates[1],
-                                        members[2].toString(),
+                                        members[2],
                                         members_coordinates[2],
-                                        members[3].toString(),
+                                        members[3],
                                         members_coordinates[3]))
                         .get());
 
