@@ -7796,9 +7796,9 @@ class TestCommands:
         # DB 0 should still have no keys, so random_key should still return None
         assert await redis_client.random_key() is None
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_dump_restore(self, redis_client: GlideClient):
+    async def test_dump_restore(self, redis_client: TGlideClient):
         key1 = f"{{key}}-1{get_random_string(10)}"
         key2 = f"{{key}}-2{get_random_string(10)}"
         key3 = f"{{key}}-3{get_random_string(10)}"
@@ -7829,9 +7829,9 @@ class TestCommands:
             await redis_client.restore(key3, 0, value.encode())
         assert "payload version or checksum are wrong" in str(e)
 
-    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_dump_restore_options(self, redis_client: GlideClient):
+    async def test_dump_restore_options(self, redis_client: TGlideClient):
         key1 = f"{{key}}-1{get_random_string(10)}"
         key2 = f"{{key}}-2{get_random_string(10)}"
         key3 = f"{{key}}-3{get_random_string(10)}"
