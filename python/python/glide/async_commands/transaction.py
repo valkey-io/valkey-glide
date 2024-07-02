@@ -2018,6 +2018,23 @@ class BaseTransaction:
             args.extend(arguments)
         return self.append_command(RequestType.FCallReadOnly, args)
 
+    def function_stats(self: TTransaction) -> TTransaction:
+        """
+        Returns information about the function that's currently running and information about the
+        available execution engines.
+
+        See https://redis.io/commands/function-stats/ for more details
+
+        Command Response:
+            Mapping[TEncodable, Mapping[TEncodable, TResult]]: A `Mapping` with two keys:
+                - `running_script` with information about the running script.
+                - `engines` with information about available engines and their stats.
+                See example for more details.
+
+        Since: Redis version 7.0.0.
+        """
+        return self.append_command(RequestType.FunctionStats, [])
+
     def xadd(
         self: TTransaction,
         key: TEncodable,
