@@ -8,6 +8,7 @@ import static glide.TestUtilities.checkFunctionStatsResponse;
 import static glide.TestUtilities.commonClusterClientConfig;
 import static glide.TestUtilities.createLuaLibWithLongRunningFunction;
 import static glide.TestUtilities.generateLuaLibCode;
+import static glide.TestUtilities.generateLuaLibCodeBinary;
 import static glide.TestUtilities.getFirstEntryFromMultiValue;
 import static glide.TestUtilities.getValueFromInfo;
 import static glide.TestUtilities.parseInfoResponseToMap;
@@ -796,7 +797,15 @@ public class CommandTests {
                 Arguments.of("brpop", null, clusterClient.brpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("blpop", null, clusterClient.blpop(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of("pfcount", null, clusterClient.pfcount(new String[] {"abc", "zxy", "lkn"})),
+                Arguments.of(
+                        "pfcount binary",
+                        null,
+                        clusterClient.pfcount(new GlideString[] {gs("abc"), gs("zxy"), gs("lkn")})),
                 Arguments.of("pfmerge", null, clusterClient.pfmerge("abc", new String[] {"zxy", "lkn"})),
+                Arguments.of(
+                        "pfmerge binary",
+                        null,
+                        clusterClient.pfmerge(gs("abc"), new GlideString[] {gs("zxy"), gs("lkn")})),
                 Arguments.of(
                         "bzpopmax", "5.0.0", clusterClient.bzpopmax(new String[] {"abc", "zxy", "lkn"}, .1)),
                 Arguments.of(
@@ -1089,6 +1098,178 @@ public class CommandTests {
     }
 
     @SneakyThrows
+    @ParameterizedTest(name = "functionLoad: singleNodeRoute = {0}")
+    @ValueSource(booleans = {true, false})
+    public void function_commands_without_keys_with_route_binary(boolean singleNodeRoute) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        GlideString libName = gs("mylib1c_" + singleNodeRoute);
+        GlideString funcName = gs("myfunc1c_" + singleNodeRoute);
+        // function $funcName returns first argument
+        GlideString code =
+                generateLuaLibCodeBinary(libName, Map.of(funcName, gs("return args[1]")), true);
+        Route route = singleNodeRoute ? new SlotKeyRoute("1", PRIMARY) : ALL_PRIMARIES;
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC, route).get());
+        assertEquals(libName, clusterClient.functionLoad(code, false, route).get());
+
+        var fcallResult =
+                clusterClient.fcall(funcName.toString(), new String[] {"one", "two"}, route).get();
+        if (route instanceof SingleNodeRoute) {
+            assertEquals("one", fcallResult.getSingleValue());
+        } else {
+            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+                assertEquals("one", nodeResponse);
+            }
+        }
+        fcallResult =
+                clusterClient.fcallReadOnly(funcName.toString(), new String[] {"one", "two"}, route).get();
+        if (route instanceof SingleNodeRoute) {
+            assertEquals("one", fcallResult.getSingleValue());
+        } else {
+            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+                assertEquals("one", nodeResponse);
+            }
+        }
+
+        var expectedDescription =
+                new HashMap<String, String>() {
+                    {
+                        put(funcName.toString(), null);
+                    }
+                };
+        var expectedFlags =
+                new HashMap<String, Set<String>>() {
+                    {
+                        put(funcName.toString(), Set.of("no-writes"));
+                    }
+                };
+
+        var response = clusterClient.functionList(false, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+            }
+        }
+
+        response = clusterClient.functionList(true, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist,
+                    libName.toString(),
+                    expectedDescription,
+                    expectedFlags,
+                    Optional.of(code.toString()));
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist,
+                        libName.toString(),
+                        expectedDescription,
+                        expectedFlags,
+                        Optional.of(code.toString()));
+            }
+        }
+
+        // re-load library without overwriting
+        var executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionLoad(code, false, route).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("Library '" + libName + "' already exists"));
+
+        // re-load library with overwriting
+        assertEquals(libName, clusterClient.functionLoad(code, true, route).get());
+        GlideString newFuncName = gs("myfunc2c_" + singleNodeRoute);
+        // function $funcName returns first argument
+        // function $newFuncName returns argument array len
+        GlideString newCode =
+                generateLuaLibCodeBinary(
+                        libName, Map.of(funcName, gs("return args[1]"), newFuncName, gs("return #args")), true);
+
+        assertEquals(libName, clusterClient.functionLoad(newCode, true, route).get());
+
+        expectedDescription.put(newFuncName.toString(), null);
+        expectedFlags.put(newFuncName.toString(), Set.of("no-writes"));
+
+        response = clusterClient.functionList(false, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+            }
+        }
+
+        // load new lib and delete it - first lib remains loaded
+        GlideString anotherLib =
+                generateLuaLibCodeBinary(gs("anotherLib"), Map.of(gs("anotherFunc"), gs("")), false);
+        assertEquals(gs("anotherLib"), clusterClient.functionLoad(anotherLib, true, route).get());
+        assertEquals(OK, clusterClient.functionDelete(gs("anotherLib"), route).get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> clusterClient.functionDelete(gs("anotherLib"), route).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
+
+        response = clusterClient.functionList(true, route).get();
+        if (singleNodeRoute) {
+            var flist = response.getSingleValue();
+            checkFunctionListResponse(
+                    flist,
+                    libName.toString(),
+                    expectedDescription,
+                    expectedFlags,
+                    Optional.of(newCode.toString()));
+        } else {
+            for (var flist : response.getMultiValue().values()) {
+                checkFunctionListResponse(
+                        flist,
+                        libName.toString(),
+                        expectedDescription,
+                        expectedFlags,
+                        Optional.of(newCode.toString()));
+            }
+        }
+
+        fcallResult =
+                clusterClient.fcall(newFuncName.toString(), new String[] {"one", "two"}, route).get();
+        if (route instanceof SingleNodeRoute) {
+            assertEquals(2L, fcallResult.getSingleValue());
+        } else {
+            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+                assertEquals(2L, nodeResponse);
+            }
+        }
+        fcallResult =
+                clusterClient
+                        .fcallReadOnly(newFuncName.toString(), new String[] {"one", "two"}, route)
+                        .get();
+        if (route instanceof SingleNodeRoute) {
+            assertEquals(2L, fcallResult.getSingleValue());
+        } else {
+            for (var nodeResponse : fcallResult.getMultiValue().values()) {
+                assertEquals(2L, nodeResponse);
+            }
+        }
+
+        assertEquals(OK, clusterClient.functionFlush(route).get());
+    }
+
+    @SneakyThrows
     @Test
     public void function_commands_without_keys_and_without_route() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
@@ -1167,6 +1348,105 @@ public class CommandTests {
 
         assertEquals(2L, clusterClient.fcall(newFuncName, new String[] {"one", "two"}).get());
         assertEquals(2L, clusterClient.fcallReadOnly(newFuncName, new String[] {"one", "two"}).get());
+
+        assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
+    }
+
+    @SneakyThrows
+    @Test
+    public void function_commands_without_keys_and_without_route_binary() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+
+        assertEquals(OK, clusterClient.functionFlush(SYNC).get());
+
+        GlideString libName = gs("mylib1c");
+        GlideString funcName = gs("myfunc1c");
+        // function $funcName returns first argument
+        // generating RO functions to execution on a replica (default routing goes to RANDOM including
+        // replicas)
+        GlideString code =
+                generateLuaLibCodeBinary(libName, Map.of(funcName, gs("return args[1]")), true);
+
+        assertEquals(libName, clusterClient.functionLoad(code, false).get());
+
+        assertEquals(
+                "one", clusterClient.fcall(funcName.toString(), new String[] {"one", "two"}).get());
+        assertEquals(
+                "one", clusterClient.fcallReadOnly(funcName.toString(), new String[] {"one", "two"}).get());
+
+        var flist = clusterClient.functionList(false).get();
+        var expectedDescription =
+                new HashMap<String, String>() {
+                    {
+                        put(funcName.toString(), null);
+                    }
+                };
+        var expectedFlags =
+                new HashMap<String, Set<String>>() {
+                    {
+                        put(funcName.toString(), Set.of("no-writes"));
+                    }
+                };
+        checkFunctionListResponse(
+                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+
+        flist = clusterClient.functionList(true).get();
+        checkFunctionListResponse(
+                flist,
+                libName.toString(),
+                expectedDescription,
+                expectedFlags,
+                Optional.of(code.toString()));
+
+        // re-load library without overwriting
+        var executionException =
+                assertThrows(ExecutionException.class, () -> clusterClient.functionLoad(code, false).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(
+                executionException.getMessage().contains("Library '" + libName + "' already exists"));
+
+        // re-load library with overwriting
+        assertEquals(libName, clusterClient.functionLoad(code, true).get());
+        GlideString newFuncName = gs("myfunc2c");
+        // function $funcName returns first argument
+        // function $newFuncName returns argument array len
+        GlideString newCode =
+                generateLuaLibCodeBinary(
+                        libName, Map.of(funcName, gs("return args[1]"), newFuncName, gs("return #args")), true);
+
+        assertEquals(libName, clusterClient.functionLoad(newCode, true).get());
+
+        // load new lib and delete it - first lib remains loaded
+        GlideString anotherLib =
+                generateLuaLibCodeBinary(gs("anotherLib"), Map.of(gs("anotherFunc"), gs("")), false);
+        assertEquals(gs("anotherLib"), clusterClient.functionLoad(anotherLib, true).get());
+        assertEquals(OK, clusterClient.functionDelete(gs("anotherLib")).get());
+
+        // delete missing lib returns a error
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> clusterClient.functionDelete(gs("anotherLib")).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+        assertTrue(executionException.getMessage().contains("Library not found"));
+
+        flist = clusterClient.functionList(libName.toString(), false).get();
+        expectedDescription.put(newFuncName.toString(), null);
+        expectedFlags.put(newFuncName.toString(), Set.of("no-writes"));
+        checkFunctionListResponse(
+                flist, libName.toString(), expectedDescription, expectedFlags, Optional.empty());
+
+        flist = clusterClient.functionList(libName.toString(), true).get();
+        checkFunctionListResponse(
+                flist,
+                libName.toString(),
+                expectedDescription,
+                expectedFlags,
+                Optional.of(newCode.toString()));
+
+        assertEquals(
+                2L, clusterClient.fcall(newFuncName.toString(), new String[] {"one", "two"}).get());
+        assertEquals(
+                2L, clusterClient.fcallReadOnly(newFuncName.toString(), new String[] {"one", "two"}).get());
 
         assertEquals(OK, clusterClient.functionFlush(ASYNC).get());
     }
@@ -1853,5 +2133,97 @@ public class CommandTests {
                                         .build())
                         .get());
         assertArrayEquals(key2DescendingListSubset, clusterClient.lrange(key3, 0, -1).get());
+    }
+
+    @Test
+    @SneakyThrows
+    public void sort_binary() {
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString[] key1LpushArgs = {gs("2"), gs("1"), gs("4"), gs("3")};
+        GlideString[] key1AscendingList = {gs("1"), gs("2"), gs("3"), gs("4")};
+        GlideString[] key1DescendingList = {gs("4"), gs("3"), gs("2"), gs("1")};
+        GlideString[] key2LpushArgs = {gs("2"), gs("1"), gs("a"), gs("x"), gs("c"), gs("4"), gs("3")};
+        GlideString[] key2DescendingList = {
+            gs("x"), gs("c"), gs("a"), gs("4"), gs("3"), gs("2"), gs("1")
+        };
+        String[] key2DescendingList_strings = {"x", "c", "a", "4", "3", "2", "1"};
+        GlideString[] key2DescendingListSubset = Arrays.copyOfRange(key2DescendingList, 0, 4);
+        String[] key2DescendingListSubset_strings =
+                Arrays.copyOfRange(key2DescendingList_strings, 0, 4);
+
+        assertArrayEquals(new GlideString[0], clusterClient.sort(key3).get());
+        assertEquals(4, clusterClient.lpush(key1, key1LpushArgs).get());
+        assertArrayEquals(
+                new GlideString[0],
+                clusterClient
+                        .sort(
+                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 0L)).build())
+                        .get());
+        assertArrayEquals(
+                key1DescendingList,
+                clusterClient.sort(key1, SortClusterOptions.builder().orderBy(DESC).build()).get());
+        assertArrayEquals(
+                Arrays.copyOfRange(key1AscendingList, 0, 2),
+                clusterClient
+                        .sort(
+                                key1, SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                        .get());
+        assertEquals(7, clusterClient.lpush(key2, key2LpushArgs).get());
+        assertArrayEquals(
+                key2DescendingListSubset,
+                clusterClient
+                        .sort(
+                                key2,
+                                SortClusterOptions.builder()
+                                        .alpha()
+                                        .orderBy(DESC)
+                                        .limit(new SortBaseOptions.Limit(0L, 4L))
+                                        .build())
+                        .get());
+
+        // SORT_R0
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertArrayEquals(
+                    key1DescendingList,
+                    clusterClient
+                            .sortReadOnly(key1, SortClusterOptions.builder().orderBy(DESC).build())
+                            .get());
+            assertArrayEquals(
+                    Arrays.copyOfRange(key1AscendingList, 0, 2),
+                    clusterClient
+                            .sortReadOnly(
+                                    key1,
+                                    SortClusterOptions.builder().limit(new SortBaseOptions.Limit(0L, 2L)).build())
+                            .get());
+            assertArrayEquals(
+                    key2DescendingListSubset,
+                    clusterClient
+                            .sortReadOnly(
+                                    key2,
+                                    SortClusterOptions.builder()
+                                            .alpha()
+                                            .orderBy(DESC)
+                                            .limit(new SortBaseOptions.Limit(0L, 4L))
+                                            .build())
+                            .get());
+        }
+
+        // SORT with STORE
+        assertEquals(
+                4,
+                clusterClient
+                        .sortStore(
+                                key2,
+                                key3,
+                                SortClusterOptions.builder()
+                                        .alpha()
+                                        .orderBy(DESC)
+                                        .limit(new SortBaseOptions.Limit(0L, 4L))
+                                        .build())
+                        .get());
+        assertArrayEquals(
+                key2DescendingListSubset_strings, clusterClient.lrange(key3.toString(), 0, -1).get());
     }
 }

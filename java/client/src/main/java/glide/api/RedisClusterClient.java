@@ -514,12 +514,34 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> functionLoad(
+            @NonNull GlideString libraryCode, boolean replace) {
+        GlideString[] arguments =
+                replace
+                        ? new GlideString[] {gs(REPLACE.toString()), libraryCode}
+                        : new GlideString[] {libraryCode};
+        return commandManager.submitNewCommand(
+                FunctionLoad, arguments, this::handleGlideStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> functionLoad(
             @NonNull String libraryCode, boolean replace, @NonNull Route route) {
         String[] arguments =
                 replace ? new String[] {REPLACE.toString(), libraryCode} : new String[] {libraryCode};
         return commandManager.submitNewCommand(
                 FunctionLoad, arguments, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<GlideString> functionLoad(
+            @NonNull GlideString libraryCode, boolean replace, @NonNull Route route) {
+        GlideString[] arguments =
+                replace
+                        ? new GlideString[] {gs(REPLACE.toString()), libraryCode}
+                        : new GlideString[] {libraryCode};
+        return commandManager.submitNewCommand(
+                FunctionLoad, arguments, route, this::handleGlideStringResponse);
     }
 
     /** Process a <code>FUNCTION LIST</code> cluster response. */
@@ -611,9 +633,22 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<String> functionDelete(@NonNull GlideString libName) {
+        return commandManager.submitNewCommand(
+                FunctionDelete, new GlideString[] {libName}, this::handleStringResponse);
+    }
+
+    @Override
     public CompletableFuture<String> functionDelete(@NonNull String libName, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionDelete, new String[] {libName}, route, this::handleStringResponse);
+    }
+
+    @Override
+    public CompletableFuture<String> functionDelete(
+            @NonNull GlideString libName, @NonNull Route route) {
+        return commandManager.submitNewCommand(
+                FunctionDelete, new GlideString[] {libName}, route, this::handleStringResponse);
     }
 
     @Override
@@ -813,6 +848,16 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> sort(
+            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
+        GlideString[] arguments = ArrayUtils.addFirst(sortClusterOptions.toGlideStringArgs(), key);
+        return commandManager.submitNewCommand(
+                Sort,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<String[]> sortReadOnly(
             @NonNull String key, @NonNull SortClusterOptions sortClusterOptions) {
         String[] arguments = ArrayUtils.addFirst(sortClusterOptions.toArgs(), key);
@@ -823,6 +868,16 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> sortReadOnly(
+            @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
+        GlideString[] arguments = ArrayUtils.addFirst(sortClusterOptions.toGlideStringArgs(), key);
+        return commandManager.submitNewCommand(
+                SortReadOnly,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<Long> sortStore(
             @NonNull String key,
             @NonNull String destination,
@@ -830,6 +885,18 @@ public class RedisClusterClient extends BaseClient
         String[] storeArguments = new String[] {STORE_COMMAND_STRING, destination};
         String[] arguments =
                 concatenateArrays(new String[] {key}, sortClusterOptions.toArgs(), storeArguments);
+        return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> sortStore(
+            @NonNull GlideString key,
+            @NonNull GlideString destination,
+            @NonNull SortClusterOptions sortClusterOptions) {
+        GlideString[] storeArguments = new GlideString[] {gs(STORE_COMMAND_STRING), destination};
+        GlideString[] arguments =
+                concatenateArrays(
+                        new GlideString[] {key}, sortClusterOptions.toGlideStringArgs(), storeArguments);
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 }
