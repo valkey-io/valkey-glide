@@ -664,6 +664,71 @@ public class RedisClientTest {
         assertEquals(value, payload);
     }
 
+    @SneakyThrows
+    @Test
+    public void getex_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString value = gs("testValue");
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<GlideString>submitNewCommand(
+                        eq(GetEx), eq(new GlideString[] {key}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.getex(key);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void getex_with_options() {
+        // setup
+        String key = "testKey";
+        String value = "testValue";
+        GetExOptions options = GetExOptions.Seconds(10L);
+        CompletableFuture<String> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<String>submitNewCommand(
+                        eq(GetEx), eq(new String[] {key, "EX", "10"}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<String> response = service.getex(key, options);
+        String payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void getex_with_options_binary() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString value = gs("testValue");
+        GetExOptions options = GetExOptions.Seconds(10L);
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+        when(commandManager.<GlideString>submitNewCommand(
+                        eq(GetEx), eq(new GlideString[] {key, gs("EX"), gs("10")}), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.getex(key, options);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
     private static List<Arguments> getGetExOptions() {
         return List.of(
                 Arguments.of(
@@ -687,13 +752,48 @@ public class RedisClientTest {
                         "test_with_persist", GetExOptions.Persist(), new String[] {"PERSIST"}));
     }
 
+    private static List<Arguments> getGetExOptionsBinary() {
+        return List.of(
+                Arguments.of(
+                        // seconds
+                        "test_with_seconds", GetExOptions.Seconds(10L), new GlideString[] {gs("EX"), gs("10")}),
+                Arguments.of(
+                        // milliseconds
+                        "test_with_milliseconds",
+                        GetExOptions.Milliseconds(1000L),
+                        new GlideString[] {gs("PX"), gs("1000")}),
+                Arguments.of(
+                        // unix seconds
+                        "test_with_unix_seconds",
+                        GetExOptions.UnixSeconds(10L),
+                        new GlideString[] {gs("EXAT"), gs("10")}),
+                Arguments.of(
+                        // unix milliseconds
+                        "test_with_unix_milliseconds",
+                        GetExOptions.UnixMilliseconds(1000L),
+                        new GlideString[] {gs("PXAT"), gs("1000")}),
+                Arguments.of(
+                        // persist
+                        "test_with_persist", GetExOptions.Persist(), new GlideString[] {gs("PERSIST")}));
+    }
+
     @SneakyThrows
     @ParameterizedTest(name = "{0}")
     @MethodSource("getGetExOptions")
     public void getex_options(String testName, GetExOptions options, String[] expectedArgs) {
         assertArrayEquals(
                 expectedArgs, options.toArgs(), "Expected " + testName + " toArgs() to pass.");
-        System.out.println(expectedArgs);
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("getGetExOptionsBinary")
+    public void getex_options_binary(
+            String testName, GetExOptions options, GlideString[] expectedGlideStringArgs) {
+        assertArrayEquals(
+                expectedGlideStringArgs,
+                options.toGlideStringArgs(),
+                "Expected " + testName + " toArgs() to pass.");
     }
 
     @SneakyThrows
@@ -2626,6 +2726,28 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lpos_binary() {
+        // setup
+        GlideString[] args = new GlideString[] {gs("list"), gs("element")};
+        long index = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpos(gs("list"), gs("element"));
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lpos_withOptions() {
         // setup
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
@@ -2640,6 +2762,32 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long> response = service.lpos("list", "element", options);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lpos_withOptions_binary() {
+        // setup
+        LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+        GlideString[] args =
+                new GlideString[] {
+                    gs("list"), gs("element"), gs("RANK"), gs("1"), gs("MAXLEN"), gs("1000")
+                };
+        long index = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LPos), eq(args), any())).thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lpos(gs("list"), gs("element"), options);
         Long payload = response.get();
 
         // verify
@@ -2672,6 +2820,29 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lposCount_binary() {
+        // setup
+        GlideString[] args = new GlideString[] {gs("list"), gs("element"), gs("COUNT"), gs("1")};
+        Long[] index = new Long[] {1L};
+
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(LPos), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response = service.lposCount(gs("list"), gs("element"), 1L);
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lposCount_withOptions() {
         // setup
         LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
@@ -2687,6 +2858,40 @@ public class RedisClientTest {
 
         // exercise
         CompletableFuture<Long[]> response = service.lposCount("list", "element", 0L, options);
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(index, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lposCount_withOptions_binary() {
+        // setup
+        LPosOptions options = LPosOptions.builder().rank(1L).maxLength(1000L).build();
+        GlideString[] args =
+                new GlideString[] {
+                    gs("list"),
+                    gs("element"),
+                    gs("COUNT"),
+                    gs("0"),
+                    gs("RANK"),
+                    gs("1"),
+                    gs("MAXLEN"),
+                    gs("1000")
+                };
+        Long[] index = new Long[] {0L};
+
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(index);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(LPos), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response = service.lposCount(gs("list"), gs("element"), 0L, options);
         Long[] payload = response.get();
 
         // verify
@@ -5525,6 +5730,32 @@ public class RedisClientTest {
         assertEquals(completedResult, payload);
     }
 
+    @Test
+    @SneakyThrows
+    public void xtrim_binary_with_exact_MinId() {
+        // setup
+        GlideString key = gs("testKey");
+        StreamTrimOptions limit = new MinId(true, "id");
+        GlideString[] arguments =
+                new GlideString[] {key, gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("id")};
+        Long completedResult = 1L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(XTrim), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.xtrim(key, limit);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
     private static List<Arguments> getStreamTrimOptions() {
         return List.of(
                 Arguments.of(
@@ -5559,12 +5790,66 @@ public class RedisClientTest {
                         }));
     }
 
+    private static List<Arguments> getStreamTrimOptionsBinary() {
+        return List.of(
+                Arguments.of(
+                        // MAXLEN just THRESHOLD
+                        "test_xtrim_maxlen",
+                        new MaxLen(5L),
+                        new GlideString[] {gs(TRIM_MAXLEN_REDIS_API), gs("5")}),
+                Arguments.of(
+                        // MAXLEN with LIMIT
+                        "test_xtrim_maxlen_with_limit",
+                        new MaxLen(5L, 10L),
+                        new GlideString[] {
+                            gs(TRIM_MAXLEN_REDIS_API),
+                            gs(TRIM_NOT_EXACT_REDIS_API),
+                            gs("5"),
+                            gs(TRIM_LIMIT_REDIS_API),
+                            gs("10")
+                        }),
+                Arguments.of(
+                        // MAXLEN with exact
+                        "test_xtrim_exact_maxlen",
+                        new MaxLen(true, 10L),
+                        new GlideString[] {gs(TRIM_MAXLEN_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("10")}),
+                Arguments.of(
+                        // MINID just THRESHOLD
+                        "test_xtrim_minid",
+                        new MinId("0-1"),
+                        new GlideString[] {gs(TRIM_MINID_REDIS_API), gs("0-1")}),
+                Arguments.of(
+                        // MINID with exact
+                        "test_xtrim_exact_minid",
+                        new MinId(true, "0-2"),
+                        new GlideString[] {gs(TRIM_MINID_REDIS_API), gs(TRIM_EXACT_REDIS_API), gs("0-2")}),
+                Arguments.of(
+                        // MINID with LIMIT
+                        "test_xtrim_minid_with_limit",
+                        new MinId("0-3", 10L),
+                        new GlideString[] {
+                            gs(TRIM_MINID_REDIS_API),
+                            gs(TRIM_NOT_EXACT_REDIS_API),
+                            gs("0-3"),
+                            gs(TRIM_LIMIT_REDIS_API),
+                            gs("10")
+                        }));
+    }
+
     @SneakyThrows
     @ParameterizedTest(name = "{0}")
     @MethodSource("getStreamTrimOptions")
     public void xtrim_with_options_to_arguments(
             String testName, StreamTrimOptions options, String[] expectedArgs) {
         assertArrayEquals(expectedArgs, options.toArgs());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(name = "{0}")
+    @MethodSource("getStreamTrimOptionsBinary")
+    public void xtrim_with_options_to_arguments_binary(
+            String testName, StreamTrimOptions options, GlideString[] expectedGlideStringArgs) {
+        assertArrayEquals(expectedGlideStringArgs, options.toGlideStringArgs());
     }
 
     @Test
@@ -8926,6 +9211,42 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void bitfieldReadOnly_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long[] result = new Long[] {7L, 8L};
+        Offset offset = new Offset(1);
+        OffsetMultiplier offsetMultiplier = new OffsetMultiplier(8);
+        BitFieldGet subcommand1 = new BitFieldGet(new UnsignedEncoding(4), offset);
+        BitFieldGet subcommand2 = new BitFieldGet(new SignedEncoding(5), offsetMultiplier);
+        GlideString[] args = {
+            key,
+            gs(BitFieldOptions.GET_COMMAND_STRING),
+            gs(BitFieldOptions.UNSIGNED_ENCODING_PREFIX.concat("4")),
+            gs(offset.getOffset()),
+            gs(BitFieldOptions.GET_COMMAND_STRING),
+            gs(BitFieldOptions.SIGNED_ENCODING_PREFIX.concat("5")),
+            gs(offsetMultiplier.getOffset())
+        };
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(BitFieldReadOnly), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response =
+                service.bitfieldReadOnly(key, new BitFieldReadOnlySubCommands[] {subcommand1, subcommand2});
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bitfield_returns_success() {
         // setup
         String key = "testKey";
@@ -8952,6 +9273,59 @@ public class RedisClientTest {
                     u2.getEncoding(),
                     offset.getOffset(),
                     Long.toString(incrbyValue)
+                };
+        CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(result);
+
+        // match on protobuf request
+        when(commandManager.<Long[]>submitNewCommand(eq(BitField), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long[]> response =
+                service.bitfield(
+                        key,
+                        new BitFieldSubCommands[] {
+                            new BitFieldSet(u2, offset, setValue),
+                            new BitFieldGet(i8, offsetMultiplier),
+                            new BitFieldOptions.BitFieldOverflow(SAT),
+                            new BitFieldOptions.BitFieldIncrby(u2, offset, incrbyValue),
+                        });
+        Long[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(result, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bitfield_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        Long[] result = new Long[] {7L, 8L, 9L};
+        UnsignedEncoding u2 = new UnsignedEncoding(2);
+        SignedEncoding i8 = new SignedEncoding(8);
+        Offset offset = new Offset(1);
+        OffsetMultiplier offsetMultiplier = new OffsetMultiplier(8);
+        long setValue = 2;
+        long incrbyValue = 5;
+        GlideString[] args =
+                new GlideString[] {
+                    key,
+                    gs(SET_COMMAND_STRING),
+                    gs(u2.getEncoding()),
+                    gs(offset.getOffset()),
+                    gs(Long.toString(setValue)),
+                    gs(GET_COMMAND_STRING),
+                    gs(i8.getEncoding()),
+                    gs(offsetMultiplier.getOffset()),
+                    gs(OVERFLOW_COMMAND_STRING),
+                    gs(SAT.toString()),
+                    gs(INCRBY_COMMAND_STRING),
+                    gs(u2.getEncoding()),
+                    gs(offset.getOffset()),
+                    gs(Long.toString(incrbyValue))
                 };
         CompletableFuture<Long[]> testResponse = new CompletableFuture<>();
         testResponse.complete(result);

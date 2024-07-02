@@ -140,6 +140,26 @@ public interface StreamBaseCommands {
     CompletableFuture<Long> xtrim(String key, StreamTrimOptions options);
 
     /**
+     * Trims the stream by evicting older entries.
+     *
+     * @see <a href="https://valkey.io/commands/xtrim/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param options Stream trim options {@link StreamTrimOptions}.
+     * @return The number of entries deleted from the stream.
+     * @example
+     *     <pre>{@code
+     * // A nearly exact trimming of the stream to at least a length of 10
+     * Long trimmed = client.xtrim(gs("key"), new MaxLen(false, 10L)).get();
+     * System.out.println("Number of trimmed entries from stream: " + trimmed);
+     *
+     * // An exact trimming of the stream by minimum id of "0-3", limit of 10 entries
+     * Long trimmed = client.xtrim(gs("key"), new MinId(true, "0-3", 10L)).get();
+     * System.out.println("Number of trimmed entries from stream: " + trimmed);
+     * }</pre>
+     */
+    CompletableFuture<Long> xtrim(GlideString key, StreamTrimOptions options);
+
+    /**
      * Returns the number of entries in the stream stored at <code>key</code>.
      *
      * @see <a href="https://valkey.io/commands/xlen/">valkey.io</a> for details.
