@@ -59,7 +59,7 @@ class BaseClient(CoreCommands):
         To create a new client, use the `create` classmethod
         """
         self.config: BaseClientConfiguration = config
-        self._available_futures: dict[int, asyncio.Future] = {}
+        self._available_futures: Dict[int, asyncio.Future] = {}
         self._available_callback_indexes: List[int] = list()
         self._buffered_requests: List[TRequest] = list()
         self._writer_lock = threading.Lock()
