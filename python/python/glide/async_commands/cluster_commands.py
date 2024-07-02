@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Set, Union, cast
 
 from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
@@ -12,7 +12,14 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
-from glide.constants import TOK, TClusterResponse, TEncodable, TResult, TSingleNodeRoute
+from glide.constants import (
+    TOK,
+    TClusterResponse,
+    TEncodable,
+    TFunctionListResponse,
+    TResult,
+    TSingleNodeRoute,
+)
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
@@ -357,6 +364,56 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(
                 RequestType.FunctionLoad,
                 ["REPLACE", library_code] if replace else [library_code],
+                route,
+            ),
+        )
+
+    async def function_list(
+        self,
+        library_name_pattern: Optional[TEncodable] = None,
+        with_code: bool = False,
+        route: Optional[Route] = None,
+    ) -> TClusterResponse[TFunctionListResponse]:
+        """
+        Returns information about the functions and libraries.
+
+        See https://valkey.io/commands/function-list/ for more details.
+
+        Args:
+            library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
+            with_code (bool): Specifies whether to request the library code from the server or not.
+            route (Optional[Route]): The command will be routed to a random node, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[TFunctionListResponse]: Info
+            about all or selected libraries and their functions.
+
+        Examples:
+            >>> response = await client.function_list("myLib?_backup", True)
+                [{
+                    b"library_name": b"myLib5_backup",
+                    b"engine": b"LUA",
+                    b"functions": [{
+                        b"name": b"myfunc",
+                        b"description": None,
+                        b"flags": {b"no-writes"},
+                    }],
+                    b"library_code": b"#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+                }]
+
+        Since: Redis 7.0.0.
+        """
+        args = []
+        if library_name_pattern is not None:
+            args.extend(["LIBRARYNAME", library_name_pattern])
+        if with_code:
+            args.append("WITHCODE")
+        return cast(
+            TClusterResponse[TFunctionListResponse],
+            await self._execute_command(
+                RequestType.FunctionList,
+                args,
                 route,
             ),
         )
