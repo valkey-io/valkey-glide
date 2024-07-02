@@ -7063,10 +7063,10 @@ class TestCommands:
         # verify with FUNCTION LIST
         check_function_list_response(
             await redis_client.function_list(lib_name, with_code=True),
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
-            code.encode(),
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
+            code,
         )
 
         # re-load library without replace
@@ -7145,20 +7145,20 @@ class TestCommands:
         if single_route:
             check_function_list_response(
                 function_list,
-                lib_name.encode(),
-                {func_name.encode(): None},
-                {func_name.encode(): {b"no-writes"}},
-                code.encode(),
+                lib_name,
+                {func_name: None},
+                {func_name: {b"no-writes"}},
+                code,
             )
         else:
             assert isinstance(function_list, dict)
             for nodeResponse in function_list.values():
                 check_function_list_response(
                     nodeResponse,
-                    lib_name.encode(),
-                    {func_name.encode(): None},
-                    {func_name.encode(): {b"no-writes"}},
-                    code.encode(),
+                    lib_name,
+                    {func_name: None},
+                    {func_name: {b"no-writes"}},
+                    code,
                 )
 
         # re-load library without replace
@@ -7226,24 +7226,24 @@ class TestCommands:
 
         check_function_list_response(
             await redis_client.function_list(lib_name),
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
             None,
         )
         check_function_list_response(
             await redis_client.function_list(f"{lib_name}*"),
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
             None,
         )
         check_function_list_response(
             await redis_client.function_list(lib_name, with_code=True),
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
-            code.encode(),
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
+            code,
         )
 
         no_args_response = await redis_client.function_list()
@@ -7252,16 +7252,16 @@ class TestCommands:
         assert len(wildcard_pattern_response) == original_functions_count + 1
         check_function_list_response(
             no_args_response,
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
             None,
         )
         check_function_list_response(
             wildcard_pattern_response,
-            lib_name.encode(),
-            {func_name.encode(): None},
-            {func_name.encode(): {b"no-writes"}},
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
             None,
         )
 
@@ -7297,9 +7297,9 @@ class TestCommands:
         if single_route:
             check_function_list_response(
                 result,
-                lib_name.encode(),
-                {func_name.encode(): None},
-                {func_name.encode(): {b"no-writes"}},
+                lib_name,
+                {func_name: None},
+                {func_name: {b"no-writes"}},
                 None,
             )
         else:
@@ -7307,9 +7307,9 @@ class TestCommands:
             for nodeResponse in result.values():
                 check_function_list_response(
                     nodeResponse,
-                    lib_name.encode(),
-                    {func_name.encode(): None},
-                    {func_name.encode(): {b"no-writes"}},
+                    lib_name,
+                    {func_name: None},
+                    {func_name: {b"no-writes"}},
                     None,
                 )
 
@@ -7317,9 +7317,9 @@ class TestCommands:
         if single_route:
             check_function_list_response(
                 result,
-                lib_name.encode(),
-                {func_name.encode(): None},
-                {func_name.encode(): {b"no-writes"}},
+                lib_name,
+                {func_name: None},
+                {func_name: {b"no-writes"}},
                 None,
             )
         else:
@@ -7327,9 +7327,9 @@ class TestCommands:
             for nodeResponse in result.values():
                 check_function_list_response(
                     nodeResponse,
-                    lib_name.encode(),
-                    {func_name.encode(): None},
-                    {func_name.encode(): {b"no-writes"}},
+                    lib_name,
+                    {func_name: None},
+                    {func_name: {b"no-writes"}},
                     None,
                 )
 
@@ -7337,20 +7337,20 @@ class TestCommands:
         if single_route:
             check_function_list_response(
                 result,
-                lib_name.encode(),
-                {func_name.encode(): None},
-                {func_name.encode(): {b"no-writes"}},
-                code.encode(),
+                lib_name,
+                {func_name: None},
+                {func_name: {b"no-writes"}},
+                code,
             )
         else:
             assert isinstance(result, dict)
             for nodeResponse in result.values():
                 check_function_list_response(
                     nodeResponse,
-                    lib_name.encode(),
-                    {func_name.encode(): None},
-                    {func_name.encode(): {b"no-writes"}},
-                    code.encode(),
+                    lib_name,
+                    {func_name: None},
+                    {func_name: {b"no-writes"}},
+                    code,
                 )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -7387,16 +7387,16 @@ class TestCommands:
         assert len(no_args_response) == 2
         check_function_list_response(
             no_args_response,
-            lib_name_1.encode(),
-            {func_name_1.encode(): None, func_name_2.encode(): None},
-            {func_name_1.encode(): set(), func_name_2.encode(): set()},
+            lib_name_1,
+            {func_name_1: None, func_name_2: None},
+            {func_name_1: set(), func_name_2: set()},
             None,
         )
         check_function_list_response(
             no_args_response,
-            lib_name_2.encode(),
-            {func_name_3.encode(): None},
-            {func_name_3.encode(): {b"no-writes"}},
+            lib_name_2,
+            {func_name_3: None},
+            {func_name_3: {b"no-writes"}},
             None,
         )
 

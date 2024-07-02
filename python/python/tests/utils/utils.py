@@ -230,10 +230,10 @@ def generate_lua_lib_code(
 
 def check_function_list_response(
     response: List[Mapping[bytes, Any]],
-    lib_name: bytes,
-    function_descriptions: Mapping[bytes, Optional[bytes]],
-    function_flags: Mapping[bytes, Set[bytes]],
-    lib_code: Optional[bytes] = None,
+    lib_name: str,
+    function_descriptions: Mapping[str, Optional[bytes]],
+    function_flags: Mapping[str, Set[bytes]],
+    lib_code: Optional[str] = None,
 ):
     """
     Validate whether `FUNCTION LIST` response contains required info.
@@ -249,7 +249,7 @@ def check_function_list_response(
     assert len(response) > 0
     has_lib = False
     for lib in response:
-        has_lib = lib.get(b"library_name") == lib_name
+        has_lib = lib.get(b"library_name") == lib_name.encode()
         if has_lib:
             functions: List[Mapping[bytes, Any]] = cast(
                 List[Mapping[bytes, Any]], lib.get(b"functions")
@@ -258,12 +258,14 @@ def check_function_list_response(
             for function in functions:
                 function_name: bytes = cast(bytes, function.get(b"name"))
                 assert function.get(b"description") == function_descriptions.get(
-                    function_name
+                    function_name.decode("utf-8")
                 )
-                assert function.get(b"flags") == function_flags.get(function_name)
+                assert function.get(b"flags") == function_flags.get(
+                    function_name.decode("utf-8")
+                )
 
                 if lib_code:
-                    assert lib.get(b"library_code") == lib_code
+                    assert lib.get(b"library_code") == lib_code.encode()
             break
 
     assert has_lib is True

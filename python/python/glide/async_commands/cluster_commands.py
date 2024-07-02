@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, Union, cast
+from typing import Any, Dict, List, Mapping, Optional, Set, Union, cast
 
 from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
@@ -358,7 +358,9 @@ class ClusterCommands(CoreCommands):
         library_name_pattern: Optional[str] = None,
         with_code: bool = False,
         route: Optional[Route] = None,
-    ) -> List[Mapping[bytes, Any]]:
+    ) -> List[
+        Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]
+    ]:
         """
         Returns information about the functions and libraries.
 
@@ -371,7 +373,8 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            List[Mapping[bytes, Any]]: Info about all libraries and their functions.
+            List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]: Info about all
+                libraries and their functions.
 
         Examples:
             >>> response = await client.function_list("myLib?_backup", True)

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Mapping, Optional, cast
+from typing import Any, Dict, List, Mapping, Optional, Set, Union, cast
 
 from glide.async_commands.command_args import Limit, OrderBy
 from glide.async_commands.core import (
@@ -264,7 +264,16 @@ class StandaloneCommands(CoreCommands):
 
     async def function_list(
         self, library_name_pattern: Optional[str] = None, with_code: bool = False
-    ) -> List[Mapping[bytes, Any]]:
+    ) -> List[
+        Mapping[
+            bytes,
+            List[
+                Mapping[
+                    bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]
+                ]
+            ],
+        ]
+    ]:
         """
         Returns information about the functions and libraries.
 
@@ -275,7 +284,8 @@ class StandaloneCommands(CoreCommands):
             with_code (bool): Specifies whether to request the library code from the server or not.
 
         Returns:
-            List[Mapping[bytes, Any]]: Info about all libraries and their functions.
+            List[Mapping[bytes, Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]]]]: Info about all
+                libraries and their functions.
 
         Examples:
             >>> response = await client.function_list("myLib?_backup", True)
