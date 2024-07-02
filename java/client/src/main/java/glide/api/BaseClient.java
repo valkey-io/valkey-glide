@@ -2387,7 +2387,7 @@ public abstract class BaseClient
             @NonNull String id,
             @NonNull Long entriesRead) {
         String[] arguments =
-                new String[] {key, groupName, id, "ENTRIESREAD", Long.toString(entriesReadId)};
+                new String[] {key, groupName, id, "ENTRIESREAD", Long.toString(entriesRead)};
         return commandManager.submitNewCommand(XGroupSetId, arguments, this::handleStringResponse);
     }
 
