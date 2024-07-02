@@ -1426,11 +1426,10 @@ public class SharedCommandTests {
                         ExecutionException.class, () -> client.hrandfieldWithCountWithValues(key2, 3).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
-    
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-
     public void hrandfieldBinary(BaseClient client) {
         byte[] binvalue1 = {(byte) 0x01, (byte) 0x00, (byte) 0x01, (byte) 0x00, (byte) 0x02};
         byte[] binvalue2 = {(byte) 0xFF, (byte) 0x66, (byte) 0xFF, (byte) 0xAF, (byte) 0x22};
