@@ -111,17 +111,19 @@ async def transaction_test(
         args.append(lib_name.encode())
         transaction.function_list(lib_name)
         args.append(
-            {
-                b"library_name": lib_name.encode(),
-                b"engine": b"LUA",
-                b"functions": [
-                    {
-                        b"name": func_name.encode(),
-                        b"description": None,
-                        b"flags": {b"no-writes"},
-                    }
-                ],
-            }
+            [
+                {
+                    b"library_name": lib_name.encode(),
+                    b"engine": b"LUA",
+                    b"functions": [
+                        {
+                            b"name": func_name.encode(),
+                            b"description": None,
+                            b"flags": {b"no-writes"},
+                        }
+                    ],
+                }
+            ]
         )
         transaction.function_list(lib_name, True)
         args.append(

@@ -7152,7 +7152,7 @@ class TestCommands:
             )
         else:
             assert isinstance(function_list, dict)
-            for nodeResponse in result.values():
+            for nodeResponse in function_list.values():
                 check_function_list_response(
                     nodeResponse,
                     lib_name.encode(),
