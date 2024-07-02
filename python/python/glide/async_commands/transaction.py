@@ -1885,6 +1885,36 @@ class BaseTransaction:
             ["REPLACE", library_code] if replace else [library_code],
         )
 
+    def function_list(
+        self: TTransaction,
+        library_name_pattern: Optional[TEncodable] = None,
+        with_code: bool = False,
+    ) -> TTransaction:
+        """
+        Returns information about the functions and libraries.
+
+        See https://valkey.io/commands/function-list/ for more details.
+
+        Args:
+            library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
+            with_code (bool): Specifies whether to request the library code from the server or not.
+
+        Commands response:
+            TFunctionListResponse: Info about all or
+                selected libraries and their functions.
+
+        Since: Redis 7.0.0.
+        """
+        args = []
+        if library_name_pattern is not None:
+            args.extend(["LIBRARYNAME", library_name_pattern])
+        if with_code:
+            args.append("WITHCODE")
+        return self.append_command(
+            RequestType.FunctionList,
+            args,
+        )
+
     def function_flush(
         self: TTransaction, mode: Optional[FlushMode] = None
     ) -> TTransaction:
