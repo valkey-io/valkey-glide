@@ -7362,7 +7362,7 @@ class TestCommands:
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        await redis_client.flushall()
+        await redis_client.function_flush()
         assert len(await redis_client.function_list()) == 0
 
         lib_name_1 = f"mylib1C{get_random_string(5)}"

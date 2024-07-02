@@ -125,7 +125,7 @@ async def transaction_test(
         )
         transaction.function_list(lib_name, True)
         args.append(
-            {
+            [{
                 b"library_name": lib_name.encode(),
                 b"engine": b"LUA",
                 b"functions": [
@@ -136,7 +136,7 @@ async def transaction_test(
                     }
                 ],
                 b"library_code": code.encode(),
-            }
+            }]
         )
         transaction.fcall(func_name, [], arguments=["one", "two"])
         args.append(b"one")

@@ -374,7 +374,17 @@ class ClusterCommands(CoreCommands):
             List[Mapping[bytes, Any]]: Info about all libraries and their functions.
 
         Examples:
-
+            >>> response = await client.function_list("myLib?_backup", True)
+                [{
+                    b"library_name": b"myLib5_backup",
+                    b"engine": b"LUA",
+                    b"functions": [{
+                        b"name": func_name.encode(),
+                        b"description": None,
+                        b"flags": {b"no-writes"},
+                    }],
+                    b"library_code": b"#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+                }]
 
         Since: Redis 7.0.0.
         """
