@@ -135,12 +135,12 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> await client.ping()
-            "PONG"
+                b"PONG"
             >>> await client.ping("Hello")
-            "Hello"
+                b"Hello"
         """
         argument = [] if message is None else [message]
-        return cast(str, await self._execute_command(RequestType.Ping, argument))
+        return cast(bytes, await self._execute_command(RequestType.Ping, argument))
 
     async def config_get(self, parameters: List[TEncodable]) -> Dict[bytes, bytes]:
         """
@@ -227,13 +227,13 @@ class StandaloneCommands(CoreCommands):
             message (TEncodable): The message to be echoed back.
 
         Returns:
-            str: The provided `message`.
+            bytes: The provided `message`.
 
         Examples:
             >>> await client.echo("Glide-for-Redis")
-                'Glide-for-Redis'
+                b'Glide-for-Redis'
         """
-        return cast(str, await self._execute_command(RequestType.Echo, [message]))
+        return cast(bytes, await self._execute_command(RequestType.Echo, [message]))
 
     async def function_load(self, library_code: str, replace: bool = False) -> str:
         """
@@ -499,7 +499,7 @@ class StandaloneCommands(CoreCommands):
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
-    async def publish(self, message: TEncodable, channel: TEncodable) -> TOK:
+    async def publish(self, message: TEncodable, channel: TEncodable) -> int:
         """
         Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
@@ -516,8 +516,9 @@ class StandaloneCommands(CoreCommands):
             >>> await client.publish("Hi all!", "global-channel")
                 1 # This message was posted to 1 subscription which is configured on primary node
         """
-        result = await self._execute_command(RequestType.Publish, [channel, message])
-        return cast(int, result)
+        return cast(
+            int, await self._execute_command(RequestType.Publish, [channel, message])
+        )
 
     async def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
         """

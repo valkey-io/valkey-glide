@@ -178,12 +178,14 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> await client.ping()
-            "PONG"
+                b"PONG"
             >>> await client.ping("Hello")
-            "Hello"
+                b"Hello"
         """
         argument = [] if message is None else [message]
-        return cast(str, await self._execute_command(RequestType.Ping, argument, route))
+        return cast(
+            bytes, await self._execute_command(RequestType.Ping, argument, route)
+        )
 
     async def config_get(
         self, parameters: List[TEncodable], route: Optional[Route] = None
@@ -199,19 +201,19 @@ class ClusterCommands(CoreCommands):
             in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[Dict[str, str]]: A dictionary of values corresponding to the
+            TClusterResponse[Dict[bytes, bytes]]: A dictionary of values corresponding to the
             configuration parameters.
-            When specifying a route other than a single node, response will be : {Address (str) : response (Dict[str, str]) , ... }
-            with type of Dict[str, Dict[str, str]].
+            When specifying a route other than a single node, response will be : {Address (bytes) : response (Dict[bytes, bytes]) , ... }
+            with type of Dict[bytes, Dict[bytes, bytes]].
 
         Examples:
             >>> await client.config_get(["timeout"] , RandomNode())
-            {'timeout': '1000'}
-            >>> await client.config_get(["timeout" , "maxmemory"])
-            {'timeout': '1000', "maxmemory": "1GB"}
+            {b'timeout': b'1000'}
+            >>> await client.config_get(["timeout" , b"maxmemory"])
+            {b'timeout': b'1000', b"maxmemory": b"1GB"}
         """
         return cast(
-            TClusterResponse[Dict[str, str]],
+            TClusterResponse[Dict[bytes, bytes]],
             await self._execute_command(RequestType.ConfigGet, parameters, route),
         )
 
@@ -307,9 +309,9 @@ class ClusterCommands(CoreCommands):
             in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[str]: The provided `message`.
+            TClusterResponse[bytes]: The provided `message`.
             When specifying a route other than a single node, response will be:
-            {Address (str) : response (str) , ... } with type of Dict[str, str].
+            {Address (bytes) : response (bytes) , ... } with type of Dict[bytes, bytes].
 
         Examples:
             >>> await client.echo(b"Glide-for-Redis")
@@ -318,7 +320,7 @@ class ClusterCommands(CoreCommands):
                 {b'addr': b'Glide-for-Redis', b'addr2': b'Glide-for-Redis', b'addr3': b'Glide-for-Redis'}
         """
         return cast(
-            TClusterResponse[str],
+            TClusterResponse[bytes],
             await self._execute_command(RequestType.Echo, [message], route),
         )
 
@@ -420,8 +422,8 @@ class ClusterCommands(CoreCommands):
 
     async def fcall_route(
         self,
-        function: str,
-        arguments: Optional[List[str]] = None,
+        function: TEncodable,
+        arguments: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
     ) -> TClusterResponse[TResult]:
         """
@@ -429,8 +431,8 @@ class ClusterCommands(CoreCommands):
         See https://redis.io/commands/fcall/ for more details.
 
         Args:
-            function (str): The function name.
-            arguments (Optional[List[str]]): A list of `function` arguments. `Arguments`
+            function (TEncodable): The function name.
+            arguments (Optional[List[TEncodable]]): A list of `function` arguments. `Arguments`
                 should not represent names of keys.
             route (Optional[Route]): The command will be routed to a random primay node, unless `route` is provided, in which
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
