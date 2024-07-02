@@ -2,7 +2,16 @@
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener as start_socket_listener_core;
+
+// Protocol constants to expose to Java.
+use glide_core::client::FINISHED_SCAN_CURSOR;
+use glide_core::HASH as TYPE_HASH;
+use glide_core::LIST as TYPE_LIST;
 use glide_core::MAX_REQUEST_ARGS_LENGTH as MAX_REQUEST_ARGS_LENGTH_IN_BYTES;
+use glide_core::SET as TYPE_SET;
+use glide_core::STREAM as TYPE_STREAM;
+use glide_core::STRING as TYPE_STRING;
+use glide_core::ZSET as TYPE_ZSET;
 
 use bytes::Bytes;
 use jni::errors::Error as JniError;
@@ -420,16 +429,25 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'loc
 }
 
 #[no_mangle]
-pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releaseNativeCursor<'local>(
+/// Releases a ClusterScanCursor handle allocated in Rust.
+///
+/// This function is meant to be invoked by Java using JNI.
+///
+/// * `_env`    - The JNI environment. Not used.
+/// * `_class`  - The class object. Not used.
+/// * cursor      - The cursor handle to release.
+pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releaseNativeCursor<
+    'local,
+>(
     mut env: JNIEnv<'local>,
     _class: JClass<'local>,
-    cursor: JString,
+    cursor: JString<'local>,
 ) {
     handle_panics(
         move || {
             fn release_native_cursor(
                 env: &mut JNIEnv<'_>,
-                cursor: JString,
+                cursor: JString<'_>,
             ) -> Result<(), FFIError> {
                 let cursor_str: String = env.get_string(&cursor)?.into();
                 glide_core::cluster_scan_container::remove_scan_state_cursor(cursor_str);
@@ -441,4 +459,138 @@ pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releas
         "releaseNativeCursor",
     )
     .unwrap_or(())
+}
+
+/// Returns the String representing a finished cursor handle.
+///
+/// This function is meant to be invoked by Java using JNI. This is used to ensure
+/// that this constant is consistent with the Rust client.
+///
+/// * `env`    - The JNI environment.
+/// * `_class`  - The class object. Not used.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_getFinishedCursorHandleConstant<
+    'local,
+>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> JString<'local> {
+    safe_create_jstring(env, FINISHED_SCAN_CURSOR, "getFinishedCursorHandleConstant")
+}
+
+/// Returns the String representing the name of the ObjectType String.
+///
+/// This function is meant to be invoked by Java using JNI. This is used to ensure
+/// that this constant is consistent with the Rust client.
+///
+/// * `env`    - The JNI environment.
+/// * `_class`  - The class object. Not used.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeStringConstant<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> JString<'local> {
+    safe_create_jstring(env, TYPE_STRING, "getTypeStringConstant")
+}
+
+/// Returns the String representing the name of the ObjectType List.
+///
+/// This function is meant to be invoked by Java using JNI. This is used to ensure
+/// that this constant is consistent with the Rust client.
+///
+/// * `env`    - The JNI environment.
+/// * `_class`  - The class object. Not used.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeListConstant<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> JString<'local> {
+    safe_create_jstring(env, TYPE_LIST, "getTypeListConstant")
+}
+
+/// Returns the String representing the name of the ObjectType Set.
+///
+/// This function is meant to be invoked by Java using JNI. This is used to ensure
+/// that this constant is consistent with the Rust client.
+///
+/// * `env`    - The JNI environment.
+/// * `_class`  - The class object. Not used.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeSetConstant<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> JString<'local> {
+    safe_create_jstring(env, TYPE_SET, "getTypeSetConstant")
+}
+
+/// Returns the String representing the name of the ObjectType ZSet.
+///
+/// This function is meant to be invoked by Java using JNI. This is used to ensure
+/// that this constant is consistent with the Rust client.
+///
+/// * `env`    - The JNI environment.
+/// * `_class`  - The class object. Not used.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeZSetConstant<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> JString<'local> {
+    safe_create_jstring(env, TYPE_ZSET, "getTypeZSetConstant")
+}
+
+/// Returns the String representing the name of the ObjectType Hash.
+///
+/// This function is meant to be invoked by Java using JNI. This is used to ensure
+/// that this constant is consistent with the Rust client.
+///
+/// * `env`    - The JNI environment.
+/// * `_class`  - The class object. Not used.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeHashConstant<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> JString<'local> {
+    safe_create_jstring(env, TYPE_HASH, "getTypeHashConstant")
+}
+
+/// Returns the String representing the name of the ObjectType Set.
+///
+/// This function is meant to be invoked by Java using JNI. This is used to ensure
+/// that this constant is consistent with the Rust client.
+///
+/// * `env`    - The JNI environment.
+/// * `_class`  - The class object. Not used.
+#[no_mangle]
+pub extern "system" fn Java_glide_ffi_resolvers_ObjectTypeResolver_getTypeStreamConstant<'local>(
+    env: JNIEnv<'local>,
+    _class: JClass<'local>,
+) -> JString<'local> {
+    safe_create_jstring(env, TYPE_STREAM, "getTypeStreamConstant")
+}
+
+/// Convert a Rust string to a Java String and handle errors.
+///
+/// * `env`             - The JNI environment.
+/// * `_class`          - The class object. Not used.
+/// * `input`           - The String to convert.
+/// * `functionName`    - The name of the calling function.
+fn safe_create_jstring<'local>(
+    mut env: JNIEnv<'local>,
+    input: &str,
+    function_name: &str,
+) -> JString<'local> {
+    handle_panics(
+        move || {
+            fn create_jstring<'a>(
+                env: &mut JNIEnv<'a>,
+                input: &str,
+            ) -> Result<JString<'a>, FFIError> {
+                Ok(env.new_string(input)?)
+            }
+            let result = create_jstring(&mut env, input);
+            handle_errors(&mut env, result)
+        },
+        function_name,
+    )
+    .unwrap_or(JString::<'_>::default())
 }

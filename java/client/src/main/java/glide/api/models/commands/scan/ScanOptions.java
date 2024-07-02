@@ -3,6 +3,7 @@ package glide.api.models.commands.scan;
 
 import glide.api.commands.GenericClusterCommands;
 import glide.api.commands.GenericCommands;
+import glide.ffi.resolvers.ObjectTypeResolver;
 import glide.utils.ArrayTransformUtils;
 import lombok.experimental.SuperBuilder;
 
@@ -25,13 +26,12 @@ public class ScanOptions extends BaseScanOptions {
     private final ObjectType type;
 
     public enum ObjectType {
-        // TODO: Get names from Rust rather than hard-coding them.
-        STRING("String"),
-        LIST("List"),
-        SET("Set"),
-        ZSET("ZSet"),
-        HASH("Hash"),
-        STREAM("Stream");
+        STRING(ObjectTypeResolver.OBJECT_TYPE_STRING_NATIVE_NAME),
+        LIST(ObjectTypeResolver.OBJECT_TYPE_LIST_NATIVE_NAME),
+        SET(ObjectTypeResolver.OBJECT_TYPE_SET_NATIVE_NAME),
+        ZSET(ObjectTypeResolver.OBJECT_TYPE_ZSET_NATIVE_NAME),
+        HASH(ObjectTypeResolver.OBJECT_TYPE_HASH_NATIVE_NAME),
+        STREAM(ObjectTypeResolver.OBJECT_TYPE_STREAM_NATIVE_NAME);
 
         /**
          * @return the name of the enum when communicating with the native layer.

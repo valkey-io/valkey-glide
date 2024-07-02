@@ -1002,10 +1002,9 @@ public class RedisClusterClient extends BaseClient
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 
+    /** A {@link ClusterScanCursor} implementation for interacting with the Rust layer. */
     private static final class NativeClusterScanCursor
             implements CommandManager.ClusterScanCursorDetail {
-        // TODO: This should be made a constant in Rust.
-        private static final String FINISHED_CURSOR_MARKER = "finished";
 
         private String cursorHandle;
         private boolean isFinished;
@@ -1014,7 +1013,7 @@ public class RedisClusterClient extends BaseClient
         // This is for internal use only.
         public NativeClusterScanCursor(@NonNull String cursorHandle) {
             this.cursorHandle = cursorHandle;
-            this.isFinished = FINISHED_CURSOR_MARKER.equals(cursorHandle);
+            this.isFinished = ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE.equals(cursorHandle);
         }
 
         @Override
