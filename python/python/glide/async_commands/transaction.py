@@ -1868,7 +1868,7 @@ class BaseTransaction:
         """
         Loads a library to Redis.
 
-        See https://valkey.io/docs/latest/commands/function-load/ for more details.
+        See https://valkey.io/commands/function-load/ for more details.
 
         Args:
             library_code (TEncodable): The source code that implements the library.
@@ -1885,13 +1885,43 @@ class BaseTransaction:
             ["REPLACE", library_code] if replace else [library_code],
         )
 
+    def function_list(
+        self: TTransaction,
+        library_name_pattern: Optional[TEncodable] = None,
+        with_code: bool = False,
+    ) -> TTransaction:
+        """
+        Returns information about the functions and libraries.
+
+        See https://valkey.io/commands/function-list/ for more details.
+
+        Args:
+            library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
+            with_code (bool): Specifies whether to request the library code from the server or not.
+
+        Commands response:
+            TFunctionListResponse: Info about all or
+                selected libraries and their functions.
+
+        Since: Redis 7.0.0.
+        """
+        args = []
+        if library_name_pattern is not None:
+            args.extend(["LIBRARYNAME", library_name_pattern])
+        if with_code:
+            args.append("WITHCODE")
+        return self.append_command(
+            RequestType.FunctionList,
+            args,
+        )
+
     def function_flush(
         self: TTransaction, mode: Optional[FlushMode] = None
     ) -> TTransaction:
         """
         Deletes all function libraries.
 
-        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+        See https://valkey.io/commands/function-flush/ for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -1910,7 +1940,7 @@ class BaseTransaction:
         """
         Deletes a library and all its functions.
 
-        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+        See https://valkey.io/commands/function-delete/ for more details.
 
         Args:
             library_code (TEncodable): The library name to delete
@@ -2503,6 +2533,45 @@ class BaseTransaction:
         args.append("JUSTID")
 
         return self.append_command(RequestType.XAutoClaim, args)
+
+    def xinfo_groups(
+        self: TTransaction,
+        key: TEncodable,
+    ) -> TTransaction:
+        """
+        Returns the list of all consumer groups and their attributes for the stream stored at `key`.
+
+        See https://valkey.io/commands/xinfo-groups for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+
+        Command response:
+            List[Mapping[bytes, Union[bytes, int, None]]]: A list of mappings, where each mapping represents the
+                attributes of a consumer group for the stream at `key`.
+        """
+        return self.append_command(RequestType.XInfoGroups, [key])
+
+    def xinfo_consumers(
+        self: TTransaction,
+        key: TEncodable,
+        group_name: TEncodable,
+    ) -> TTransaction:
+        """
+        Returns the list of all consumers and their attributes for the given consumer group of the stream stored at
+        `key`.
+
+        See https://valkey.io/commands/xinfo-consumers for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+
+        Command response:
+            List[Mapping[bytes, Union[bytes, int]]]: A list of mappings, where each mapping contains the attributes of a
+                consumer for the given consumer group of the stream at `key`.
+        """
+        return self.append_command(RequestType.XInfoConsumers, [key, group_name])
 
     def geoadd(
         self: TTransaction,
@@ -4462,7 +4531,7 @@ class BaseTransaction:
                                      in the list. A `max_len` of 0 means unlimited amount of comparisons.
 
         Command Response:
-            Union[int, list[int], None]: The index of the first occurrence of `element`,
+            Union[int, List[int], None]: The index of the first occurrence of `element`,
             or None if `element` is not in the list.
             With the `count` option, a list of indices of matching elements will be returned.
 

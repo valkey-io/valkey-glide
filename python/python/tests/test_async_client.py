@@ -6,9 +6,8 @@ import asyncio
 import copy
 import math
 import time
-from collections.abc import Mapping
 from datetime import date, datetime, timedelta, timezone
-from typing import Any, Dict, List, Tuple, Union, cast
+from typing import Any, Dict, List, Mapping, Tuple, Union, cast
 
 import pytest
 from glide import ClosingError, RequestError, Script
@@ -89,6 +88,7 @@ from glide.routes import (
 )
 from tests.conftest import create_client
 from tests.utils.utils import (
+    check_function_list_response,
     check_if_server_version_lt,
     compare_maps,
     convert_bytes_to_string_object,
@@ -6353,6 +6353,189 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xinfo_groups_xinfo_consumers(
+        self, redis_client: TGlideClient, protocol
+    ):
+        key = get_random_string(10)
+        group_name1 = get_random_string(10)
+        group_name2 = get_random_string(10)
+        consumer1 = get_random_string(10)
+        consumer2 = get_random_string(10)
+        stream_id0_0 = "0-0"
+        stream_id1_0 = "1-0"
+        stream_id1_1 = "1-1"
+        stream_id1_2 = "1-2"
+        stream_id1_3 = "1-3"
+
+        # setup: add 3 entries to stream, create consumer group and consumer1, read 1 entry from stream with consumer1
+        assert (
+            await redis_client.xadd(
+                key, [("f1", "v1"), ("f2", "v2")], StreamAddOptions(stream_id1_0)
+            )
+            == stream_id1_0.encode()
+        )
+        assert (
+            await redis_client.xadd(key, [("f3", "v3")], StreamAddOptions(stream_id1_1))
+            == stream_id1_1.encode()
+        )
+        assert (
+            await redis_client.xadd(key, [("f4", "v4")], StreamAddOptions(stream_id1_2))
+            == stream_id1_2.encode()
+        )
+        assert await redis_client.xgroup_create(key, group_name1, stream_id0_0) == OK
+        assert await redis_client.xreadgroup(
+            {key: ">"}, group_name1, consumer1, StreamReadGroupOptions(count=1)
+        ) == {key.encode(): {stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]]}}
+
+        # sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is > 0
+        time.sleep(2)
+        consumers_result = await redis_client.xinfo_consumers(key, group_name1)
+        assert len(consumers_result) == 1
+        consumer1_info = consumers_result[0]
+        assert consumer1_info.get(b"name") == consumer1.encode()
+        assert consumer1_info.get(b"pending") == 1
+        assert cast(int, consumer1_info.get(b"idle")) > 0
+        if not await check_if_server_version_lt(redis_client, "7.2.0"):
+            assert (
+                cast(int, consumer1_info.get(b"inactive"))
+                > 0  # "inactive" was added in Redis 7.2.0
+            )
+
+        # create consumer2 and read the rest of the entries with it
+        assert (
+            await redis_client.xgroup_create_consumer(key, group_name1, consumer2)
+            is True
+        )
+        assert await redis_client.xreadgroup({key: ">"}, group_name1, consumer2) == {
+            key.encode(): {
+                stream_id1_1.encode(): [[b"f3", b"v3"]],
+                stream_id1_2.encode(): [[b"f4", b"v4"]],
+            }
+        }
+
+        # verify that xinfo_consumers contains info for 2 consumers now
+        # test with byte string args
+        consumers_result = await redis_client.xinfo_consumers(
+            key.encode(), group_name1.encode()
+        )
+        assert len(consumers_result) == 2
+
+        # add one more entry
+        assert (
+            await redis_client.xadd(key, [("f5", "v5")], StreamAddOptions(stream_id1_3))
+            == stream_id1_3.encode()
+        )
+
+        groups = await redis_client.xinfo_groups(key)
+        assert len(groups) == 1
+        group1_info = groups[0]
+        assert group1_info.get(b"name") == group_name1.encode()
+        assert group1_info.get(b"consumers") == 2
+        assert group1_info.get(b"pending") == 3
+        assert group1_info.get(b"last-delivered-id") == stream_id1_2.encode()
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert (
+                group1_info.get(b"entries-read")
+                == 3  # we have read stream entries 1-0, 1-1, and 1-2
+            )
+            assert (
+                group1_info.get(b"lag")
+                == 1  # we still have not read one entry in the stream, entry 1-3
+            )
+
+        # verify xgroup_set_id effects the returned value from xinfo_groups
+        assert await redis_client.xgroup_set_id(key, group_name1, stream_id1_1) == OK
+        # test with byte string arg
+        groups = await redis_client.xinfo_groups(key.encode())
+        assert len(groups) == 1
+        group1_info = groups[0]
+        assert group1_info.get(b"name") == group_name1.encode()
+        assert group1_info.get(b"consumers") == 2
+        assert group1_info.get(b"pending") == 3
+        assert group1_info.get(b"last-delivered-id") == stream_id1_1.encode()
+        # entries-read and lag were added to the result in 7.0.0
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            assert (
+                group1_info.get(b"entries-read")
+                is None  # gets set to None when we change the last delivered ID
+            )
+            assert (
+                group1_info.get(b"lag")
+                is None  # gets set to None when we change the last delivered ID
+            )
+
+        if not await check_if_server_version_lt(redis_client, "7.0.0"):
+            # verify xgroup_set_id with entries_read_id effects the returned value from xinfo_groups
+            assert (
+                await redis_client.xgroup_set_id(
+                    key, group_name1, stream_id1_1, entries_read_id="1"
+                )
+                == OK
+            )
+            groups = await redis_client.xinfo_groups(key)
+            assert len(groups) == 1
+            group1_info = groups[0]
+            assert group1_info.get(b"name") == group_name1.encode()
+            assert group1_info.get(b"consumers") == 2
+            assert group1_info.get(b"pending") == 3
+            assert group1_info.get(b"last-delivered-id") == stream_id1_1.encode()
+            assert group1_info.get(b"entries-read") == 1
+            assert (
+                group1_info.get(b"lag")
+                == 3  # lag is calculated as number of stream entries minus entries-read
+            )
+
+        # add one more consumer group
+        assert await redis_client.xgroup_create(key, group_name2, stream_id0_0) == OK
+
+        # verify that xinfo_groups contains info for 2 consumer groups now
+        groups = await redis_client.xinfo_groups(key)
+        assert len(groups) == 2
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xinfo_groups_xinfo_consumers_edge_cases_and_failures(
+        self, redis_client: TGlideClient, protocol
+    ):
+        key = get_random_string(10)
+        string_key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        group_name = get_random_string(10)
+        stream_id1_0 = "1-0"
+
+        # passing a non-existing key raises an error
+        with pytest.raises(RequestError):
+            await redis_client.xinfo_groups(non_existing_key)
+        with pytest.raises(RequestError):
+            await redis_client.xinfo_consumers(non_existing_key, group_name)
+
+        assert (
+            await redis_client.xadd(
+                key, [("f1", "v1"), ("f2", "v2")], StreamAddOptions(stream_id1_0)
+            )
+            == stream_id1_0.encode()
+        )
+
+        # passing a non-existing group raises an error
+        with pytest.raises(RequestError):
+            await redis_client.xinfo_consumers(key, "non_existing_group")
+
+        # no groups exist yet
+        assert await redis_client.xinfo_groups(key) == []
+
+        assert await redis_client.xgroup_create(key, group_name, stream_id1_0) == OK
+        # no consumers exist yet
+        assert await redis_client.xinfo_consumers(key, group_name) == []
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xinfo_groups(string_key)
+        with pytest.raises(RequestError):
+            await redis_client.xinfo_consumers(string_key, group_name)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_xgroup_set_id(
         self, redis_client: TGlideClient, cluster_mode, protocol, request
     ):
@@ -7114,7 +7297,6 @@ class TestCommands:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_load(self, redis_client: TGlideClient):
-        # TODO: Test with FUNCTION LIST
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -7123,6 +7305,9 @@ class TestCommands:
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
 
+        # verify function does not yet exist
+        assert await redis_client.function_list(lib_name) == []
+
         assert await redis_client.function_load(code) == lib_name.encode()
 
         assert await redis_client.fcall(func_name, arguments=["one", "two"]) == b"one"
@@ -7130,7 +7315,14 @@ class TestCommands:
             await redis_client.fcall_ro(func_name, arguments=["one", "two"]) == b"one"
         )
 
-        # TODO: add FUNCTION LIST once implemented
+        # verify with FUNCTION LIST
+        check_function_list_response(
+            await redis_client.function_list(lib_name, with_code=True),
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
+            code,
+        )
 
         # re-load library without replace
         with pytest.raises(RequestError) as e:
@@ -7159,7 +7351,6 @@ class TestCommands:
     async def test_function_load_cluster_with_route(
         self, redis_client: GlideClusterClient, single_route: bool
     ):
-        # TODO: Test with FUNCTION LIST
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
@@ -7168,6 +7359,15 @@ class TestCommands:
         func_name = f"myfunc1c{get_random_string(5)}"
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        # verify function does not yet exist
+        function_list = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert function_list == []
+        else:
+            assert isinstance(function_list, dict)
+            for functions in function_list.values():
+                assert functions == []
 
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
@@ -7193,7 +7393,28 @@ class TestCommands:
             for nodeResponse in result.values():
                 assert nodeResponse == b"one"
 
-        # TODO: add FUNCTION LIST once implemented
+        # verify with FUNCTION LIST
+        function_list = await redis_client.function_list(
+            lib_name, with_code=True, route=route
+        )
+        if single_route:
+            check_function_list_response(
+                function_list,
+                lib_name,
+                {func_name: None},
+                {func_name: {b"no-writes"}},
+                code,
+            )
+        else:
+            assert isinstance(function_list, dict)
+            for nodeResponse in function_list.values():
+                check_function_list_response(
+                    nodeResponse,
+                    lib_name,
+                    {func_name: None},
+                    {func_name: {b"no-writes"}},
+                    code,
+                )
 
         # re-load library without replace
         with pytest.raises(RequestError) as e:
@@ -7239,6 +7460,203 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_list(self, redis_client: TGlideClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        original_functions_count = len(await redis_client.function_list())
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+
+        # Assert function `lib_name` does not yet exist
+        assert await redis_client.function_list(lib_name) == []
+
+        # load library
+        await redis_client.function_load(code)
+
+        check_function_list_response(
+            await redis_client.function_list(lib_name.encode()),
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
+            None,
+        )
+        check_function_list_response(
+            await redis_client.function_list(f"{lib_name}*"),
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
+            None,
+        )
+        check_function_list_response(
+            await redis_client.function_list(lib_name, with_code=True),
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
+            code,
+        )
+
+        no_args_response = await redis_client.function_list()
+        wildcard_pattern_response = await redis_client.function_list(
+            "*".encode(), False
+        )
+        assert len(no_args_response) == original_functions_count + 1
+        assert len(wildcard_pattern_response) == original_functions_count + 1
+        check_function_list_response(
+            no_args_response,
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
+            None,
+        )
+        check_function_list_response(
+            wildcard_pattern_response,
+            lib_name,
+            {func_name: None},
+            {func_name: {b"no-writes"}},
+            None,
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    @pytest.mark.parametrize("single_route", [True, False])
+    async def test_function_list_with_routing(
+        self, redis_client: GlideClusterClient, single_route: bool
+    ):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, True)
+
+        # Assert function `lib_name` does not yet exist
+        result = await redis_client.function_list(lib_name, route=route)
+        if single_route:
+            assert result == []
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert nodeResponse == []
+
+        # load library
+        await redis_client.function_load(code, route=route)
+
+        result = await redis_client.function_list(lib_name, route=route)
+        if single_route:
+            check_function_list_response(
+                result,
+                lib_name,
+                {func_name: None},
+                {func_name: {b"no-writes"}},
+                None,
+            )
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                check_function_list_response(
+                    nodeResponse,
+                    lib_name,
+                    {func_name: None},
+                    {func_name: {b"no-writes"}},
+                    None,
+                )
+
+        result = await redis_client.function_list(f"{lib_name}*", route=route)
+        if single_route:
+            check_function_list_response(
+                result,
+                lib_name,
+                {func_name: None},
+                {func_name: {b"no-writes"}},
+                None,
+            )
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                check_function_list_response(
+                    nodeResponse,
+                    lib_name,
+                    {func_name: None},
+                    {func_name: {b"no-writes"}},
+                    None,
+                )
+
+        result = await redis_client.function_list(lib_name, with_code=True, route=route)
+        if single_route:
+            check_function_list_response(
+                result,
+                lib_name,
+                {func_name: None},
+                {func_name: {b"no-writes"}},
+                code,
+            )
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                check_function_list_response(
+                    nodeResponse,
+                    lib_name,
+                    {func_name: None},
+                    {func_name: {b"no-writes"}},
+                    code,
+                )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_list_with_multiple_functions(
+        self, redis_client: TGlideClient
+    ):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        await redis_client.function_flush()
+        assert len(await redis_client.function_list()) == 0
+
+        lib_name_1 = f"mylib1C{get_random_string(5)}"
+        func_name_1 = f"myfunc1c{get_random_string(5)}"
+        func_name_2 = f"myfunc2c{get_random_string(5)}"
+        code_1 = generate_lua_lib_code(
+            lib_name_1,
+            {func_name_1: "return args[1]", func_name_2: "return args[2]"},
+            False,
+        )
+        await redis_client.function_load(code_1)
+
+        lib_name_2 = f"mylib2C{get_random_string(5)}"
+        func_name_3 = f"myfunc3c{get_random_string(5)}"
+        code_2 = generate_lua_lib_code(
+            lib_name_2, {func_name_3: "return args[3]"}, True
+        )
+        await redis_client.function_load(code_2)
+
+        no_args_response = await redis_client.function_list()
+
+        assert len(no_args_response) == 2
+        check_function_list_response(
+            no_args_response,
+            lib_name_1,
+            {func_name_1: None, func_name_2: None},
+            {func_name_1: set(), func_name_2: set()},
+            None,
+        )
+        check_function_list_response(
+            no_args_response,
+            lib_name_2,
+            {func_name_3: None},
+            {func_name_3: {b"no-writes"}},
+            None,
+        )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_flush(self, redis_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
@@ -7251,16 +7669,21 @@ class TestCommands:
         # Load the function
         assert await redis_client.function_load(code) == lib_name.encode()
 
-        # TODO: Ensure the function exists with FUNCTION LIST
+        # verify function exists
+        assert len(await redis_client.function_list(lib_name)) == 1
 
         # Flush functions
         assert await redis_client.function_flush(FlushMode.SYNC) == OK
         assert await redis_client.function_flush(FlushMode.ASYNC) == OK
 
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
+        # verify function is removed
+        assert len(await redis_client.function_list(lib_name)) == 0
 
         # Attempt to re-load library without overwriting to ensure FLUSH was effective
         assert await redis_client.function_load(code) == lib_name.encode()
+
+        # verify function exists
+        assert len(await redis_client.function_list(lib_name)) == 1
 
         # Clean up by flushing functions again
         await redis_client.function_flush()
@@ -7283,16 +7706,39 @@ class TestCommands:
         # Load the function
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
-        # TODO: Ensure the function exists with FUNCTION LIST
+        # verify function exists
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 1
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 1
 
         # Flush functions
         assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
         assert await redis_client.function_flush(FlushMode.ASYNC, route) == OK
 
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
+        # verify function is removed
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 0
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 0
 
         # Attempt to re-load library without overwriting to ensure FLUSH was effective
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
+
+        # verify function exists
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 1
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 1
 
         # Clean up by flushing functions again
         assert await redis_client.function_flush(route=route) == OK
@@ -7311,12 +7757,14 @@ class TestCommands:
         # Load the function
         assert await redis_client.function_load(code) == lib_name.encode()
 
-        # TODO: Ensure the library exists with FUNCTION LIST
+        # verify function exists
+        assert len(await redis_client.function_list(lib_name)) == 1
 
         # Delete the function
         assert await redis_client.function_delete(lib_name) == OK
 
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
+        # verify function is removed
+        assert len(await redis_client.function_list(lib_name)) == 0
 
         # deleting a non-existing library
         with pytest.raises(RequestError) as e:
@@ -7341,12 +7789,26 @@ class TestCommands:
         # Load the function
         assert await redis_client.function_load(code, False, route) == lib_name.encode()
 
-        # TODO: Ensure the library exists with FUNCTION LIST
+        # verify function exists
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 1
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 1
 
         # Delete the function
         assert await redis_client.function_delete(lib_name, route) == OK
 
-        # TODO: Ensure the function is no longer present with FUNCTION LIST
+        # verify function is removed
+        result = await redis_client.function_list(lib_name, False, route)
+        if single_route:
+            assert len(result) == 0
+        else:
+            assert isinstance(result, dict)
+            for nodeResponse in result.values():
+                assert len(nodeResponse) == 0
 
         # deleting a non-existing library
         with pytest.raises(RequestError) as e:
@@ -8139,7 +8601,7 @@ class TestMultiKeyCommandCrossSlot:
     async def test_multi_key_command_returns_cross_slot_error(
         self, redis_client: GlideClusterClient
     ):
-        promises: list[Any] = [
+        promises: List[Any] = [
             redis_client.blpop(["abc", "zxy", "lkn"], 0.1),
             redis_client.brpop(["abc", "zxy", "lkn"], 0.1),
             redis_client.rename("abc", "zxy"),
@@ -8678,7 +9140,7 @@ class TestClusterRoutes:
             ),
         )
         result_cursor = str(result[result_cursor_index])
-        result_iteration_collection: dict[str, str] = convert_list_to_dict(
+        result_iteration_collection: Dict[str, str] = convert_list_to_dict(
             result[result_collection_index]
         )
         full_result_map.update(result_iteration_collection)
@@ -8702,7 +9164,8 @@ class TestClusterRoutes:
             full_result_map.update(next_result_collection)
             result_iteration_collection = next_result_collection
             result_cursor = next_result_cursor
-        assert (num_map_with_str_scores | char_map_with_str_scores) == full_result_map
+        num_map_with_str_scores.update(char_map_with_str_scores)
+        assert num_map_with_str_scores == full_result_map
 
         # Test match pattern
         result = await redis_client.zscan(key1, initial_cursor, match="*")
@@ -8790,7 +9253,7 @@ class TestClusterRoutes:
             ),
         )
         result_cursor = str(result[result_cursor_index])
-        result_iteration_collection: dict[str, str] = convert_list_to_dict(
+        result_iteration_collection: Dict[str, str] = convert_list_to_dict(
             result[result_collection_index]
         )
         full_result_map.update(result_iteration_collection)
@@ -8814,7 +9277,8 @@ class TestClusterRoutes:
             full_result_map.update(next_result_collection)
             result_iteration_collection = next_result_collection
             result_cursor = next_result_cursor
-        assert (num_map | char_map) == full_result_map
+        num_map.update(char_map)
+        assert num_map == full_result_map
 
         # Test match pattern
         result = await redis_client.hscan(key1, initial_cursor, match="*")

@@ -1,11 +1,11 @@
 # Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
-from collections.abc import Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
     Dict,
     List,
+    Mapping,
     Optional,
     Protocol,
     Set,
@@ -25,7 +25,7 @@ from glide.async_commands.bitmap import (
     _create_bitfield_args,
     _create_bitfield_read_only_args,
 )
-from glide.async_commands.command_args import Limit, ListDirection, OrderBy
+from glide.async_commands.command_args import Limit, ListDirection, ObjectType, OrderBy
 from glide.async_commands.sorted_set import (
     AggregationType,
     GeoSearchByBox,
@@ -58,7 +58,7 @@ from glide.constants import TOK, TEncodable, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 from glide.routes import Route
 
-from ..glide import Script
+from ..glide import ClusterScanCursor, Script
 
 
 class ConditionalChange(Enum):
@@ -359,6 +359,14 @@ class CoreCommands(Protocol):
         keys: Optional[List[TEncodable]] = None,
         args: Optional[List[TEncodable]] = None,
         route: Optional[Route] = None,
+    ) -> TResult: ...
+
+    async def _cluster_scan(
+        self,
+        cursor: ClusterScanCursor,
+        match: Optional[TEncodable] = ...,
+        count: Optional[int] = ...,
+        type: Optional[ObjectType] = ...,
     ) -> TResult: ...
 
     async def set(
@@ -3331,6 +3339,91 @@ class CoreCommands(Protocol):
             await self._execute_command(RequestType.XAutoClaim, args),
         )
 
+    async def xinfo_groups(
+        self,
+        key: TEncodable,
+    ) -> List[Mapping[bytes, Union[bytes, int, None]]]:
+        """
+        Returns the list of all consumer groups and their attributes for the stream stored at `key`.
+
+        See https://valkey.io/commands/xinfo-groups for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+
+        Returns:
+            List[Mapping[bytes, Union[bytes, int, None]]]: A list of mappings, where each mapping represents the
+                attributes of a consumer group for the stream at `key`.
+
+        Examples:
+            >>> await client.xinfo_groups("my_stream")
+                [
+                    {
+                        b"name": b"mygroup",
+                        b"consumers": 2,
+                        b"pending": 2,
+                        b"last-delivered-id": b"1638126030001-0",
+                        b"entries-read": 2,  # The "entries-read" field was added in Redis version 7.0.0.
+                        b"lag": 0,  # The "lag" field was added in Redis version 7.0.0.
+                    },
+                    {
+                        b"name": b"some-other-group",
+                        b"consumers": 1,
+                        b"pending": 0,
+                        b"last-delivered-id": b"1638126028070-0",
+                        b"entries-read": 1,
+                        b"lag": 1,
+                    }
+                ]
+                # The list of consumer groups and their attributes for stream "my_stream".
+        """
+        return cast(
+            List[Mapping[bytes, Union[bytes, int, None]]],
+            await self._execute_command(RequestType.XInfoGroups, [key]),
+        )
+
+    async def xinfo_consumers(
+        self,
+        key: TEncodable,
+        group_name: TEncodable,
+    ) -> List[Mapping[bytes, Union[bytes, int]]]:
+        """
+        Returns the list of all consumers and their attributes for the given consumer group of the stream stored at
+        `key`.
+
+        See https://valkey.io/commands/xinfo-consumers for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group_name (TEncodable): The consumer group name.
+
+        Returns:
+            List[Mapping[bytes, Union[bytes, int]]]: A list of mappings, where each mapping contains the attributes of a
+                consumer for the given consumer group of the stream at `key`.
+
+        Examples:
+            >>> await client.xinfo_consumers("my_stream", "my_group")
+                [
+                    {
+                        b"name": b"Alice",
+                        b"pending": 1,
+                        b"idle": 9104628,
+                        b"inactive": 18104698,  # The "inactive" field was added in Redis version 7.2.0.
+                    },
+                    {
+                        b"name": b"Bob",
+                        b"pending": 1,
+                        b"idle": 83841983,
+                        b"inactive": 993841998,
+                    }
+                ]
+                # The list of consumers and their attributes for consumer group "my_group" of stream "my_stream".
+        """
+        return cast(
+            List[Mapping[bytes, Union[bytes, int]]],
+            await self._execute_command(RequestType.XInfoConsumers, [key, group_name]),
+        )
+
     async def geoadd(
         self,
         key: TEncodable,
@@ -6123,7 +6216,7 @@ class CoreCommands(Protocol):
         key2: TEncodable,
         min_match_len: Optional[int] = None,
         with_match_len: Optional[bool] = False,
-    ) -> Mapping[bytes, Union[list[list[Union[list[int], int]]], int]]:
+    ) -> Mapping[bytes, Union[List[List[Union[List[int], int]]], int]]:
         """
         Returns the indices and length of the longest common subsequence between strings stored at key1 and key2.
 
@@ -6206,7 +6299,7 @@ class CoreCommands(Protocol):
             args.append("WITHMATCHLEN")
 
         return cast(
-            Mapping[bytes, Union[list[list[Union[list[int], int]]], int]],
+            Mapping[bytes, Union[List[List[Union[List[int], int]]], int]],
             await self._execute_command(RequestType.LCS, args),
         )
 
@@ -6217,7 +6310,7 @@ class CoreCommands(Protocol):
         rank: Optional[int] = None,
         count: Optional[int] = None,
         max_len: Optional[int] = None,
-    ) -> Union[int, list[int], None]:
+    ) -> Union[int, List[int], None]:
         """
         Returns the index or indexes of element(s) matching `element` in the `key` list. If no match is found,
         None is returned.
@@ -6233,7 +6326,7 @@ class CoreCommands(Protocol):
                                      in the list. A `max_len` of 0 means unlimited amount of comparisons.
 
         Returns:
-            Union[int, list[int], None]: The index of the first occurrence of `element`,
+            Union[int, List[int], None]: The index of the first occurrence of `element`,
             or None if `element` is not in the list.
             With the `count` option, a list of indices of matching elements will be returned.
 
@@ -6264,6 +6357,6 @@ class CoreCommands(Protocol):
             args.extend(["MAXLEN", str(max_len)])
 
         return cast(
-            Union[int, list[int], None],
+            Union[int, List[int], None],
             await self._execute_command(RequestType.LPos, args),
         )
