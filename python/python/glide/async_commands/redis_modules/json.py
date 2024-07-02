@@ -11,14 +11,14 @@
             'OK'  # Indicates successful setting of the value at path '$' in the key stored at `doc`.
         >>> json_get = await redisJson.get(client, "doc", "$") # Returns the value at path '$' in the JSON document stored at `doc` as JSON string.
         >>> print(json_get)
-            "[{\"a\":1.0,\"b\":2}]" 
-        >>> json.loads(json_get)
+            b"[{\"a\":1.0,\"b\":2}]" 
+        >>> json.loads(str(json_get))
             [{"a": 1.0, "b" :2}] # JSON object retrieved from the key `doc` using json.loads()
         """
 from typing import List, Optional, Union, cast
 
 from glide.async_commands.core import ConditionalChange
-from glide.constants import TOK, TJsonResponse
+from glide.constants import TOK, TEncodable, TJsonResponse
 from glide.glide_client import TGlideClient
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -56,9 +56,9 @@ class JsonGetOptions:
 
 async def set(
     client: TGlideClient,
-    key: str,
-    path: str,
-    value: str,
+    key: TEncodable,
+    path: TEncodable,
+    value: TEncodable,
     set_condition: Optional[ConditionalChange] = None,
 ) -> Optional[TOK]:
     """
@@ -68,10 +68,10 @@ async def set(
 
     Args:
         client (TGlideClient): The Redis client to execute the command.
-        key (str): The key of the JSON document.
-        path (str): Represents the path within the JSON document where the value will be set.
+        key (TEncodable): The key of the JSON document.
+        path (TEncodable): Represents the path within the JSON document where the value will be set.
             The key will be modified only if `value` is added as the last child in the specified `path`, or if the specified `path` acts as the parent of a new child being added.
-        value (set): The value to set at the specific path, in JSON formatted str.
+        value (TEncodable): The value to set at the specific path, in JSON formatted bytes or str.
         set_condition (Optional[ConditionalChange]): Set the value only if the given condition is met (within the key or path).
             Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
 
@@ -96,10 +96,10 @@ async def set(
 
 async def get(
     client: TGlideClient,
-    key: str,
-    paths: Optional[Union[str, List[str]]] = None,
+    key: TEncodable,
+    paths: Optional[Union[TEncodable, List[TEncodable]]] = None,
     options: Optional[JsonGetOptions] = None,
-) -> Optional[str]:
+) -> Optional[bytes]:
     """
     Retrieves the JSON value at the specified `paths` stored at `key`.
 
@@ -107,42 +107,42 @@ async def get(
 
     Args:
         client (TGlideClient): The Redis client to execute the command.
-        key (str): The key of the JSON document.
-        paths (Optional[Union[str, List[str]]]): The path or list of paths within the JSON document. Default is root `$`.
-        options (Optional[JsonGetOptions]): Options for formatting the string representation of the JSON data. See `JsonGetOptions`.
+        key (TEncodable): The key of the JSON document.
+        paths (Optional[Union[TEncodable, List[TEncodable]]]): The path or list of paths within the JSON document. Default is root `$`.
+        options (Optional[JsonGetOptions]): Options for formatting the byte representation of the JSON data. See `JsonGetOptions`.
 
     Returns:
-        str: A bulk string representation of the returned value.
+        bytes: A bytes representation of the returned value.
             If `key` doesn't exists, returns None.
 
     Examples:
         >>> from glide import json as redisJson
         >>> import json
         >>> json_str = await redisJson.get(client, "doc", "$")
-        >>> json.loads(json_str) # Parse JSON string to Python data
+        >>> json.loads(str(json_str)) # Parse JSON string to Python data
             [{"a": 1.0, "b" :2}]  # JSON object retrieved from the key `doc` using json.loads()
         >>> await redisJson.get(client, "doc", "$")
-            "[{\"a\":1.0,\"b\":2}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
+            b"[{\"a\":1.0,\"b\":2}]"  # Returns the value at path '$' in the JSON document stored at `doc`.
         >>> await redisJson.get(client, "doc", ["$.a", "$.b"], json.JsonGetOptions(indent="  ", newline="\n", space=" "))
-            "{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"  # Returns the values at paths '$.a' and '$.b' in the JSON document stored at `doc`, with specified formatting options.
+            b"{\n \"$.a\": [\n  1.0\n ],\n \"$.b\": [\n  2\n ]\n}"  # Returns the values at paths '$.a' and '$.b' in the JSON document stored at `doc`, with specified formatting options.
         >>> await redisJson.get(client, "doc", "$.non_existing_path")
-            "[]"  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc`.
+            b"[]"  # Returns an empty array since the path '$.non_existing_path' does not exist in the JSON document stored at `doc`.
     """
     args = ["JSON.GET", key]
     if options:
         args.extend(options.get_options())
     if paths:
-        if isinstance(paths, str):
+        if isinstance(paths, (str, bytes)):
             paths = [paths]
         args.extend(paths)
 
-    return cast(str, await client.custom_command(args))
+    return cast(bytes, await client.custom_command(args))
 
 
 async def delete(
     client: TGlideClient,
-    key: str,
-    path: Optional[str] = None,
+    key: TEncodable,
+    path: Optional[TEncodable] = None,
 ) -> int:
     """
     Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
@@ -151,8 +151,8 @@ async def delete(
 
     Args:
         client (TGlideClient): The Redis client to execute the command.
-        key (str): The key of the JSON document.
-        path (Optional[str]): Represents the path within the JSON document where the value will be deleted.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): Represents the path within the JSON document where the value will be deleted.
             If None, deletes the entire JSON document at `key`. Defaults to None.
 
     Returns:
@@ -178,8 +178,8 @@ async def delete(
 
 async def forget(
     client: TGlideClient,
-    key: str,
-    path: Optional[str] = None,
+    key: TEncodable,
+    path: Optional[TEncodable] = None,
 ) -> Optional[int]:
     """
     Deletes the JSON value at the specified `path` within the JSON document stored at `key`.
@@ -188,8 +188,8 @@ async def forget(
 
     Args:
         client (TGlideClient): The Redis client to execute the command.
-        key (str): The key of the JSON document.
-        path (Optional[str]): Represents the path within the JSON document where the value will be deleted.
+        key (TEncodable): The key of the JSON document.
+        path (Optional[TEncodable]): Represents the path within the JSON document where the value will be deleted.
             If None, deletes the entire JSON document at `key`. Defaults to None.
 
     Returns:
@@ -216,8 +216,8 @@ async def forget(
 
 async def toggle(
     client: TGlideClient,
-    key: str,
-    path: str,
+    key: TEncodable,
+    path: TEncodable,
 ) -> TJsonResponse[bool]:
     """
     Toggles a Boolean value stored at the specified `path` within the JSON document stored at `key`.
@@ -226,8 +226,8 @@ async def toggle(
 
     Args:
         client (TGlideClient): The Redis client to execute the command.
-        key (str): The key of the JSON document.
-        path (str): The JSONPath to specify.
+        key (TEncodable): The key of the JSON document.
+        path (TEncodable): The JSONPath to specify.
 
     Returns:
         TJsonResponse[bool]: For JSONPath (`path` starts with `$`), returns a list of boolean replies for every possible path, with the toggled boolean value,
