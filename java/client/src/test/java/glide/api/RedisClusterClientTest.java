@@ -2955,10 +2955,12 @@ public class RedisClusterClientTest {
     @SneakyThrows
     @Test
     public void scan_existing_cursor_options() {
-        CommandManager.ClusterScanCursorDetail mockCursor = Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        CommandManager.ClusterScanCursorDetail mockCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
         when(mockCursor.getCursorHandle()).thenReturn("1");
 
-        CommandManager.ClusterScanCursorDetail mockResultCursor = Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
+        CommandManager.ClusterScanCursorDetail mockResultCursor =
+                Mockito.mock(CommandManager.ClusterScanCursorDetail.class);
         when(mockResultCursor.getCursorHandle()).thenReturn("2");
 
         final Object[] result = new Object[] {mockResultCursor.getCursorHandle(), new Object[] {"foo"}};

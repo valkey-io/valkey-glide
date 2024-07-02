@@ -64,7 +64,6 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
 import glide.ffi.resolvers.ClusterScanCursorResolver;
 import glide.managers.CommandManager;
-import glide.managers.ConnectionManager;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -1002,7 +1001,8 @@ public class RedisClusterClient extends BaseClient
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 
-    private static final class NativeClusterScanCursor implements CommandManager.ClusterScanCursorDetail {
+    private static final class NativeClusterScanCursor
+            implements CommandManager.ClusterScanCursorDetail {
         // TODO: This should be made a constant in Rust.
         private static final String FINISHED_CURSOR_MARKER = "finished";
 
