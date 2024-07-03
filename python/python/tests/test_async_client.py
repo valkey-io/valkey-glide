@@ -9390,7 +9390,6 @@ class TestScripts:
         length = 2**12  # 4kb
         arg1 = "0" * length
         arg2 = "1" * length
-        assert await redis_client.set(key, arg1) == "OK"
 
         script = Script("return ARGV[2]")
         assert (

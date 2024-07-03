@@ -309,7 +309,7 @@ class BaseClient(CoreCommands):
         (encoded_args, args_size) = self._encode_and_sum_size(args)
         if (keys_size + args_size) < MAX_REQUEST_ARGS_LEN:
             request.script_invocation.hash = hash
-            request.script_invocation.keys[:] = keys
+            request.script_invocation.keys[:] = encoded_keys
             request.script_invocation.args[:] = encoded_args
 
         else:
