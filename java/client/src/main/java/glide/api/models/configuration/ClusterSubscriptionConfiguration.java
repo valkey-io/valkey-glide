@@ -35,7 +35,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
     /**
      * Describes subscription modes for cluster client.
      *
-     * @see <a href="https://valkey.io/docs/topics/pubsub/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/docs/topics/pubsub/">valkey.io</a> for details.
      */
     public enum PubSubClusterChannelMode implements ChannelMode {
         /** Use exact channel names. */
