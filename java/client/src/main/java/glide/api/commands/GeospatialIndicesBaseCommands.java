@@ -29,7 +29,7 @@ public interface GeospatialIndicesBaseCommands {
      * </code>.<br>
      * If a member is already a part of the sorted set, its position is updated.
      *
-     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
@@ -52,7 +52,7 @@ public interface GeospatialIndicesBaseCommands {
      * </code>.<br>
      * If a member is already a part of the sorted set, its position is updated.
      *
-     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
@@ -79,7 +79,7 @@ public interface GeospatialIndicesBaseCommands {
      * To perform a <code>geoadd</code> operation while specifying optional parameters, use {@link
      * #geoadd(String, Map, GeoAddOptions)}.
      *
-     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
@@ -100,7 +100,7 @@ public interface GeospatialIndicesBaseCommands {
      * To perform a <code>geoadd</code> operation while specifying optional parameters, use {@link
      * #geoadd(String, Map, GeoAddOptions)}.
      *
-     * @see <a href="https://redis.io/commands/geoadd/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a> for more details.
      * @param key The key of the sorted set.
      * @param membersToGeospatialData A mapping of member names to their corresponding positions - see
      *     {@link GeospatialData}. The command will report an error when the user attempts to index
