@@ -373,7 +373,8 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> await client.function_dump()
-                data # data could be saved to restore loaded functions on any Redis instance
+                # The serialized payload of all loaded libraries. This response can
+                # be used to restore loaded functions on any Valkey instance.
 
         Since: Redis 7.0.0.
         """
@@ -383,12 +384,12 @@ class StandaloneCommands(CoreCommands):
         self, payload: TEncodable, policy: Optional[FunctionRestorePolicy] = None
     ) -> TOK:
         """
-        Restores libraries from the serialized payload returned by function-dump command.
+        Restores libraries from the serialized payload returned by the `function_dump` command.
 
         See https://valkey.io/docs/latest/commands/function-restore/ for more details.
 
         Args:
-            payload (TEncodable): The serialized data from function-dump command.
+            payload (TEncodable): The serialized data from the `function_dump` command.
             policy (Optional[FunctionRestorePolicy]): A policy for handling existing libraries.
 
         Returns:
@@ -397,7 +398,7 @@ class StandaloneCommands(CoreCommands):
         Examples:
             >>> await client.function_restore(data)
                 "OK"
-            >>> await client.function_restore(data, FLUSH)
+            >>> await client.function_restore(data, FunctionRestorePolicy.FLUSH)
                 "OK"
 
         Since: Redis 7.0.0.

@@ -143,6 +143,7 @@ __all__ = [
     "ExpiryType",
     "ExpiryTypeGetEx",
     "FlushMode",
+    "FunctionRestorePolicy",
     "GeoSearchByBox",
     "GeoSearchByRadius",
     "GeoSearchCount",

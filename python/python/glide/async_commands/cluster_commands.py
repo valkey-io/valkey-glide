@@ -564,15 +564,17 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/docs/latest/commands/function-dump/ for more details.
 
         Args:
-            route (Optional[Route]): Specifies the routing configuration of the command. The client
-                will route the command to the nodes defined by `route`.
+            route (Optional[Route]): The command will be routed to a random node, unless
+                `route` is provided, in which case the client will route the command to the
+                nodes defined by `route`.
 
         Returns:
             TClusterResponse[bytes]: The serialized payload of all loaded libraries.
 
         Examples:
             >>> await client.function_dump()
-                data # data could be saved to restore loaded functions on any Redis instance
+                # The serialized payload of all loaded libraries. This response can
+                # be used to restore loaded functions on any Valkey instance.
 
         Since: Redis 7.0.0.
         """
@@ -588,15 +590,16 @@ class ClusterCommands(CoreCommands):
         route: Optional[Route] = None,
     ) -> TOK:
         """
-        Restores libraries from the serialized payload returned by function-dump command.
+        Restores libraries from the serialized payload returned by the `function_dump` command.
 
         See https://valkey.io/docs/latest/commands/function-restore/ for more details.
 
         Args:
-            payload (bytes): The serialized data from function-dump command.
+            payload (bytes): The serialized data from the `function_dump` command.
             policy (Optional[FunctionRestorePolicy]): A policy for handling existing libraries.
-            route (Optional[Route]): Specifies the routing configuration of the command. The client
-                will route the command to the nodes defined by `route`.
+            route (Optional[Route]): The command will be sent to all primaries, unless
+                `route` is provided, in which case the client will route the command to the
+                nodes defined by `route`.
 
         Returns:
             TOK: OK.
@@ -604,7 +607,7 @@ class ClusterCommands(CoreCommands):
         Examples:
             >>> await client.function_restore(data, AllPrimaries())
                 "OK"
-            >>> await client.function_restore(data, FLUSH, AllPrimaries())
+            >>> await client.function_restore(data, FunctionRestorePolicy.FLUSH, AllPrimaries())
                 "OK"
 
         Since: Redis 7.0.0.

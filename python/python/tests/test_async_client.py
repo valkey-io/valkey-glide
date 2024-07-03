@@ -8011,7 +8011,7 @@ class TestCommands:
         )
         assert await redis_client.function_load(code, True) == libname1.encode()
         flist = await redis_client.function_list(with_code=True)
-        dump = await redis_client.function_dump()
+        dump = await redis_client.function_dump(RandomNode())
         assert dump is not None and isinstance(dump, bytes)
 
         # restore without cleaning the lib and/or overwrite option causes an error
@@ -8028,7 +8028,9 @@ class TestCommands:
 
         # REPLACE policy succeed
         assert (
-            await redis_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
+            await redis_client.function_restore(
+                dump, FunctionRestorePolicy.REPLACE, route=AllPrimaries()
+            )
             is OK
         )
 
