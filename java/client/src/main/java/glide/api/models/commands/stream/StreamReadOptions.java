@@ -3,6 +3,7 @@ package glide.api.models.commands.stream;
 
 import glide.api.commands.StreamBaseCommands;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -57,5 +58,15 @@ public class StreamReadOptions {
         optionArgs.addAll(entrySet.stream().map(Map.Entry::getValue).collect(Collectors.toList()));
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Converts options into a String[].
+     *
+     * @return String[]
+     */
+    public String[] toArgs() {
+        Map<String, String> emptyMap = new HashMap<>();
+        return toArgs(emptyMap);
     }
 }

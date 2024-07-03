@@ -1,14 +1,14 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.utils;
 
-import static glide.api.models.GlideString.gs;
-
 import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.models.GlideString;
 import glide.api.models.commands.geospatial.GeospatialData;
 import java.lang.reflect.Array;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -80,14 +80,15 @@ public class ArrayTransformUtils {
      * @param args A mapping of member names to their corresponding positions.
      * @return An array of GlideStrings to be used in {@link GeospatialIndicesBaseCommands#geoadd}.
      */
-    public static GlideString[] mapGeoDataToGlideStringArray(Map<GlideString, GeospatialData> args) {
+    public static <ArgType> GlideString[] mapGeoDataToGlideStringArray(
+            Map<ArgType, GeospatialData> args) {
         return args.entrySet().stream()
                 .flatMap(
                         entry ->
                                 Stream.of(
-                                        gs(Double.toString(entry.getValue().getLongitude())),
-                                        gs(Double.toString(entry.getValue().getLatitude())),
-                                        entry.getKey()))
+                                        GlideString.of(entry.getValue().getLongitude()),
+                                        GlideString.of(entry.getValue().getLatitude()),
+                                        GlideString.of(entry.getKey())))
                 .toArray(GlideString[]::new);
     }
 
@@ -235,6 +236,27 @@ public class ArrayTransformUtils {
     }
 
     /**
+     * Converts a map of any type of keys and values in to an array of GlideString where all keys are
+     * placed first, followed by the values.
+     *
+     * @param args Map of keys to values of any type to convert.
+     * @return Array of GlideString [key1, key2, value1, value2...].
+     */
+    public static GlideString[] flattenAllKeysFollowedByAllValues(Map<?, ?> args) {
+        List<GlideString> keysList = new ArrayList<>();
+        List<GlideString> valuesList = new ArrayList<>();
+        List<GlideString> all = new ArrayList<>();
+
+        for (var entry : args.entrySet()) {
+            keysList.add(GlideString.of(entry.getKey()));
+            valuesList.add(GlideString.of(entry.getValue()));
+        }
+
+        return concatenateArrays(
+                keysList.toArray(GlideString[]::new), valuesList.toArray(GlideString[]::new));
+    }
+
+    /**
      * Converts any array into GlideString array keys and values.
      *
      * @param args Map of keys to values of any type to convert.
@@ -242,5 +264,22 @@ public class ArrayTransformUtils {
      */
     public static <ArgType> GlideString[] toGlideStringArray(ArgType[] args) {
         return Arrays.stream(args).map(GlideString::of).toArray(GlideString[]::new);
+    }
+
+    /**
+     * Given an inputMap of any key / value pairs, create a new Map of <GlideString, GlideString>
+     *
+     * @param inputMap Map of values to convert.
+     * @return A Map of <GlideString, GlideString>
+     */
+    public static Map<GlideString, GlideString> convertMapToGlideStringMap(Map<?, ?> inputMap) {
+        if (inputMap == null) {
+            return null;
+        }
+        return inputMap.entrySet().stream()
+                .collect(
+                        HashMap::new,
+                        (m, e) -> m.put(GlideString.of(e.getKey()), GlideString.of(e.getValue())),
+                        HashMap::putAll);
     }
 }

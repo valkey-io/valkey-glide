@@ -27,8 +27,33 @@ public class ArgsBuilder {
         return this;
     }
 
+    /** Append args to the list of argument only if condition is true */
+    public <ArgType> ArgsBuilder addIf(ArgType[] args, boolean condition) {
+        if (condition) {
+            for (ArgType arg : args) {
+                argumentsList.add(GlideString.of(arg));
+            }
+        }
+        return this;
+    }
+
+    /** Append arg to the list of argument only if condition is true */
+    public <ArgType> ArgsBuilder addIf(ArgType arg, boolean condition) {
+        if (condition) {
+            argumentsList.add(GlideString.of(arg));
+        }
+        return this;
+    }
+
     public ArgsBuilder add(String[] args) {
         for (String arg : args) {
+            argumentsList.add(GlideString.of(arg));
+        }
+        return this;
+    }
+
+    public ArgsBuilder add(int[] args) {
+        for (int arg : args) {
             argumentsList.add(GlideString.of(arg));
         }
         return this;
