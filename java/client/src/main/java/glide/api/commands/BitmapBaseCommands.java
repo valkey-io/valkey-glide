@@ -20,7 +20,7 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Bitmap Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://redis.io/docs/latest/commands/?group=bitmap">Bitmap Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=bitmap">Bitmap Commands</a>
  */
 public interface BitmapBaseCommands {
     /**

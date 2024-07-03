@@ -16,13 +16,13 @@ import lombok.RequiredArgsConstructor;
  * SortedSetBaseCommands#zrange}, {@link SortedSetBaseCommands#zrangestore}, {@link
  * SortedSetBaseCommands#zrangeWithScores}, and {@link SortedSetBaseCommands#zlexcount}
  *
- * @see <a href="https://valkey.io/commands/zcount/">redis.io</a>
- * @see <a href="https://valkey.io/commands/zremrangebyrank/">redis.io</a>
- * @see <a href="https://valkey.io/commands/zremrangebylex/">redis.io</a>
- * @see <a href="https://valkey.io/commands/zremrangebyscore/">redis.io</a>
- * @see <a href="https://valkey.io/commands/zrange/">redis.io</a>
- * @see <a href="https://valkey.io/commands/zrangestore/">redis.io</a>
- * @see <a href="https://valkey.io/commands/zlexcount/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/zcount/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zremrangebyrank/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zremrangebylex/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zremrangebyscore/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zrange/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zrangestore/">valkey.io</a>
+ * @see <a href="https://valkey.io/commands/zlexcount/">valkey.io</a>
  */
 public class RangeOptions {
 

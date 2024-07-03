@@ -70,7 +70,7 @@ public interface GenericClusterCommands {
      * <p>The transaction will be routed to the slot owner of the first key found in the transaction.
      * If no key is found, the command will be sent to a random node.
      *
-     * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
+     * @see <a href="https://redis.io/topics/Transactions/">valkey.io</a> for details on Redis
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
      * @return A list of results corresponding to the execution of each command in the transaction.
@@ -94,7 +94,7 @@ public interface GenericClusterCommands {
     /**
      * Executes a transaction by processing the queued commands.
      *
-     * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
+     * @see <a href="https://redis.io/topics/Transactions/">valkey.io</a> for details on Redis
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
      * @param route A single-node routing configuration for the transaction. The client will route the
@@ -121,7 +121,7 @@ public interface GenericClusterCommands {
     /**
      * Returns a random key.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/randomkey/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>, and will return the first successful
      *     result.
@@ -141,7 +141,7 @@ public interface GenericClusterCommands {
      * Returns a random key.<br>
      * The command will be routed to all primary nodes, and will return the first successful result.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/randomkey/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/randomkey/">valkey.io</a> for details.
      * @return A random <code>key</code> from the database.
      * @example
      *     <pre>{@code

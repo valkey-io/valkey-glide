@@ -13,7 +13,7 @@ import lombok.RequiredArgsConstructor;
  * {@link SortedSetBaseCommands#zadd(String, Map, ZAddOptions)} and {@link
  * SortedSetBaseCommands#zaddIncr(String, String, double, ZAddOptions)}
  *
- * @see <a href="https://valkey.io/commands/zadd/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/zadd/">valkey.io</a>
  */
 @Builder
 public final class ZAddOptions {

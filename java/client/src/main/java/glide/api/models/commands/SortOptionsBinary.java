@@ -16,8 +16,8 @@ import lombok.experimental.SuperBuilder;
  * GenericCommands#sortReadOnly(GlideString, SortOptionsBinary)}, and {@link
  * GenericCommands#sortStore(GlideString, String, SortOptionsBinary)}
  *
- * @see <a href="https://valkey.io/commands/sort/">redis.io</a> and <a
- *     href="https://redis.io/docs/latest/commands/sort_ro/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> and <a
+ *     href="https://valkey.io/commands/sort_ro/">valkey.io</a>
  */
 @SuperBuilder
 public class SortOptionsBinary extends SortBaseOptions {
