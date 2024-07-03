@@ -742,7 +742,7 @@ class ClusterCommands(CoreCommands):
 
         By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
 
-        See https://valkey.io/commands/sort_ro for more details.
+        See https://valkey.io/commands/sort for more details.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.

@@ -552,7 +552,7 @@ class StandaloneCommands(CoreCommands):
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
 
-        See https://valkey.io/commands/sort_ro for more details.
+        See https://valkey.io/commands/sort for more details.
 
         Args:
             key (TEncodable): The key of the list, set, or sorted set to be sorted.
