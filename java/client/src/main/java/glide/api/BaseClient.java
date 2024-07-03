@@ -195,6 +195,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
+import glide.api.models.ArgsBuilder;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
@@ -2735,10 +2736,12 @@ public abstract class BaseClient
             @NonNull Map<GlideString, GeospatialData> membersToGeospatialData,
             @NonNull GeoAddOptions options) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key},
-                        options.toGlideStringArgs(),
-                        mapGeoDataToGlideStringArray(membersToGeospatialData));
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .add(mapGeoDataToGlideStringArray(membersToGeospatialData))
+                        .toArray();
+
         return commandManager.submitNewCommand(GeoAdd, arguments, this::handleLongResponse);
     }
 
@@ -3485,6 +3488,20 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> geosearch(
+            @NonNull GlideString key,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key).add(searchFrom.toArgs()).add(searchBy.toArgs()).toArray();
+
+        return commandManager.submitNewCommand(
+                GeoSearch,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<String[]> geosearch(
             @NonNull String key,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
@@ -3498,6 +3515,26 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> geosearch(
+            @NonNull GlideString key,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchResultOptions resultOptions) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(resultOptions.toArgs())
+                        .toArray();
+
+        return commandManager.submitNewCommand(
+                GeoSearch,
+                arguments,
+                response -> castArray(handleArrayOrNullResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<Object[]> geosearch(
             @NonNull String key,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
@@ -3507,6 +3544,23 @@ public abstract class BaseClient
                 concatenateArrays(
                         new String[] {key}, searchFrom.toArgs(), searchBy.toArgs(), options.toArgs());
         return commandManager.submitNewCommand(GeoSearch, arguments, this::handleArrayResponse);
+    }
+
+    @Override
+    public CompletableFuture<Object[]> geosearch(
+            @NonNull GlideString key,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(options.toArgs())
+                        .toArray();
+        return commandManager.submitNewCommand(
+                GeoSearch, arguments, this::handleArrayOrNullResponseBinary);
     }
 
     @Override
@@ -3527,6 +3581,25 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> geosearch(
+            @NonNull GlideString key,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchOptions options,
+            @NonNull GeoSearchResultOptions resultOptions) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(options.toArgs())
+                        .add(resultOptions.toArgs())
+                        .toArray();
+        return commandManager.submitNewCommand(
+                GeoSearch, arguments, this::handleArrayOrNullResponseBinary);
+    }
+
+    @Override
     public CompletableFuture<Long> geosearchstore(
             @NonNull String destination,
             @NonNull String source,
@@ -3535,6 +3608,22 @@ public abstract class BaseClient
         String[] arguments =
                 concatenateArrays(
                         new String[] {destination, source}, searchFrom.toArgs(), searchBy.toArgs());
+        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geosearchstore(
+            @NonNull GlideString destination,
+            @NonNull GlideString source,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(source)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .toArray();
         return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
     }
 
@@ -3551,6 +3640,24 @@ public abstract class BaseClient
                         searchFrom.toArgs(),
                         searchBy.toArgs(),
                         resultOptions.toArgs());
+        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geosearchstore(
+            @NonNull GlideString destination,
+            @NonNull GlideString source,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchResultOptions resultOptions) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(source)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(resultOptions.toArgs())
+                        .toArray();
         return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
     }
 
@@ -3572,6 +3679,24 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> geosearchstore(
+            @NonNull GlideString destination,
+            @NonNull GlideString source,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchStoreOptions options) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(source)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(options.toArgs())
+                        .toArray();
+        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geosearchstore(
             @NonNull String destination,
             @NonNull String source,
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
@@ -3585,6 +3710,26 @@ public abstract class BaseClient
                         searchBy.toArgs(),
                         options.toArgs(),
                         resultOptions.toArgs());
+        return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> geosearchstore(
+            @NonNull GlideString destination,
+            @NonNull GlideString source,
+            @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
+            @NonNull GeoSearchShape searchBy,
+            @NonNull GeoSearchStoreOptions options,
+            @NonNull GeoSearchResultOptions resultOptions) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(source)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(options.toArgs())
+                        .add(resultOptions.toArgs())
+                        .toArray();
         return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
     }
 
