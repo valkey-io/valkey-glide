@@ -35,7 +35,7 @@ pub(crate) enum ExpectedReturnType<'a> {
     GeoSearchReturnType,
     SimpleString,
     XAutoClaimReturnType,
-    XInfoStreamReturnType,
+    XInfoStreamFullReturnType,
 }
 
 pub(crate) fn convert_to_expected_type(
@@ -828,133 +828,126 @@ pub(crate) fn convert_to_expected_type(
         - Additionally we convert some map's values:
           - "entries", "first-entry" and "last-entry" value - to a `Map<str, str[][]>` (similar to `XREAD`)
               no nested maps due to duplicating keys - see example
-        Using `XInfoStreamReturnType` recursively for maps' value type.
+        Using `XInfoStreamFullReturnType` recursively for maps' value type.
         */
-        ExpectedReturnType::XInfoStreamReturnType => {
-            dbg!(value.clone());
-            match value {
-                // a RESP3 response or uncompleted converstion of RESP2
-                Value::Map(map) => {
-                    dbg!("map");
-                    let result = map
-                    .into_iter()
-                    .map(|(key, inner_value)| {
-                        dbg!(key.clone());
-                        dbg!(inner_value.clone());
-
-                        let converted_key = convert_to_expected_type(key, Some(ExpectedReturnType::SimpleString))?;
-                        if converted_key == Value::SimpleString("groups".into())
-                        || converted_key == Value::SimpleString("consumers".into()) {
-                            let Value::Array(nested_array) = inner_value.clone() else {
-                                // "groups" could mapped to an integer if command submitted without `FULL` keyword
-                                if matches!(inner_value.clone(), Value::Int(_)) {
-                                    return Ok((converted_key, inner_value));
+        ExpectedReturnType::XInfoStreamFullReturnType => match value {
+            Value::Map(_) => Ok(value),  // Response is already in RESP3 format - no conversion needed
+            Value::Array(mut array) => {
+                // Response is in RESP2 format. We need to:
+                // - convert any consumer in the consumer array to a map, if there are any consumers
+                // - convert any group in the group array to a map, if there are any groups
+                // - convert the root of the response into a map
+                let groups_key = Value::SimpleString("groups".into());
+                let mut error_while_converting_key = false;
+                let groups_index = array
+                    .iter()
+                    .position(
+                        |key| {
+                            let res = convert_to_expected_type(key.clone(), Some(ExpectedReturnType::SimpleString));
+                            match res {
+                                Ok(converted_key) => {
+                                    converted_key == groups_key
+                                },
+                                Err(_) => {
+                                    error_while_converting_key = true;
+                                    false
                                 }
-                                return Err((ErrorKind::TypeError, "Incorrect value type received /////").into());
-                            };
-                            // array is empty or already converted (a RESP3 response) - do nothing
-                            if nested_array.is_empty() || matches!(nested_array[0], Value::Map(_)) {
-                                dbg!("already converted (a RESP3 response) - do nothing");
-                                Ok((converted_key, inner_value))
-                            } else {
-                                dbg!("else");
-                                //////////////
-                                let Value::Array(nested_array) = inner_value.clone() else {
-                                    return Err((ErrorKind::TypeError, "Incorrect value type received ----").into());
-                                };
-                                // nested array is a 2D array actually
-                                let converted_array: Vec<Value> = nested_array.into_iter().map(|elem| {
-                                    let Value::Array(mut nested_sub_array) = elem else {
-                                        return Err((ErrorKind::TypeError, "Incorrect value type received +++").into());
-                                    };
-                                    let mut converted = Vec::with_capacity(nested_sub_array.len() / 2);
-                                    // convert it to a map, while converting keys to `SimpleString`s
-                                    while !nested_sub_array.is_empty() {
-                                        let submap_key = convert_to_expected_type(nested_sub_array.remove(0), Some(ExpectedReturnType::SimpleString))?;
-                                        let submap_value = nested_sub_array.remove(0);
-                                        converted.push((submap_key, submap_value));
-                                    }
-                                    // and then recursevly process it
-                                    dbg!(converted.clone());
-                                    let converted = convert_to_expected_type(
-                                        Value::Map(converted),
-                                        Some(ExpectedReturnType::XInfoStreamReturnType))?;
-                                    dbg!(converted.clone());
-                                    Ok(converted)
-                                }).collect::<RedisResult<_>>()?;
-
-                                let converted_value = Value::Array(converted_array);
-                                Ok((converted_key, converted_value))
                             }
-                        } else if converted_key == Value::SimpleString("entries".into()) 
-                        || converted_key == Value::SimpleString("first-entry".into())
-                        || converted_key == Value::SimpleString("last-entry".into()) {
-                            dbg!("entries");
-                            dbg!(inner_value.clone());
-
-                            let converted_value = convert_to_expected_type(
-                                inner_value,
-                                Some(ExpectedReturnType::Map {
-                                    key_type: &Some(ExpectedReturnType::SimpleString),
-                                    value_type: &Some(ExpectedReturnType::ArrayOfPairs),
-                            }))?;
-                            Ok((converted_key, converted_value))
-                        } else {
-                            Ok((converted_key, inner_value))
                         }
-                    })
-                    .collect::<RedisResult<_>>();
+                    ).unwrap();
 
-                    let res = result.map(Value::Map);
-                    dbg!(res)
-                },
-                Value::Array(ref array) => {
-                    dbg!("array");
+                if error_while_converting_key {
+                    return Err((ErrorKind::TypeError, "Error while trying to compare keys").into());
+                }
 
-                    if (*array).is_empty() {
-                        dbg!("arr is empty");
-                        return Ok(value);
+                let Value::Array(mut groups) = array[groups_index].clone() else {
+                    return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                };
+
+                if groups.is_empty() {
+                    let converted_response = convert_to_expected_type(Value::Array(array), Some(ExpectedReturnType::Map {
+                        key_type: &Some(ExpectedReturnType::BulkString),
+                        value_type: &None,
+                    }))?;
+
+                    let Value::Map(map) = converted_response else {
+                        return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                    };
+
+                    return Ok(Value::Map(map));
+                }
+
+                let mut groups_as_maps = Vec::new();
+                for group_value in groups {
+                    let Value::Array(mut group) = group_value.clone() else {
+                        return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                    };
+
+                    let consumers_key = Value::SimpleString("consumers".into());
+                    let consumers_index = group
+                        .iter_mut()
+                        .position(
+                            |key| {
+                                let res = convert_to_expected_type(key.clone(), Some(ExpectedReturnType::SimpleString));
+                                match res {
+                                    Ok(converted_key) => {
+                                        converted_key == consumers_key
+                                    },
+                                    Err(_) => {
+                                        error_while_converting_key = true;
+                                        false
+                                    }
+                                }
+                            }
+                        ).unwrap();
+
+                    if error_while_converting_key {
+                        return Err((ErrorKind::TypeError, "Error while trying to compare keys").into());
                     }
 
-                    if (*array).len() == 2 {
-                        dbg!("arr of 2 - single entry");
-                        let converted = convert_to_expected_type(
-                            value,
-                            Some(ExpectedReturnType::Map {
-                                key_type: &Some(ExpectedReturnType::SimpleString),
-                                value_type: &Some(ExpectedReturnType::ArrayOfPairs),
-                        }))?;
-                        dbg!(converted.clone());
-                        return Ok(converted);
+                    let Value::Array(ref consumers) = group[consumers_index] else {
+                        return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                    };
+
+                    if consumers.is_empty() {
+                        groups_as_maps.push(
+                            convert_to_expected_type(Value::Array(group.clone()), Some(ExpectedReturnType::Map {
+                                key_type: &Some(ExpectedReturnType::BulkString),
+                                value_type: &None,
+                            }))?
+                        );
+                        continue;
                     }
 
-                    let map = match array.first() {
-                        Some(Value::Array(_)) => {
-                            dbg!("do nothing");
-                            Ok(value)
-                        },
-                        _ => {
-                            // convert array to a map
-                            let mmap = convert_array_to_map_by_type(
-                                (*array).clone(),
-                                Some(ExpectedReturnType::SimpleString),
-                                Some(ExpectedReturnType::XInfoStreamReturnType));
-                            // and then recursevly traverse it to convert nested things
-                            convert_to_expected_type(mmap?, Some(ExpectedReturnType::XInfoStreamReturnType))
-                        }
-                    }?;
-                    dbg!(map.clone());
-                    Ok(map)
-                },
-                Value::Int(_) | Value::BulkString(_) | Value::SimpleString(_)
-                | Value::VerbatimString { .. } | Value::Nil => Ok(value),
-                _ => Err((
-                    ErrorKind::TypeError,
-                    "Response couldn't be converted============",
-                    format!("(response was {:?})", get_value_type(&value)),
-                )
-                    .into()),
+                    let mut consumers_as_maps = Vec::new();
+                    for consumer in consumers {
+                        consumers_as_maps.push(convert_to_expected_type(consumer.clone(), Some(ExpectedReturnType::Map {
+                            key_type: &Some(ExpectedReturnType::BulkString),
+                            value_type: &None,
+                        }))?);
+                    }
+
+                    groups[consumers_index] = Value::Array(consumers_as_maps);
+                }
+
+                array[groups_index] = Value::Array(groups_as_maps);
+                let converted_response = convert_to_expected_type(Value::Array(array.to_vec()), Some(ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::BulkString),
+                    value_type: &None,
+                }))?;
+
+                let Value::Map(map) = converted_response else {
+                    return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                };
+
+                Ok(Value::Map(map))
             }
+            _ => Err((
+                ErrorKind::TypeError,
+                "Response couldn't be converted to XInfoStreamFullReturnType",
+                format!("(response was {:?})", get_value_type(&value)),
+            )
+                .into()),
         }
     }
 }
@@ -1308,7 +1301,17 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
                 None
             }
         }
-        b"XINFO STREAM" => Some(ExpectedReturnType::XInfoStreamReturnType),
+        b"XINFO STREAM" => {
+            if cmd.position(b"FULL").is_some()
+            {
+                Some(ExpectedReturnType::XInfoStreamFullReturnType)
+            } else {
+                Some(ExpectedReturnType::Map {
+                    key_type: &Some(ExpectedReturnType::BulkString),
+                    value_type: &None,
+                })
+            }
+        }
         _ => None,
     }
 }
@@ -1337,6 +1340,33 @@ pub(crate) fn get_value_type<'a>(value: &Value) -> &'a str {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn xinfo_stream_expected_return_type() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XINFO").arg("STREAM").arg("key")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::SimpleString),
+                value: &None
+            })
+        ));
+
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XINFO").arg("STREAM").arg("key").arg("FULL")),
+            Some(ExpectedReturnType::Map {
+                key_type: &Some(ExpectedReturnType::SimpleString),
+                value: &None
+            })
+        ));
+    }
+
+    #[test]
+    fn convert_xinfo_stream() {
+        assert!(matches!(
+            expected_type_for_cmd(redis::cmd("XINFO").arg("key")),
+            Some(ExpectedReturnType::XInfoStreamFullReturnType)
+        ));
+    }
 
     #[test]
     fn xinfo_groups_xinfo_consumers_expected_return_type() {
