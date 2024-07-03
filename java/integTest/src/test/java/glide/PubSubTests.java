@@ -222,19 +222,11 @@ public class PubSubTests {
     //  meanwhile, all pubsubMessages are delivered.
     //  debug this and add checks for `publish` return value
 
-    // TODO: remove once fixed
-    private void skipTestsOnMac() {
-        assumeFalse(
-                System.getProperty("os.name").toLowerCase().contains("mac"),
-                "PubSub doesn't work on mac OS");
-    }
-
     /** Similar to `test_pubsub_exact_happy_path` in python client tests. */
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
     @MethodSource("getTestScenarios")
     public void exact_happy_path(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         String channel = UUID.randomUUID().toString();
         String message = UUID.randomUUID().toString();
         var subscriptions = Map.of(exact(standalone), Set.of(channel));
@@ -256,7 +248,6 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
     @MethodSource("getTestScenarios")
     public void exact_happy_path_many_channels(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         int numChannels = 256;
         int messagesPerChannel = 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
@@ -293,7 +284,6 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void sharded_pubsub(MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        skipTestsOnMac();
 
         String channel = UUID.randomUUID().toString();
         String pubsubMessage = UUID.randomUUID().toString();
@@ -316,7 +306,6 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void sharded_pubsub_many_channels(MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        skipTestsOnMac();
 
         int numChannels = 256;
         int pubsubMessagesPerChannel = 256;
@@ -355,7 +344,6 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
     @MethodSource("getTestScenarios")
     public void pattern(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         String prefix = "channel.";
         String pattern = prefix + "*";
         Map<String, String> message2channels =
@@ -392,7 +380,6 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
     @MethodSource("getTestScenarios")
     public void pattern_many_channels(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         String prefix = "channel.";
         String pattern = prefix + "*";
         int numChannels = 256;
@@ -431,7 +418,6 @@ public class PubSubTests {
     @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
     @MethodSource("getTestScenarios")
     public void combined_exact_and_pattern_one_client(boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         String prefix = "channel.";
         String pattern = prefix + "*";
         int numChannels = 256;
@@ -483,7 +469,6 @@ public class PubSubTests {
     @MethodSource("getTestScenarios")
     public void combined_exact_and_pattern_multiple_clients(
             boolean standalone, MessageReadMethod method) {
-        skipTestsOnMac();
         String prefix = "channel.";
         String pattern = prefix + "*";
         int numChannels = 256;
@@ -553,7 +538,6 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void combined_exact_pattern_and_sharded_one_client(MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        skipTestsOnMac();
 
         String prefix = "channel.";
         String pattern = prefix + "*";
@@ -614,7 +598,6 @@ public class PubSubTests {
     @EnumSource(MessageReadMethod.class)
     public void combined_exact_pattern_and_sharded_multi_client(MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        skipTestsOnMac();
 
         String prefix = "channel.";
         String pattern = prefix + "*";
@@ -731,7 +714,6 @@ public class PubSubTests {
     @ValueSource(booleans = {true, false})
     public void three_publishing_clients_same_name_with_sharded_no_callback(boolean sync) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        skipTestsOnMac();
 
         MessageReadMethod method = sync ? MessageReadMethod.Sync : MessageReadMethod.Async;
         String channel = UUID.randomUUID().toString();
@@ -789,7 +771,6 @@ public class PubSubTests {
     @Test
     public void three_publishing_clients_same_name_with_sharded_with_callback() {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        skipTestsOnMac();
 
         String channel = UUID.randomUUID().toString();
         var exactMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
@@ -839,7 +820,6 @@ public class PubSubTests {
     @SneakyThrows
     @Test
     public void error_cases() {
-        skipTestsOnMac();
         // client isn't configured with subscriptions
         var client = createClient(true);
         assertThrows(ConfigurationError.class, client::tryGetPubSubMessage);
@@ -874,7 +854,6 @@ public class PubSubTests {
     @MethodSource("getTestScenarios")
     public void transaction_with_all_types_of_messages(boolean standalone, MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-        skipTestsOnMac();
         assumeTrue(
                 standalone, // TODO activate tests after fix
                 "Test doesn't work on cluster due to Cross Slot error, probably a bug in `redis-rs`");
