@@ -7,8 +7,7 @@ use crate::cluster_scan_container::get_cluster_scan_cursor;
 use crate::connection_request::ConnectionRequest;
 use crate::errors::{error_message, error_type, RequestErrorType};
 use crate::redis_request::{
-    command, redis_request, ClusterScan, Command, RedisRequest, Routes, ScriptInvocation,
-    SlotTypes, Transaction,
+    command, redis_request, ClusterScan, Command, RedisRequest, Routes, SlotTypes, Transaction,
 };
 use crate::response;
 use crate::response::Response;
