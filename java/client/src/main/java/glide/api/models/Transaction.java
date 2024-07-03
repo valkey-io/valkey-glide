@@ -179,7 +179,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
      *     </code> indicates the start of the search.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
-     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
+     *     the <code>cursor
      *     </code> returned on the last iteration of the scan.<br>
      *     The second element is always an <code>Array</code> of matched keys from the database.
      */
@@ -196,7 +197,8 @@ public class Transaction extends BaseTransaction<Transaction> {
      *     </code> indicates the start of the search.
      * @param options The {@link ScanOptions}.
      * @return Command Response - An <code>Array</code> of <code>Objects</code>. The first element is
-     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     always the <code>cursor</code> for the next iteration of results. <code>"0"</code> will be
+     *     the <code>cursor
      *     </code> returned on the last iteration of the scan.<br>
      *     The second element is always an <code>Array</code> of matched keys from the database.
      */
