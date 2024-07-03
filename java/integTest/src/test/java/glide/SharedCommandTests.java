@@ -9002,6 +9002,7 @@ public class SharedCommandTests {
         String key1 = "{key}-1" + UUID.randomUUID();
         String key2 = "{key}-2" + UUID.randomUUID();
         String[] members = {"Catania", "Palermo", "edge2", "edge1"};
+        Set<String> members_set = Set.of(members);
         GeospatialData[] members_coordinates = {
             new GeospatialData(15.087269, 37.502669),
             new GeospatialData(13.361389, 38.115556),
@@ -9053,6 +9054,16 @@ public class SharedCommandTests {
                         .get());
 
         // Search by box, unit: km, from a geospatial data point
+        assertTrue(
+                members_set.containsAll(
+                        Set.of(
+                                client
+                                        .geosearch(
+                                                key1,
+                                                new CoordOrigin(new GeospatialData(15, 37)),
+                                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                                        .get())));
+
         assertArrayEquals(
                 members,
                 client
@@ -9150,6 +9161,18 @@ public class SharedCommandTests {
                                 new MemberOrigin("Catania"),
                                 new GeoSearchShape(meters_radius, GeoUnit.METERS),
                                 new GeoSearchResultOptions(SortOrder.DESC))
+                        .get());
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {"Palermo", new Object[] {3479099956230698L}},
+                    new Object[] {"Catania", new Object[] {3479447370796909L}},
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                GeoSearchOptions.builder().withhash().build())
                         .get());
 
         // Test search by radius, unit: miles, from geospatial data
@@ -9260,6 +9283,7 @@ public class SharedCommandTests {
         GlideString key1 = gs("{key}-1" + UUID.randomUUID());
         GlideString key2 = gs("{key}-2" + UUID.randomUUID());
         GlideString[] members = {gs("Catania"), gs("Palermo"), gs("edge2"), gs("edge1")};
+        Set<GlideString> members_set = Set.of(members);
         GeospatialData[] members_coordinates = {
             new GeospatialData(15.087269, 37.502669),
             new GeospatialData(13.361389, 38.115556),
@@ -9311,6 +9335,16 @@ public class SharedCommandTests {
                         .get());
 
         // Search by box, unit: km, from a geospatial data point
+        assertTrue(
+                members_set.containsAll(
+                        Set.of(
+                                client
+                                        .geosearch(
+                                                key1,
+                                                new CoordOrigin(new GeospatialData(15, 37)),
+                                                new GeoSearchShape(400, 400, GeoUnit.KILOMETERS))
+                                        .get())));
+
         assertArrayEquals(
                 members,
                 client
@@ -9410,6 +9444,18 @@ public class SharedCommandTests {
                                 new GeoSearchResultOptions(SortOrder.DESC))
                         .get());
 
+        assertDeepEquals(
+                new Object[] {
+                    new Object[] {gs("Palermo"), new Object[] {3479099956230698L}},
+                    new Object[] {gs("Catania"), new Object[] {3479447370796909L}},
+                },
+                client
+                        .geosearch(
+                                key1,
+                                new MemberOriginBinary(gs("Catania")),
+                                new GeoSearchShape(meters_radius, GeoUnit.METERS),
+                                GeoSearchOptions.builder().withhash().build())
+                        .get());
         // Test search by radius, unit: miles, from geospatial data
         assertArrayEquals(
                 new GlideString[] {gs("edge1"), gs("edge2"), gs("Palermo"), gs("Catania")},
