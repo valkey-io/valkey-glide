@@ -1,8 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.geospatial;
 
-import static glide.api.models.GlideString.gs;
-
 import glide.api.commands.GeospatialIndicesBaseCommands;
 import glide.api.models.GlideString;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +29,6 @@ public final class GeoSearchOrigin {
     public interface SearchOrigin {
         /** Convert to command arguments according to the Valkey API. */
         String[] toArgs();
-
-        /** Convert to command arguments according to the Valkey API. */
-        public GlideString[] toGlideStringArgs();
     }
 
     /** The search origin represented by a {@link GeospatialData} position. */
@@ -49,17 +44,6 @@ public final class GeoSearchOrigin {
          */
         public String[] toArgs() {
             return ArrayUtils.addAll(new String[] {FROMLONLAT_VALKEY_API}, position.toArgs());
-        }
-
-        /**
-         * Converts GeoSearchOrigin into a GlideString[].
-         *
-         * @return GlideString[] An array containing arguments corresponding to the starting point of
-         *     the query.
-         */
-        public GlideString[] toGlideStringArgs() {
-            return ArrayUtils.addAll(
-                    new GlideString[] {gs(FROMLONLAT_VALKEY_API)}, position.toGlideStringArgs());
         }
     }
 
@@ -77,16 +61,6 @@ public final class GeoSearchOrigin {
         public String[] toArgs() {
             return new String[] {FROMMEMBER_VALKEY_API, member};
         }
-
-        /**
-         * Converts GeoSearchOrigin into a GlideString[].
-         *
-         * @return GlideString[] An array containing arguments corresponding to the starting point of
-         *     the query.
-         */
-        public GlideString[] toGlideStringArgs() {
-            return new GlideString[] {gs(FROMMEMBER_VALKEY_API), gs(member)};
-        }
     }
 
     /** The search origin represented by an existing member. */
@@ -102,16 +76,6 @@ public final class GeoSearchOrigin {
          */
         public String[] toArgs() {
             return new String[] {FROMMEMBER_VALKEY_API, member.toString()};
-        }
-
-        /**
-         * Converts GeoSearchOrigin into a GlideString[].
-         *
-         * @return GlideString[] An array containing arguments corresponding to the starting point of
-         *     the query.
-         */
-        public GlideString[] toGlideStringArgs() {
-            return new GlideString[] {gs(FROMMEMBER_VALKEY_API), member};
         }
     }
 }

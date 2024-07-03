@@ -1,10 +1,7 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.geospatial;
 
-import static glide.api.models.GlideString.gs;
-
 import glide.api.commands.GeospatialIndicesBaseCommands;
-import glide.api.models.GlideString;
 import lombok.Getter;
 
 /**
@@ -96,29 +93,6 @@ public final class GeoSearchShape {
                 };
             default:
                 return new String[] {};
-        }
-    }
-
-    /**
-     * Converts GeoSearchShape into a GlideString[].
-     *
-     * @return GlideString[] An array containing arguments corresponding to the shape to search by.
-     */
-    public GlideString[] toGlideStringArgs() {
-        switch (shape) {
-            case BYRADIUS:
-                return new GlideString[] {
-                    gs(shape.toString()), gs(Double.toString(radius)), gs(unit.getValkeyAPI())
-                };
-            case BYBOX:
-                return new GlideString[] {
-                    gs(shape.toString()),
-                    gs(Double.toString(width)),
-                    gs(Double.toString(height)),
-                    gs(unit.getValkeyAPI())
-                };
-            default:
-                return new GlideString[] {};
         }
     }
 }

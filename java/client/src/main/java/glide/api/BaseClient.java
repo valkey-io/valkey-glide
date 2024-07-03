@@ -195,6 +195,7 @@ import glide.api.commands.SortedSetBaseCommands;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.commands.StringBaseCommands;
 import glide.api.commands.TransactionsBaseCommands;
+import glide.api.models.ArgsBuilder;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Script;
@@ -2735,10 +2736,12 @@ public abstract class BaseClient
             @NonNull Map<GlideString, GeospatialData> membersToGeospatialData,
             @NonNull GeoAddOptions options) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key},
-                        options.toGlideStringArgs(),
-                        mapGeoDataToGlideStringArray(membersToGeospatialData));
+                new ArgsBuilder()
+                        .add(key)
+                        .add(options.toArgs())
+                        .add(mapGeoDataToGlideStringArray(membersToGeospatialData))
+                        .toArray();
+
         return commandManager.submitNewCommand(GeoAdd, arguments, this::handleLongResponse);
     }
 
@@ -3490,8 +3493,8 @@ public abstract class BaseClient
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key}, searchFrom.toGlideStringArgs(), searchBy.toGlideStringArgs());
+                new ArgsBuilder().add(key).add(searchFrom.toArgs()).add(searchBy.toArgs()).toArray();
+
         return commandManager.submitNewCommand(
                 GeoSearch,
                 arguments,
@@ -3518,11 +3521,13 @@ public abstract class BaseClient
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key},
-                        searchFrom.toGlideStringArgs(),
-                        searchBy.toGlideStringArgs(),
-                        resultOptions.toGlideStringArgs());
+                new ArgsBuilder()
+                        .add(key)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(resultOptions.toArgs())
+                        .toArray();
+
         return commandManager.submitNewCommand(
                 GeoSearch,
                 arguments,
@@ -3548,11 +3553,12 @@ public abstract class BaseClient
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchOptions options) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key},
-                        searchFrom.toGlideStringArgs(),
-                        searchBy.toGlideStringArgs(),
-                        options.toGlideStringArgs());
+                new ArgsBuilder()
+                        .add(key)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(options.toArgs())
+                        .toArray();
         return commandManager.submitNewCommand(
                 GeoSearch, arguments, this::handleArrayOrNullResponseBinary);
     }
@@ -3582,12 +3588,13 @@ public abstract class BaseClient
             @NonNull GeoSearchOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key},
-                        searchFrom.toGlideStringArgs(),
-                        searchBy.toGlideStringArgs(),
-                        options.toGlideStringArgs(),
-                        resultOptions.toGlideStringArgs());
+                new ArgsBuilder()
+                        .add(key)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(options.toArgs())
+                        .add(resultOptions.toArgs())
+                        .toArray();
         return commandManager.submitNewCommand(
                 GeoSearch, arguments, this::handleArrayOrNullResponseBinary);
     }
@@ -3611,10 +3618,12 @@ public abstract class BaseClient
             @NonNull GeoSearchOrigin.SearchOrigin searchFrom,
             @NonNull GeoSearchShape searchBy) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {destination, source},
-                        searchFrom.toGlideStringArgs(),
-                        searchBy.toGlideStringArgs());
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(source)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .toArray();
         return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
     }
 
@@ -3642,11 +3651,13 @@ public abstract class BaseClient
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchResultOptions resultOptions) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {destination, source},
-                        searchFrom.toGlideStringArgs(),
-                        searchBy.toGlideStringArgs(),
-                        resultOptions.toGlideStringArgs());
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(source)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(resultOptions.toArgs())
+                        .toArray();
         return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
     }
 
@@ -3674,11 +3685,13 @@ public abstract class BaseClient
             @NonNull GeoSearchShape searchBy,
             @NonNull GeoSearchStoreOptions options) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {destination, source},
-                        searchFrom.toGlideStringArgs(),
-                        searchBy.toGlideStringArgs(),
-                        options.toGlideStringArgs());
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(source)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(options.toArgs())
+                        .toArray();
         return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
     }
 
@@ -3709,12 +3722,14 @@ public abstract class BaseClient
             @NonNull GeoSearchStoreOptions options,
             @NonNull GeoSearchResultOptions resultOptions) {
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {destination, source},
-                        searchFrom.toGlideStringArgs(),
-                        searchBy.toGlideStringArgs(),
-                        options.toGlideStringArgs(),
-                        resultOptions.toGlideStringArgs());
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(source)
+                        .add(searchFrom.toArgs())
+                        .add(searchBy.toArgs())
+                        .add(options.toArgs())
+                        .add(resultOptions.toArgs())
+                        .toArray();
         return commandManager.submitNewCommand(GeoSearchStore, arguments, this::handleLongResponse);
     }
 
