@@ -844,8 +844,8 @@ public class TransactionTests {
         transaction.xgroupSetId("key", "group", "id");
         results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id")));
 
-        transaction.xgroupSetId("key", "group", "id", "1-1");
-        results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id", "ENTRIESREAD", "1-1")));
+        transaction.xgroupSetId("key", "group", "id", 1);
+        results.add(Pair.of(XGroupSetId, buildArgs("key", "group", "id", "ENTRIESREAD", "1")));
 
         transaction.xreadgroup(
                 Map.of("key", "id"),

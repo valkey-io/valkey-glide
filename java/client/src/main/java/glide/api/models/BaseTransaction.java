@@ -3685,10 +3685,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - <code>OK</code>.
      */
     public <ArgType> T xgroupSetId(
-            @NonNull ArgType key,
-            @NonNull ArgType groupName,
-            @NonNull ArgType id,
-            @NonNull ArgType entriesRead) {
+            @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id, long entriesRead) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
