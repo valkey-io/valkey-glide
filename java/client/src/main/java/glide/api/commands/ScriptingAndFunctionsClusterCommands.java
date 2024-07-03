@@ -13,8 +13,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands and transactions for the "Scripting and Function" group for a cluster client.
  *
- * @see <a href="https://valkey.io/commands/?group=scripting">Scripting and Function
- *     Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=scripting">Scripting and Function Commands</a>
  */
 public interface ScriptingAndFunctionsClusterCommands {
 
@@ -381,8 +380,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @return <code>OK</code>.
      * @example
@@ -398,8 +396,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
      * @return <code>OK</code>.
@@ -415,8 +412,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Restores libraries from the serialized payload returned by {@link #functionDump(Route)}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -433,8 +429,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Restores libraries from the serialized payload returned by {@link #functionDump(Route)}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
      * @param route Specifies the routing configuration for the command. The client will route the

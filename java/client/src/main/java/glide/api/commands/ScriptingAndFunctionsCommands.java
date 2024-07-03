@@ -12,8 +12,7 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Scripting and Function" group for a standalone
  * client.
  *
- * @see <a href="https://valkey.io/commands/?group=scripting">Scripting and Function
- *     Commands</a>
+ * @see <a href="https://valkey.io/commands/?group=scripting">Scripting and Function Commands</a>
  */
 public interface ScriptingAndFunctionsCommands {
 
@@ -182,8 +181,7 @@ public interface ScriptingAndFunctionsCommands {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @return <code>OK</code>.
      * @example
@@ -198,8 +196,7 @@ public interface ScriptingAndFunctionsCommands {
      * Restores libraries from the serialized payload returned by {@link #functionDump()}..
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
      * @return <code>OK</code>.
