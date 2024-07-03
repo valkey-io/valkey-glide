@@ -5422,6 +5422,135 @@ public class SharedCommandTests {
         }
     }
 
+    // TODO: uncomment once required methods have binary version implementations (xgroupCreate and xgroupCreateConsumer)
+//     @SneakyThrows
+//     @ParameterizedTest(autoCloseArguments = false)
+//     @MethodSource("getClients")
+//     public void xreadgroup_binary_return_failures(BaseClient client) {
+//         GlideString key = gs("{key}:1" + UUID.randomUUID());
+//         GlideString nonStreamKey = gs("{key}:3" + UUID.randomUUID());
+//         GlideString groupName = gs("group" + UUID.randomUUID());
+//         GlideString zeroStreamId = gs("0");
+//         GlideString consumerName = gs("consumer" + UUID.randomUUID());
+
+//         // setup first entries in streams key1 and key2
+//         GlideString timestamp_1_1 =
+//                 client.xadd(key, Map.of(gs("f1"), gs("v1")), StreamAddOptions.builder().id("1-1").build()).get();
+//         assertNotNull(timestamp_1_1);
+
+//         // create group and consumer for the group
+//         assertEquals(
+//                 OK,
+//                 client
+//                         .xgroupCreate(
+//                                 key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+//                         .get());
+//         assertTrue(client.xgroupCreateConsumer(key, groupName, consumerName).get());
+
+//         // First key exists, but it is not a stream
+//         assertEquals(OK, client.set(nonStreamKey, gs("bar")).get());
+//         ExecutionException executionException =
+//                 assertThrows(
+//                         ExecutionException.class,
+//                         () ->
+//                                 client
+//                                         .xreadgroupBinary(
+//                                                 Map.of(nonStreamKey, timestamp_1_1, key, timestamp_1_1),
+//                                                 groupName,
+//                                                 consumerName)
+//                                         .get());
+//         assertInstanceOf(RequestException.class, executionException.getCause());
+
+//         // Second key exists, but it is not a stream
+//         executionException =
+//                 assertThrows(
+//                         ExecutionException.class,
+//                         () ->
+//                                 client
+//                                         .xreadgroupBinary(
+//                                                 Map.of(key, timestamp_1_1, nonStreamKey, timestamp_1_1),
+//                                                 groupName,
+//                                                 consumerName)
+//                                         .get());
+//         assertInstanceOf(RequestException.class, executionException.getCause());
+
+//         // group doesn't exists, throws a request error with "NOGROUP"
+//         executionException =
+//                 assertThrows(
+//                         ExecutionException.class,
+//                         () -> client.xreadgroupBinary(Map.of(key, timestamp_1_1), gs("not_a_group"), consumerName).get());
+//         assertInstanceOf(RequestException.class, executionException.getCause());
+//         assertTrue(executionException.getMessage().contains("NOGROUP"));
+
+//         // consumer doesn't exist and will be created
+//         var emptyResult =
+//                 client.xreadgroupBinary(Map.of(key, timestamp_1_1), groupName, gs("non_existing_consumer")).get();
+//         // no available pending messages
+//         assertEquals(0, emptyResult.get(key).size());
+
+//         try (var testClient =
+//                 client instanceof RedisClient
+//                         ? RedisClient.CreateClient(commonClientConfig().build()).get()
+//                         : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+//             GlideString timeoutKey = gs("{key}:2" + UUID.randomUUID());
+//             GlideString timeoutGroupName = gs("group" + UUID.randomUUID());
+//             GlideString timeoutConsumerName = gs("consumer" + UUID.randomUUID());
+
+//             // Create a group read with the test client
+//             // add a single stream entry and consumer
+//             // the first call to ">" will return an update consumer group
+//             // the second call to ">" will block waiting for new entries
+//             // using anything other than ">" won't block, but will return the empty consumer result
+//             // see: https://github.com/redis/redis/issues/6587
+//             assertEquals(
+//                     OK,
+//                     testClient
+//                             .xgroupCreate(
+//                                     timeoutKey,
+//                                     timeoutGroupName,
+//                                     zeroStreamId,
+//                                     StreamGroupOptions.builder().makeStream().build())
+//                             .get());
+//             assertTrue(
+//                     testClient.xgroupCreateConsumer(timeoutKey, timeoutGroupName, timeoutConsumerName).get());
+//             GlideString streamid_1 = testClient.xadd(timeoutKey, Map.of(gs("field1"), gs("value1"))).get();
+//             assertNotNull(streamid_1);
+
+//             // read the entire stream for the consumer and mark messages as pending
+//             var result_1 =
+//                     testClient
+//                             .xreadgroupBinary(Map.of(timeoutKey, gs(">")), timeoutGroupName, timeoutConsumerName)
+//                             .get();
+//             // returns a null result on the key
+//             assertNull(result_1.get(key));
+
+//             // subsequent calls to read ">" will block:
+//             // ensure that command doesn't time out even if timeout > request timeout
+//             long oneSecondInMS = 1000L;
+//             assertNull(
+//                     testClient
+//                             .xreadgroupBinary(
+//                                     Map.of(timeoutKey, gs(">")),
+//                                     timeoutGroupName,
+//                                     timeoutConsumerName,
+//                                     StreamReadGroupOptions.builder().block(oneSecondInMS).build())
+//                             .get());
+
+//             // with 0 timeout (no timeout) should never time out,
+//             // but we wrap the test with timeout to avoid test failing or stuck forever
+//             assertThrows(
+//                     TimeoutException.class, // <- future timeout, not command timeout
+//                     () ->
+//                             testClient
+//                                     .xreadgroupBinary(
+//                                             Map.of(timeoutKey, gs(">")),
+//                                             timeoutGroupName,
+//                                             timeoutConsumerName,
+//                                             StreamReadGroupOptions.builder().block(0L).build())
+//                                     .get(3, TimeUnit.SECONDS));
+//         }
+//     }
+
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")

@@ -2436,6 +2436,12 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadgroupBinary(
+            @NonNull Map<GlideString, GlideString> keysAndIds, @NonNull GlideString group, @NonNull GlideString consumer) {
+        return xreadgroupBinary(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
+    }
+
+    @Override
     public CompletableFuture<Map<String, Map<String, String[][]>>> xreadgroup(
             @NonNull Map<String, String> keysAndIds,
             @NonNull String group,
@@ -2443,6 +2449,16 @@ public abstract class BaseClient
             @NonNull StreamReadGroupOptions options) {
         String[] arguments = options.toArgs(group, consumer, keysAndIds);
         return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadgroupBinary(
+            @NonNull Map<GlideString, GlideString> keysAndIds,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer,
+            @NonNull StreamReadGroupOptions options) {
+        GlideString[] arguments = options.toArgsBinary(group, consumer, keysAndIds);
+        return commandManager.submitNewCommand(XReadGroup, arguments, this::handleXReadResponseBinary);
     }
 
     @Override

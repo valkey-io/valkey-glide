@@ -13,6 +13,7 @@ import static glide.api.models.GlideString.gs;
 
 /**
  * Optional arguments for {@link StreamBaseCommands#xread(Map, StreamReadOptions)}
+ * and {@link StreamBaseCommands#xreadBinary(Map, StreamReadOptions)}
  *
  * @see <a href="https://valkey.io/commands/xread/">valkey.io</a>
  */

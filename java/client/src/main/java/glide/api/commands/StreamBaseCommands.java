@@ -796,6 +796,40 @@ public interface StreamBaseCommands {
      *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
      * @param group The consumer group name.
      * @param consumer The consumer name.
+     * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with stream
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     *      Returns <code>null</code> if there is no stream that can be served.
+     * @example
+     *     <pre>{@code
+     * // create a new stream at "mystream", with stream id "1-0"
+     * GlideString streamId = client.xadd(gs("mystream"), Map.of(gs("myfield"), gs("mydata")), StreamAddOptions.builder().id("1-0").build()).get();
+     * assert client.xgroupCreate(gs("mystream"), gs("mygroup"), gs("0-0")).get().equals("OK"); // create the consumer group "mygroup"
+     * Map<GlideString, Map<GlideString, GlideString[][]>> streamReadResponse = client.xreadgroupBinary(Map.of(gs("mystream"), gs(">")), gs("mygroup"), gs("myconsumer")).get();
+     * // Returns gs("mystream"): gs("1-0"): {{gs("myfield"), gs("mydata")}}
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }
+     * </pre>
+     */
+    CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadgroupBinary(
+            Map<GlideString, GlideString> keysAndIds, GlideString group, GlideString consumer);
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The consumer name.
      * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
      * @return A <code>{@literal Map<String, Map<String, String[][]>>}</code> with stream
      *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
@@ -822,6 +856,45 @@ public interface StreamBaseCommands {
             Map<String, String> keysAndIds,
             String group,
             String consumer,
+            StreamReadGroupOptions options);
+
+    /**
+     * Reads entries from the given streams owned by a consumer group.
+     *
+     * @apiNote When in cluster mode, all keys in <code>keysAndIds</code> must map to the same hash
+     *     slot.
+     * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a> for details.
+     * @param keysAndIds A <code>Map</code> of keys and entry ids to read from. The <code>
+     *     Map</code> is composed of a stream's key and the id of the entry after which the stream
+     *     will be read. Use the special id of <code>{@literal ">"}</code> to receive only new messages.
+     * @param group The consumer group name.
+     * @param consumer The consumer name.
+     * @param options Options detailing how to read the stream {@link StreamReadGroupOptions}.
+     * @return A <code>{@literal Map<GlideString, Map<GlideString, GlideString[][]>>}</code> with stream
+     *      keys, to <code>Map</code> of stream-ids, to an array of pairings with format <code>[[field, entry], [field, entry], ...]<code>.
+     *      Returns <code>null</code> if the {@link StreamReadGroupOptions#block} option is given and a timeout occurs, or if there is no stream that can be served.
+     * @example
+     *     <pre>{@code
+     * // create a new stream at "mystream", with stream id "1-0"
+     * GlideString streamId = client.xadd(gs("mystream"), Map.of(gs("myfield"), gs("mydata")), StreamAddOptions.builder().id("1-0").build()).get();
+     * assert client.xgroupCreate(gs("mystream"), gs("mygroup"), gs("0-0")).get().equals("OK"); // create the consumer group "mygroup"
+     * StreamReadGroupOptions options = StreamReadGroupOptions.builder().count(1).build(); // retrieves only a single message at a time
+     * Map<GlideString, Map<GlideString, GlideString[][]>> streamReadResponse = client.xreadgroupBinary(Map.of(gs("mystream"), ">"), gs("mygroup"), gs("myconsumer"), options).get();
+     * // Returns gs("mystream"): gs("1-0"): {{gs("myfield"), gs("mydata")}}
+     * for (var keyEntry : streamReadResponse.entrySet()) {
+     *     System.out.printf("Key: %s", keyEntry.getKey());
+     *     for (var streamEntry : keyEntry.getValue().entrySet()) {
+     *         Arrays.stream(streamEntry.getValue()).forEach(entity ->
+     *             System.out.printf("stream id: %s; field: %s; value: %s\n", streamEntry.getKey(), entity[0], entity[1])
+     *         );
+     *     }
+     * }
+     * </pre>
+     */
+    CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadgroupBinary(
+            Map<GlideString, GlideString> keysAndIds,
+            GlideString group,
+            GlideString consumer,
             StreamReadGroupOptions options);
 
     /**
@@ -856,7 +929,7 @@ public interface StreamBaseCommands {
      *     <pre>{@code
      * GlideString entryId = client.xadd(gs("mystream"), Map.of(gs("myfield"), gs("mydata")).get();
      * // read messages from streamId
-     * var readResult = client.xreadgroup(Map.of(gs("mystream"), entryId), gs("mygroup"), gs("my0consumer")).get();
+     * var readResult = client.xreadgroupBinary(Map.of(gs("mystream"), entryId), gs("mygroup"), gs("my0consumer")).get();
      * // acknowledge messages on stream
      * assert 1L == client.xack(gs("mystream"), gs("mygroup"), new GlideString[] {entryId}).get();
      * </pre>
