@@ -6,6 +6,7 @@ import static glide.api.models.GlideString.gs;
 import glide.api.commands.StreamBaseCommands;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -88,5 +89,25 @@ public class StreamReadOptions {
         optionArgs.addAll(entrySet.stream().map(Map.Entry::getValue).collect(Collectors.toList()));
 
         return optionArgs.toArray(new GlideString[0]);
+    }
+
+    /** 
+     * Converts options into a String[].
+     *
+     * @return String[]
+     */
+    public String[] toArgs() {
+        Map<String, String> emptyMap = new HashMap<>();
+        return toArgs(emptyMap);
+    }
+  
+    /** 
+     * Converts options into a GlideString[].
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toArgsBinary() {
+        Map<GlideString, GlideString> emptyMap = new HashMap<>();
+        return toArgsBinary(emptyMap);
     }
 }

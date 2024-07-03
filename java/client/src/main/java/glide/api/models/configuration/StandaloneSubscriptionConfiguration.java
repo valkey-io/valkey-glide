@@ -34,7 +34,7 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
     /**
      * Describes subscription modes for standalone client.
      *
-     * @see <a href="https://valkey.io/docs/topics/pubsub/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/docs/topics/pubsub/">valkey.io</a> for details.
      */
     public enum PubSubChannelMode implements ChannelMode {
         /** Use exact channel names. */

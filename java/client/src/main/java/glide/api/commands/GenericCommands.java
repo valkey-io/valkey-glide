@@ -5,6 +5,7 @@ import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
@@ -40,7 +41,7 @@ public interface GenericCommands {
     /**
      * Executes a transaction by processing the queued commands.
      *
-     * @see <a href="https://redis.io/topics/Transactions/">redis.io</a> for details on Redis
+     * @see <a href="https://redis.io/topics/Transactions/">valkey.io</a> for details on Redis
      *     Transactions.
      * @param transaction A {@link Transaction} object containing a list of commands to be executed.
      * @return A list of results corresponding to the execution of each command in the transaction.
@@ -65,7 +66,7 @@ public interface GenericCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
-     * @see <a href="https://redis.io/commands/move/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
      * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
@@ -83,7 +84,7 @@ public interface GenericCommands {
      * Move <code>key</code> from the currently selected database to the database specified by <code>
      * dbIndex</code>.
      *
-     * @see <a href="https://redis.io/commands/move/">redis.io</a> for more details.
+     * @see <a href="https://valkey.io/commands/move/">valkey.io</a> for more details.
      * @param key The key to move.
      * @param dbIndex The index of the database to move <code>key</code> to.
      * @return <code>true</code> if <code>key</code> was moved, or <code>false</code> if the <code>key
@@ -103,7 +104,7 @@ public interface GenericCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
@@ -125,7 +126,7 @@ public interface GenericCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
@@ -147,7 +148,7 @@ public interface GenericCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
@@ -167,7 +168,7 @@ public interface GenericCommands {
      * </code> key first if it already exists, otherwise performs no action.
      *
      * @since Redis 6.2.0 and above.
-     * @see <a href="https://redis.io/commands/copy/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/copy/">valkey.io</a> for details.
      * @param source The key to the source value.
      * @param destination The key where the value should be copied to.
      * @param destinationDB The alternative logical database index for the destination key.
@@ -342,4 +343,63 @@ public interface GenericCommands {
      */
     CompletableFuture<Long> sortStore(
             GlideString key, GlideString destination, SortOptionsBinary sortOptions);
+
+    /**
+     * Iterates incrementally over a database for matching keys.
+     *
+     * @see <a href="https://valkey.io/commands/scan/">valkey.io</a> for details.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the scan.<br>
+     *     The second element is always an <code>Array</code> of matched keys from the database.
+     * @example
+     *     <pre>{@code
+     * // Assume database contains a set with 200 keys
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *     result = client.scan(cursor, options).get();
+     *     cursor = result[0].toString();
+     *     Object[] stringResults = (Object[]) result[1];
+     *     String keyList = Arrays.stream(stringResults)
+     *         .map(obj -> (String)obj)
+     *         .collect(Collectors.joining(", "));
+     *     System.out.println("\nSCAN iteration: " + keyList);
+     * } while (!cursor.equals("0"));
+     * </pre>
+     */
+    CompletableFuture<Object[]> scan(String cursor);
+
+    /**
+     * Iterates incrementally over a database for matching keys.
+     *
+     * @see <a href="https://valkey.io/commands/scan/">valkey.io</a> for details.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @param options The {@link ScanOptions}.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the scan.<br>
+     *     The second element is always an <code>Array</code> of matched keys from the database.
+     * @example
+     *     <pre>{@code
+     * // Assume database contains a set with 200 keys
+     * String cursor = "0";
+     * Object[] result;
+     * // match keys on pattern *11*
+     * ScanOptions options = ScanOptions.builder().matchPattern("*11*").build();
+     * do {
+     *     result = client.scan(cursor, options).get();
+     *     cursor = result[0].toString();
+     *     Object[] stringResults = (Object[]) result[1];
+     *     String keyList = Arrays.stream(stringResults)
+     *         .map(obj -> (String)obj)
+     *         .collect(Collectors.joining(", "));
+     *     System.out.println("\nSCAN iteration: " + keyList);
+     * } while (!cursor.equals("0"));
+     * </pre>
+     */
+    CompletableFuture<Object[]> scan(String cursor, ScanOptions options);
 }
