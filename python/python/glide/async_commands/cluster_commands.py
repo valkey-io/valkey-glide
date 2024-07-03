@@ -484,6 +484,35 @@ class ClusterCommands(CoreCommands):
             ),
         )
 
+    async def function_kill(self, route: Optional[Route] = None) -> TOK:
+        """
+        Kills a function that is currently executing.
+        This command only terminates read-only functions.
+
+        See https://valkey.io/commands/function-kill/ for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to all primary nodes, unless `route` is provided,
+                in which case the client will route the command to the nodes defined by `route`.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_kill()
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionKill,
+                [],
+                route,
+            ),
+        )
+
     async def fcall_route(
         self,
         function: TEncodable,
@@ -498,7 +527,7 @@ class ClusterCommands(CoreCommands):
             function (TEncodable): The function name.
             arguments (Optional[List[TEncodable]]): A list of `function` arguments. `Arguments`
                 should not represent names of keys.
-            route (Optional[Route]): The command will be routed to a random primay node, unless `route` is provided, in which
+            route (Optional[Route]): The command will be routed to a random primary node, unless `route` is provided, in which
                 case the client will route the command to the nodes defined by `route`. Defaults to None.
 
         Returns:

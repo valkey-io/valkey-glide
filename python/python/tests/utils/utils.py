@@ -232,6 +232,31 @@ def generate_lua_lib_code(
         code += " }\n"
     return code
 
+def create_lua_lib_with_long_running_function(
+    lib_name: str, func_name: str, timeout: int, readonly: bool
+) -> str:
+    code = (f"#!lua name={lib_name}\n"
+    f"local function {lib_name}_{func_name}(keys, args)\n"
+    "  local started = tonumber(redis.pcall('time')[1])\n"
+    # fun fact - redis does no writes if 'no-writes' flag is set
+    "  redis.pcall('set', keys[1], 42)\n"
+    "  while (true) do\n"
+    "    local now = tonumber(redis.pcall('time')[1])\n"
+    f"    if now > started + {timeout} then\n"
+    f"      return 'Timed out {timeout} sec'\n"
+    "    end\n"
+    "  end\n"
+    "  return 'OK'\n"
+    "end\n"
+    "redis.register_function{\n"
+    f"function_name='{func_name}',\n"
+    f"callback={lib_name}_{func_name},\n"
+    )
+    if (readonly):
+        code += "flags={ 'no-writes' }\n"
+    code += "}"
+    print(code)
+    return code
 
 def check_function_list_response(
     response: TClusterResponse[TFunctionListResponse],
