@@ -26,6 +26,7 @@ from glide.async_commands.core import (
     ExpiryType,
     ExpiryTypeGetEx,
     FlushMode,
+    FunctionRestorePolicy,
     InfoSection,
     InsertPosition,
     UpdateOptions,
