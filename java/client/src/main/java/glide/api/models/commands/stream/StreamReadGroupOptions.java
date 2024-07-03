@@ -14,7 +14,7 @@ import lombok.experimental.SuperBuilder;
  * Optional arguments for {@link StreamBaseCommands#xreadgroup(Map, String, String,
  * StreamReadGroupOptions)}
  *
- * @see <a href="https://valkey.io/commands/xreadgroup/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a>
  */
 @SuperBuilder
 public final class StreamReadGroupOptions extends StreamReadOptions {

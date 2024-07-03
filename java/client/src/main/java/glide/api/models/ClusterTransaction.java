@@ -39,7 +39,7 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @since Redis 7.0 and above.
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
-     * @see <a href="https://valkey.io/commands/publish/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param channel The channel to publish the message on.
      * @param message The message to publish.
      * @return Command response - The number of clients that received the message.
