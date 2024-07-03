@@ -606,9 +606,9 @@ public abstract class BaseClient
      * @param <V> Value type.
      */
     @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
-    protected <V> Map<GlideString, V> handleMapOrNullResponseBinary(Response response) throws RedisException {
-        return handleRedisResponse(
-                Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+    protected <V> Map<GlideString, V> handleMapOrNullResponseBinary(Response response)
+            throws RedisException {
+        return handleRedisResponse(Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
     }
 
     /**
@@ -632,8 +632,8 @@ public abstract class BaseClient
      * @param response A Protobuf response
      * @return A map of a map of <code>GlideString[][]</code>
      */
-    protected Map<GlideString, Map<GlideString, GlideString[][]>> handleXReadResponseBinary(Response response)
-            throws RedisException {
+    protected Map<GlideString, Map<GlideString, GlideString[][]>> handleXReadResponseBinary(
+            Response response) throws RedisException {
         Map<GlideString, Object> mapResponse = handleMapOrNullResponseBinary(response);
         if (mapResponse == null) {
             return null;
@@ -642,7 +642,9 @@ public abstract class BaseClient
                 .collect(
                         Collectors.toMap(
                                 Map.Entry::getKey,
-                                e -> castMapOf2DArray((Map<GlideString, Object[][]>) e.getValue(), GlideString.class)));
+                                e ->
+                                        castMapOf2DArray(
+                                                (Map<GlideString, Object[][]>) e.getValue(), GlideString.class)));
     }
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
@@ -2232,6 +2234,7 @@ public abstract class BaseClient
             @NonNull Map<String, String> keysAndIds) {
         return xread(keysAndIds, StreamReadOptions.builder().build());
     }
+
     @Override
     public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
             @NonNull Map<GlideString, GlideString> keysAndIds) {
@@ -2437,7 +2440,9 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadgroupBinary(
-            @NonNull Map<GlideString, GlideString> keysAndIds, @NonNull GlideString group, @NonNull GlideString consumer) {
+            @NonNull Map<GlideString, GlideString> keysAndIds,
+            @NonNull GlideString group,
+            @NonNull GlideString consumer) {
         return xreadgroupBinary(keysAndIds, group, consumer, StreamReadGroupOptions.builder().build());
     }
 

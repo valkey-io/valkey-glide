@@ -1,19 +1,20 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
 
+import static glide.api.models.GlideString.gs;
+
 import glide.api.commands.StreamBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.experimental.SuperBuilder;
-import glide.api.models.GlideString;
-import static glide.api.models.GlideString.gs;
 
 /**
- * Optional arguments for {@link StreamBaseCommands#xread(Map, StreamReadOptions)}
- * and {@link StreamBaseCommands#xreadBinary(Map, StreamReadOptions)}
+ * Optional arguments for {@link StreamBaseCommands#xread(Map, StreamReadOptions)} and {@link
+ * StreamBaseCommands#xreadBinary(Map, StreamReadOptions)}
  *
  * @see <a href="https://valkey.io/commands/xread/">valkey.io</a>
  */

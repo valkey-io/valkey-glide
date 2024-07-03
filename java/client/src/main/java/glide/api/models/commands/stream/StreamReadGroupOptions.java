@@ -1,20 +1,21 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.models.commands.stream;
 
+import static glide.api.models.GlideString.gs;
+
 import glide.api.commands.StreamBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.experimental.SuperBuilder;
-import glide.api.models.GlideString;
-import static glide.api.models.GlideString.gs;
 
 /**
  * Optional arguments for {@link StreamBaseCommands#xreadgroup(Map, String, String,
- * StreamReadGroupOptions)} and {@link StreamBaseCommands#xreadgroupBinary(Map, GlideString, GlideString,
- * StreamReadGroupOptions)}
+ * StreamReadGroupOptions)} and {@link StreamBaseCommands#xreadgroupBinary(Map, GlideString,
+ * GlideString, StreamReadGroupOptions)}
  *
  * @see <a href="https://valkey.io/commands/xreadgroup/">redis.io</a>
  */
@@ -74,12 +75,13 @@ public final class StreamReadGroupOptions extends StreamReadOptions {
     }
 
     /**
-     * Converts options and the key-to-id input for {@link StreamBaseCommands#xreadgroupBinary(Map, GlideString,
-     * GlideString, StreamReadGroupOptions)} into a GlideString[].
+     * Converts options and the key-to-id input for {@link StreamBaseCommands#xreadgroupBinary(Map,
+     * GlideString, GlideString, StreamReadGroupOptions)} into a GlideString[].
      *
      * @return GlideString[]
      */
-    public GlideString[] toArgsBinary(GlideString group, GlideString consumer, Map<GlideString, GlideString> streams) {
+    public GlideString[] toArgsBinary(
+            GlideString group, GlideString consumer, Map<GlideString, GlideString> streams) {
         List<GlideString> optionArgs = new ArrayList<>();
         optionArgs.add(gs(READ_GROUP_REDIS_API));
         optionArgs.add(group);

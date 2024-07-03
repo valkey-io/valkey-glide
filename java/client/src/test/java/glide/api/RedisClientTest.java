@@ -6237,7 +6237,9 @@ public class RedisClientTest {
         Map<GlideString, Map<GlideString, GlideString[][]>> completedResult = new LinkedHashMap<>();
         completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
         completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
-        GlideString[] arguments = {gs(READ_STREAMS_REDIS_API), keyOne, keyTwo, streamIdOne, streamIdTwo};
+        GlideString[] arguments = {
+            gs(READ_STREAMS_REDIS_API), keyOne, keyTwo, streamIdOne, streamIdTwo
+        };
 
         CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
                 new CompletableFuture<>();
@@ -6252,7 +6254,8 @@ public class RedisClientTest {
         Map<GlideString, GlideString> keysAndIds = new LinkedHashMap<>();
         keysAndIds.put(keyOne, streamIdOne);
         keysAndIds.put(keyTwo, streamIdTwo);
-        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response = service.xreadBinary(keysAndIds);
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadBinary(keysAndIds);
         Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
 
         // verify

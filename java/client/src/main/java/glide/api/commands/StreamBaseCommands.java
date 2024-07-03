@@ -153,7 +153,8 @@ public interface StreamBaseCommands {
      *     }
      * }</pre>
      */
-    CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(Map<GlideString, GlideString> keysAndIds);
+    CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
+            Map<GlideString, GlideString> keysAndIds);
 
     /**
      * Reads entries from the given streams.
@@ -213,7 +214,7 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
-        Map<GlideString, GlideString> keysAndIds, StreamReadOptions options);
+            Map<GlideString, GlideString> keysAndIds, StreamReadOptions options);
 
     /**
      * Trims the stream by evicting older entries.
