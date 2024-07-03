@@ -8011,7 +8011,6 @@ class TestCommands:
         )
         assert await redis_client.function_load(code, True) == libname1.encode()
         flist = await redis_client.function_list(with_code=True)
-
         dump = await redis_client.function_dump()
         assert dump is not None and isinstance(dump, bytes)
 
@@ -8035,7 +8034,8 @@ class TestCommands:
 
         # but nothing changed - all code overwritten
         restoredFunctionList = await redis_client.function_list(with_code=True)
-        assert len(restoredFunctionList) == 1
+        assert restoredFunctionList is not None
+        assert isinstance(restoredFunctionList, List) and len(restoredFunctionList) == 1
         assert restoredFunctionList[0]["library_name".encode()] == libname1.encode()
 
         # Note that function ordering may differ across nodes so we can't do a deep equals
@@ -8048,7 +8048,8 @@ class TestCommands:
         )
         assert await redis_client.function_load(code, True) == libname2.encode()
         restoredFunctionList = await redis_client.function_list(with_code=True)
-        assert len(restoredFunctionList) == 1
+        assert restoredFunctionList is not None
+        assert isinstance(restoredFunctionList, List) and len(restoredFunctionList) == 1
         assert restoredFunctionList[0]["library_name".encode()] == libname2.encode()
 
         # REPLACE policy now fails due to a name collision
@@ -8061,7 +8062,8 @@ class TestCommands:
             await redis_client.function_restore(dump, FunctionRestorePolicy.FLUSH) is OK
         )
         restoredFunctionList = await redis_client.function_list(with_code=True)
-        assert len(restoredFunctionList) == 1
+        assert restoredFunctionList is not None
+        assert isinstance(restoredFunctionList, List) and len(restoredFunctionList) == 1
         assert restoredFunctionList[0]["library_name".encode()] == libname1.encode()
 
         # Note that function ordering may differ across nodes so we can't do a deep equals
