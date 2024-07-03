@@ -6,6 +6,8 @@ import glide.api.models.ClusterTransaction;
 import glide.api.models.GlideString;
 import glide.api.models.Script;
 import glide.api.models.Transaction;
+import glide.api.models.commands.scan.ClusterScanCursor;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RequestRoutingConfiguration.ByAddressRoute;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute;
@@ -22,6 +24,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+import lombok.NonNull;
 import lombok.RequiredArgsConstructor;
 import redis_request.RedisRequestOuterClass;
 import redis_request.RedisRequestOuterClass.Command;
@@ -43,6 +46,19 @@ public class CommandManager {
 
     /** UDS connection representation. */
     private final ChannelHandler channel;
+
+    /**
+     * Internal interface for exposing implementation details about a ClusterScanCursor. This is an
+     * interface so that it can be mocked in tests.
+     */
+    public interface ClusterScanCursorDetail extends ClusterScanCursor {
+        /**
+         * Returns the handle String representing the cursor.
+         *
+         * @return the handle String representing the cursor.
+         */
+        String getCursorHandle();
+    }
 
     /**
      * Build a command and send.
@@ -167,6 +183,23 @@ public class CommandManager {
     }
 
     /**
+     * Submits a scan request with cursor
+     *
+     * @param cursor Iteration cursor
+     * @param options {@link ScanOptions}
+     * @param responseHandler The handler for the response object
+     * @return A result promise of type T
+     */
+    public <T> CompletableFuture<T> submitClusterScan(
+            ClusterScanCursor cursor,
+            @NonNull ScanOptions options,
+            RedisExceptionCheckedFunction<Response, T> responseHandler) {
+
+        final RedisRequest.Builder command = prepareCursorRequest(cursor, options);
+        return submitCommandToChannel(command, responseHandler);
+    }
+
+    /**
      * Take a redis request and send to channel.
      *
      * @param command The Redis command request as a builder to execute
@@ -286,6 +319,43 @@ public class CommandManager {
                 RedisRequest.newBuilder().setTransaction(transaction.getProtobufTransaction().build());
 
         return route.isPresent() ? prepareRedisRequestRoute(builder, route.get()) : builder;
+    }
+
+    /**
+     * Build a protobuf cursor scan request.
+     *
+     * @param cursor Iteration cursor
+     * @param options {@link ScanOptions}
+     * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
+     *     adding a callback id.
+     */
+    protected RedisRequest.Builder prepareCursorRequest(
+            @NonNull ClusterScanCursor cursor, @NonNull ScanOptions options) {
+
+        RedisRequestOuterClass.ClusterScan.Builder clusterScanBuilder =
+                RedisRequestOuterClass.ClusterScan.newBuilder();
+
+        if (cursor != ClusterScanCursor.INITIAL_CURSOR_INSTANCE) {
+            if (cursor instanceof ClusterScanCursorDetail) {
+                clusterScanBuilder.setCursor(((ClusterScanCursorDetail) cursor).getCursorHandle());
+            } else {
+                throw new IllegalArgumentException("Illegal cursor submitted.");
+            }
+        }
+
+        if (options.getMatchPattern() != null) {
+            clusterScanBuilder.setMatchPattern(options.getMatchPattern());
+        }
+
+        if (options.getCount() != null) {
+            clusterScanBuilder.setCount(options.getCount());
+        }
+
+        if (options.getType() != null) {
+            clusterScanBuilder.setObjectType(options.getType().getNativeName());
+        }
+
+        return RedisRequest.newBuilder().setClusterScan(clusterScanBuilder.build());
     }
 
     /**

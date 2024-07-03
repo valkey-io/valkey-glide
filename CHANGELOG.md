@@ -76,6 +76,8 @@
 * Python: Added LPOS command ([#1740](https://github.com/aws/glide-for-redis/pull/1740))
 * Python: Added SCAN command ([#1623](https://github.com/aws/glide-for-redis/pull/1623))
 * Python: Added DUMP and Restore commands ([#1733](https://github.com/aws/glide-for-redis/pull/1733))
+* Java: Added SCAN command ([#1751](https://github.com/aws/glide-for-redis/pull/1751))
+
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

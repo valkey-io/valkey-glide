@@ -4,6 +4,9 @@ package glide.api.logging;
 import static glide.ffi.resolvers.LoggerResolver.initInternal;
 import static glide.ffi.resolvers.LoggerResolver.logInternal;
 
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.PrintStream;
 import java.util.function.Supplier;
 import lombok.Getter;
 import lombok.NonNull;
@@ -168,6 +171,31 @@ public final class Logger {
             return;
         }
         logInternal(level.getLevel(), logIdentifier, message);
+    }
+
+    /**
+     * Logs the provided exception or error if the provided log level is lower than the logger level.
+     *
+     * @param level The log level of the provided message.
+     * @param logIdentifier The log identifier should give the log a context.
+     * @param throwable The exception or error to log.
+     */
+    public static void log(
+            @NonNull Level level, @NonNull String logIdentifier, @NonNull Throwable throwable) {
+        // TODO: Add the corresponding API to Python and Node.js.
+        log(
+                level,
+                logIdentifier,
+                () -> {
+                    try (ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
+                            PrintStream printStream = new PrintStream(outputStream)) {
+                        throwable.printStackTrace(printStream);
+                        return printStream.toString();
+                    } catch (IOException e) {
+                        // This can't happen with a ByteArrayOutputStream.
+                        return null;
+                    }
+                });
     }
 
     /**
