@@ -1,13 +1,14 @@
 use bytes::Bytes;
+use glide_core::client::FINISHED_SCAN_CURSOR;
 /**
  * Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0
  */
 use glide_core::start_socket_listener;
 use glide_core::MAX_REQUEST_ARGS_LENGTH;
+use pyo3::exceptions::PyTypeError;
 use pyo3::prelude::*;
-use pyo3::types::{PyBool, PyBytes, PyDict, PyFloat, PyList, PySet};
+use pyo3::types::{PyAny, PyBool, PyBytes, PyDict, PyFloat, PyList, PySet};
 use pyo3::Python;
-
 use redis::Value;
 
 pub const DEFAULT_TIMEOUT_IN_MILLISECONDS: u32 =
@@ -32,6 +33,42 @@ impl Level {
     }
 }
 
+/// This struct is used to keep track of the cursor of a cluster scan.
+/// We want to avoid passing the cursor between layers of the application,
+/// So we keep the state in the container and only pass the id of the cursor.
+/// The cursor is stored in the container and can be retrieved using the id.
+/// The cursor is removed from the container when the object is deleted (dropped).
+#[pyclass]
+#[derive(Default)]
+pub struct ClusterScanCursor {
+    cursor: String,
+}
+
+#[pymethods]
+impl ClusterScanCursor {
+    #[new]
+    fn new(new_cursor: Option<String>) -> Self {
+        match new_cursor {
+            Some(cursor) => ClusterScanCursor { cursor },
+            None => ClusterScanCursor::default(),
+        }
+    }
+
+    fn get_cursor(&self) -> String {
+        self.cursor.clone()
+    }
+
+    fn is_finished(&self) -> bool {
+        self.cursor == *FINISHED_SCAN_CURSOR.to_string()
+    }
+}
+
+impl Drop for ClusterScanCursor {
+    fn drop(&mut self) {
+        glide_core::cluster_scan_container::remove_scan_state_cursor(self.cursor.clone());
+    }
+}
+
 #[pyclass]
 pub struct Script {
     hash: String,
@@ -40,9 +77,18 @@ pub struct Script {
 #[pymethods]
 impl Script {
     #[new]
-    fn new(code: String) -> Self {
-        let hash = glide_core::scripts_container::add_script(&code);
-        Script { hash }
+    fn new(code: &PyAny) -> PyResult<Self> {
+        let hash = if let Ok(code_str) = code.extract::<String>() {
+            glide_core::scripts_container::add_script(code_str.as_bytes())
+        } else if let Ok(code_bytes) = code.extract::<&PyBytes>() {
+            glide_core::scripts_container::add_script(code_bytes.as_bytes())
+        } else {
+            return Err(PyTypeError::new_err(
+                "code must be either a String or PyBytes",
+            ));
+        };
+
+        Ok(Script { hash })
     }
 
     fn get_hash(&self) -> String {
@@ -59,6 +105,7 @@ impl Script {
 fn glide(_py: Python, m: &PyModule) -> PyResult<()> {
     m.add_class::<Level>()?;
     m.add_class::<Script>()?;
+    m.add_class::<ClusterScanCursor>()?;
     m.add(
         "DEFAULT_TIMEOUT_IN_MILLISECONDS",
         DEFAULT_TIMEOUT_IN_MILLISECONDS,

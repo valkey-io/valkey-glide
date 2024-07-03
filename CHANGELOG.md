@@ -64,6 +64,7 @@
 * Python: Added RANDOMKEY command ([#1701](https://github.com/aws/glide-for-redis/pull/1701))
 * Python: Added FUNCTION FLUSH command ([#1700](https://github.com/aws/glide-for-redis/pull/1700))
 * Python: Added FUNCTION DELETE command ([#1714](https://github.com/aws/glide-for-redis/pull/1714))
+* Python: Added FUNCTION LIST command ([#1738](https://github.com/aws/glide-for-redis/pull/1738))
 * Python: Added SSCAN command ([#1709](https://github.com/aws/glide-for-redis/pull/1709))
 * Python: Added LCS command ([#1716](https://github.com/aws/glide-for-redis/pull/1716))
 * Python: Added WAIT command ([#1710](https://github.com/aws/glide-for-redis/pull/1710))
@@ -71,7 +72,10 @@
 * Python: Add ZSCAN and HSCAN commands ([#1732](https://github.com/aws/glide-for-redis/pull/1732))
 * Python: Added FCALL_RO command ([#1721](https://github.com/aws/glide-for-redis/pull/1721))
 * Python: Added WATCH and UNWATCH command ([#1736](https://github.com/aws/glide-for-redis/pull/1736))
-* Python: Added LPos command ([#1740](https://github.com/aws/glide-for-redis/pull/1740))
+* Python: Added XINFO GROUPS and XINFO CONSUMERS commands ([#1753](https://github.com/aws/glide-for-redis/pull/1753))
+* Python: Added LPOS command ([#1740](https://github.com/aws/glide-for-redis/pull/1740))
+* Python: Added SCAN command ([#1623](https://github.com/aws/glide-for-redis/pull/1623))
+* Python: Added DUMP and Restore commands ([#1733](https://github.com/aws/glide-for-redis/pull/1733))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))

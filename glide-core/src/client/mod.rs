@@ -3,17 +3,16 @@
  */
 mod types;
 
+use crate::cluster_scan_container::insert_cluster_scan_cursor;
 use crate::scripts_container::get_script;
 use futures::FutureExt;
 use logger_core::log_info;
 use redis::aio::ConnectionLike;
 use redis::cluster_async::ClusterConnection;
 use redis::cluster_routing::{Routable, RoutingInfo, SingleNodeRoutingInfo};
-use redis::{Cmd, ErrorKind, PushInfo, Value};
-use redis::{RedisError, RedisResult};
+use redis::{Cmd, ErrorKind, ObjectType, PushInfo, RedisError, RedisResult, ScanStateRC, Value};
 pub use standalone_client::StandaloneClient;
 use std::io;
-use std::ops::Deref;
 use std::time::Duration;
 pub use types::*;
 
@@ -29,6 +28,7 @@ pub const DEFAULT_RESPONSE_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_CONNECTION_ATTEMPT_TIMEOUT: Duration = Duration::from_millis(250);
 pub const DEFAULT_PERIODIC_CHECKS_INTERVAL: Duration = Duration::from_secs(60);
 pub const INTERNAL_CONNECTION_TIMEOUT: Duration = Duration::from_millis(250);
+pub const FINISHED_SCAN_CURSOR: &str = "finished";
 
 pub(super) fn get_port(address: &NodeAddress) -> u16 {
     const DEFAULT_PORT: u16 = 6379;
@@ -246,6 +246,50 @@ impl Client {
         .boxed()
     }
 
+    // Cluster scan is not passed to redis-rs as a regular command, so we need to handle it separately.
+    // We send the command to a specific function in the redis-rs cluster client, which internally handles the
+    // the complication of a command scan, and generate the command base on the logic in the redis-rs library.
+    //
+    // The function returns a tuple with the cursor and the keys found in the scan.
+    // The cursor is not a regular cursor, but an ARC to a struct that contains the cursor and the data needed
+    // to continue the scan called ScanState.
+    // In order to avoid passing Rust GC to clean the ScanState when the cursor (ref) is passed to the wrapper,
+    // which means that Rust layer is not aware of the cursor anymore, we need to keep the ScanState alive.
+    // We do that by storing the ScanState in a global container, and return a cursor-id of the cursor to the wrapper.
+    //
+    // The wrapper create an object contain the cursor-id with a drop function that will remove the cursor from the container.
+    // When the ref is removed from the hash-map, there's no more references to the ScanState, and the GC will clean it.
+    pub async fn cluster_scan<'a>(
+        &'a mut self,
+        scan_state_cursor: &'a ScanStateRC,
+        match_pattern: &'a Option<&str>,
+        count: Option<usize>,
+        object_type: Option<ObjectType>,
+    ) -> RedisResult<Value> {
+        match self.internal_client {
+            ClientWrapper::Standalone(_) => {
+                unreachable!("Cluster scan is not supported in standalone mode")
+            }
+            ClientWrapper::Cluster { ref mut client } => {
+                let (cursor, keys) = client
+                    .cluster_scan(
+                        scan_state_cursor.clone(),
+                        *match_pattern,
+                        count,
+                        object_type,
+                    )
+                    .await?;
+
+                let cluster_cursor_id = if cursor.is_finished() {
+                    Value::BulkString(FINISHED_SCAN_CURSOR.into())
+                } else {
+                    Value::BulkString(insert_cluster_scan_cursor(cursor).into())
+                };
+                Ok(Value::Array(vec![cluster_cursor_id, Value::Array(keys)]))
+            }
+        }
+    }
+
     fn get_transaction_values(
         pipeline: &redis::Pipeline,
         mut values: Vec<Value>,
@@ -327,11 +371,11 @@ impl Client {
         .boxed()
     }
 
-    pub async fn invoke_script<'a, T: Deref<Target = str>>(
+    pub async fn invoke_script<'a>(
         &'a mut self,
         hash: &'a str,
-        keys: Vec<T>,
-        args: Vec<T>,
+        keys: &Vec<&[u8]>,
+        args: &Vec<&[u8]>,
         routing: Option<RoutingInfo>,
     ) -> redis::RedisResult<Value> {
         let eval = eval_cmd(hash, keys, args);
@@ -343,7 +387,7 @@ impl Client {
             let Some(code) = get_script(hash) else {
                 return Err(err);
             };
-            let load = load_cmd(code.as_str());
+            let load = load_cmd(&code);
             self.send_command(&load, None).await?;
             self.send_command(&eval, routing).await
         } else {
@@ -352,20 +396,20 @@ impl Client {
     }
 }
 
-fn load_cmd(code: &str) -> Cmd {
+fn load_cmd(code: &[u8]) -> Cmd {
     let mut cmd = redis::cmd("SCRIPT");
     cmd.arg("LOAD").arg(code);
     cmd
 }
 
-fn eval_cmd<T: Deref<Target = str>>(hash: &str, keys: Vec<T>, args: Vec<T>) -> Cmd {
+fn eval_cmd(hash: &str, keys: &Vec<&[u8]>, args: &Vec<&[u8]>) -> Cmd {
     let mut cmd = redis::cmd("EVALSHA");
     cmd.arg(hash).arg(keys.len());
     for key in keys {
-        cmd.arg(&*key);
+        cmd.arg(key);
     }
     for arg in args {
-        cmd.arg(&*arg);
+        cmd.arg(arg);
     }
     cmd
 }

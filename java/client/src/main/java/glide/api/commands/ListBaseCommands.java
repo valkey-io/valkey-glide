@@ -327,6 +327,38 @@ public interface ListBaseCommands {
     CompletableFuture<String[]> lrange(String key, long start, long end);
 
     /**
+     * Returns the specified elements of the list stored at <code>key</code>.<br>
+     * The offsets <code>start</code> and <code>end</code> are zero-based indexes, with <code>0</code>
+     * being the first element of the list, <code>1</code> being the next element and so on. These
+     * offsets can also be negative numbers indicating offsets starting at the end of the list, with
+     * <code>-1</code> being the last element of the list, <code>-2</code> being the penultimate, and
+     * so on.
+     *
+     * @see <a href="https://redis.io/commands/lrange/">redis.io</a> for details.
+     * @param key The key of the list.
+     * @param start The starting point of the range.
+     * @param end The end of the range.
+     * @return Array of elements in the specified range.<br>
+     *     If <code>start</code> exceeds the end of the list, or if <code>start</code> is greater than
+     *     <code>end</code>, an empty array will be returned.<br>
+     *     If <code>end</code> exceeds the actual end of the list, the range will stop at the actual
+     *     end of the list.<br>
+     *     If <code>key</code> does not exist an empty array will be returned.
+     * @example
+     *     <pre>{@code
+     * GlideString[] payload = lient.lrange(gs("my_list"), 0, 2).get();
+     * assert Arrays.equals(new GlideString[] {gs("value1"), gs("value2"), gs("value3")});
+     *
+     * GlideString[] payload = client.lrange(gs("my_list"), -2, -1).get();
+     * assert Arrays.equals(new GlideString[] {gs("value2"), gs("value3")});
+     *
+     * GlideString[] payload = client.lrange(gs("non_exiting_key"), 0, 2).get();
+     * assert Arrays.equals(new GlideString[] {});
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> lrange(GlideString key, long start, long end);
+
+    /**
      * Returns the element at <code>index</code> from the list stored at <code>key</code>.<br>
      * The index is zero-based, so <code>0</code> means the first element, <code>1</code> the second
      * element and so on. Negative indices can be used to designate elements starting at the tail of

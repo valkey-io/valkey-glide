@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from typing import Dict, List, Mapping, Optional, cast
+from typing import Any, Dict, List, Mapping, Optional, Set, Union, cast
 
-from glide.async_commands.command_args import Limit, OrderBy
+from glide.async_commands.command_args import Limit, ObjectType, OrderBy
 from glide.async_commands.core import (
     CoreCommands,
     FlushMode,
@@ -12,12 +12,12 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, Transaction
-from glide.constants import OK, TOK, TResult
+from glide.constants import OK, TOK, TEncodable, TFunctionListResponse, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 
 
 class StandaloneCommands(CoreCommands):
-    async def custom_command(self, command_args: List[str]) -> TResult:
+    async def custom_command(self, command_args: List[TEncodable]) -> TResult:
         """
         Executes a single command, without checking inputs.
         See the [Glide for Redis Wiki](https://github.com/aws/glide-for-redis/wiki/General-Concepts#custom-command)
@@ -27,7 +27,7 @@ class StandaloneCommands(CoreCommands):
 
                 connection.customCommand(["CLIENT", "LIST","TYPE", "PUBSUB"])
         Args:
-            command_args (List[str]): List of strings of the command's arguments.
+            command_args (List[TEncodable]): List of the command's arguments, where each argument is either a string or bytes.
             Every part of the command, including the command name and subcommands, should be added as a separate value in args.
 
         Returns:
@@ -51,7 +51,9 @@ class StandaloneCommands(CoreCommands):
         Returns:
             bytes: Returns bytes containing the information for the sections requested.
         """
-        args = [section.value for section in sections] if sections else []
+        args: List[TEncodable] = (
+            [section.value for section in sections] if sections else []
+        )
         return cast(bytes, await self._execute_command(RequestType.Info, args))
 
     async def exec(
@@ -119,57 +121,56 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(int, await self._execute_command(RequestType.ClientId, []))
 
-    async def ping(self, message: Optional[str] = None) -> str:
+    async def ping(self, message: Optional[TEncodable] = None) -> bytes:
         """
         Ping the Redis server.
         See https://redis.io/commands/ping/ for more details.
 
         Args:
-           message (Optional[str]): An optional message to include in the PING command. If not provided,
-            the server will respond with "PONG". If provided, the server will respond with a copy of the message.
+           message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
+            the server will respond with b"PONG". If provided, the server will respond with a copy of the message.
 
         Returns:
-           str: "PONG" if `message` is not provided, otherwise return a copy of `message`.
+           bytes: b"PONG" if `message` is not provided, otherwise return a copy of `message`.
 
         Examples:
             >>> await client.ping()
-            "PONG"
+                b"PONG"
             >>> await client.ping("Hello")
-            "Hello"
+                b"Hello"
         """
         argument = [] if message is None else [message]
-        return cast(str, await self._execute_command(RequestType.Ping, argument))
+        return cast(bytes, await self._execute_command(RequestType.Ping, argument))
 
-    async def config_get(self, parameters: List[str]) -> Dict[str, str]:
+    async def config_get(self, parameters: List[TEncodable]) -> Dict[bytes, bytes]:
         """
         Get the values of configuration parameters.
         See https://redis.io/commands/config-get/ for details.
 
         Args:
-            parameters (List[str]): A list of configuration parameter names to retrieve values for.
+            parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
 
         Returns:
-            Dict[str, str]: A dictionary of values corresponding to the configuration parameters.
+            Dict[bytes, bytes]: A dictionary of values corresponding to the configuration parameters.
 
         Examples:
             >>> await client.config_get(["timeout"] , RandomNode())
-            {'timeout': '1000'}
-            >>> await client.config_get(["timeout" , "maxmemory"])
-            {'timeout': '1000', "maxmemory": "1GB"}
-
+                {b'timeout': b'1000'}
+            >>> await client.config_get([b"timeout" , "maxmemory"])
+                {b'timeout': b'1000', b'maxmemory': b'1GB'}
         """
         return cast(
-            Dict[str, str],
+            Dict[bytes, bytes],
             await self._execute_command(RequestType.ConfigGet, parameters),
         )
 
-    async def config_set(self, parameters_map: Mapping[str, str]) -> TOK:
+    async def config_set(self, parameters_map: Mapping[TEncodable, TEncodable]) -> TOK:
         """
         Set configuration parameters to the specified values.
         See https://redis.io/commands/config-set/ for details.
 
         Args:
-            parameters_map (Mapping[str, str]): A map consisting of configuration
+            parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
             parameters and their respective values to set.
 
         Returns:
@@ -177,28 +178,28 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> config_set({"timeout": "1000", "maxmemory": "1GB"})
-            OK
+                OK
         """
-        parameters: List[str] = []
+        parameters: List[TEncodable] = []
         for pair in parameters_map.items():
             parameters.extend(pair)
         return cast(TOK, await self._execute_command(RequestType.ConfigSet, parameters))
 
-    async def client_getname(self) -> Optional[str]:
+    async def client_getname(self) -> Optional[bytes]:
         """
         Get the name of the primary's connection.
         See https://redis.io/commands/client-getname/ for more details.
 
         Returns:
-            Optional[str]: Returns the name of the client connection as a string if a name is set,
+            Optional[bytes]: Returns the name of the client connection as a byte string if a name is set,
             or None if no name is assigned.
 
         Examples:
             >>> await client.client_getname()
-            'Connection Name'
+                b'Connection Name'
         """
         return cast(
-            Optional[str], await self._execute_command(RequestType.ClientGetName, [])
+            Optional[bytes], await self._execute_command(RequestType.ClientGetName, [])
         )
 
     async def dbsize(self) -> int:
@@ -215,50 +216,96 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(int, await self._execute_command(RequestType.DBSize, []))
 
-    async def echo(self, message: str) -> str:
+    async def echo(self, message: TEncodable) -> bytes:
         """
         Echoes the provided `message` back.
 
         See https://redis.io/commands/echo for more details.
 
         Args:
-            message (str): The message to be echoed back.
+            message (TEncodable): The message to be echoed back.
 
         Returns:
-            str: The provided `message`.
+            bytes: The provided `message`.
 
         Examples:
             >>> await client.echo("Glide-for-Redis")
-                'Glide-for-Redis'
+                b'Glide-for-Redis'
         """
-        return cast(str, await self._execute_command(RequestType.Echo, [message]))
+        return cast(bytes, await self._execute_command(RequestType.Echo, [message]))
 
-    async def function_load(self, library_code: str, replace: bool = False) -> str:
+    async def function_load(
+        self, library_code: TEncodable, replace: bool = False
+    ) -> bytes:
         """
         Loads a library to Redis.
 
-        See https://valkey.io/docs/latest/commands/function-load/ for more details.
+        See https://valkey.io/commands/function-load/ for more details.
 
         Args:
-            library_code (str): The source code that implements the library.
+            library_code (TEncodable): The source code that implements the library.
             replace (bool): Whether the given library should overwrite a library with the same name if
                 it already exists.
 
         Returns:
-            str: The library name that was loaded.
+            bytes: The library name that was loaded.
 
         Examples:
             >>> code = "#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
             >>> await client.function_load(code, True)
-                "mylib"
+                b"mylib"
 
         Since: Redis 7.0.0.
         """
         return cast(
-            str,
+            bytes,
             await self._execute_command(
                 RequestType.FunctionLoad,
                 ["REPLACE", library_code] if replace else [library_code],
+            ),
+        )
+
+    async def function_list(
+        self, library_name_pattern: Optional[TEncodable] = None, with_code: bool = False
+    ) -> TFunctionListResponse:
+        """
+        Returns information about the functions and libraries.
+
+        See https://valkey.io/commands/function-list/ for more details.
+
+        Args:
+            library_name_pattern (Optional[TEncodable]):  A wildcard pattern for matching library names.
+            with_code (bool): Specifies whether to request the library code from the server or not.
+
+        Returns:
+            TFunctionListResponse: Info about all or
+                selected libraries and their functions.
+
+        Examples:
+            >>> response = await client.function_list("myLib?_backup", True)
+                [{
+                    b"library_name": b"myLib5_backup",
+                    b"engine": b"LUA",
+                    b"functions": [{
+                        b"name": b"myfunc",
+                        b"description": None,
+                        b"flags": {b"no-writes"},
+                    }],
+                    b"library_code": b"#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
+                }]
+
+        Since: Redis 7.0.0.
+        """
+        args = []
+        if library_name_pattern is not None:
+            args.extend(["LIBRARYNAME", library_name_pattern])
+        if with_code:
+            args.append("WITHCODE")
+        return cast(
+            TFunctionListResponse,
+            await self._execute_command(
+                RequestType.FunctionList,
+                args,
             ),
         )
 
@@ -266,7 +313,7 @@ class StandaloneCommands(CoreCommands):
         """
         Deletes all function libraries.
 
-        See https://valkey.io/docs/latest/commands/function-flush/ for more details.
+        See https://valkey.io/commands/function-flush/ for more details.
 
         Args:
             mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
@@ -288,14 +335,14 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
-    async def function_delete(self, library_name: str) -> TOK:
+    async def function_delete(self, library_name: TEncodable) -> TOK:
         """
         Deletes a library and all its functions.
 
-        See https://valkey.io/docs/latest/commands/function-delete/ for more details.
+        See https://valkey.io/commands/function-delete/ for more details.
 
         Args:
-            library_code (str): The libary name to delete
+            library_code (TEncodable): The library name to delete
 
         Returns:
             TOK: A simple `OK`.
@@ -314,23 +361,23 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
-    async def time(self) -> List[str]:
+    async def time(self) -> List[bytes]:
         """
         Returns the server time.
 
         See https://redis.io/commands/time/ for more details.
 
         Returns:
-            List[str]:  The current server time as a two items `array`:
+            List[bytes]:  The current server time as a two items `array`:
             A Unix timestamp and the amount of microseconds already elapsed in the current second.
             The returned `array` is in a [Unix timestamp, Microseconds already elapsed] format.
 
         Examples:
             >>> await client.time()
-            ['1710925775', '913580']
+                [b'1710925775', b'913580']
         """
         return cast(
-            List[str],
+            List[bytes],
             await self._execute_command(RequestType.Time, []),
         )
 
@@ -345,21 +392,21 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> await client.lastsave()
-            1710925775  # Unix time of the last DB save
+                1710925775  # Unix time of the last DB save
         """
         return cast(
             int,
             await self._execute_command(RequestType.LastSave, []),
         )
 
-    async def move(self, key: str, db_index: int) -> bool:
+    async def move(self, key: TEncodable, db_index: int) -> bool:
         """
         Move `key` from the currently selected database to the database specified by `db_index`.
 
         See https://valkey.io/commands/move/ for more details.
 
         Args:
-            key (str): The key to move.
+            key (TEncodable): The key to move.
             db_index (int): The index of the database to move `key` to.
 
         Returns:
@@ -377,13 +424,13 @@ class StandaloneCommands(CoreCommands):
 
     async def sort(
         self,
-        key: str,
-        by_pattern: Optional[str] = None,
+        key: TEncodable,
+        by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
-        get_patterns: Optional[List[str]] = None,
+        get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> List[Optional[str]]:
+    ) -> List[Optional[bytes]]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
@@ -392,8 +439,8 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/sort for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
-            by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
                 `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
@@ -402,7 +449,7 @@ class StandaloneCommands(CoreCommands):
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            get_pattern (Optional[str]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+            get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
                 transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
@@ -417,34 +464,34 @@ class StandaloneCommands(CoreCommands):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point
 
         Returns:
-            List[Optional[str]]: Returns a list of sorted elements.
+            List[Optional[bytes]]: Returns a list of sorted elements.
 
         Examples:
-            >>> await client.lpush("mylist", 3, 1, 2)
+            >>> await client.lpush("mylist", [b"3", b"1", b"2"])
             >>> await client.sort("mylist")
-            ['1', '2', '3']
+                [b'1', b'2', b'3']
             >>> await client.sort("mylist", order=OrderBy.DESC)
-            ['3', '2', '1']
-            >>> await client.lpush("mylist2", 2, 1, 2, 3, 3, 1)
+                [b'3', b'2', b'1']
+            >>> await client.lpush("mylist2", ['2', '1', '2', '3', '3', '1'])
             >>> await client.sort("mylist2", limit=Limit(2, 3))
-            ['2', '2', '3']
-            >>> await client.hset("user:1", "name", "Alice", "age", 30)
-            >>> await client.hset("user:2", "name", "Bob", "age", 25)
-            >>> await client.lpush("user_ids", 2, 1)
+                [b'2', b'2', b'3']
+            >>> await client.hset("user:1": {"name": "Alice", "age": '30'})
+            >>> await client.hset("user:2", {"name": "Bob", "age": '25'})
+            >>> await client.lpush("user_ids", ['2', '1'])
             >>> await client.sort("user_ids", by_pattern="user:*->age", get_patterns=["user:*->name"])
-            ['Bob', 'Alice']
+                [b'Bob', b'Alice']
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         result = await self._execute_command(RequestType.Sort, args)
-        return cast(List[Optional[str]], result)
+        return cast(List[Optional[bytes]], result)
 
     async def sort_store(
         self,
-        key: str,
-        destination: str,
-        by_pattern: Optional[str] = None,
+        key: TEncodable,
+        destination: TEncodable,
+        by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
-        get_patterns: Optional[List[str]] = None,
+        get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> int:
@@ -456,9 +503,9 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/sort for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
-            destination (str): The key where the sorted result will be stored.
-            by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            destination (TEncodable): The key where the sorted result will be stored.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
                 `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
@@ -467,7 +514,7 @@ class StandaloneCommands(CoreCommands):
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            get_pattern (Optional[str]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+            get_patterns (Optional[List[TEncodable]]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
                 transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
@@ -485,11 +532,11 @@ class StandaloneCommands(CoreCommands):
             int: The number of elements in the sorted key stored at `store`.
 
         Examples:
-            >>> await client.lpush("mylist", 3, 1, 2)
+            >>> await client.lpush("mylist", ['3', '1', '2'])
             >>> await client.sort_store("mylist", "sorted_list")
-            3  # Indicates that the sorted list "sorted_list" contains three elements.
+                3  # Indicates that the sorted list "sorted_list" contains three elements.
             >>> await client.lrange("sorted_list", 0, -1)
-            ['1', '2', '3']
+                [b'1', b'2', b'3']
         """
         args = _build_sort_args(
             key, by_pattern, limit, get_patterns, order, alpha, store=destination
@@ -497,14 +544,14 @@ class StandaloneCommands(CoreCommands):
         result = await self._execute_command(RequestType.Sort, args)
         return cast(int, result)
 
-    async def publish(self, message: str, channel: str) -> int:
+    async def publish(self, message: TEncodable, channel: TEncodable) -> int:
         """
         Publish a message on pubsub channel.
         See https://valkey.io/commands/publish for more details.
 
         Args:
-            message (str): Message to publish
-            channel (str): Channel to publish the message on.
+            message (TEncodable): Message to publish
+            channel (TEncodable): Channel to publish the message on.
 
         Returns:
             int: Number of subscriptions in primary node that received the message.
@@ -514,8 +561,9 @@ class StandaloneCommands(CoreCommands):
             >>> await client.publish("Hi all!", "global-channel")
                 1 # This message was posted to 1 subscription which is configured on primary node
         """
-        result = await self._execute_command(RequestType.Publish, [channel, message])
-        return cast(int, result)
+        return cast(
+            int, await self._execute_command(RequestType.Publish, [channel, message])
+        )
 
     async def flushall(self, flush_mode: Optional[FlushMode] = None) -> TOK:
         """
@@ -527,13 +575,13 @@ class StandaloneCommands(CoreCommands):
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
 
         Returns:
-            TOK: OK.
+            TOK: A simple OK response.
 
         Examples:
-             >>> await client.flushall(FlushMode.ASYNC)
-                 OK  # This command never fails.
+            >>> await client.flushall(FlushMode.ASYNC)
+                OK  # This command never fails.
         """
-        args = []
+        args: List[TEncodable] = []
         if flush_mode is not None:
             args.append(flush_mode.value)
 
@@ -552,15 +600,15 @@ class StandaloneCommands(CoreCommands):
             flush_mode (Optional[FlushMode]): The flushing mode, could be either `SYNC` or `ASYNC`.
 
         Returns:
-            TOK: OK.
+            TOK: A simple OK response.
 
         Examples:
-             >>> await client.flushdb()
-                 OK  # The keys of the currently selected database were deleted.
-             >>> await client.flushdb(FlushMode.ASYNC)
-                 OK  # The keys of the currently selected database were deleted asynchronously.
+            >>> await client.flushdb()
+                OK  # The keys of the currently selected database were deleted.
+            >>> await client.flushdb(FlushMode.ASYNC)
+                OK  # The keys of the currently selected database were deleted asynchronously.
         """
-        args = []
+        args: List[TEncodable] = []
         if flush_mode is not None:
             args.append(flush_mode.value)
 
@@ -571,8 +619,8 @@ class StandaloneCommands(CoreCommands):
 
     async def copy(
         self,
-        source: str,
-        destination: str,
+        source: TEncodable,
+        destination: TEncodable,
         destinationDB: Optional[int] = None,
         replace: Optional[bool] = None,
     ) -> bool:
@@ -585,8 +633,8 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/copy for more details.
 
         Args:
-            source (str): The key to the source value.
-            destination (str): The key where the value should be copied to.
+            source (TEncodable): The key to the source value.
+            destination (TEncodable): The key where the value should be copied to.
             destinationDB (Optional[int]): The alternative logical database index for the destination key.
             replace (Optional[bool]): If the destination key should be removed before copying the value to it.
 
@@ -595,15 +643,15 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> await client.set("source", "sheep")
-            >>> await client.copy("source", "destination", 1, False)
+            >>> await client.copy(b"source", b"destination", 1, False)
                 True # Source was copied
             >>> await client.select(1)
             >>> await client.get("destination")
-                "sheep"
+                b"sheep"
 
         Since: Redis version 6.2.0.
         """
-        args = [source, destination]
+        args: List[TEncodable] = [source, destination]
         if destinationDB is not None:
             args.extend(["DB", str(destinationDB)])
         if replace is True:
@@ -617,7 +665,7 @@ class StandaloneCommands(CoreCommands):
         self,
         version: Optional[int] = None,
         parameters: Optional[List[int]] = None,
-    ) -> str:
+    ) -> bytes:
         """
         Displays a piece of generative computer art and the Redis version.
 
@@ -630,40 +678,40 @@ class StandaloneCommands(CoreCommands):
                 For version `6`, those are number of columns and number of lines.
 
         Returns:
-            str: A piece of generative computer art along with the current Redis version.
+            bytes: A piece of generative computer art along with the current Redis version.
 
         Examples:
             >>> await client.lolwut(6, [40, 20]);
-            "Redis ver. 7.2.3" # Indicates the current Redis version
+                b"Redis ver. 7.2.3" # Indicates the current Redis version
             >>> await client.lolwut(5, [30, 5, 5]);
-            "Redis ver. 7.2.3" # Indicates the current Redis version
+                b"Redis ver. 7.2.3" # Indicates the current Redis version
         """
-        args = []
+        args: List[TEncodable] = []
         if version is not None:
             args.extend(["VERSION", str(version)])
         if parameters:
             for var in parameters:
                 args.extend(str(var))
         return cast(
-            str,
+            bytes,
             await self._execute_command(RequestType.Lolwut, args),
         )
 
-    async def random_key(self) -> Optional[str]:
+    async def random_key(self) -> Optional[bytes]:
         """
         Returns a random existing key name from the currently selected database.
 
         See https://valkey.io/commands/randomkey for more details.
 
         Returns:
-            Optional[str]: A random existing key name from the currently selected database.
+            Optional[bytes]: A random existing key name from the currently selected database.
 
         Examples:
             >>> await client.random_key()
-            "random_key_name"  # "random_key_name" is a random existing key name from the currently selected database.
+                b"random_key_name"  # "random_key_name" is a random existing key name from the currently selected database.
         """
         return cast(
-            Optional[str],
+            Optional[bytes],
             await self._execute_command(RequestType.RandomKey, []),
         )
 
@@ -691,7 +739,7 @@ class StandaloneCommands(CoreCommands):
             >>> await client.wait(1, 1000);
             // return 1 when a replica is reached or 0 if 1000ms is reached.
         """
-        args = [str(numreplicas), str(timeout)]
+        args: List[TEncodable] = [str(numreplicas), str(timeout)]
         return cast(
             int,
             await self._execute_command(RequestType.Wait, args),
@@ -716,4 +764,69 @@ class StandaloneCommands(CoreCommands):
         return cast(
             TOK,
             await self._execute_command(RequestType.UnWatch, []),
+        )
+
+    async def scan(
+        self,
+        cursor: TEncodable,
+        match: Optional[TEncodable] = None,
+        count: Optional[int] = None,
+        type: Optional[ObjectType] = None,
+    ) -> List[Union[bytes, List[bytes]]]:
+        """
+        Incrementally iterate over a collection of keys.
+        SCAN is a cursor based iterator. This means that at every call of the command,
+        the server returns an updated cursor that the user needs to use as the cursor argument in the next call.
+        An iteration starts when the cursor is set to "0", and terminates when the cursor returned by the server is "0".
+
+        A full iteration always retrieves all the elements that were present
+        in the collection from the start to the end of a full iteration.
+        Elements that were not constantly present in the collection during a full iteration, may be returned or not.
+
+        See https://valkey.io/commands/scan for more details.
+
+        Args:
+            cursor (TResult): The cursor used for iteration. For the first iteration, the cursor should be set to "0".
+              Using a non-zero cursor in the first iteration,
+              or an invalid cursor at any iteration, will lead to undefined results.
+              Using the same cursor in multiple iterations will, in case nothing changed between the iterations,
+                return the same elements multiple times.
+                If the the db has changed, it may result an undefined behavior.
+            match (Optional[TResult]): A pattern to match keys against.
+            count (Optional[int]): The number of keys to return per iteration.
+                The number of keys returned per iteration is not guaranteed to be the same as the count argument.
+                the argument is used as a hint for the server to know how many "steps" it can use to retrieve the keys.
+                The default value is 10.
+            type (ObjectType): The type of object to scan for.
+
+        Returns:
+            List[Union[bytes, List[bytes]]]: A List containing the next cursor value and a list of keys,
+                formatted as [cursor, [key1, key2, ...]]
+
+        Examples:
+        >>> result = await client.scan(b'0')
+            print(result) #[b'17', [b'key1', b'key2', b'key3', b'key4', b'key5', b'set1', b'set2', b'set3']]
+            first_cursor_result = result[0]
+            result = await client.scan(first_cursor_result)
+            print(result) #[b'349', [b'key4', b'key5', b'set1', b'hash1', b'zset1', b'list1', b'list2',
+                                    b'list3', b'zset2', b'zset3', b'zset4', b'zset5', b'zset6']]
+            result = await client.scan(result[0])
+            print(result) #[b'0', [b'key6', b'key7']]
+
+        >>> result = await client.scan(first_cursor_result, match=b'key*', count=2)
+            print(result) #[b'6', [b'key4', b'key5']]
+
+        >>> result = await client.scan("0", type=ObjectType.Set)
+            print(result) #[b'362', [b'set1', b'set2', b'set3']]
+        """
+        args = [cursor]
+        if match:
+            args.extend(["MATCH", match])
+        if count:
+            args.extend(["COUNT", str(count)])
+        if type:
+            args.extend(["TYPE", type.value])
+        return cast(
+            List[Union[bytes, List[bytes]]],
+            await self._execute_command(RequestType.Scan, args),
         )
