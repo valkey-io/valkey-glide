@@ -7631,14 +7631,78 @@ class TestCommands:
             await redis_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
-    @pytest.mark.parametrize("cluster_mode", [True, False])
+    def check_function_stats_response(response, running_function, lib_count, function_count):
+        running_script_info = response["running_script"]
+        if running_script_info == None and len(running_function) != 0:
+            pytest.fail("No running function info")
+
+        if running_script_info != None and len(running_function) == 0:
+            command = running_script_info["command"]
+            pytest.fail("Unexpected running function info: " + " ".join(command))
+
+        if running_script_info != None:
+            command = running_script_info["command"]
+            assert running_function == command
+            # command line format is:
+            # fcall|fcall_ro <function name> <num keys> <key>* <arg>*
+            assert running_function[1] == running_script_info["name"]
+
+        expected = {"LUA": {"libraries_count": lib_count, "functions_count": function_count}}
+        assert expected == response["engines"]
+
+    @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_function_stats(self, redis_client: TGlideClient):
+    async def test_function_stats(self, redis_client: GlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
+        lib_name = "functionStats"
+        func_name = lib_name
+        assert await redis_client.function_flush(FlushMode.SYNC) == OK
         
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
+        assert await redis_client.function_load(code, True) == lib_name.encode()
+
+        response = await redis_client.function_stats()
+        check_function_stats_response(response, [], 1, 1)
+
+        code = generate_lua_lib_code(lib_name + "_2", {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"}, False)
+
+        assert await redis_client.function_stats()
+        check_function_stats_response(response, [], 2, 3)
+
+        assert await redis_client.function_flush(FlushMode.SYNC) == OK
+
+        assert await redis_client.function_stats()
+        check_function_stats_response(response, [], 0, 0)
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_stats_cluster(self, redis_client: GlideClusterClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        lib_name = "functionStats_without_route"
+        func_name = lib_name
+        assert await redis_client.function_flush(FlushMode.SYNC) == OK
+        
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
+        assert await redis_client.function_load(code, True) == lib_name.encode()
+
+        response = await redis_client.function_stats()
+        check_function_stats_response(response, [], 1, 1)
+
+        code = generate_lua_lib_code(lib_name + "_2", {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"}, False)
+
+        assert await redis_client.function_stats()
+        check_function_stats_response(response, [], 2, 3)
+
+        assert await redis_client.function_flush(FlushMode.SYNC) == OK
+
+        assert await redis_client.function_stats()
+        check_function_stats_response(response, [], 0, 0)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7650,7 +7714,39 @@ class TestCommands:
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        
+        route = SlotKeyRoute(get_random_string(10), SlotType.PRIMARY) if single_route else AllPrimaries()
+        lib_name = "functionStats_with_route_" + str(single_route)
+        func_name = lib_name
+        assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
+
+        code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
+        assert await redis_client.function_load(code, True, route) == lib_name.encode()
+
+        response = await redis_client.function_stats(route)
+        if single_route:
+            check_function_stats_response(response, [], 1, 1)
+        else:
+            for node_response in response:
+                check_function_stats_response(node_response, [], 1, 1)
+
+        code = generate_lua_lib_code(lib_name + "_2", {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"}, False)
+        assert await redis_client.function_load(code, True, route) == (lib_name + "_2").encode()
+
+        response = await redis_client.function_stats(route)
+        if single_route:
+            check_function_stats_response(response, [], 2, 3)
+        else:
+            for node_response in response:
+                check_function_stats_response(node_response, [], 2, 3)
+            
+        assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
+
+        response = await redis_client.function_stats(route)
+        if single_route:
+            check_function_stats_response(response, [], 0, 0)
+        else:
+            for node_response in response:
+                check_function_stats_response(node_response, [], 0, 0)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

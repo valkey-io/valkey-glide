@@ -2026,7 +2026,7 @@ class BaseTransaction:
         See https://redis.io/commands/function-stats/ for more details
 
         Command Response:
-            Mapping[TEncodable, Mapping[TEncodable, TResult]]: A `Mapping` with two keys:
+            Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]]: A `Mapping` with two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
                 See example for more details.

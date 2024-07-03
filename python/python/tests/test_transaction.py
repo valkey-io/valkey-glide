@@ -161,8 +161,7 @@ async def transaction_test(
         transaction.function_stats()
         args.append([
             {
-                b"running_script": {
-                },
+                b"running_script": None,
                 b"engines": {
                     b"LUA": {
                         b"libraries_count": 1,

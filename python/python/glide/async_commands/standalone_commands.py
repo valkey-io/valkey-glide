@@ -361,8 +361,7 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
-<<<<<<< HEAD
-    async def function_stats(self) -> Mapping[TEncodable, Mapping[TEncodable, TResult]]:
+    async def function_stats(self) -> Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]]:
         """
         Returns information about the function that's currently running and information about the
         available execution engines.
@@ -370,7 +369,7 @@ class StandaloneCommands(CoreCommands):
         See https://redis.io/commands/function-stats/ for more details
 
         Returns:
-            Mapping[TEncodable, Mapping[TEncodable, TResult]]: A `Mapping` with two keys:
+            Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]]: A `Mapping` with two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
                 See example for more details.
@@ -394,7 +393,7 @@ class StandaloneCommands(CoreCommands):
         Since: Redis version 7.0.0.
         """
         return cast(
-            Mapping[TEncodable, Mapping[TEncodable, TResult]],
+            Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]],
             await self._execute_command(
                 RequestType.FunctionStats,
                 []
