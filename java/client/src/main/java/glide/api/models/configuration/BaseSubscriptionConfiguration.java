@@ -7,13 +7,12 @@ import glide.api.models.configuration.ClusterSubscriptionConfiguration.ClusterSu
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.StandaloneSubscriptionConfigurationBuilder;
+import glide.api.models.exceptions.ConfigurationError;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.BiConsumer;
-
-import glide.api.models.exceptions.ConfigurationError;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -90,7 +89,8 @@ public abstract class BaseSubscriptionConfiguration {
          */
         public B callback(MessageCallback callback, Object context) {
             if (context != null && callback == null) {
-                throw new ConfigurationError("PubSub subscriptions with a context require a callback function to be configured.");
+                throw new ConfigurationError(
+                        "PubSub subscriptions with a context require a callback function to be configured.");
             }
             this.callback = Optional.ofNullable(callback);
             this.context = Optional.ofNullable(context);
@@ -105,7 +105,8 @@ public abstract class BaseSubscriptionConfiguration {
          */
         public B callback(MessageCallback callback) {
             if (callback == null && this.context.isPresent()) {
-                throw new ConfigurationError("PubSub subscriptions with a context require a callback function to be configured.");
+                throw new ConfigurationError(
+                        "PubSub subscriptions with a context require a callback function to be configured.");
             }
             this.callback = Optional.ofNullable(callback);
             return self();

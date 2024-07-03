@@ -8,7 +8,7 @@ import java.util.concurrent.CompletableFuture;
  *
  * @see <a href="https://valkey.io/commands/publish/">Pub/Sub Commands</a>
  */
-public interface PubSubClusterCommands extends PubSubBaseCommands {
+public interface PubSubClusterCommands {
 
     /**
      * Publishes message on pubsub channel.
@@ -17,7 +17,8 @@ public interface PubSubClusterCommands extends PubSubBaseCommands {
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param message The message to publish.
      * @param channel The channel to publish the message on.
-     * @param sharded Indicates that this should be run in sharded mode.
+     * @param sharded Indicates that this should be run in sharded mode. Setting <code>sharded</code>
+     *     to <code>true</code> is only applicable with Redis 7.0+.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code

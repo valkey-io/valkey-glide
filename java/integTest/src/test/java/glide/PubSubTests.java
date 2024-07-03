@@ -699,25 +699,30 @@ public class PubSubTests {
         var patternMessage = new PubSubMessage(UUID.randomUUID().toString(), channel, channel);
         var shardedMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
         Map<PubSubClusterChannelMode, Set<String>> subscriptionsExact =
-            Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
+                Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
         Map<PubSubClusterChannelMode, Set<String>> subscriptionsPattern =
-            Map.of(PubSubClusterChannelMode.PATTERN, Set.of(channel));
+                Map.of(PubSubClusterChannelMode.PATTERN, Set.of(channel));
         Map<PubSubClusterChannelMode, Set<String>> subscriptionsSharded =
-            Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
+                Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
 
-        var listenerExact = !useCallback ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsExact) :
-            (RedisClusterClient) createListener(
-                false, true, PubSubClusterChannelMode.EXACT.ordinal(), subscriptionsExact);
+        var listenerExact =
+                !useCallback
+                        ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsExact)
+                        : (RedisClusterClient)
+                                createListener(
+                                        false, true, PubSubClusterChannelMode.EXACT.ordinal(), subscriptionsExact);
 
-        var listenerPattern = !useCallback ?
-            (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsPattern) :
-            createListener(
-                false, true, PubSubClusterChannelMode.PATTERN.ordinal(), subscriptionsPattern);
+        var listenerPattern =
+                !useCallback
+                        ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsPattern)
+                        : createListener(
+                                false, true, PubSubClusterChannelMode.PATTERN.ordinal(), subscriptionsPattern);
 
-        var listenerSharded = !useCallback ?
-            (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsSharded) :
-            createListener(
-                false, true, PubSubClusterChannelMode.SHARDED.ordinal(), subscriptionsSharded);
+        var listenerSharded =
+                !useCallback
+                        ? (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsSharded)
+                        : createListener(
+                                false, true, PubSubClusterChannelMode.SHARDED.ordinal(), subscriptionsSharded);
 
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded));
 
@@ -729,37 +734,37 @@ public class PubSubTests {
 
         if (!useCallback) {
             verifyReceivedPubsubMessages(
-                Set.of(
-                    Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
-                    Pair.of(
-                        PubSubClusterChannelMode.EXACT.ordinal(),
-                        new PubSubMessage(patternMessage.getMessage(), channel))),
-                listenerExact,
-                false);
+                    Set.of(
+                            Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.EXACT.ordinal(),
+                                    new PubSubMessage(patternMessage.getMessage(), channel))),
+                    listenerExact,
+                    false);
             verifyReceivedPubsubMessages(
-                Set.of(
-                    Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
-                    Pair.of(
-                        PubSubClusterChannelMode.PATTERN.ordinal(),
-                        new PubSubMessage(exactMessage.getMessage(), channel, channel))),
-                listenerPattern,
-                false);
+                    Set.of(
+                            Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.PATTERN.ordinal(),
+                                    new PubSubMessage(exactMessage.getMessage(), channel, channel))),
+                    listenerPattern,
+                    false);
             verifyReceivedPubsubMessages(
-                Set.of(Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage)),
-                listenerSharded,
-                false);
+                    Set.of(Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage)),
+                    listenerSharded,
+                    false);
         } else {
             var expected =
-                Set.of(
-                    Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
-                    Pair.of(
-                        PubSubClusterChannelMode.EXACT.ordinal(),
-                        new PubSubMessage(patternMessage.getMessage(), channel)),
-                    Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
-                    Pair.of(
-                        PubSubClusterChannelMode.PATTERN.ordinal(),
-                        new PubSubMessage(exactMessage.getMessage(), channel, channel)),
-                    Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage));
+                    Set.of(
+                            Pair.of(PubSubClusterChannelMode.EXACT.ordinal(), exactMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.EXACT.ordinal(),
+                                    new PubSubMessage(patternMessage.getMessage(), channel)),
+                            Pair.of(PubSubClusterChannelMode.PATTERN.ordinal(), patternMessage),
+                            Pair.of(
+                                    PubSubClusterChannelMode.PATTERN.ordinal(),
+                                    new PubSubMessage(exactMessage.getMessage(), channel, channel)),
+                            Pair.of(PubSubClusterChannelMode.SHARDED.ordinal(), shardedMessage));
 
             verifyReceivedPubsubMessages(expected, listenerExact, true);
         }

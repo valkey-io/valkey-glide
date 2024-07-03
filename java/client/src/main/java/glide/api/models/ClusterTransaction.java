@@ -42,10 +42,12 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param message The message to publish.
      * @param channel The channel to publish the message on.
-     * @param sharded Indicates that this should be run in sharded mode.
+     * @param sharded Indicates that this should be run in sharded mode. Setting <code>sharded</code>
+     *     to <code>true</code> is only applicable with Redis 7.0+.
      * @return Command response - The number of clients that received the message.
      */
-    public <ArgType> ClusterTransaction spublish(@NonNull ArgType message, @NonNull ArgType channel, sharded) {
+    public <ArgType> ClusterTransaction publish(
+            @NonNull ArgType message, @NonNull ArgType channel, boolean sharded) {
         if (!sharded) {
             return super.publish(message, channel);
         }
