@@ -11,8 +11,8 @@ import lombok.experimental.SuperBuilder;
 /**
  * Optional arguments to sort, sortReadOnly, and sortStore commands
  *
- * @see <a href="https://redis.io/commands/sort/">redis.io</a> and <a
- *     href="https://redis.io/docs/latest/commands/sort_ro/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/sort/">valkey.io</a> and <a
+ *     href="https://valkey.io/commands/sort_ro/">valkey.io</a>
  */
 @SuperBuilder
 public abstract class SortBaseOptions {
