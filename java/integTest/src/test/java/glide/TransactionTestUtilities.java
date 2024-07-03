@@ -76,25 +76,19 @@ public class TransactionTestUtilities {
     /** Generate test samples for parametrized tests. Could be routed to random node. */
     public static Stream<Arguments> getCommonTransactionBuilders() {
         return Stream.of(
-                                Arguments.of(
-                                        "Generic Commands", (TransactionBuilder)
-                 TransactionTestUtilities::genericCommands),
-                                Arguments.of(
-                                        "String Commands", (TransactionBuilder)
-                 TransactionTestUtilities::stringCommands),
-                                Arguments.of("Hash Commands", (TransactionBuilder)
-                 TransactionTestUtilities::hashCommands),
-                                Arguments.of("List Commands", (TransactionBuilder)
-                 TransactionTestUtilities::listCommands),
-                                Arguments.of("Set Commands", (TransactionBuilder)
-                 TransactionTestUtilities::setCommands),
-                                Arguments.of(
-                                        "Sorted Set Commands",
-                                        (TransactionBuilder) TransactionTestUtilities::sortedSetCommands),
-                                Arguments.of(
-                                        "HyperLogLog Commands",
-                                        (TransactionBuilder)
-                 TransactionTestUtilities::hyperLogLogCommands),
+                Arguments.of(
+                        "Generic Commands", (TransactionBuilder) TransactionTestUtilities::genericCommands),
+                Arguments.of(
+                        "String Commands", (TransactionBuilder) TransactionTestUtilities::stringCommands),
+                Arguments.of("Hash Commands", (TransactionBuilder) TransactionTestUtilities::hashCommands),
+                Arguments.of("List Commands", (TransactionBuilder) TransactionTestUtilities::listCommands),
+                Arguments.of("Set Commands", (TransactionBuilder) TransactionTestUtilities::setCommands),
+                Arguments.of(
+                        "Sorted Set Commands",
+                        (TransactionBuilder) TransactionTestUtilities::sortedSetCommands),
+                Arguments.of(
+                        "HyperLogLog Commands",
+                        (TransactionBuilder) TransactionTestUtilities::hyperLogLogCommands),
                 Arguments.of(
                         "Stream Commands", (TransactionBuilder) TransactionTestUtilities::streamCommands),
                 Arguments.of(

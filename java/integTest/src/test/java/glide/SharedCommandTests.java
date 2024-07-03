@@ -5463,9 +5463,9 @@ public class SharedCommandTests {
         assertEquals(streamId1_2, group1Info.get("last-delivered-id"));
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(
-                3L, group1Info.get("entries-read")); // We have read stream entries 1-0, 1-1, and 1-2
+                    3L, group1Info.get("entries-read")); // We have read stream entries 1-0, 1-1, and 1-2
             assertEquals(
-                1L, group1Info.get("lag")); // We still have not read one entry in the stream, entry 1-3
+                    1L, group1Info.get("lag")); // We still have not read one entry in the stream, entry 1-3
         }
 
         // Verify xgroup_set_id effects the returned value from xinfo_groups

@@ -13364,17 +13364,17 @@ public class RedisClientTest {
         GlideString groupName = gs("groupName");
         GlideString[] arguments = {key, groupName};
         Map<GlideString, Object>[] mockResult =
-            new Map[] {
-                Map.of("name", "groupName", "pending", 2, "idle", 9104628, "inactive", 18104698)
-            };
+                new Map[] {
+                    Map.of("name", "groupName", "pending", 2, "idle", 9104628, "inactive", 18104698)
+                };
 
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
         testResponse.complete(mockResult);
 
         // match on protobuf request
         when(commandManager.<Map<GlideString, Object>[]>submitNewCommand(
-            eq(XInfoConsumers), eq(arguments), any()))
-            .thenReturn(testResponse);
+                        eq(XInfoConsumers), eq(arguments), any()))
+                .thenReturn(testResponse);
 
         // exercise
         CompletableFuture<Map<GlideString, Object>[]> response = service.xinfoConsumers(key, groupName);
