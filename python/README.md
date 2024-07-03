@@ -3,9 +3,9 @@
 General Language Independent Driver for the Enterprise (GLIDE) for Redis, is an AWS-sponsored, open-source Redis client. GLIDE for Redis works with any Redis distribution that adheres to the Redis Serialization Protocol (RESP) specification, including open-source Redis, Amazon ElastiCache for Redis, and Amazon MemoryDB for Redis.
 Strategic, mission-critical Redis-based applications have requirements for security, optimized performance, minimal downtime, and observability. GLIDE for Redis is designed to provide a client experience that helps meet these objectives. It is sponsored and supported by AWS, and comes pre-configured with best practices learned from over a decade of operating Redis-compatible services used by hundreds of thousands of customers. To help ensure consistency in development and operations, GLIDE for Redis is implemented using a core driver framework, written in Rust, with extensions made available for each supported programming language. This design ensures that updates easily propagate to each language and reduces overall complexity. In this Preview release, GLIDE for Redis is available for Python and Javascript (Node.js), with support for Java actively under development.
 
-## Supported Redis Versions
+## Supported Engine Versions
 
-GLIDE for Redis is API-compatible with open source Redis version 6 and 7.
+Refer to the [Supported Engine Versions table](https://github.com/aws/glide-for-redis/blob/main/README.md#supported-engine-versions) for details.
 
 ## Current Status
 
@@ -18,9 +18,15 @@ This preview release is recommended for testing purposes only.
 
 The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
 
-## Python supported version
+## Python Supported Versions
 
-Python 3.8 or higher.
+| Python Version |
+|----------------|
+| 3.8            |
+| 3.9            |
+| 3.10           |
+| 3.11           |
+| 3.12           |
 
 ## Installation and Setup
 

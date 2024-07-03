@@ -242,9 +242,11 @@ enum RequestType {
     ZScan = 201;
     HScan = 202;
     XAutoClaim = 203;
+    XInfoGroups = 204;
+    XInfoConsumers = 205;
+    Scan = 206;
     Wait = 208;
     XClaim = 209;
-    Scan = 210;
 }
 
 message Command {

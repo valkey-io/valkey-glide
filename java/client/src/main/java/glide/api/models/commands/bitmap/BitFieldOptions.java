@@ -14,8 +14,8 @@ import lombok.RequiredArgsConstructor;
  * {@link BitmapBaseCommands#bitfieldReadOnly(String, BitFieldReadOnlySubCommands[])}. Specifies
  * subcommands, bit-encoding type, and offset type.
  *
- * @see <a href="https://redis.io/commands/bitfield/">redis.io</a> and <a
- *     href="https://redis.io/docs/latest/commands/bitfield_ro/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/bitfield/">valkey.io</a> and <a
+ *     href="https://valkey.io/commands/bitfield_ro/">valkey.io</a>
  */
 public class BitFieldOptions {
     /** <code>GET</code> subcommand string to include in the <code>BITFIELD</code> command. */
