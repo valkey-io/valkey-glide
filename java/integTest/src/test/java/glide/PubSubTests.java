@@ -29,6 +29,7 @@ import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -679,7 +680,7 @@ public class PubSubTests {
 
         // redis can reorder the messages, so we can't validate that the order (without big delays
         // between sends)
-        assertEquals(new HashSet<>(messages), received);
+        assertEquals(new LinkedHashSet<>(messages), received);
     }
 
     /**
