@@ -4,6 +4,7 @@ package glide;
 import static glide.TestConfiguration.REDIS_VERSION;
 import static glide.TestUtilities.commonClientConfig;
 import static glide.TestUtilities.commonClusterClientConfig;
+import static glide.api.models.GlideString.gs;
 import static glide.api.models.configuration.RequestRoutingConfiguration.SimpleMultiNodeRoute.ALL_NODES;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -17,6 +18,7 @@ import glide.api.BaseClient;
 import glide.api.RedisClient;
 import glide.api.RedisClusterClient;
 import glide.api.models.ClusterTransaction;
+import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.Transaction;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.ChannelMode;
@@ -56,13 +58,13 @@ public class PubSubTests {
     @SuppressWarnings("unchecked")
     private <M extends ChannelMode> BaseClient createClientWithSubscriptions(
             boolean standalone,
-            Map<M, Set<String>> subscriptions,
+            Map<M, Set<GlideString>> subscriptions,
             Optional<MessageCallback> callback,
             Optional<Object> context) {
         if (standalone) {
             var subConfigBuilder =
                     StandaloneSubscriptionConfiguration.builder()
-                            .subscriptions((Map<PubSubChannelMode, Set<String>>) subscriptions);
+                            .subscriptions((Map<PubSubChannelMode, Set<GlideString>>) subscriptions);
 
             if (callback.isPresent()) {
                 subConfigBuilder.callback(callback.get(), context.get());
@@ -73,7 +75,7 @@ public class PubSubTests {
         } else {
             var subConfigBuilder =
                     ClusterSubscriptionConfiguration.builder()
-                            .subscriptions((Map<PubSubClusterChannelMode, Set<String>>) subscriptions);
+                            .subscriptions((Map<PubSubClusterChannelMode, Set<GlideString>>) subscriptions);
 
             if (callback.isPresent()) {
                 subConfigBuilder.callback(callback.get(), context.get());
@@ -88,7 +90,7 @@ public class PubSubTests {
     }
 
     private <M extends ChannelMode> BaseClient createClientWithSubscriptions(
-            boolean standalone, Map<M, Set<String>> subscriptions) {
+            boolean standalone, Map<M, Set<GlideString>> subscriptions) {
         return createClientWithSubscriptions(
                 standalone, subscriptions, Optional.empty(), Optional.empty());
     }
@@ -166,7 +168,7 @@ public class PubSubTests {
             boolean standalone,
             boolean useCallback,
             int clientId,
-            Map<? extends ChannelMode, Set<String>> subscriptions) {
+            Map<? extends ChannelMode, Set<GlideString>> subscriptions) {
         MessageCallback callback =
                 (msg, ctx) ->
                         ((ConcurrentLinkedDeque<Pair<Integer, PubSubMessage>>) ctx)
@@ -205,8 +207,8 @@ public class PubSubTests {
     @MethodSource("getTwoBoolPermutations")
     public void exact_happy_path(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
-        String channel = UUID.randomUUID().toString();
-        String message = UUID.randomUUID().toString();
+        GlideString channel = gs(UUID.randomUUID().toString());
+        GlideString message = gs(UUID.randomUUID().toString());
         var subscriptions = Map.of(exact(standalone), Set.of(channel));
 
         var listener = createListener(standalone, useCallback, 1, subscriptions);
@@ -230,13 +232,13 @@ public class PubSubTests {
         int messagesPerChannel = 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
         ChannelMode mode = exact(standalone);
-        Map<? extends ChannelMode, Set<String>> subscriptions = Map.of(mode, new HashSet<>());
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions = Map.of(mode, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(mode).add(channel);
             for (var j = 0; j < messagesPerChannel; j++) {
-                var message = i + "-" + j + "-" + UUID.randomUUID();
+                GlideString message = gs(i + "-" + j + "-" + UUID.randomUUID());
                 messages.add(new PubSubMessage(message, channel));
             }
         }
@@ -265,8 +267,8 @@ public class PubSubTests {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         skipTestsOnMac();
 
-        String channel = UUID.randomUUID().toString();
-        String pubsubMessage = UUID.randomUUID().toString();
+        GlideString channel = gs(UUID.randomUUID().toString());
+        GlideString pubsubMessage = gs(UUID.randomUUID().toString());
         var subscriptions = Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
 
         var listener = createListener(false, useCallback, 1, subscriptions);
@@ -292,13 +294,13 @@ public class PubSubTests {
         int pubsubMessagesPerChannel = 256;
         var pubsubMessages = new ArrayList<PubSubMessage>(numChannels * pubsubMessagesPerChannel);
         PubSubClusterChannelMode mode = PubSubClusterChannelMode.SHARDED;
-        Map<PubSubClusterChannelMode, Set<String>> subscriptions = Map.of(mode, new HashSet<>());
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions = Map.of(mode, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(mode).add(channel);
             for (var j = 0; j < pubsubMessagesPerChannel; j++) {
-                var message = i + "-" + j + "-" + UUID.randomUUID();
+                GlideString message = gs(i + "-" + j + "-" + UUID.randomUUID());
                 pubsubMessages.add(new PubSubMessage(message, channel));
             }
         }
@@ -327,10 +329,10 @@ public class PubSubTests {
     public void pattern(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
         String prefix = "channel.";
-        String pattern = prefix + "*";
-        Map<String, String> message2channels =
+        GlideString pattern = gs(prefix + "*");
+        Map<GlideString, GlideString> message2channels =
                 Map.of(
-                        prefix + "1", UUID.randomUUID().toString(), prefix + "2", UUID.randomUUID().toString());
+                        gs(prefix + "1"), gs(UUID.randomUUID().toString()), gs(prefix + "2"), gs(UUID.randomUUID().toString()));
         var subscriptions =
                 Map.of(
                         standalone ? PubSubChannelMode.PATTERN : PubSubClusterChannelMode.PATTERN,
@@ -363,7 +365,7 @@ public class PubSubTests {
     public void pattern_many_channels(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         int numChannels = 256;
         int messagesPerChannel = 256;
         ChannelMode mode = standalone ? PubSubChannelMode.PATTERN : PubSubClusterChannelMode.PATTERN;
@@ -371,9 +373,9 @@ public class PubSubTests {
         var subscriptions = Map.of(mode, Set.of(pattern));
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = prefix + "-" + i + "-" + UUID.randomUUID();
+            GlideString channel = gs(prefix + "-" + i + "-" + UUID.randomUUID());
             for (var j = 0; j < messagesPerChannel; j++) {
-                var message = i + "-" + j + "-" + UUID.randomUUID();
+                GlideString message = gs(i + "-" + j + "-" + UUID.randomUUID());
                 messages.add(new PubSubMessage(message, channel, pattern));
             }
         }
@@ -403,12 +405,12 @@ public class PubSubTests {
     public void combined_exact_and_pattern_one_client(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         int numChannels = 256;
         int messagesPerChannel = 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * messagesPerChannel);
         ChannelMode mode = standalone ? PubSubChannelMode.EXACT : PubSubClusterChannelMode.EXACT;
-        Map<? extends ChannelMode, Set<String>> subscriptions =
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
                 Map.of(
                         mode,
                         new HashSet<>(),
@@ -416,17 +418,17 @@ public class PubSubTests {
                         Set.of(pattern));
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(mode).add(channel);
             for (var j = 0; j < messagesPerChannel; j++) {
-                var message = i + "-" + j + "-" + UUID.randomUUID();
+                GlideString message = gs(i + "-" + j + "-" + UUID.randomUUID());
                 messages.add(new PubSubMessage(message, channel));
             }
         }
 
         for (var j = 0; j < messagesPerChannel; j++) {
-            var pubsubMessage = j + "-" + UUID.randomUUID();
-            var channel = prefix + "-" + j + "-" + UUID.randomUUID();
+            GlideString pubsubMessage = gs(j + "-" + UUID.randomUUID());
+            GlideString channel = gs(prefix + "-" + j + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(pubsubMessage, channel, pattern));
         }
 
@@ -455,22 +457,22 @@ public class PubSubTests {
     public void combined_exact_and_pattern_multiple_clients(boolean standalone, boolean useCallback) {
         skipTestsOnMac();
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         int numChannels = 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * 2);
         ChannelMode mode = exact(standalone);
-        Map<? extends ChannelMode, Set<String>> subscriptions = Map.of(mode, new HashSet<>());
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions = Map.of(mode, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(mode).add(channel);
-            var message = i + "-" + UUID.randomUUID();
+            GlideString message = gs(i + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(message, channel));
         }
 
         for (var j = 0; j < numChannels; j++) {
-            var message = j + "-" + UUID.randomUUID();
-            var channel = prefix + "-" + j + "-" + UUID.randomUUID();
+            GlideString message = gs(j + "-" + UUID.randomUUID());
+            GlideString channel = gs(prefix + "-" + j + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(message, channel, pattern));
         }
 
@@ -524,34 +526,34 @@ public class PubSubTests {
         skipTestsOnMac();
 
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         String shardPrefix = "{shard}";
         int numChannels = 256;
         var messages = new ArrayList<PubSubMessage>(numChannels * 2);
         var shardedMessages = new ArrayList<PubSubMessage>(numChannels);
-        Map<PubSubClusterChannelMode, Set<String>> subscriptions =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions =
                 Map.of(
                         PubSubClusterChannelMode.EXACT, new HashSet<>(),
                         PubSubClusterChannelMode.PATTERN, Set.of(pattern),
                         PubSubClusterChannelMode.SHARDED, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptions.get(PubSubClusterChannelMode.EXACT).add(channel);
-            var message = i + "-" + UUID.randomUUID();
+            GlideString message = gs(i + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(message, channel));
         }
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = shardPrefix + "-" + i + "-" + UUID.randomUUID();
+            GlideString channel = gs(shardPrefix + "-" + i + "-" + UUID.randomUUID());
             subscriptions.get(PubSubClusterChannelMode.SHARDED).add(channel);
-            var message = i + "-" + UUID.randomUUID();
+            GlideString message = gs(i + "-" + UUID.randomUUID());
             shardedMessages.add(new PubSubMessage(message, channel));
         }
 
         for (var j = 0; j < numChannels; j++) {
-            var message = j + "-" + UUID.randomUUID();
-            var channel = prefix + "-" + j + "-" + UUID.randomUUID();
+            GlideString message = gs(j + "-" + UUID.randomUUID());
+            GlideString channel = gs(prefix + "-" + j + "-" + UUID.randomUUID());
             messages.add(new PubSubMessage(message, channel, pattern));
         }
 
@@ -587,36 +589,36 @@ public class PubSubTests {
         skipTestsOnMac();
 
         String prefix = "channel.";
-        String pattern = prefix + "*";
+        GlideString pattern = gs(prefix + "*");
         String shardPrefix = "{shard}";
         int numChannels = 256;
         var exactMessages = new ArrayList<PubSubMessage>(numChannels);
         var patternMessages = new ArrayList<PubSubMessage>(numChannels);
         var shardedMessages = new ArrayList<PubSubMessage>(numChannels);
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsExact =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsExact =
                 Map.of(PubSubClusterChannelMode.EXACT, new HashSet<>());
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsPattern =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsPattern =
                 Map.of(PubSubClusterChannelMode.PATTERN, Set.of(pattern));
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsSharded =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsSharded =
                 Map.of(PubSubClusterChannelMode.SHARDED, new HashSet<>());
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = i + "-" + UUID.randomUUID();
+            GlideString channel = gs(i + "-" + UUID.randomUUID());
             subscriptionsExact.get(PubSubClusterChannelMode.EXACT).add(channel);
-            var pubsubMessage = i + "-" + UUID.randomUUID();
+            GlideString pubsubMessage = gs(i + "-" + UUID.randomUUID());
             exactMessages.add(new PubSubMessage(pubsubMessage, channel));
         }
 
         for (var i = 0; i < numChannels; i++) {
-            var channel = shardPrefix + "-" + i + "-" + UUID.randomUUID();
+            GlideString channel = gs(shardPrefix + "-" + i + "-" + UUID.randomUUID());
             subscriptionsSharded.get(PubSubClusterChannelMode.SHARDED).add(channel);
-            var message = i + "-" + UUID.randomUUID();
+            GlideString message = gs(i + "-" + UUID.randomUUID());
             shardedMessages.add(new PubSubMessage(message, channel));
         }
 
         for (var j = 0; j < numChannels; j++) {
-            var message = j + "-" + UUID.randomUUID();
-            var channel = prefix + "-" + j + "-" + UUID.randomUUID();
+            GlideString message = gs(j + "-" + UUID.randomUUID());
+            GlideString channel = gs(prefix + "-" + j + "-" + UUID.randomUUID());
             patternMessages.add(new PubSubMessage(message, channel, pattern));
         }
 
@@ -694,15 +696,15 @@ public class PubSubTests {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         skipTestsOnMac();
 
-        String channel = UUID.randomUUID().toString();
-        var exactMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
-        var patternMessage = new PubSubMessage(UUID.randomUUID().toString(), channel, channel);
-        var shardedMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsExact =
+        GlideString channel = gs(UUID.randomUUID().toString());
+        var exactMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), channel);
+        var patternMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), channel, channel);
+        var shardedMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), channel);
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsExact =
                 Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsPattern =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsPattern =
                 Map.of(PubSubClusterChannelMode.PATTERN, Set.of(channel));
-        Map<PubSubClusterChannelMode, Set<String>> subscriptionsSharded =
+        Map<PubSubClusterChannelMode, Set<GlideString>> subscriptionsSharded =
                 Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
 
         var listenerExact =
@@ -815,14 +817,14 @@ public class PubSubTests {
                 "Test doesn't work on cluster due to Cross Slot error, probably a bug in `redis-rs`");
 
         String prefix = "channel";
-        String pattern = prefix + "*";
-        String shardPrefix = "{shard}";
-        String channel = UUID.randomUUID().toString();
-        var exactMessage = new PubSubMessage(UUID.randomUUID().toString(), channel);
-        var patternMessage = new PubSubMessage(UUID.randomUUID().toString(), prefix, pattern);
-        var shardedMessage = new PubSubMessage(UUID.randomUUID().toString(), shardPrefix);
+        GlideString pattern = gs(prefix + "*");
+        GlideString shardPrefix = gs("{shard}");
+        GlideString channel = gs(UUID.randomUUID().toString());
+        var exactMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), channel);
+        var patternMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), gs(prefix), pattern);
+        var shardedMessage = new PubSubMessage(gs(UUID.randomUUID().toString()), shardPrefix);
 
-        Map<? extends ChannelMode, Set<String>> subscriptions =
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
                 standalone
                         ? Map.of(
                                 PubSubChannelMode.EXACT,

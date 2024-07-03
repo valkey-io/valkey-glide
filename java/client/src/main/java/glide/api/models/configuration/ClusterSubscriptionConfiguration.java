@@ -6,6 +6,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import glide.api.models.GlideString;
 import lombok.Getter;
 
 /**
@@ -55,13 +57,13 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
      * Will be applied via <code>SUBSCRIBE</code>/<code>PSUBSCRIBE</code>/<code>SSUBSCRIBE</code>
      * commands during connection establishment.
      */
-    private final Map<PubSubClusterChannelMode, Set<String>> subscriptions;
+    private final Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions;
 
     // All code below is a custom implementation of `SuperBuilder`
     private ClusterSubscriptionConfiguration(
             Optional<MessageCallback> callback,
             Optional<Object> context,
-            Map<PubSubClusterChannelMode, Set<String>> subscriptions) {
+            Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions) {
         super(callback, context);
         this.subscriptions = subscriptions;
     }
@@ -77,7 +79,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
 
         private ClusterSubscriptionConfigurationBuilder() {}
 
-        private Map<PubSubClusterChannelMode, Set<String>> subscriptions = new HashMap<>(3);
+        private Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions = new HashMap<>(3);
 
         /**
          * Add a subscription to a channel or to multiple channels if {@link
@@ -85,7 +87,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
          * See {@link ClusterSubscriptionConfiguration#subscriptions}.
          */
         public ClusterSubscriptionConfigurationBuilder subscription(
-                PubSubClusterChannelMode mode, String channelOrPattern) {
+                PubSubClusterChannelMode mode, GlideString channelOrPattern) {
             addSubscription(subscriptions, mode, channelOrPattern);
             return this;
         }
@@ -95,7 +97,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
          * See {@link ClusterSubscriptionConfiguration#subscriptions}.
          */
         public ClusterSubscriptionConfigurationBuilder subscriptions(
-                Map<PubSubClusterChannelMode, Set<String>> subscriptions) {
+                Map<PubSubClusterChannelMode, Set<GlideString>> subscriptions) {
             this.subscriptions = subscriptions;
             return this;
         }
@@ -106,7 +108,7 @@ public final class ClusterSubscriptionConfiguration extends BaseSubscriptionConf
          * See {@link ClusterSubscriptionConfiguration#subscriptions}.
          */
         public ClusterSubscriptionConfigurationBuilder subscriptions(
-                PubSubClusterChannelMode mode, Set<String> subscriptions) {
+                PubSubClusterChannelMode mode, Set<GlideString> subscriptions) {
             this.subscriptions.put(mode, subscriptions);
             return this;
         }

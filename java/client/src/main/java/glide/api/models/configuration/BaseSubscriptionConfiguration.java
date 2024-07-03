@@ -2,6 +2,7 @@
 package glide.api.models.configuration;
 
 import glide.api.BaseClient;
+import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.ClusterSubscriptionConfigurationBuilder;
 import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClusterChannelMode;
@@ -9,6 +10,7 @@ import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSub
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.StandaloneSubscriptionConfigurationBuilder;
 import glide.api.models.exceptions.ConfigurationError;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -70,9 +72,10 @@ public abstract class BaseSubscriptionConfiguration {
         protected Optional<Object> context = Optional.empty();
 
         protected <M extends ChannelMode> void addSubscription(
-                Map<M, Set<String>> subscriptions, M mode, String channelOrPattern) {
+            Map<M, Set<GlideString>> subscriptions, M mode, GlideString channelOrPattern) {
             if (!subscriptions.containsKey(mode)) {
-                subscriptions.put(mode, new HashSet<>());
+                // Note: Use a LinkedHashSet to preserve order for ease of debugging and unit testing.
+                subscriptions.put(mode, new LinkedHashSet<>());
             }
             subscriptions.get(mode).add(channelOrPattern);
         }

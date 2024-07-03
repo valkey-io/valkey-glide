@@ -2,10 +2,12 @@
 package glide.api.models.configuration;
 
 import glide.api.RedisClient;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+
+import glide.api.models.GlideString;
 import lombok.Getter;
 
 /**
@@ -48,13 +50,13 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
      * Will be applied via <code>SUBSCRIBE</code>/<code>PSUBSCRIBE</code> commands during connection
      * establishment.
      */
-    private final Map<PubSubChannelMode, Set<String>> subscriptions;
+    private final Map<PubSubChannelMode, Set<GlideString>> subscriptions;
 
     // All code below is a custom implementation of `SuperBuilder`
     public StandaloneSubscriptionConfiguration(
             Optional<MessageCallback> callback,
             Optional<Object> context,
-            Map<PubSubChannelMode, Set<String>> subscriptions) {
+            Map<PubSubChannelMode, Set<GlideString>> subscriptions) {
         super(callback, context);
         this.subscriptions = subscriptions;
     }
@@ -70,7 +72,8 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
 
         private StandaloneSubscriptionConfigurationBuilder() {}
 
-        private Map<PubSubChannelMode, Set<String>> subscriptions = new HashMap<>(2);
+        // Note: Use a LinkedHashMap to preserve order for ease of debugging and unit testing.
+        private Map<PubSubChannelMode, Set<GlideString>> subscriptions = new LinkedHashMap<>(2);
 
         /**
          * Add a subscription to a channel or to multiple channels if {@link PubSubChannelMode#PATTERN}
@@ -78,7 +81,7 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
          * See {@link StandaloneSubscriptionConfiguration#subscriptions}.
          */
         public StandaloneSubscriptionConfigurationBuilder subscription(
-                PubSubChannelMode mode, String channelOrPattern) {
+                PubSubChannelMode mode, GlideString channelOrPattern) {
             addSubscription(subscriptions, mode, channelOrPattern);
             return self();
         }
@@ -88,7 +91,7 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
          * See {@link StandaloneSubscriptionConfiguration#subscriptions}.
          */
         public StandaloneSubscriptionConfigurationBuilder subscriptions(
-                Map<PubSubChannelMode, Set<String>> subscriptions) {
+                Map<PubSubChannelMode, Set<GlideString>> subscriptions) {
             this.subscriptions = subscriptions;
             return this;
         }
@@ -99,7 +102,7 @@ public final class StandaloneSubscriptionConfiguration extends BaseSubscriptionC
          * See {@link StandaloneSubscriptionConfiguration#subscriptions}.
          */
         public StandaloneSubscriptionConfigurationBuilder subscriptions(
-                PubSubChannelMode mode, Set<String> subscriptions) {
+                PubSubChannelMode mode, Set<GlideString> subscriptions) {
             this.subscriptions.put(mode, subscriptions);
             return this;
         }
