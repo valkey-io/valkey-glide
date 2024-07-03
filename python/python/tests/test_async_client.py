@@ -4763,9 +4763,7 @@ class TestCommands:
             get_patterns=["user:*->name"],
             alpha=True,
         )
-        assert result == convert_string_to_bytes_object(
-            ["Dave", "Bob", "Alice", "Charlie", "Eve"]
-        )
+        assert result == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         if not skip_sort_ro_test:
             result_ro = await redis_client.sort_ro(

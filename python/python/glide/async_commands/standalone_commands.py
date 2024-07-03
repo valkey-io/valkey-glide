@@ -551,6 +551,7 @@ class StandaloneCommands(CoreCommands):
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        This command is routed depending on the client's `ReadFrom` strategy.
 
         See https://valkey.io/commands/sort for more details.
 

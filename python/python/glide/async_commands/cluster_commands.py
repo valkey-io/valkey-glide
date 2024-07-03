@@ -738,6 +738,7 @@ class ClusterCommands(CoreCommands):
     ) -> List[bytes]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
         This command is routed depending on the client's `ReadFrom` strategy.
 
         By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
