@@ -214,9 +214,9 @@ pub enum RequestType {
     XAutoClaim = 203,
     XInfoGroups = 204,
     XInfoConsumers = 205,
+    Scan = 206,
     Wait = 208,
     XClaim = 209,
-    Scan = 210,
 }
 
 fn get_two_word_command(first: &str, second: &str) -> Cmd {
