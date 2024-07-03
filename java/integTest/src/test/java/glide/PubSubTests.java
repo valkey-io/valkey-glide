@@ -197,14 +197,14 @@ public class PubSubTests {
     @SuppressWarnings("unchecked")
     private BaseClient createListener(
             boolean standalone,
-            boolean useCallback,
+            boolean withCallback,
             int clientId,
             Map<? extends ChannelMode, Set<String>> subscriptions) {
         MessageCallback callback =
                 (msg, ctx) ->
                         ((ConcurrentLinkedDeque<Pair<Integer, PubSubMessage>>) ctx)
                                 .push(Pair.of(clientId, msg));
-        return useCallback
+        return withCallback
                 ? createClientWithSubscriptions(
                         standalone, subscriptions, Optional.of(callback), Optional.of(pubsubMessageQueue))
                 : createClientWithSubscriptions(standalone, subscriptions);
@@ -229,7 +229,7 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_exact_happy_path` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void exact_happy_path(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
@@ -251,7 +251,7 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_exact_happy_path_many_channels` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void exact_happy_path_many_channels(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
@@ -350,7 +350,7 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_pattern` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void pattern(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
@@ -387,7 +387,7 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_pattern_many_channels` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void pattern_many_channels(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
@@ -426,7 +426,7 @@ public class PubSubTests {
 
     /** Similar to `test_pubsub_combined_exact_and_pattern_one_client` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void combined_exact_and_pattern_one_client(boolean standalone, MessageReadMethod method) {
         skipTestsOnMac();
@@ -477,7 +477,7 @@ public class PubSubTests {
      * Similar to `test_pubsub_combined_exact_and_pattern_multiple_clients` in python client tests.
      */
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void combined_exact_and_pattern_multiple_clients(
             boolean standalone, MessageReadMethod method) {
@@ -948,7 +948,7 @@ public class PubSubTests {
     }
 
     @SneakyThrows
-    @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
+    @ParameterizedTest(name = "standalone = {0}, read messages via {1}")
     @MethodSource("getTestScenarios")
     public void transaction_with_all_types_of_messages(boolean standalone, MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
