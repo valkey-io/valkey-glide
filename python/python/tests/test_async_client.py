@@ -34,6 +34,7 @@ from glide.async_commands.core import (
     ExpiryType,
     ExpiryTypeGetEx,
     FlushMode,
+    FunctionRestorePolicy,
     InfBound,
     InfoSection,
     InsertPosition,
@@ -8046,6 +8047,171 @@ class TestCommands:
             )
             == 42
         )
+
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_dump_restore_standalone(self, redis_client: GlideClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+
+        # Dump an empty lib
+        emptyDump = await redis_client.function_dump()
+        assert emptyDump is not None and len(emptyDump) > 0
+
+        name1 = f"Foster{get_random_string(5)}"
+        name2 = f"Dogster{get_random_string(5)}"
+
+        # function name1 returns first argument; function name2 returns argument array len
+        code = generate_lua_lib_code(
+            name1, {name1: "return args[1]", name2: "return #args"}, False
+        )
+        assert await redis_client.function_load(code, True) == name1.encode()
+        flist = await redis_client.function_list(with_code=True)
+
+        dump = await redis_client.function_dump()
+        assert dump is not None
+
+        # restore without cleaning the lib and/or overwrite option causes an error
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.function_restore(dump)
+        assert "already exists" in str(e)
+
+        # APPEND policy also fails for the same reason (name collision)
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.function_restore(
+                dump, FunctionRestorePolicy.APPEND
+            )
+        assert "already exists" in str(e)
+
+        # REPLACE policy succeed
+        assert (
+            await redis_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
+            is OK
+        )
+
+        # but nothing changed - all code overwritten
+        assert await redis_client.function_list(with_code=True) == flist
+
+        # create lib with another name, but with the same function names
+        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+        code = generate_lua_lib_code(
+            name2, {name1: "return args[1]", name2: "return #args"}, False
+        )
+        assert await redis_client.function_load(code, True) == name2.encode()
+
+        # REPLACE policy now fails due to a name collision
+        with pytest.raises(RequestError) as e:
+            await redis_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
+        assert "already exists" in str(e)
+
+        # FLUSH policy succeeds, but deletes the second lib
+        assert (
+            await redis_client.function_restore(dump, FunctionRestorePolicy.FLUSH) is OK
+        )
+        assert await redis_client.function_list(with_code=True) == flist
+
+        # call restored functions
+        assert (
+            await redis_client.fcall(name1, arguments=["meow", "woem"])
+            == "meow".encode()
+        )
+        assert await redis_client.fcall(name2, arguments=["meow", "woem"]) == 2
+
+    @pytest.mark.parametrize("cluster_mode", [True])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_dump_restore_cluster(
+        self, redis_client: GlideClusterClient
+    ):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+
+        # Dump an empty lib
+        emptyDump = await redis_client.function_dump()
+        assert emptyDump is not None and len(emptyDump) > 0
+
+        name1 = f"Foster{get_random_string(5)}"
+        libname1 = f"FosterLib{get_random_string(5)}"
+        name2 = f"Dogster{get_random_string(5)}"
+        libname2 = f"DogsterLib{get_random_string(5)}"
+
+        # function name1 returns first argument; function name2 returns argument array len
+        code = generate_lua_lib_code(
+            libname1, {name1: "return args[1]", name2: "return #args"}, True
+        )
+        assert await redis_client.function_load(code, True) == libname1.encode()
+        flist = await redis_client.function_list(with_code=True)
+        dump = await redis_client.function_dump(RandomNode())
+        assert dump is not None and isinstance(dump, bytes)
+
+        # restore without cleaning the lib and/or overwrite option causes an error
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.function_restore(dump)
+        assert "already exists" in str(e)
+
+        # APPEND policy also fails for the same reason (name collision)
+        with pytest.raises(RequestError) as e:
+            assert await redis_client.function_restore(
+                dump, FunctionRestorePolicy.APPEND
+            )
+        assert "already exists" in str(e)
+
+        # REPLACE policy succeed
+        assert (
+            await redis_client.function_restore(
+                dump, FunctionRestorePolicy.REPLACE, route=AllPrimaries()
+            )
+            is OK
+        )
+
+        # but nothing changed - all code overwritten
+        restoredFunctionList = await redis_client.function_list(with_code=True)
+        assert restoredFunctionList is not None
+        assert isinstance(restoredFunctionList, List) and len(restoredFunctionList) == 1
+        assert restoredFunctionList[0]["library_name".encode()] == libname1.encode()
+
+        # Note that function ordering may differ across nodes so we can't do a deep equals
+        assert len(restoredFunctionList[0]["functions".encode()]) == 2
+
+        # create lib with another name, but with the same function names
+        assert await redis_client.function_flush(FlushMode.SYNC) is OK
+        code = generate_lua_lib_code(
+            libname2, {name1: "return args[1]", name2: "return #args"}, True
+        )
+        assert await redis_client.function_load(code, True) == libname2.encode()
+        restoredFunctionList = await redis_client.function_list(with_code=True)
+        assert restoredFunctionList is not None
+        assert isinstance(restoredFunctionList, List) and len(restoredFunctionList) == 1
+        assert restoredFunctionList[0]["library_name".encode()] == libname2.encode()
+
+        # REPLACE policy now fails due to a name collision
+        with pytest.raises(RequestError) as e:
+            await redis_client.function_restore(dump, FunctionRestorePolicy.REPLACE)
+        assert "already exists" in str(e)
+
+        # FLUSH policy succeeds, but deletes the second lib
+        assert (
+            await redis_client.function_restore(dump, FunctionRestorePolicy.FLUSH) is OK
+        )
+        restoredFunctionList = await redis_client.function_list(with_code=True)
+        assert restoredFunctionList is not None
+        assert isinstance(restoredFunctionList, List) and len(restoredFunctionList) == 1
+        assert restoredFunctionList[0]["library_name".encode()] == libname1.encode()
+
+        # Note that function ordering may differ across nodes so we can't do a deep equals
+        assert len(restoredFunctionList[0]["functions".encode()]) == 2
+
+        # call restored functions
+        assert (
+            await redis_client.fcall_ro(name1, arguments=["meow", "woem"])
+            == "meow".encode()
+        )
+        assert await redis_client.fcall_ro(name2, arguments=["meow", "woem"]) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

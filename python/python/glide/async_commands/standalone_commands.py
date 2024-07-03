@@ -8,6 +8,7 @@ from glide.async_commands.command_args import Limit, ObjectType, OrderBy
 from glide.async_commands.core import (
     CoreCommands,
     FlushMode,
+    FunctionRestorePolicy,
     InfoSection,
     _build_sort_args,
 )
@@ -360,6 +361,58 @@ class StandaloneCommands(CoreCommands):
                 [library_name],
             ),
         )
+
+    async def function_dump(self) -> bytes:
+        """
+        Returns the serialized payload of all loaded libraries.
+
+        See https://valkey.io/docs/latest/commands/function-dump/ for more details.
+
+        Returns:
+            bytes: The serialized payload of all loaded libraries.
+
+        Examples:
+            >>> payload = await client.function_dump()
+                # The serialized payload of all loaded libraries. This response can
+                # be used to restore loaded functions on any Valkey instance.
+            >>> await client.function_restore(payload)
+                "OK" # The serialized dump response was used to restore the libraries.
+
+        Since: Redis 7.0.0.
+        """
+        return cast(bytes, await self._execute_command(RequestType.FunctionDump, []))
+
+    async def function_restore(
+        self, payload: TEncodable, policy: Optional[FunctionRestorePolicy] = None
+    ) -> TOK:
+        """
+        Restores libraries from the serialized payload returned by the `function_dump` command.
+
+        See https://valkey.io/docs/latest/commands/function-restore/ for more details.
+
+        Args:
+            payload (TEncodable): The serialized data from the `function_dump` command.
+            policy (Optional[FunctionRestorePolicy]): A policy for handling existing libraries.
+
+        Returns:
+            TOK: OK.
+
+        Examples:
+            >>> payload = await client.function_dump()
+                # The serialized payload of all loaded libraries. This response can
+                # be used to restore loaded functions on any Valkey instance.
+            >>> await client.function_restore(payload)
+                "OK" # The serialized dump response was used to restore the libraries.
+            >>> await client.function_restore(payload, FunctionRestorePolicy.FLUSH)
+                "OK" # The serialized dump response was used to restore the libraries with the specified policy.
+
+        Since: Redis 7.0.0.
+        """
+        args: List[TEncodable] = [payload]
+        if policy is not None:
+            args.append(policy.value)
+
+        return cast(TOK, await self._execute_command(RequestType.FunctionRestore, args))
 
     async def time(self) -> List[bytes]:
         """
