@@ -297,15 +297,15 @@ def check_function_stats_response(
         pytest.fail("No running function info")
 
     if running_script_info != None and len(running_function) == 0:
-        command = running_script_info.get(b"command")
-        pytest.fail("Unexpected running function info: " + " ".join(command))
+        command = cast(dict, running_script_info).get(b"command")
+        pytest.fail("Unexpected running function info: " + " ".join(cast(str, command)))
 
     if running_script_info != None:
-        command = running_script_info.get(b"command")
+        command = cast(dict, running_script_info).get(b"command")
         assert running_function == command
         # command line format is:
         # fcall|fcall_ro <function name> <num keys> <key>* <arg>*
-        assert running_function[1] == running_script_info.get(b"name")
+        assert running_function[1] == cast(dict, running_script_info).get(b"name")
 
     expected = {
         b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}

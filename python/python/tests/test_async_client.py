@@ -75,7 +75,7 @@ from glide.config import (
     ProtocolVersion,
     RedisCredentials,
 )
-from glide.constants import OK, TEncodable, TResult
+from glide.constants import OK, TEncodable, TFunctionStatsResponse, TResult
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.routes import (
     AllNodes,
@@ -7684,7 +7684,9 @@ class TestCommands:
 
         response = await redis_client.function_stats()
         for node_response in response.values():
-            check_function_stats_response(node_response, [], 1, 1)
+            check_function_stats_response(
+                cast(TFunctionStatsResponse, node_response), [], 1, 1
+            )
 
         code = generate_lua_lib_code(
             lib_name + "_2",
@@ -7697,13 +7699,17 @@ class TestCommands:
 
         response = await redis_client.function_stats()
         for node_response in response.values():
-            check_function_stats_response(node_response, [], 2, 3)
+            check_function_stats_response(
+                cast(TFunctionStatsResponse, node_response), [], 2, 3
+            )
 
         assert await redis_client.function_flush(FlushMode.SYNC) == OK
 
         response = await redis_client.function_stats()
         for node_response in response.values():
-            check_function_stats_response(node_response, [], 0, 0)
+            check_function_stats_response(
+                cast(TFunctionStatsResponse, node_response), [], 0, 0
+            )
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7730,10 +7736,14 @@ class TestCommands:
 
         response = await redis_client.function_stats(route)
         if single_route:
-            check_function_stats_response(response, [], 1, 1)
+            check_function_stats_response(
+                cast(TFunctionStatsResponse, response), [], 1, 1
+            )
         else:
             for node_response in response.values():
-                check_function_stats_response(node_response, [], 1, 1)
+                check_function_stats_response(
+                    cast(TFunctionStatsResponse, node_response), [], 1, 1
+                )
 
         code = generate_lua_lib_code(
             lib_name + "_2",
@@ -7747,19 +7757,27 @@ class TestCommands:
 
         response = await redis_client.function_stats(route)
         if single_route:
-            check_function_stats_response(response, [], 2, 3)
+            check_function_stats_response(
+                cast(TFunctionStatsResponse, response), [], 2, 3
+            )
         else:
             for node_response in response.values():
-                check_function_stats_response(node_response, [], 2, 3)
+                check_function_stats_response(
+                    cast(TFunctionStatsResponse, node_response), [], 2, 3
+                )
 
         assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
 
         response = await redis_client.function_stats(route)
         if single_route:
-            check_function_stats_response(response, [], 0, 0)
+            check_function_stats_response(
+                cast(TFunctionStatsResponse, response), [], 0, 0
+            )
         else:
             for node_response in response.values():
-                check_function_stats_response(node_response, [], 0, 0)
+                check_function_stats_response(
+                    cast(TFunctionStatsResponse, node_response), [], 0, 0
+                )
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
