@@ -517,7 +517,7 @@ public interface HashBaseCommands {
      * Returns a random field name from the hash value stored at <code>key</code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return A random field name from the hash stored at <code>key</code>, or <code>null</code> when
      *     the key does not exist.
@@ -554,7 +554,7 @@ public interface HashBaseCommands {
      * </code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
@@ -596,7 +596,7 @@ public interface HashBaseCommands {
      * value stored at <code>key</code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
