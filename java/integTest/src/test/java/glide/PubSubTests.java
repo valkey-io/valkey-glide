@@ -34,6 +34,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentLinkedDeque;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
@@ -130,15 +131,16 @@ public class PubSubTests {
         pubsubMessageQueue.clear();
     }
 
+    @SneakyThrows
     private void verifyReceivedPubsubMessages(
             Set<Pair<Integer, PubSubMessage>> pubsubMessages, BaseClient listener, boolean callback) {
         if (callback) {
             assertEquals(pubsubMessages, new HashSet<>(pubsubMessageQueue));
         } else {
             var received = new HashSet<PubSubMessage>(pubsubMessages.size());
-            PubSubMessage pubsubMessage;
-            while ((pubsubMessage = listener.tryGetPubSubMessage()) != null) {
-                received.add(pubsubMessage);
+            CompletableFuture<PubSubMessage> messagePromise;
+            while ((messagePromise = listener.getPubSubMessage()).isDone()) {
+                received.add(messagePromise.get());
             }
             assertEquals(
                     pubsubMessages.stream().map(Pair::getValue).collect(Collectors.toSet()), received);
@@ -831,8 +833,7 @@ public class PubSubTests {
     @SneakyThrows
     @ParameterizedTest(name = "standalone = {0}, use callback = {1}")
     @MethodSource("getTwoBoolPermutations")
-    public void transaction_with_all_types_of_PubsubMessages(
-            boolean standalone, boolean useCallback) {
+    public void transaction_with_all_types_of_messages(boolean standalone, boolean useCallback) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
         skipTestsOnMac();
         assumeTrue(
