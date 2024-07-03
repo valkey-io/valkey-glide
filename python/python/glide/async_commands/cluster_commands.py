@@ -8,6 +8,7 @@ from glide.async_commands.command_args import Limit, ObjectType, OrderBy
 from glide.async_commands.core import (
     CoreCommands,
     FlushMode,
+    FunctionRestorePolicy,
     InfoSection,
     _build_sort_args,
 )
@@ -552,6 +553,76 @@ class ClusterCommands(CoreCommands):
         return cast(
             TClusterResponse[TResult],
             await self._execute_command(RequestType.FCallReadOnly, args, route),
+        )
+
+    async def function_dump(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[bytes]:
+        """
+        Returns the serialized payload of all loaded libraries.
+
+        See https://valkey.io/commands/function-dump/ for more details.
+
+        Args:
+            route (Optional[Route]): The command will be routed to a random node, unless
+                `route` is provided, in which case the client will route the command to the
+                nodes defined by `route`.
+
+        Returns:
+            TClusterResponse[bytes]: The serialized payload of all loaded libraries.
+
+        Examples:
+            >>> payload = await client.function_dump()
+                # The serialized payload of all loaded libraries. This response can
+                # be used to restore loaded functions on any Valkey instance.
+            >>> await client.function_restore(payload)
+                "OK" # The serialized dump response was used to restore the libraries.
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TClusterResponse[bytes],
+            await self._execute_command(RequestType.FunctionDump, [], route),
+        )
+
+    async def function_restore(
+        self,
+        payload: TEncodable,
+        policy: Optional[FunctionRestorePolicy] = None,
+        route: Optional[Route] = None,
+    ) -> TOK:
+        """
+        Restores libraries from the serialized payload returned by the `function_dump` command.
+
+        See https://valkey.io/commands/function-restore/ for more details.
+
+        Args:
+            payload (bytes): The serialized data from the `function_dump` command.
+            policy (Optional[FunctionRestorePolicy]): A policy for handling existing libraries.
+            route (Optional[Route]): The command will be sent to all primaries, unless
+                `route` is provided, in which case the client will route the command to the
+                nodes defined by `route`.
+
+        Returns:
+            TOK: OK.
+
+        Examples:
+            >>> payload = await client.function_dump()
+                # The serialized payload of all loaded libraries. This response can
+                # be used to restore loaded functions on any Valkey instance.
+            >>> await client.function_restore(payload, AllPrimaries())
+                "OK" # The serialized dump response was used to restore the libraries with the specified route.
+            >>> await client.function_restore(payload, FunctionRestorePolicy.FLUSH, AllPrimaries())
+                "OK" # The serialized dump response was used to restore the libraries with the specified route and policy.
+
+        Since: Redis 7.0.0.
+        """
+        args: List[TEncodable] = [payload]
+        if policy is not None:
+            args.append(policy.value)
+
+        return cast(
+            TOK, await self._execute_command(RequestType.FunctionRestore, args, route)
         )
 
     async def time(

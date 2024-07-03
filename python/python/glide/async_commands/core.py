@@ -307,6 +307,22 @@ class FlushMode(Enum):
     SYNC = "SYNC"
 
 
+class FunctionRestorePolicy(Enum):
+    """
+    Options for the FUNCTION RESTORE command.
+
+    - APPEND: Appends the restored libraries to the existing libraries and aborts on collision. This is the
+        default policy.
+    - FLUSH: Deletes all existing libraries before restoring the payload.
+    - REPLACE: Appends the restored libraries to the existing libraries, replacing any existing ones in case
+        of name collisions. Note that this policy doesn't prevent function name collisions, only libraries.
+    """
+
+    APPEND = "APPEND"
+    FLUSH = "FLUSH"
+    REPLACE = "REPLACE"
+
+
 def _build_sort_args(
     key: TEncodable,
     by_pattern: Optional[TEncodable] = None,
