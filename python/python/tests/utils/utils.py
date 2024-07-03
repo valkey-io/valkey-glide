@@ -227,8 +227,9 @@ def generate_lua_lib_code(
     return code
 
 
-def create_lua_lib_with_long_running_function(lib_name: str, func_name: str, timeout: int,
-                                              read_only: bool) -> str:
+def create_lua_lib_with_long_running_function(
+    lib_name: str, func_name: str, timeout: int, read_only: bool
+) -> str:
     """
     Create a Lub Lib with a RO function which runs an endless loop up to timeout sec.
     Execution takes at least 5 sec regardless of the timeout configured.

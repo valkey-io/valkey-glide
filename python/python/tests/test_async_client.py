@@ -93,11 +93,12 @@ from tests.utils.utils import (
     compare_maps,
     convert_bytes_to_string_object,
     convert_string_to_bytes_object,
+    create_lua_lib_with_long_running_function,
     generate_lua_lib_code,
     get_first_result,
     get_random_string,
     is_single_response,
-    parse_info_response, create_lua_lib_with_long_running_function,
+    parse_info_response,
 )
 
 
@@ -122,7 +123,7 @@ class TestGlideClients:
         redis_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
-        length = 2 ** 25  # 33mb
+        length = 2**25  # 33mb
         key = "0" * length
         value = "0" * length
         assert len(key) == length
@@ -139,7 +140,7 @@ class TestGlideClients:
         await redis_client.set(key, value)
         assert await redis_client.get(key) == value.encode()
 
-    @pytest.mark.parametrize("value_size", [100, 2 ** 16])
+    @pytest.mark.parametrize("value_size", [100, 2**16])
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_client_handle_concurrent_workload_without_dropping_or_changing_values(
@@ -2437,14 +2438,14 @@ class TestCommands:
 
         # Test search by box, unit: miles, from a geospatial data, with limited ANY count to 1
         assert (
-                   await redis_client.geosearch(
-                       key,
-                       GeospatialData(15, 37),
-                       GeoSearchByBox(250, 250, GeoUnit.MILES),
-                       OrderBy.ASC,
-                       count=GeoSearchCount(1, True),
-                   )
-               )[0] in cast(list, convert_string_to_bytes_object(members))
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(250, 250, GeoUnit.MILES),
+                OrderBy.ASC,
+                count=GeoSearchCount(1, True),
+            )
+        )[0] in cast(list, convert_string_to_bytes_object(members))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2509,17 +2510,17 @@ class TestCommands:
 
         # Test search by radius, unit: kilometers, from a geospatial data, with limited ANY count to 1
         assert (
-                   await redis_client.geosearch(
-                       key,
-                       GeospatialData(15, 37),
-                       GeoSearchByRadius(200, GeoUnit.KILOMETERS),
-                       OrderBy.ASC,
-                       count=GeoSearchCount(1, True),
-                       with_coord=True,
-                       with_dist=True,
-                       with_hash=True,
-                   )
-               )[0] in cast(list, convert_string_to_bytes_object(result))
+            await redis_client.geosearch(
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByRadius(200, GeoUnit.KILOMETERS),
+                OrderBy.ASC,
+                count=GeoSearchCount(1, True),
+                with_coord=True,
+                with_dist=True,
+                with_hash=True,
+            )
+        )[0] in cast(list, convert_string_to_bytes_object(result))
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -2604,13 +2605,13 @@ class TestCommands:
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data
         assert (
-                   await redis_client.geosearchstore(
-                       destination_key,
-                       key,
-                       GeospatialData(15, 37),
-                       GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
-                   )
-               ) == 4  # Number of elements stored
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+            )
+        ) == 4  # Number of elements stored
 
         # Verify the stored results
         zrange_map = await redis_client.zrange_withscores(
@@ -2622,14 +2623,14 @@ class TestCommands:
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data, with distance
         assert (
-                   await redis_client.geosearchstore(
-                       destination_key,
-                       key,
-                       GeospatialData(15, 37),
-                       GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
-                       store_dist=True,
-                   )
-               ) == 4  # Number of elements stored
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+                store_dist=True,
+            )
+        ) == 4  # Number of elements stored
 
         # Verify the stored results
         zrange_map = await redis_client.zrange_withscores(
@@ -2641,14 +2642,14 @@ class TestCommands:
 
         # Test storing results of a box search, unit: kilometes, from a geospatial data, with count
         assert (
-                   await redis_client.geosearchstore(
-                       destination_key,
-                       key,
-                       GeospatialData(15, 37),
-                       GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
-                       count=GeoSearchCount(1),
-                   )
-               ) == 1  # Number of elements stored
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                GeospatialData(15, 37),
+                GeoSearchByBox(400, 400, GeoUnit.KILOMETERS),
+                count=GeoSearchCount(1),
+            )
+        ) == 1  # Number of elements stored
 
         # Verify the stored results
         zrange_map = await redis_client.zrange_withscores(
@@ -2659,14 +2660,14 @@ class TestCommands:
         # Test storing results of a box search, unit: meters, from a member, with distance
         meters = 400 * 1000
         assert (
-                   await redis_client.geosearchstore(
-                       destination_key,
-                       key,
-                       "Catania",
-                       GeoSearchByBox(meters, meters, GeoUnit.METERS),
-                       store_dist=True,
-                   )
-               ) == 3  # Number of elements stored
+            await redis_client.geosearchstore(
+                destination_key,
+                key,
+                "Catania",
+                GeoSearchByBox(meters, meters, GeoUnit.METERS),
+                store_dist=True,
+            )
+        ) == 3  # Number of elements stored
 
         # Verify the stored results with distances
         zrange_map = await redis_client.zrange_withscores(
@@ -3800,9 +3801,9 @@ class TestCommands:
         assert await redis_client.zrange(
             key, RangeByIndex(start=0, stop=1), reverse=True
         ) == [
-                   b"three",
-                   b"two",
-               ]
+            b"three",
+            b"two",
+        ]
 
         assert await redis_client.zrange(key, RangeByIndex(start=3, stop=1)) == []
         assert (
@@ -3840,15 +3841,15 @@ class TestCommands:
         ) == [b"two", b"one"]
 
         assert (
-                   await redis_client.zrange(
-                       key,
-                       RangeByScore(
-                           start=InfBound.NEG_INF,
-                           stop=InfBound.POS_INF,
-                           limit=Limit(offset=1, count=2),
-                       ),
-                   )
-               ) == [b"two", b"three"]
+            await redis_client.zrange(
+                key,
+                RangeByScore(
+                    start=InfBound.NEG_INF,
+                    stop=InfBound.POS_INF,
+                    limit=Limit(offset=1, count=2),
+                ),
+            )
+        ) == [b"two", b"three"]
 
         assert (
             await redis_client.zrange(
@@ -3907,15 +3908,15 @@ class TestCommands:
         ) == [b"a", b"b"]
 
         assert (
-                   await redis_client.zrange(
-                       key,
-                       RangeByLex(
-                           start=InfBound.NEG_INF,
-                           stop=InfBound.POS_INF,
-                           limit=Limit(offset=1, count=2),
-                       ),
-                   )
-               ) == [b"b", b"c"]
+            await redis_client.zrange(
+                key,
+                RangeByLex(
+                    start=InfBound.NEG_INF,
+                    stop=InfBound.POS_INF,
+                    limit=Limit(offset=1, count=2),
+                ),
+            )
+        ) == [b"b", b"c"]
 
         assert await redis_client.zrange(
             key,
@@ -3957,10 +3958,10 @@ class TestCommands:
         )
 
         assert (
-                   await redis_client.zrange_withscores(
-                       "non_existing_key", RangeByIndex(start=0, stop=-1)
-                   )
-               ) == {}
+            await redis_client.zrange_withscores(
+                "non_existing_key", RangeByIndex(start=0, stop=-1)
+            )
+        ) == {}
 
         assert await redis_client.set(key, "value") == OK
         with pytest.raises(RequestError):
@@ -4935,8 +4936,8 @@ class TestCommands:
         )
 
         assert (
-                   await redis_client.xadd(key, [(field, "foo2"), (field2, "bar2")])
-               ) is not None
+            await redis_client.xadd(key, [(field, "foo2"), (field2, "bar2")])
+        ) is not None
         assert await redis_client.xlen(key) == 2
 
         # This will trim the first entry.
@@ -5196,17 +5197,17 @@ class TestCommands:
         assert await redis_client.xread(
             {key1: stream_id1_1}, StreamReadOptions(count=1)
         ) == {
-                   key1.encode(): {
-                       stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
-                   },
-               }
+            key1.encode(): {
+                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
+            },
+        }
         assert await redis_client.xread(
             {key1: stream_id1_1}, StreamReadOptions(count=1, block_ms=1000)
         ) == {
-                   key1.encode(): {
-                       stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
-                   },
-               }
+            key1.encode(): {
+                stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
+            },
+        }
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -5255,19 +5256,19 @@ class TestCommands:
         assert await redis_client.xread(
             {key1: stream_id0}, StreamReadOptions(count=0)
         ) == {
-                   key1.encode(): {
-                       stream_id1.encode(): [[b"f1", b"v1"]],
-                       stream_id2.encode(): [[b"f2", b"v2"]],
-                   },
-               }
+            key1.encode(): {
+                stream_id1.encode(): [[b"f1", b"v1"]],
+                stream_id2.encode(): [[b"f2", b"v2"]],
+            },
+        }
         assert await redis_client.xread(
             {key1: stream_id0}, StreamReadOptions(count=-1)
         ) == {
-                   key1.encode(): {
-                       stream_id1.encode(): [[b"f1", b"v1"]],
-                       stream_id2.encode(): [[b"f2", b"v2"]],
-                   },
-               }
+            key1.encode(): {
+                stream_id1.encode(): [[b"f1", b"v1"]],
+                stream_id2.encode(): [[b"f2", b"v2"]],
+            },
+        }
 
         # invalid stream ID
         with pytest.raises(RequestError):
@@ -5432,11 +5433,11 @@ class TestCommands:
             consumer_name,
             StreamReadGroupOptions(block_ms=1000, count=10),
         ) == {
-                   key.encode(): {
-                       stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
-                       stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
-                   }
-               }
+            key.encode(): {
+                stream_id1_0.encode(): [[b"f1_0", b"v1_0"]],
+                stream_id1_1.encode(): [[b"f1_1", b"v1_1"]],
+            }
+        }
 
         # delete one of the stream entries
         assert await redis_client.xdel(key, [stream_id1_0]) == 1
@@ -5572,20 +5573,20 @@ class TestCommands:
         assert await redis_client.xreadgroup(
             {key: ">"}, group_name, consumer_name, StreamReadGroupOptions(count=0)
         ) == {
-                   key.encode(): {
-                       stream_id1_1.encode(): [[b"f1", b"v1"]],
-                   },
-               }
+            key.encode(): {
+                stream_id1_1.encode(): [[b"f1", b"v1"]],
+            },
+        }
         assert await redis_client.xreadgroup(
             {key: stream_id1_0},
             group_name,
             consumer_name,
             StreamReadGroupOptions(count=-1),
         ) == {
-                   key.encode(): {
-                       stream_id1_1.encode(): [[b"f1", b"v1"]],
-                   },
-               }
+            key.encode(): {
+                stream_id1_1.encode(): [[b"f1", b"v1"]],
+            },
+        }
 
         # invalid stream ID
         with pytest.raises(RequestError):
@@ -7801,7 +7802,9 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2])
-    async def test_function_kill(self, redis_client: TGlideClient, cluster_mode, protocol, request):
+    async def test_function_kill(
+        self, redis_client: TGlideClient, cluster_mode, protocol, request
+    ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(redis_client, min_version):
             pytest.skip(f"Redis version required >= {min_version}")
@@ -7831,7 +7834,7 @@ class TestCommands:
             start_time = asyncio.get_event_loop().time()
             while asyncio.get_event_loop().time() - start_time < timeout:
                 response = await redis_client.custom_command(["FUNCTION", "STATS"])
-                if response.get('running_script') is not None:
+                if response.get("running_script") is not None:
                     break
                 await asyncio.sleep(0.1)
             else:
