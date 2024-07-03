@@ -209,11 +209,6 @@ public class PubSubTests {
                 : createClientWithSubscriptions(standalone, subscriptions);
     }
 
-    // TODO add following tests from https://github.com/aws/glide-for-redis/pull/1643
-    //  test_pubsub_exact_happy_path_coexistence
-    //  test_pubsub_exact_happy_path_many_channels_co_existence
-    //  test_sharded_pubsub_co_existence
-    //  test_pubsub_pattern_co_existence
     // TODO tests below blocked by https://github.com/aws/glide-for-redis/issues/1649
     //  test_pubsub_exact_max_size_PubsubMessage
     //  test_pubsub_sharded_max_size_PubsubMessage
@@ -607,6 +602,7 @@ public class PubSubTests {
                 messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()), listener, method);
     }
 
+    /** This test fully covers all `test_pubsub_*_co_existence` tests in python client. */
     @SneakyThrows
     @Test
     public void coexistense_of_sync_and_async_read() {
