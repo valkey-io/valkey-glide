@@ -91,7 +91,7 @@ public class StreamReadOptions {
         return optionArgs.toArray(new GlideString[0]);
     }
 
-    /** 
+    /**
      * Converts options into a String[].
      *
      * @return String[]
@@ -100,8 +100,8 @@ public class StreamReadOptions {
         Map<String, String> emptyMap = new HashMap<>();
         return toArgs(emptyMap);
     }
-  
-    /** 
+
+    /**
      * Converts options into a GlideString[].
      *
      * @return GlideString[]
