@@ -937,8 +937,8 @@ class TestTransaction:
         assert isinstance(result[0], str)
         assert "# Memory" in result[0]
         assert result[1:5] == [OK, False, OK, value.encode()]
-        assert result[5:14] == [2, 2, 2, [b"Bob", b"Alice"], [b"Bob", b"Alice"], 2, OK, None, 0]
-        assert result[14:] == expected
+        assert result[5:13] == [2, 2, 2, [b"Bob", b"Alice"], 2, OK, None, 0]
+        assert result[13:] == expected
 
     def test_transaction_clear(self):
         transaction = Transaction()

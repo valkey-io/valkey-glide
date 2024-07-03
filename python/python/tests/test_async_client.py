@@ -4741,7 +4741,7 @@ class TestCommands:
                 order=OrderBy.ASC,
                 alpha=True,
             )
-            assert result_ro == ["Alice", "Bob"]
+            assert result_ro == [b"Alice", b"Bob"]
 
         # Test sort_store with all arguments
         sort_store_result = await glide_client.sort_store(
@@ -4774,7 +4774,7 @@ class TestCommands:
                 get_patterns=["user:*->name"],
                 alpha=True,
             )
-            assert result_ro == ["Dave", "Bob", "Alice", "Charlie", "Eve"]
+            assert result_ro == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         # Test sort with `by` argument with missing keys to sort by
         assert await glide_client.lpush("user_ids", ["a"]) == 6
@@ -4795,7 +4795,7 @@ class TestCommands:
                 get_patterns=["user:*->name"],
                 alpha=True,
             )
-            assert result_ro == [None, "Dave", "Bob", "Alice", "Charlie", "Eve"]
+            assert result_ro == [None, b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         # Test sort with `by` argument with missing keys to sort by
         result = await glide_client.sort(
@@ -4815,7 +4815,7 @@ class TestCommands:
                 get_patterns=["user:*->age"],
                 alpha=True,
             )
-            assert result_ro == [None, "30", "25", "35", "20", "40"]
+            assert result_ro == [None, b"30", b"25", b"35", b"20", b"40"]
 
         # Test Limit with count 0
         result = await glide_client.sort(
@@ -4870,7 +4870,7 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await redis_client.sort_ro(key)
-            assert result_ro == ["1", "2", "3", "4", "5"]
+            assert result_ro == [b"1", b"2", b"3", b"4", b"5"]
 
         # limit argument
         result = await glide_client.sort(key, limit=Limit(1, 3))
@@ -4878,7 +4878,7 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await redis_client.sort_ro(key, limit=Limit(1, 3))
-            assert result_ro == ["2", "3", "4"]
+            assert result_ro == [b"2", b"3", b"4"]
 
         # order argument
         result = await glide_client.sort(key, order=OrderBy.DESC)
@@ -4886,7 +4886,7 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await redis_client.sort_ro(key, order=OrderBy.DESC)
-            assert result_ro == ["5", "4", "3", "2", "1"]
+            assert result_ro == [b"5", b"4", b"3", b"2", b"1"]
 
         assert await redis_client.lpush(key, ["a"]) == 6
 
@@ -4909,7 +4909,7 @@ class TestCommands:
 
         if not skip_sort_ro_test:
             result_ro = await redis_client.sort_ro(key, alpha=True)
-            assert result_ro == ["1", "2", "3", "4", "5", "a"]
+            assert result_ro == [b"1", b"2", b"3", b"4", b"5", b"a"]
 
         # Combining multiple arguments
         result = await glide_client.sort(
@@ -4921,7 +4921,7 @@ class TestCommands:
             result_ro = await redis_client.sort_ro(
                 key, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
             )
-            assert result_ro == ["5", "4", "3"]
+            assert result_ro == [b"5", b"4", b"3"]
 
         # Test sort_store with combined arguments
         sort_store_result = await glide_client.sort_store(

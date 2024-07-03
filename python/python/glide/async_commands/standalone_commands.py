@@ -541,13 +541,13 @@ class StandaloneCommands(CoreCommands):
 
     async def sort_ro(
         self,
-        key: str,
-        by_pattern: Optional[str] = None,
+        key: TEncodable,
+        by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
-        get_patterns: Optional[List[str]] = None,
+        get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> List[Optional[str]]:
+    ) -> List[Optional[bytes]]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
@@ -555,8 +555,8 @@ class StandaloneCommands(CoreCommands):
         See https://valkey.io/commands/sort_ro for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
-            by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
                 `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
@@ -565,7 +565,7 @@ class StandaloneCommands(CoreCommands):
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            get_pattern (Optional[str]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+            get_pattern (Optional[TEncodable]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
                 transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
@@ -580,28 +580,28 @@ class StandaloneCommands(CoreCommands):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point
 
         Returns:
-            List[Optional[str]]: Returns a list of sorted elements.
+            List[Optional[bytes]]: Returns a list of sorted elements.
 
         Examples:
             >>> await client.lpush("mylist", 3, 1, 2)
             >>> await client.sort_ro("mylist")
-            ['1', '2', '3']
+            [b'1', b'2', b'3']
             >>> await client.sort_ro("mylist", order=OrderBy.DESC)
-            ['3', '2', '1']
+            [b'3', b'2', b'1']
             >>> await client.lpush("mylist2", 2, 1, 2, 3, 3, 1)
             >>> await client.sort_ro("mylist2", limit=Limit(2, 3))
-            ['2', '2', '3']
+            [b'2', b'2', b'3']
             >>> await client.hset("user:1", "name", "Alice", "age", 30)
             >>> await client.hset("user:2", "name", "Bob", "age", 25)
             >>> await client.lpush("user_ids", 2, 1)
             >>> await client.sort_ro("user_ids", by_pattern="user:*->age", get_patterns=["user:*->name"])
-            ['Bob', 'Alice']
+            [b'Bob', b'Alice']
 
         Since: Redis version 7.0.0.
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         result = await self._execute_command(RequestType.SortReadOnly, args)
-        return cast(List[Optional[str]], result)
+        return cast(List[Optional[bytes]], result)
 
     async def sort_store(
         self,

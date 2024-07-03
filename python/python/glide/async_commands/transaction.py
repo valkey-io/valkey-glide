@@ -4725,10 +4725,10 @@ class Transaction(BaseTransaction):
 
     def sort_ro(
         self: TTransaction,
-        key: str,
-        by_pattern: Optional[str] = None,
+        key: TEncodable,
+        by_pattern: Optional[TEncodable] = None,
         limit: Optional[Limit] = None,
-        get_patterns: Optional[List[str]] = None,
+        get_patterns: Optional[List[TEncodable]] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
     ) -> TTransaction:
@@ -4739,8 +4739,8 @@ class Transaction(BaseTransaction):
         See https://valkey.io/commands/sort_ro for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
-            by_pattern (Optional[str]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
                 `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
@@ -4749,7 +4749,7 @@ class Transaction(BaseTransaction):
                 keys `weight_<element>`.
                 If not provided, elements are sorted by their value.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
-            get_pattern (Optional[str]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+            get_pattern (Optional[TEncodable]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
                 The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
                 from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
                 transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
@@ -4764,7 +4764,7 @@ class Transaction(BaseTransaction):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
         Command response:
-            List[Optional[str]]: Returns a list of sorted elements.
+            List[Optional[bytes]]: Returns a list of sorted elements.
 
         Since: Redis version 7.0.0.
         """
@@ -4913,7 +4913,7 @@ class ClusterTransaction(BaseTransaction):
 
     def sort_ro(
         self: TTransaction,
-        key: str,
+        key: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
@@ -4924,7 +4924,7 @@ class ClusterTransaction(BaseTransaction):
         See https://valkey.io/commands/sort_ro for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
@@ -4932,7 +4932,7 @@ class ClusterTransaction(BaseTransaction):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
         Command response:
-            List[str]: A list of sorted elements.
+            List[bytes]: A list of sorted elements.
 
         Since: Redis version 7.0.0.
         """

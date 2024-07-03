@@ -186,7 +186,6 @@ pub enum RequestType {
     Move = 174,
     SInterCard = 175,
     XRevRange = 176,
-    SortReadOnly = 177,
     Copy = 178,
     MSetNX = 179,
     LPos = 180,

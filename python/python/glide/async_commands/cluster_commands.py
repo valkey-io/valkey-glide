@@ -731,11 +731,11 @@ class ClusterCommands(CoreCommands):
 
     async def sort_ro(
         self,
-        key: str,
+        key: TEncodable,
         limit: Optional[Limit] = None,
         order: Optional[OrderBy] = None,
         alpha: Optional[bool] = None,
-    ) -> List[str]:
+    ) -> List[bytes]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
         This command is routed depending on the client's `ReadFrom` strategy.
@@ -745,7 +745,7 @@ class ClusterCommands(CoreCommands):
         See https://valkey.io/commands/sort_ro for more details.
 
         Args:
-            key (str): The key of the list, set, or sorted set to be sorted.
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
             limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
             order (Optional[OrderBy]): Specifies the order to sort the elements.
                 Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
@@ -753,29 +753,29 @@ class ClusterCommands(CoreCommands):
                 Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
 
         Returns:
-            List[str]: A list of sorted elements.
+            List[bytes]: A list of sorted elements.
 
         Examples:
             >>> await client.lpush("mylist", '3', '1', '2')
             >>> await client.sort_ro("mylist")
-            ['1', '2', '3']
+            [b'1', b'2', b'3']
 
             >>> await client.sort_ro("mylist", order=OrderBy.DESC)
-            ['3', '2', '1']
+            [b'3', b'2', b'1']
 
             >>> await client.lpush("mylist", '2', '1', '2', '3', '3', '1')
             >>> await client.sort_ro("mylist", limit=Limit(2, 3))
-            ['1', '2', '2']
+            [b'1', b'2', b'2']
 
             >>> await client.lpush("mylist", "a", "b", "c", "d")
             >>> await client.sort_ro("mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
-            ['b', 'a']
+            [b'b', b'a']
 
         Since: Redis version 7.0.0.
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         result = await self._execute_command(RequestType.SortReadOnly, args)
-        return cast(List[str], result)
+        return cast(List[bytes], result)
 
     async def sort_store(
         self,
