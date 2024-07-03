@@ -373,8 +373,11 @@ class StandaloneCommands(CoreCommands):
 
         Examples:
             >>> await client.function_dump()
+                <binary data>
                 # The serialized payload of all loaded libraries. This response can
                 # be used to restore loaded functions on any Valkey instance.
+            >>> await client.function_restore(<binary data>)
+                "OK" # The serialized dump response was used to restore the libraries.
 
         Since: Redis 7.0.0.
         """

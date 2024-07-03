@@ -309,7 +309,7 @@ class FlushMode(Enum):
 
 class FunctionRestorePolicy(Enum):
     """
-    option: options for FUNCTION RESTORE command.
+    Options for the FUNCTION RESTORE command.
 
     - APPEND: Appends the restored libraries to the existing libraries and aborts on collision. This is the
         default policy.
