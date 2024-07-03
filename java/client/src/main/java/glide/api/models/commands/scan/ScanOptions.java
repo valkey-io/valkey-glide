@@ -25,6 +25,7 @@ public class ScanOptions extends BaseScanOptions {
      */
     private final ObjectType type;
 
+    /** Defines the complex data types available for a <code>SCAN</code> request. */
     public enum ObjectType {
         STRING(ObjectTypeResolver.OBJECT_TYPE_STRING_NATIVE_NAME),
         LIST(ObjectTypeResolver.OBJECT_TYPE_LIST_NATIVE_NAME),
