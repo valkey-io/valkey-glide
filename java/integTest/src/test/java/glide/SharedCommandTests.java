@@ -5404,6 +5404,18 @@ public class SharedCommandTests {
             assertTrue((Long) consumerInfo.get("inactive") > 0L);
         }
 
+        // Test with GlideString
+        consumers = client.xinfoConsumers(gs(key), gs(groupName1)).get();
+        assertEquals(1, consumers.length);
+        consumerInfo = consumers[0];
+        assertEquals(consumer1, consumerInfo.get("name"));
+        assertEquals(1L, consumerInfo.get("pending"));
+        assertTrue((Long) consumerInfo.get("idle") > 0L);
+
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
+            assertTrue((Long) consumerInfo.get("inactive") > 0L);
+        }
+
         // Create consumer2 and read the rest of the entries with it
         assertTrue(client.xgroupCreateConsumer(key, groupName1, consumer2).get());
         result = client.xreadgroup(Map.of(key, ">"), groupName1, consumer2).get();
@@ -5441,6 +5453,21 @@ public class SharedCommandTests {
                     1L, group1Info.get("lag")); // We still have not read one entry in the stream, entry 1-3
         }
 
+        // Test with GlideString
+        groups = client.xinfoGroups(gs(key)).get();
+        assertEquals(1, groups.length);
+        group1Info = groups[0];
+        assertEquals(groupName1, group1Info.get("name"));
+        assertEquals(2L, group1Info.get("consumers"));
+        assertEquals(3L, group1Info.get("pending"));
+        assertEquals(streamId1_2, group1Info.get("last-delivered-id"));
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertEquals(
+                3L, group1Info.get("entries-read")); // We have read stream entries 1-0, 1-1, and 1-2
+            assertEquals(
+                1L, group1Info.get("lag")); // We still have not read one entry in the stream, entry 1-3
+        }
+
         // Verify xgroup_set_id effects the returned value from xinfo_groups
         assertEquals(OK, client.xgroupSetId(key, groupName1, streamId1_1).get());
         groups = client.xinfoGroups(key).get();
@@ -5458,7 +5485,7 @@ public class SharedCommandTests {
                     null, group1Info.get("lag")); // Gets set to None when we change the last delivered ID
 
             // Verify xgroup_set_id with entries_read_id effects the returned value from xinfo_groups
-            assertEquals(OK, client.xgroupSetId(key, groupName1, streamId1_1, "1").get());
+            assertEquals(OK, client.xgroupSetId(key, groupName1, streamId1_1, 1L).get());
             groups = client.xinfoGroups(key).get();
             assertEquals(1, groups.length);
             group1Info = groups[0];

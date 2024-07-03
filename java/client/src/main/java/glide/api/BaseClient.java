@@ -2720,11 +2720,28 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Object>[]> xinfoGroups(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoGroups,
+                new GlideString[] {key},
+                response -> castArray(handleArrayResponse(response), Map.class));
+    }
+
+    @Override
     public CompletableFuture<Map<String, Object>[]> xinfoConsumers(
             @NonNull String key, @NonNull String groupName) {
         return commandManager.submitNewCommand(
                 XInfoConsumers,
                 new String[] {key, groupName},
+                response -> castArray(handleArrayResponse(response), Map.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>[]> xinfoConsumers(
+            @NonNull GlideString key, @NonNull GlideString groupName) {
+        return commandManager.submitNewCommand(
+                XInfoConsumers,
+                new GlideString[] {key, groupName},
                 response -> castArray(handleArrayResponse(response), Map.class));
     }
 

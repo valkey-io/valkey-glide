@@ -13289,6 +13289,46 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xinfoGroups_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = {key};
+        Map<GlideString, Object>[] mockResult =
+                new Map[] {
+                    Map.of(
+                            "name",
+                            "groupName",
+                            "consumers",
+                            2,
+                            "pending",
+                            2,
+                            "last-delivered-id",
+                            "1638126030001-0",
+                            "entries-read",
+                            2,
+                            "lag",
+                            2)
+                };
+
+        CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Object>[]>submitNewCommand(
+                        eq(XInfoGroups), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Object>[]> response = service.xinfoGroups(key);
+        Map<GlideString, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xinfoConsumers_returns_success() {
         // setup
         String key = "testKey";
@@ -13310,6 +13350,35 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Map<String, Object>[]> response = service.xinfoConsumers(key, groupName);
         Map<String, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xinfoConsumers_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString groupName = gs("groupName");
+        GlideString[] arguments = {key, groupName};
+        Map<GlideString, Object>[] mockResult =
+            new Map[] {
+                Map.of("name", "groupName", "pending", 2, "idle", 9104628, "inactive", 18104698)
+            };
+
+        CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Object>[]>submitNewCommand(
+            eq(XInfoConsumers), eq(arguments), any()))
+            .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Object>[]> response = service.xinfoConsumers(key, groupName);
+        Map<GlideString, Object>[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

@@ -4056,7 +4056,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     attributes of a consumer group for the stream at <code>key</code>.
      */
     public T xinfoGroups(@NonNull String key) {
-        protobufTransaction.addCommands(buildCommand(XInfoGroups, buildArgs(key)));
+        protobufTransaction.addCommands(buildCommand(XInfoGroups, newArgsBuilder().add(key)));
         return getThis();
     }
 
@@ -4071,7 +4071,8 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     attributes of a consumer for the given consumer group of the stream at <code>key</code>.
      */
     public T xinfoConsumers(@NonNull String key, @NonNull String groupName) {
-        protobufTransaction.addCommands(buildCommand(XInfoConsumers, buildArgs(key, groupName)));
+        protobufTransaction.addCommands(
+                buildCommand(XInfoConsumers, newArgsBuilder().add(key).add(groupName)));
         return getThis();
     }
 
