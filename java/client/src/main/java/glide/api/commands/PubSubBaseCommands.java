@@ -6,7 +6,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands for the "Pub/Sub" group for standalone and cluster clients.
  *
- * @see <a href="https://valkey.io/commands/?group=pubsub">Pub/Sub Commands</a>
+ * @see <a href="https://redis.io/commands/?group=pubsub">Pub/Sub Commands</a>
  */
 public interface PubSubBaseCommands {
 

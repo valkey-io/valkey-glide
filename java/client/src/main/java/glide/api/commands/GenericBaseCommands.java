@@ -14,7 +14,7 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Generic Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://valkey.io/commands/?group=generic">Generic Commands</a>
+ * @see <a href="https://redis.io/commands/?group=generic">Generic Commands</a>
  */
 public interface GenericBaseCommands {
     /** Redis API keyword used to replace the destination key. */

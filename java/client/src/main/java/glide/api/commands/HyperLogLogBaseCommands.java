@@ -8,7 +8,7 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "HyperLogLog Commands" group for standalone and
  * cluster clients.
  *
- * @see <a href="https://valkey.io/commands/?group=hyperloglog">HyperLogLog Commands</a>
+ * @see <a href="https://redis.io/commands/?group=hyperloglog">HyperLogLog Commands</a>
  */
 public interface HyperLogLogBaseCommands {
 

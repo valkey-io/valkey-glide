@@ -12,7 +12,7 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Scripting and Function" group for a standalone
  * client.
  *
- * @see <a href="https://valkey.io/commands/?group=scripting">Scripting and Function Commands</a>
+ * @see <a href="https://redis.io/commands/?group=scripting">Scripting and Function Commands</a>
  */
 public interface ScriptingAndFunctionsCommands {
 

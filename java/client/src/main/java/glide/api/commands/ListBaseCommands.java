@@ -13,7 +13,7 @@ import lombok.NonNull;
  * Supports commands and transactions for the "List Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://valkey.io/commands/?group=list">List Commands</a>
+ * @see <a href="https://redis.io/commands/?group=list">List Commands</a>
  */
 public interface ListBaseCommands {
     /** Redis API keyword used to extract specific count of members from a sorted set. */

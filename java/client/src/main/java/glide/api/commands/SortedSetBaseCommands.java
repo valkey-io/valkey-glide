@@ -28,7 +28,7 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Sorted Set Commands" group for standalone and cluster
  * clients.
  *
- * @see <a href="https://valkey.io/commands/?group=sorted-set">Sorted Set Commands</a>
+ * @see <a href="https://redis.io/commands/?group=sorted-set">Sorted Set Commands</a>
  */
 public interface SortedSetBaseCommands {
     /** Redis API keyword used to query sorted set members with their scores. */
