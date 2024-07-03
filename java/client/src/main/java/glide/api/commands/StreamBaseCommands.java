@@ -15,7 +15,6 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
-import lombok.NonNull;
 
 /**
  * Supports commands and transactions for the "Stream Commands" group for standalone and cluster
@@ -1285,11 +1284,11 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xinfo-groups/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @return An <code>Array</code> of mappings, where each mapping represents the attributes of a
-     *     consumer group for the stream at <code>key</code>.
+     * @return An <code>Array</code> of <code>Maps</code>, where each mapping represents the
+     *     attributes of a consumer group for the stream at <code>key</code>.
      * @example
      *     <pre>{@code
-     * Map[] groups = client.xinfoGroups(key).get();
+     * Map[] groups = client.xinfoGroups("key").get();
      * for (int i = 0; i < groups.length; i ++) {
      *     System.out.println("Info of group: " + groups[0].get("name"));
      *     System.out.println("\tname: " + groups[0].get("name"));
@@ -1301,7 +1300,7 @@ public interface StreamBaseCommands {
      * }
      * }</pre>
      */
-    CompletableFuture<Map<String, Object>[]> xinfoGroups(@NonNull String key);
+    CompletableFuture<Map<String, Object>[]> xinfoGroups(String key);
 
     /**
      * Returns the list of all consumer groups and their attributes for the stream stored at <code>key
@@ -1309,11 +1308,11 @@ public interface StreamBaseCommands {
      *
      * @see <a href="https://valkey.io/commands/xinfo-groups/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @return An <code>Array</code> of mappings, where each mapping represents the attributes of a
-     *     consumer group for the stream at <code>key</code>.
+     * @return An <code>Array</code> of <code>Maps</code>, where each mapping represents the
+     *     attributes of a consumer group for the stream at <code>key</code>.
      * @example
      *     <pre>{@code
-     * Map[] groups = client.xinfoGroups(key).get();
+     * Map[] groups = client.xinfoGroups(gs("key")).get();
      * for (int i = 0; i < groups.length; i ++) {
      *     System.out.println("Info of group: " + groups[0].get("name"));
      *     System.out.println("\tname: " + groups[0].get("name"));
@@ -1325,7 +1324,7 @@ public interface StreamBaseCommands {
      * }
      * }</pre>
      */
-    CompletableFuture<Map<GlideString, Object>[]> xinfoGroups(@NonNull GlideString key);
+    CompletableFuture<Map<GlideString, Object>[]> xinfoGroups(GlideString key);
 
     /**
      * Returns the list of all consumers and their attributes for the given consumer group of the
@@ -1334,11 +1333,11 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xinfo-consumers/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
-     * @return An <code>Array</code> of mappings, where each mapping contains the attributes of a
-     *     consumer for the given consumer group of the stream at <code>key</code>.
+     * @return An <code>Array</code> of <code>Maps</code>, where each mapping contains the attributes
+     *     of a consumer for the given consumer group of the stream at <code>key</code>.
      * @example
      *     <pre>{@code
-     * Map[] consumers = client.xinfoConsumers(key, groupName1).get();
+     * Map[] consumers = client.xinfoConsumers("key", "groupName").get();
      * for (int i = 0; i < consumers.length; i ++) {
      *     System.out.println("Info of consumer: " + consumers[0].get("name"));
      *     System.out.println("\tname: " + consumers[0].get("name"));
@@ -1348,8 +1347,7 @@ public interface StreamBaseCommands {
      * }
      * }</pre>
      */
-    CompletableFuture<Map<String, Object>[]> xinfoConsumers(
-            @NonNull String key, @NonNull String groupName);
+    CompletableFuture<Map<String, Object>[]> xinfoConsumers(String key, String groupName);
 
     /**
      * Returns the list of all consumers and their attributes for the given consumer group of the
@@ -1358,11 +1356,11 @@ public interface StreamBaseCommands {
      * @see <a href="https://valkey.io/commands/xinfo-consumers/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
-     * @return An <code>Array</code> of mappings, where each mapping contains the attributes of a
-     *     consumer for the given consumer group of the stream at <code>key</code>.
+     * @return An <code>Array</code> of <code>Maps</code>, where each mapping contains the attributes
+     *     of a consumer for the given consumer group of the stream at <code>key</code>.
      * @example
      *     <pre>{@code
-     * Map[] consumers = client.xinfoConsumers(key, groupName1).get();
+     * Map[] consumers = client.xinfoConsumers(gs("key"), gs("groupName")).get();
      * for (int i = 0; i < consumers.length; i ++) {
      *     System.out.println("Info of consumer: " + consumers[0].get("name"));
      *     System.out.println("\tname: " + consumers[0].get("name"));
@@ -1373,5 +1371,5 @@ public interface StreamBaseCommands {
      * }</pre>
      */
     CompletableFuture<Map<GlideString, Object>[]> xinfoConsumers(
-            @NonNull GlideString key, @NonNull GlideString groupName);
+            GlideString key, GlideString groupName);
 }

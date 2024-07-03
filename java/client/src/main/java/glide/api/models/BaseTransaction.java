@@ -4052,10 +4052,10 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *
      * @see <a href="https://valkey.io/commands/xinfo-groups/">valkey.io</a> for details.
      * @param key The key of the stream.
-     * @return Command Response - An <code>Array</code> of mappings, where each mapping represents the
-     *     attributes of a consumer group for the stream at <code>key</code>.
+     * @return Command Response - An <code>Array</code> of <code>Maps</code>, where each mapping
+     *     represents the attributes of a consumer group for the stream at <code>key</code>.
      */
-    public T xinfoGroups(@NonNull String key) {
+    public <ArgType> T xinfoGroups(@NonNull String key) {
         protobufTransaction.addCommands(buildCommand(XInfoGroups, newArgsBuilder().add(key)));
         return getThis();
     }
@@ -4067,10 +4067,11 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @see <a href="https://valkey.io/commands/xinfo-consumers/">valkey.io</a> for details.
      * @param key The key of the stream.
      * @param groupName The consumer group name.
-     * @return Command Response - An <code>Array</code> of mappings, where each mapping contains the
-     *     attributes of a consumer for the given consumer group of the stream at <code>key</code>.
+     * @return Command Response - An <code>Array</code> of <code>Maps</code>, where each mapping
+     *     contains the attributes of a consumer for the given consumer group of the stream at <code>
+     *     key</code>.
      */
-    public T xinfoConsumers(@NonNull String key, @NonNull String groupName) {
+    public <ArgType> T xinfoConsumers(@NonNull String key, @NonNull String groupName) {
         protobufTransaction.addCommands(
                 buildCommand(XInfoConsumers, newArgsBuilder().add(key).add(groupName)));
         return getThis();
