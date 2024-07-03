@@ -2637,7 +2637,7 @@ public class RedisClusterClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.publish(channel, message, true);
+        CompletableFuture<String> response = service.publish(message, channel, true);
         String payload = response.get();
 
         // verify

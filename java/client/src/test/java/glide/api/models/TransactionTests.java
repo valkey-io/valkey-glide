@@ -1224,7 +1224,7 @@ public class TransactionTests {
         transaction.lcsLen("key1", "key2");
         results.add(Pair.of(LCS, buildArgs("key1", "key2", "LEN")));
 
-        transaction.publish("ch1", "msg");
+        transaction.publish("msg", "ch1");
         results.add(Pair.of(Publish, buildArgs("ch1", "msg")));
 
         transaction.lcsIdx("key1", "key2");

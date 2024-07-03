@@ -213,7 +213,7 @@ public class PubSubTests {
         var sender = createClient(standalone);
         clients.addAll(List.of(listener, sender));
 
-        sender.publish(channel, message).get();
+        sender.publish(message, channel).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the message
 
         verifyReceivedPubsubMessages(
@@ -246,7 +246,7 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -273,7 +273,7 @@ public class PubSubTests {
         var sender = (RedisClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
-        sender.publish(channel, pubsubMessage, true).get();
+        sender.publish(pubsubMessage, channel, true).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the message
 
         verifyReceivedPubsubMessages(
@@ -308,7 +308,7 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : pubsubMessages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage(), true).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel(), true).get();
         }
         sender.publish(UUID.randomUUID().toString(), UUID.randomUUID().toString(), true).get();
 
@@ -343,9 +343,9 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // need some time to propagate subscriptions - why?
 
         for (var entry : message2channels.entrySet()) {
-            sender.publish(entry.getKey(), entry.getValue()).get();
+            sender.publish(entry.getValue(), entry.getKey()).get();
         }
-        sender.publish("channel", UUID.randomUUID().toString()).get();
+        sender.publish(UUID.randomUUID().toString(), "channel").get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
         var expected =
@@ -385,9 +385,9 @@ public class PubSubTests {
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // need some time to propagate subscriptions - why?
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
-        sender.publish("channel", UUID.randomUUID().toString()).get();
+        sender.publish(UUID.randomUUID().toString(), "channel").get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
         verifyReceivedPubsubMessages(
@@ -435,7 +435,7 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -483,7 +483,7 @@ public class PubSubTests {
         clients.addAll(List.of(listenerExactSub, listenerPatternSub, sender));
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -560,10 +560,10 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : messages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
         for (var pubsubMessage : shardedMessages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage(), true).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel(), true).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -634,13 +634,13 @@ public class PubSubTests {
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded, sender));
 
         for (var pubsubMessage : exactMessages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
         for (var pubsubMessage : patternMessages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel()).get();
         }
         for (var pubsubMessage : shardedMessages) {
-            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage(), true).get();
+            sender.publish(pubsubMessage.getMessage(), pubsubMessage.getChannel(), true).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -712,9 +712,9 @@ public class PubSubTests {
                 (RedisClusterClient) createClientWithSubscriptions(false, subscriptionsSharded);
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded));
 
-        listenerPattern.publish(channel, exactMessage.getMessage()).get();
-        listenerSharded.publish(channel, patternMessage.getMessage()).get();
-        listenerExact.publish(channel, shardedMessage.getMessage(), true).get();
+        listenerPattern.publish(exactMessage.getMessage(), channel).get();
+        listenerSharded.publish(patternMessage.getMessage(), channel).get();
+        listenerExact.publish(shardedMessage.getMessage(), channel, true).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
@@ -774,9 +774,9 @@ public class PubSubTests {
 
         clients.addAll(List.of(listenerExact, listenerPattern, listenerSharded));
 
-        listenerPattern.publish(channel, exactMessage.getMessage()).get();
-        listenerSharded.publish(channel, patternMessage.getMessage()).get();
-        listenerExact.publish(channel, shardedMessage.getMessage(), true).get();
+        listenerPattern.publish(exactMessage.getMessage(), channel).get();
+        listenerSharded.publish(patternMessage.getMessage(), channel).get();
+        listenerExact.publish(shardedMessage.getMessage(), channel, true).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
@@ -816,9 +816,9 @@ public class PubSubTests {
         var clusterClient = (RedisClusterClient) createClient(false);
         var transaction =
                 new ClusterTransaction()
-                        .publish("abc", "one", true)
-                        .publish("mnk", "two", true)
-                        .publish("xyz", "three", true);
+                        .publish("one", "abc", true)
+                        .publish("two", "mnk", true)
+                        .publish("three", "xyz", true);
         var exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.exec(transaction).get());
         assertInstanceOf(RequestException.class, exception.getCause());
@@ -869,15 +869,15 @@ public class PubSubTests {
         if (standalone) {
             var transaction =
                     new Transaction()
-                            .publish(exactMessage.getChannel(), exactMessage.getMessage())
-                            .publish(patternMessage.getChannel(), patternMessage.getMessage());
+                            .publish(exactMessage.getMessage(), exactMessage.getChannel())
+                            .publish(patternMessage.getMessage(), patternMessage.getChannel());
             ((RedisClient) sender).exec(transaction).get();
         } else {
             var transaction =
                     new ClusterTransaction()
-                            .publish(shardedMessage.getChannel(), shardedMessage.getMessage(), true)
-                            .publish(exactMessage.getChannel(), exactMessage.getMessage())
-                            .publish(patternMessage.getChannel(), patternMessage.getMessage());
+                            .publish(shardedMessage.getMessage(), shardedMessage.getChannel(), true)
+                            .publish(exactMessage.getMessage(), exactMessage.getChannel())
+                            .publish(patternMessage.getMessage(), patternMessage.getChannel());
             ((RedisClusterClient) sender).exec(transaction).get();
         }
 

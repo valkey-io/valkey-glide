@@ -11695,7 +11695,7 @@ public class RedisClientTest {
                 .thenReturn(testResponse);
 
         // exercise
-        CompletableFuture<String> response = service.publish(channel, message);
+        CompletableFuture<String> response = service.publish(message, channel);
         String payload = response.get();
 
         // verify

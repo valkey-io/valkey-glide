@@ -14,14 +14,14 @@ public interface PubSubBaseCommands {
      * Publishes message on pubsub channel.
      *
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
-     * @param channel The channel to publish the message on.
      * @param message The message to publish.
+     * @param channel The channel to publish the message on.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * String response = client.publish("announcements", "The cat said 'meow'!").get();
+     * String response = client.publish("The cat said 'meow'!", "announcements").get();
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<String> publish(String channel, String message);
+    CompletableFuture<String> publish(String message, String channel);
 }

@@ -3792,7 +3792,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> publish(@NonNull String channel, @NonNull String message) {
+    public CompletableFuture<String> publish(@NonNull String message, @NonNull String channel) {
         return commandManager.submitNewCommand(
                 Publish,
                 new String[] {channel, message},

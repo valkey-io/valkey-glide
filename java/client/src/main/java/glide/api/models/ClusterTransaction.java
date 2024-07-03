@@ -40,11 +40,15 @@ public class ClusterTransaction extends BaseTransaction<ClusterTransaction> {
      * @implNote ArgType is limited to String or GlideString, any other type will throw
      *     IllegalArgumentException
      * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
-     * @param channel The channel to publish the message on.
      * @param message The message to publish.
+     * @param channel The channel to publish the message on.
+     * @param sharded Indicates that this should be run in sharded mode.
      * @return Command response - The number of clients that received the message.
      */
-    public <ArgType> ClusterTransaction spublish(@NonNull ArgType channel, @NonNull ArgType message) {
+    public <ArgType> ClusterTransaction spublish(@NonNull ArgType message, @NonNull ArgType channel, sharded) {
+        if (!sharded) {
+            return super.publish(message, channel);
+        }
         checkTypeOrThrow(channel);
         protobufTransaction.addCommands(
                 buildCommand(SPublish, newArgsBuilder().add(channel).add(message)));
