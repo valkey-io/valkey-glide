@@ -361,6 +361,29 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
+    async def function_kill(self) -> TOK:
+        """
+        Kill a function that is currently executing.
+
+        See https://valkey.io/commands/function-kill/ for more details.
+
+        Returns:
+            TOK: A simple `OK`.
+
+        Examples:
+            >>> await client.function_kill()
+                "OK"
+
+        Since: Redis 7.0.0.
+        """
+        return cast(
+            TOK,
+            await self._execute_command(
+                RequestType.FunctionKill,
+                [],
+            ),
+        )
+
     async def time(self) -> List[bytes]:
         """
         Returns the server time.

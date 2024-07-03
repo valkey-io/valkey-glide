@@ -1955,6 +1955,19 @@ class BaseTransaction:
             [library_name],
         )
 
+    def function_kill(self: TTransaction) -> TTransaction:
+            """
+            Kill a function that is currently executing.
+
+            See https://valkey.io/commands/function-kill/ for more details.
+
+            Command Response:
+                TOK: A simple `OK`.
+
+            Since: Redis 7.0.0.
+            """
+            return self.append_command(RequestType.FunctionKill,[],)
+
     def fcall(
         self: TTransaction,
         function: TEncodable,
