@@ -1,9 +1,9 @@
 import json
-import pytest
 import random
 import string
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
+import pytest
 from glide.async_commands.core import InfoSection
 from glide.constants import (
     TClusterResponse,
