@@ -18,6 +18,8 @@ public class Script implements AutoCloseable {
     /** Hash string representing the code. */
     @Getter private final String hash;
 
+    private boolean isDropped = false;
+
     /** Indicatoin if script invocation output can return binary data. */
     @Getter private final Boolean binarySafeOutput;
 
@@ -35,7 +37,11 @@ public class Script implements AutoCloseable {
     /** Drop the linked script from glide-rs <code>code</code>. */
     @Override
     public void close() throws Exception {
-        dropScript(hash);
+
+        if (!isDropped) {
+            dropScript(hash);
+            isDropped = true;
+        }
     }
 
     @Override

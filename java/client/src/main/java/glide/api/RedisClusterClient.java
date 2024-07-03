@@ -50,6 +50,7 @@ import glide.api.commands.PubSubClusterCommands;
 import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
+import glide.api.logging.Logger;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -57,9 +58,13 @@ import glide.api.models.commands.FlushMode;
 import glide.api.models.commands.InfoOptions;
 import glide.api.models.commands.SortClusterOptions;
 import glide.api.models.commands.function.FunctionRestorePolicy;
+import glide.api.models.commands.scan.ClusterScanCursor;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
+import glide.ffi.resolvers.ClusterScanCursorResolver;
+import glide.managers.CommandManager;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
@@ -909,6 +914,22 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<Object[]> scan(ClusterScanCursor cursor) {
+        return commandManager
+                .submitClusterScan(cursor, ScanOptions.builder().build(), this::handleArrayResponse)
+                .thenApply(
+                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+    }
+
+    @Override
+    public CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options) {
+        return commandManager
+                .submitClusterScan(cursor, options, this::handleArrayResponse)
+                .thenApply(
+                        result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
+    }
+
+    @Override
     public CompletableFuture<String> spublish(@NonNull String channel, @NonNull String message) {
         return commandManager.submitNewCommand(
                 SPublish,
@@ -979,5 +1000,62 @@ public class RedisClusterClient extends BaseClient
                 concatenateArrays(
                         new GlideString[] {key}, sortClusterOptions.toGlideStringArgs(), storeArguments);
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
+    }
+
+    /** A {@link ClusterScanCursor} implementation for interacting with the Rust layer. */
+    private static final class NativeClusterScanCursor
+            implements CommandManager.ClusterScanCursorDetail {
+
+        private String cursorHandle;
+        private boolean isFinished;
+        private boolean isClosed = false;
+
+        // This is for internal use only.
+        public NativeClusterScanCursor(@NonNull String cursorHandle) {
+            this.cursorHandle = cursorHandle;
+            this.isFinished = ClusterScanCursorResolver.FINISHED_CURSOR_HANDLE.equals(cursorHandle);
+        }
+
+        @Override
+        public String getCursorHandle() {
+            return cursorHandle;
+        }
+
+        @Override
+        public boolean isFinished() {
+            return isFinished;
+        }
+
+        @Override
+        public void releaseCursorHandle() {
+            internalClose();
+        }
+
+        @Override
+        protected void finalize() throws Throwable {
+            try {
+                // Release the native cursor
+                this.internalClose();
+            } finally {
+                super.finalize();
+            }
+        }
+
+        private void internalClose() {
+            if (!isClosed) {
+                try {
+                    ClusterScanCursorResolver.releaseNativeCursor(cursorHandle);
+                } catch (Exception ex) {
+                    Logger.log(
+                            Logger.Level.ERROR,
+                            "ClusterScanCursor",
+                            () -> "Error releasing cursor " + cursorHandle + ": " + ex.getMessage());
+                    Logger.log(Logger.Level.ERROR, "ClusterScanCursor", ex);
+                } finally {
+                    // Mark the cursor as closed to avoid double-free (if close() gets called more than once).
+                    isClosed = true;
+                }
+            }
+        }
     }
 }

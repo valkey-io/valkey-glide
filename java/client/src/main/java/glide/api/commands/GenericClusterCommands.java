@@ -6,6 +6,8 @@ import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.SortClusterOptions;
+import glide.api.models.commands.scan.ClusterScanCursor;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.ReadFrom;
 import glide.api.models.configuration.RequestRoutingConfiguration.Route;
 import glide.api.models.configuration.RequestRoutingConfiguration.SingleNodeRoute;
@@ -151,6 +153,129 @@ public interface GenericClusterCommands {
      * }</pre>
      */
     CompletableFuture<String> randomKey();
+
+    /**
+     * Incrementally iterates over the keys in the Cluster.
+     *
+     * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
+     * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
+     * object to manage iterations. For more information about the Cluster Scan implementation, see <a
+     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#cluster-scan">Cluster
+     * Scan</a>.
+     *
+     * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means
+     * that at every call of the command, the server returns an updated cursor ({@link
+     * ClusterScanCursor}) that the user needs to re-send as the <code>cursor</code> argument in the
+     * next call. The iteration terminates when the returned cursor {@link
+     * ClusterScanCursor#isFinished()} returns <code>true</code>.
+     *
+     * <p>This method guarantees that all keyslots available when the first SCAN is called will be
+     * scanned before the cursor is finished. Any keys added after the initial scan request is made
+     * are not guaranteed to be scanned.
+     *
+     * <p>Note that the same key may be returned in multiple scan iterations.
+     *
+     * <p>How to use the {@link ClusterScanCursor}: <br>
+     * For each iteration, the previous scan {@link ClusterScanCursor} object should be used to
+     * continue the <code>SCAN</code> by passing it in the <code>cursor</code> argument. Using the
+     * same cursor object for multiple iterations may result in the same keys returned or unexpected
+     * behavior.
+     *
+     * <p>When the cursor is no longer needed, call {@link ClusterScanCursor#releaseCursorHandle()} to
+     * immediately free resources tied to the cursor. Note that this makes the cursor unusable in
+     * subsequent calls to <code>SCAN</code>.
+     *
+     * @see ClusterScanCursor for more details about how to use the cursor.
+     * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
+     * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
+     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
+     * @return An <code>Array</code> with two elements. The first element is always the {@link
+     *     ClusterScanCursor} for the next iteration of results. To see if there is more data on the
+     *     given cursor, call {@link ClusterScanCursor#isFinished()}. To release resources for the
+     *     current cursor immediately, call {@link ClusterScanCursor#releaseCursorHandle()} after
+     *     using the cursor in a call to this method. The cursor cannot be used in a scan again after
+     *     {@link ClusterScanCursor#releaseCursorHandle()} has been called. The second element is an
+     *     <code>
+     *     Array</code> of <code>String</code> elements each representing a key.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 keys
+     * ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
+     * Object[] result;
+     * while (!cursor.isFinished()) {
+     *   result = client.scan(cursor).get();
+     *   cursor.releaseCursorHandle();
+     *   cursor = (ClusterScanCursor) result[0];
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object[]> scan(ClusterScanCursor cursor);
+
+    /**
+     * Incrementally iterates over the keys in the Cluster.
+     *
+     * <p>This command is similar to the <code>SCAN</code> command, but it is designed to work in a
+     * Cluster environment. The main difference is that this command uses a {@link ClusterScanCursor}
+     * object to manage iterations. For more information about the Cluster Scan implementation, see <a
+     * href="https://github.com/aws/glide-for-redis/wiki/General-Concepts#cluster-scan">Cluster
+     * Scan</a>.
+     *
+     * <p>As with the <code>SCAN</code> command, this command is a cursor-based iterator. This means
+     * that at every call of the command, the server returns an updated cursor ({@link
+     * ClusterScanCursor}) that the user needs to re-send as the <code>cursor</code> argument in the
+     * next call. The iteration terminates when the returned cursor {@link
+     * ClusterScanCursor#isFinished()} returns <code>true</code>.
+     *
+     * <p>This method guarantees that all keyslots available when the first SCAN is called will be
+     * scanned before the cursor is finished. Any keys added after the initial scan request is made
+     * are not guaranteed to be scanned.
+     *
+     * <p>Note that the same key may be returned in multiple scan iterations.
+     *
+     * <p>How to use the {@link ClusterScanCursor}: <br>
+     * For each iteration, the previous scan {@link ClusterScanCursor} object should be used to
+     * continue the <code>SCAN</code> by passing it in the <code>cursor</code> argument. Using the
+     * same cursor object for multiple iterations may result in the same keys returned or unexpected
+     * behavior.
+     *
+     * <p>When the cursor is no longer needed, call {@link ClusterScanCursor#releaseCursorHandle()} to
+     * immediately free resources tied to the cursor. Note that this makes the cursor unusable in
+     * subsequent calls to <code>SCAN</code>.
+     *
+     * @see ClusterScanCursor for more details about how to use the cursor.
+     * @see <a href="https://valkey.io/commands/scan">valkey.io</a> for details.
+     * @param cursor The {@link ClusterScanCursor} object that wraps the scan state. To start a new
+     *     scan, create a new empty ClusterScanCursor using {@link ClusterScanCursor#initalCursor()}.
+     * @param options The {@link ScanOptions}.
+     * @return An <code>Array</code> with two elements. The first element is always the {@link
+     *     ClusterScanCursor} for the next iteration of results. To see if there is more data on the
+     *     given cursor, call {@link ClusterScanCursor#isFinished()}. To release resources for the
+     *     current cursor immediately, call {@link ClusterScanCursor#releaseCursorHandle()} after
+     *     using the cursor in a call to this method. The cursor cannot be used in a scan again after
+     *     {@link ClusterScanCursor#releaseCursorHandle()} has been called. The second element is an
+     *     <code>
+     *     Array</code> of <code>String</code> elements each representing a key.
+     * @example
+     *     <pre>{@code
+     * // Assume key contains a set with 200 keys
+     * ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
+     * Object[] result;
+     * while (!cursor.isFinished()) {
+     *   result = client.scan(cursor).get();
+     *   cursor.releaseCursorHandle();
+     *   cursor = (ClusterScanCursor) result[0];
+     *   Object[] stringResults = (Object[]) result[1];
+     *
+     *   System.out.println("\nSCAN iteration:");
+     *   Arrays.asList(stringResults).stream().forEach(i -> System.out.print(i + ", "));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Object[]> scan(ClusterScanCursor cursor, ScanOptions options);
 
     /**
      * Sorts the elements in the list, set, or sorted set at <code>key</code> and returns the result.
