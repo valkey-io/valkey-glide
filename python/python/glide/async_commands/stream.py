@@ -360,6 +360,69 @@ class StreamPendingOptions:
         self.consumer_name = consumer_name
 
 
+class StreamClaimOptions:
+    IDLE_REDIS_API = "IDLE"
+    TIME_REDIS_API = "TIME"
+    RETRY_COUNT_REDIS_API = "RETRYCOUNT"
+    FORCE_REDIS_API = "FORCE"
+    JUST_ID_REDIS_API = "JUSTID"
+
+    def __init__(
+        self,
+        idle: Optional[int] = None,
+        idle_unix_time: Optional[int] = None,
+        retry_count: Optional[int] = None,
+        is_force: Optional[bool] = False,
+    ):
+        """
+        Options for `XCLAIM`.
+
+        Args:
+            idle (Optional[int]): Set the idle time (last time it was delivered) of the message in milliseconds. If idle
+                is not specified, an idle of `0` is assumed, that is, the time count is reset because the message now has a
+                new owner trying to process it.
+            idle_unix_time (Optional[int]): This is the same as idle but instead of a relative amount of milliseconds,
+                it sets the idle time to a specific Unix time (in milliseconds). This is useful in order to rewrite the AOF
+                file generating `XCLAIM` commands.
+            retry_count (Optional[int]): Set the retry counter to the specified value. This counter is incremented every
+                time a message is delivered again. Normally `XCLAIM` does not alter this counter, which is just served to
+                clients when the `XPENDING` command is called: this way clients can detect anomalies, like messages that
+                are never processed for some reason after a big number of delivery attempts.
+            is_force (Optional[bool]): Creates the pending message entry in the PEL even if certain specified IDs are not
+                already in the PEL assigned to a different client. However, the message must exist in the stream, otherwise
+                the IDs of non-existing messages are ignored.
+        """
+        self.idle = idle
+        self.idle_unix_time = idle_unix_time
+        self.retry_count = retry_count
+        self.is_force = is_force
+
+    def to_args(self) -> List[TEncodable]:
+        """
+        Converts options for `XCLAIM` into a List.
+
+        Returns:
+            List[str]: The options as a list of arguments for the `XCLAIM` command.
+        """
+        args: List[TEncodable] = []
+        if self.idle:
+            args.append(self.IDLE_REDIS_API)
+            args.append(str(self.idle))
+
+        if self.idle_unix_time:
+            args.append(self.TIME_REDIS_API)
+            args.append(str(self.idle_unix_time))
+
+        if self.retry_count:
+            args.append(self.RETRY_COUNT_REDIS_API)
+            args.append(str(self.retry_count))
+
+        if self.is_force:
+            args.append(self.FORCE_REDIS_API)
+
+        return args
+
+
 def _create_xpending_range_args(
     key: TEncodable,
     group_name: TEncodable,
