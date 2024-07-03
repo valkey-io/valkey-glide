@@ -17,6 +17,7 @@ from glide.constants import (
     TClusterResponse,
     TEncodable,
     TFunctionListResponse,
+    TFunctionStatsResponse,
     TResult,
     TSingleNodeRoute,
 )
@@ -554,7 +555,7 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.FCallReadOnly, args, route),
         )
 
-    async def function_stats(self, route: Optional[Route] = None) -> TClusterResponse[Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]]]:
+    async def function_stats(self, route: Optional[Route] = None) -> TClusterResponse[TFunctionStatsResponse]:
         """
         Returns information about the function that's currently running and information about the
         available execution engines.
@@ -566,7 +567,7 @@ class ClusterCommands(CoreCommands):
                 will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]]]: A `Mapping` with two keys:
+            TClusterResponse[TFunctionStatsResponse]: A `Mapping` with two keys:
                 - `running_script` with information about the running script.
                 - `engines` with information about available engines and their stats.
                 See example for more details.
@@ -590,7 +591,7 @@ class ClusterCommands(CoreCommands):
         Since: Redis version 7.0.0.
         """
         return cast(
-            Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]],
+            TClusterResponse[TFunctionStatsResponse],
             await self._execute_command(RequestType.FunctionStats, [], route)
         )
 

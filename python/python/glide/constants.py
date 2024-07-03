@@ -42,3 +42,18 @@ TFunctionListResponse = List[
         Union[bytes, List[Mapping[bytes, Union[bytes, Set[bytes]]]]],
     ]
 ]
+TFunctionStatsResponse = Mapping[
+    bytes,
+    Union[
+        None,
+        Mapping[
+            bytes,
+            Union[
+                Mapping[bytes, Mapping[bytes, int]],
+                bytes,
+                int,
+                List[bytes]
+            ]
+        ]
+    ]
+]

@@ -4,7 +4,7 @@ import string
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 from glide.async_commands.core import InfoSection
-from glide.constants import TClusterResponse, TFunctionListResponse, TResult
+from glide.constants import TClusterResponse, TFunctionListResponse, TFunctionStatsResponse, TResult
 from glide.glide_client import TGlideClient
 from packaging import version
 
@@ -270,7 +270,21 @@ def check_function_list_response(
 
     assert has_lib is True
 
-def check_function_stats_response(response, running_function, lib_count, function_count):
+def check_function_stats_response(
+    response: TFunctionStatsResponse,
+    running_function: List[bytes],
+    lib_count: int,
+    function_count: int
+):
+    """
+    Validate whether `FUNCTION STATS` response contains required info.
+
+    Args:
+        response (TFunctionStatsResponse): The response from server.
+        running_function (List[bytes]): Command line of running function expected. Empty, if nothing expected.
+        lib_count (int): Expected libraries count.
+        function_count (int): Expected functions count.
+    """
     running_script_info = response.get(b"running_script")
     if running_script_info == None and len(running_function) != 0:
         pytest.fail("No running function info")

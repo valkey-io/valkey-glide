@@ -7643,6 +7643,7 @@ class TestCommands:
         func_name = lib_name
         assert await redis_client.function_flush(FlushMode.SYNC) == OK
         
+        # function $funcName returns first argument
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
         assert await redis_client.function_load(code, True) == lib_name.encode()
 
@@ -7671,6 +7672,7 @@ class TestCommands:
         func_name = lib_name
         assert await redis_client.function_flush(FlushMode.SYNC) == OK
         
+        # function $funcName returns first argument
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
         assert await redis_client.function_load(code, True) == lib_name.encode()
 
@@ -7706,6 +7708,7 @@ class TestCommands:
         func_name = lib_name
         assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
 
+        # function $funcName returns first argument
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
         assert await redis_client.function_load(code, True, route) == lib_name.encode()
 

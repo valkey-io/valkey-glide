@@ -12,7 +12,7 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, Transaction
-from glide.constants import OK, TOK, TEncodable, TFunctionListResponse, TResult
+from glide.constants import OK, TOK, TEncodable, TFunctionListResponse, TFunctionStatsResponse, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 
 
@@ -361,7 +361,7 @@ class StandaloneCommands(CoreCommands):
             ),
         )
 
-    async def function_stats(self) -> Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]]:
+    async def function_stats(self) -> TFunctionStatsResponse:
         """
         Returns information about the function that's currently running and information about the
         available execution engines.
@@ -369,10 +369,10 @@ class StandaloneCommands(CoreCommands):
         See https://redis.io/commands/function-stats/ for more details
 
         Returns:
-            Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]]: A `Mapping` with two keys:
-                - `running_script` with information about the running script.
-                - `engines` with information about available engines and their stats.
-                See example for more details.
+            TFunctionStatsResponse: A `Mapping` with two keys:
+            - `running_script` with information about the running script.
+            - `engines` with information about available engines and their stats.
+            See example for more details.
 
         Examples:
             >>> await client.function_stats()
@@ -393,7 +393,7 @@ class StandaloneCommands(CoreCommands):
         Since: Redis version 7.0.0.
         """
         return cast(
-            Mapping[bytes, Mapping[bytes, Union[bytes, int, List[bytes]]]],
+            TFunctionStatsResponse,
             await self._execute_command(
                 RequestType.FunctionStats,
                 []
