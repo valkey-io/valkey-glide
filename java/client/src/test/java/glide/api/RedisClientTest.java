@@ -241,6 +241,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -13243,5 +13245,74 @@ public class RedisClientTest {
         // Verify
         assertEquals(testResponse, response);
         assertEquals(expected, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xinfoGroups_returns_success() {
+        // setup
+        String key = "testKey";
+        String[] arguments = {key};
+        Map<String, Object>[] mockResult =
+                new Map[] {
+                    Map.of(
+                            "name",
+                            "groupName",
+                            "consumers",
+                            2,
+                            "pending",
+                            2,
+                            "last-delivered-id",
+                            "1638126030001-0",
+                            "entries-read",
+                            2,
+                            "lag",
+                            2)
+                };
+
+        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>[]>submitNewCommand(
+                        eq(XInfoGroups), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>[]> response = service.xinfoGroups(key);
+        Map<String, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xinfoConsumers_returns_success() {
+        // setup
+        String key = "testKey";
+        String groupName = "groupName";
+        String[] arguments = {key, groupName};
+        Map<String, Object>[] mockResult =
+                new Map[] {
+                    Map.of("name", "groupName", "pending", 2, "idle", 9104628, "inactive", 18104698)
+                };
+
+        CompletableFuture<Map<String, Object>[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(mockResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>[]>submitNewCommand(
+                        eq(XInfoConsumers), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>[]> response = service.xinfoConsumers(key, groupName);
+        Map<String, Object>[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(mockResult, payload);
     }
 }

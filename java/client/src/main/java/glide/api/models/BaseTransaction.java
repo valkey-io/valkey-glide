@@ -170,6 +170,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -4041,6 +4043,35 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
                                 .add(ids)
                                 .add(options.toArgs())
                                 .add(JUST_ID_REDIS_API)));
+        return getThis();
+    }
+
+    /**
+     * Returns the list of all consumer groups and their attributes for the stream stored at <code>key
+     * </code>.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-groups/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return Command Response - An <code>Array</code> of mappings, where each mapping represents the
+     *     attributes of a consumer group for the stream at <code>key</code>.
+     */
+    public T xinfoGroups(@NonNull String key) {
+        protobufTransaction.addCommands(buildCommand(XInfoGroups, buildArgs(key)));
+        return getThis();
+    }
+
+    /**
+     * Returns the list of all consumers and their attributes for the given consumer group of the
+     * stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-consumers/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The consumer group name.
+     * @return Command Response - An <code>Array</code> of mappings, where each mapping contains the
+     *     attributes of a consumer for the given consumer group of the stream at <code>key</code>.
+     */
+    public T xinfoConsumers(@NonNull String key, @NonNull String groupName) {
+        protobufTransaction.addCommands(buildCommand(XInfoConsumers, buildArgs(key, groupName)));
         return getThis();
     }
 

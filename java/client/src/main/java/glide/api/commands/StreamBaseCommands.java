@@ -15,6 +15,7 @@ import glide.api.models.commands.stream.StreamReadOptions;
 import glide.api.models.commands.stream.StreamTrimOptions;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import lombok.NonNull;
 
 /**
  * Supports commands and transactions for the "Stream Commands" group for standalone and cluster
@@ -1277,4 +1278,52 @@ public interface StreamBaseCommands {
             long minIdleTime,
             GlideString[] ids,
             StreamClaimOptions options);
+
+    /**
+     * Returns the list of all consumer groups and their attributes for the stream stored at <code>key
+     * </code>.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-groups/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @return An <code>Array</code> of mappings, where each mapping represents the attributes of a
+     *     consumer group for the stream at <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * Map[] groups = client.xinfoGroups(key).get();
+     * for (int i = 0; i < groups.length; i ++) {
+     *     System.out.println("Info of group: " + groups[0].get("name"));
+     *     System.out.println("\tname: " + groups[0].get("name"));
+     *     System.out.println("\tconsumers: " + groups[0].get("consumers"));
+     *     System.out.println("\tpending: " + groups[0].get("pending"));
+     *     System.out.println("\tlast-delivered-id: " + groups[0].get("last-delivered-id"));
+     *     System.out.println("\tentries-read: " + groups[0].get("entries-read"));
+     *     System.out.println("\tlag: " + groups[0].get("lag"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>[]> xinfoGroups(@NonNull String key);
+
+    /**
+     * Returns the list of all consumers and their attributes for the given consumer group of the
+     * stream stored at <code>key</code>.
+     *
+     * @see <a href="https://valkey.io/commands/xinfo-consumers/">valkey.io</a> for details.
+     * @param key The key of the stream.
+     * @param groupName The consumer group name.
+     * @return An <code>Array</code> of mappings, where each mapping contains the attributes of a
+     *     consumer for the given consumer group of the stream at <code>key</code>.
+     * @example
+     *     <pre>{@code
+     * Map[] consumers = client.xinfoConsumers(key, groupName1).get();
+     * for (int i = 0; i < consumers.length; i ++) {
+     *     System.out.println("Info of consumer: " + consumers[0].get("name"));
+     *     System.out.println("\tname: " + consumers[0].get("name"));
+     *     System.out.println("\tpending: " + consumers[0].get("pending"));
+     *     System.out.println("\tidle: " + consumers[0].get("idle"));
+     *     System.out.println("\tinactive: " + consumers[0].get("inactive"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<String, Object>[]> xinfoConsumers(
+            @NonNull String key, @NonNull String groupName);
 }
