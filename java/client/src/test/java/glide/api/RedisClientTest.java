@@ -6620,12 +6620,17 @@ public class RedisClientTest {
         String key = "testKey";
         String groupName = "testGroupName";
         String id = "testId";
-        String testEntry = "testEntry";
+        Long testEntry = 123L;
         StreamGroupOptions options =
                 StreamGroupOptions.builder().makeStream().entriesRead(testEntry).build();
         String[] arguments =
                 new String[] {
-                    key, groupName, id, MAKE_STREAM_VALKEY_API, ENTRIES_READ_VALKEY_API, testEntry
+                    key,
+                    groupName,
+                    id,
+                    MAKE_STREAM_VALKEY_API,
+                    ENTRIES_READ_VALKEY_API,
+                    Long.toString(testEntry)
                 };
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
@@ -6752,8 +6757,9 @@ public class RedisClientTest {
         String key = "testKey";
         String groupName = "testGroupName";
         String id = "testId";
-        String entriesRead = "1-1";
-        String[] arguments = new String[] {key, groupName, id, "ENTRIESREAD", entriesRead};
+        Long entriesRead = 1L;
+        String[] arguments =
+                new String[] {key, groupName, id, "ENTRIESREAD", Long.toString(entriesRead)};
 
         CompletableFuture<String> testResponse = new CompletableFuture<>();
         testResponse.complete(OK);

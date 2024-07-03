@@ -875,7 +875,7 @@ public class TransactionTestUtilities {
             transaction
                     .xadd(streamKey2, Map.of("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
                     .xgroupCreate(streamKey2, groupName3, "0")
-                    .xgroupSetId(streamKey2, groupName3, "1-0", "0");
+                    .xgroupSetId(streamKey2, groupName3, "1-0", 1);
         }
 
         Object[] result = {

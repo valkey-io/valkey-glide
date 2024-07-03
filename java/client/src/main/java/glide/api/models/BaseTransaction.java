@@ -3681,26 +3681,16 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @param groupName The consumer group name.
      * @param id The stream entry ID that should be set as the last delivered ID for the consumer
      *     group.
-     * @param entriesReadId An arbitrary ID (that isn't the first ID, last ID, or the zero ID (<code>
-     *      "0-0"</code>)) used to find out how many entries are between the arbitrary ID (excluding
-     *     it) and the stream's last entry.
+     * @param entriesRead A value representing the number of stream entries already read by the group.
      * @return Command Response - <code>OK</code>.
      */
     public <ArgType> T xgroupSetId(
-            @NonNull ArgType key,
-            @NonNull ArgType groupName,
-            @NonNull ArgType id,
-            @NonNull ArgType entriesReadId) {
+            @NonNull ArgType key, @NonNull ArgType groupName, @NonNull ArgType id, long entriesRead) {
         checkTypeOrThrow(key);
         protobufTransaction.addCommands(
                 buildCommand(
                         XGroupSetId,
-                        newArgsBuilder()
-                                .add(key)
-                                .add(groupName)
-                                .add(id)
-                                .add("ENTRIESREAD")
-                                .add(entriesReadId)));
+                        newArgsBuilder().add(key).add(groupName).add(id).add("ENTRIESREAD").add(entriesRead)));
         return getThis();
     }
 

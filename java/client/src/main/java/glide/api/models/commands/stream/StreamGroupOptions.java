@@ -36,13 +36,11 @@ public final class StreamGroupOptions {
     }
 
     /**
-     * An arbitrary ID (that isn't the first ID, last ID, or the zero <code>"0-0"</code>. Use it to
-     * find out how many entries are between the arbitrary ID (excluding it) and the stream's last
-     * entry.
+     * A value representing the number of stream entries already read by the group.
      *
      * @since Redis 7.0.0
      */
-    private String entriesRead;
+    private Long entriesRead;
 
     /**
      * Converts options and the key-to-id input for {@link StreamBaseCommands#xgroupCreate(String,
@@ -59,7 +57,7 @@ public final class StreamGroupOptions {
 
         if (this.entriesRead != null) {
             optionArgs.add(ENTRIES_READ_VALKEY_API);
-            optionArgs.add(this.entriesRead);
+            optionArgs.add(entriesRead.toString());
         }
 
         return optionArgs.toArray(new String[0]);
