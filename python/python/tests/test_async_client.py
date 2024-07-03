@@ -10,7 +10,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Any, Dict, List, Mapping, Tuple, Union, cast
 
 import pytest
-from glide import ClosingError, ClusterScanCursor, RequestError, Script
+from glide import ClosingError, RequestError, Script
 from glide.async_commands.bitmap import (
     BitFieldGet,
     BitFieldIncrBy,
@@ -25,7 +25,7 @@ from glide.async_commands.bitmap import (
     SignedEncoding,
     UnsignedEncoding,
 )
-from glide.async_commands.command_args import Limit, ListDirection, ObjectType, OrderBy
+from glide.async_commands.command_args import Limit, ListDirection, OrderBy
 from glide.async_commands.core import (
     ConditionalChange,
     ExpireOptions,

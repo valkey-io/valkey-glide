@@ -182,12 +182,20 @@ public class CommandManager {
         return submitCommandToChannel(command, responseHandler);
     }
 
+    /**
+     * Submits a scan request with cursor
+     *
+     * @param cursor Iteration cursor
+     * @param options {@link ScanOptions}
+     * @param responseHandler The handler for the response object
+     * @return A result promise of type T
+     */
     public <T> CompletableFuture<T> submitClusterScan(
             ClusterScanCursor cursor,
             @NonNull ScanOptions options,
             RedisExceptionCheckedFunction<Response, T> responseHandler) {
 
-        final RedisRequest.Builder command = prepareRedisRequest(cursor, options);
+        final RedisRequest.Builder command = prepareCursorRequest(cursor, options);
         return submitCommandToChannel(command, responseHandler);
     }
 
@@ -313,7 +321,15 @@ public class CommandManager {
         return route.isPresent() ? prepareRedisRequestRoute(builder, route.get()) : builder;
     }
 
-    protected RedisRequest.Builder prepareRedisRequest(
+    /**
+     * Build a protobuf cursor scan request.
+     *
+     * @param cursor Iteration cursor
+     * @param options {@link ScanOptions}
+     * @return An uncompleted request. {@link CallbackDispatcher} is responsible to complete it by
+     *     adding a callback id.
+     */
+    protected RedisRequest.Builder prepareCursorRequest(
             @NonNull ClusterScanCursor cursor, @NonNull ScanOptions options) {
 
         RedisRequestOuterClass.ClusterScan.Builder clusterScanBuilder =

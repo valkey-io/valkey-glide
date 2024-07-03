@@ -428,7 +428,6 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'loc
     .unwrap_or(0)
 }
 
-#[no_mangle]
 /// Releases a ClusterScanCursor handle allocated in Rust.
 ///
 /// This function is meant to be invoked by Java using JNI.
@@ -436,6 +435,7 @@ pub extern "system" fn Java_glide_ffi_resolvers_LoggerResolver_initInternal<'loc
 /// * `_env`    - The JNI environment. Not used.
 /// * `_class`  - The class object. Not used.
 /// * cursor      - The cursor handle to release.
+#[no_mangle]
 pub extern "system" fn Java_glide_ffi_resolvers_ClusterScanCursorResolver_releaseNativeCursor<
     'local,
 >(

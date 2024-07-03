@@ -6,22 +6,31 @@ import glide.api.commands.GenericClusterCommands;
 /**
  * A cursor is used to iterate through data returned by cluster SCAN requests.
  *
- * @see GenericClusterCommands#scan}.
- *     <p>This interface is used in two ways: 1. An {@link #initalCursor()} is passed to {@link
- *     GenericClusterCommands#scan} to start a cluster SCAN request. 2. The result of the {@link
- *     GenericClusterCommands#scan} call returns a cursor at <code>index 0</code> of the returned
- *     <code>Object[]</code>. This cursor can be supplied again to a call to {@link
- *     GenericClusterCommands#scan}, provided {@link #isFinished()} returns false.
- *     <p>Note that cursors returned by {@link GenericClusterCommands#scan} may hold external
- *     resources. These resources can be released by calling {@link #releaseCursorHandle()}. However
- *     doing so will disallow the cursor from being used in {@link GenericClusterCommands#scan} to
- *     get more data.
- *     <p>To do this safely, follow this procedure:
- *     <ol>
- *       <li>Call {@link GenericClusterCommands#scan} with the cursor.
- *       <li>Call {@link #releaseCursorHandle()} with the cursor.
- *       <li>Reassign the cursor to the cursor returned by {@link GenericClusterCommands#scan}.
- *     </ol>
+ * <p>This interface is used in two ways:
+ *
+ * <ol>
+ *   <li>An {@link #initalCursor()} is passed to {@link GenericClusterCommands#scan} to start a
+ *       cluster SCAN request.
+ *   <li>The result of the {@link GenericClusterCommands#scan} call returns a cursor at index <code>
+ *       0</code> of the returned <code>Object[]</code>. This cursor can be supplied again to a call
+ *       to {@link GenericClusterCommands#scan}, provided that {@link #isFinished()} returns <code>
+ *       false</code>.
+ * </ol>
+ *
+ * <p>Note that cursors returned by {@link GenericClusterCommands#scan} may hold external resources.
+ * These resources can be released by calling {@link #releaseCursorHandle()}. However, doing so will
+ * invalidate the cursor from being used in another {@link GenericClusterCommands#scan}.
+ *
+ * <p>To do this safely, follow this procedure:
+ *
+ * <ol>
+ *   <li>Call {@link GenericClusterCommands#scan} with the cursor.
+ *   <li>Call {@link #releaseCursorHandle()} to destroy the cursor.
+ *   <li>Assign the new cursor returned by {@link GenericClusterCommands#scan}.
+ * </ol>
+ *
+ * @see GenericClusterCommands#scan
+ * @example
  *     <pre>{@code
  * ClusterScanCursor cursor = ClusterScanCursor.initialCursor();
  * Object[] result;
