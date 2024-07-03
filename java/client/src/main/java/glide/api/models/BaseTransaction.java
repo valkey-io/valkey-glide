@@ -4055,7 +4055,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      * @return Command Response - An <code>Array</code> of <code>Maps</code>, where each mapping
      *     represents the attributes of a consumer group for the stream at <code>key</code>.
      */
-    public <ArgType> T xinfoGroups(@NonNull String key) {
+    public <ArgType> T xinfoGroups(@NonNull ArgType key) {
         protobufTransaction.addCommands(buildCommand(XInfoGroups, newArgsBuilder().add(key)));
         return getThis();
     }
@@ -4071,7 +4071,7 @@ public abstract class BaseTransaction<T extends BaseTransaction<T>> {
      *     contains the attributes of a consumer for the given consumer group of the stream at <code>
      *     key</code>.
      */
-    public <ArgType> T xinfoConsumers(@NonNull String key, @NonNull String groupName) {
+    public <ArgType> T xinfoConsumers(@NonNull ArgType key, @NonNull ArgType groupName) {
         protobufTransaction.addCommands(
                 buildCommand(XInfoConsumers, newArgsBuilder().add(key).add(groupName)));
         return getThis();
