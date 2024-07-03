@@ -215,9 +215,13 @@ publishing {
     }
 }
 
-signing {
-    sign publishing.publications
-}
+// signing removal due Polyglot requires to use publishToMavenLocal
+// code to sign will be re-introduced only during java-cd.yml workflow
+// TODO remove the comments and the additional java-cd.yml step "Add signing to java.client build.grade"
+// as soon Polyglot remove their dependency with the publishToMavenLocal
+//signing {
+//    sign publishing.publications
+//}
 
 tasks.withType(Test) {
     testLogging {

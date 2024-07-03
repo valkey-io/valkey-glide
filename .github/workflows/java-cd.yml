@@ -128,6 +128,12 @@ jobs:
                   sed -i $SED_FOR_MACOS 's/placeholder/${{ matrix.host.CLASSIFIER }}/g' build.gradle
                   sed -i $SED_FOR_MACOS "s/255.255.255/${{ env.RELEASE_VERSION }}/g" build.gradle
 
+            - name: Add signing to java.client build.grade
+              shell: bash
+              working-directory: ./java/client
+              run: |
+                  echo "signing { sign publishing.publications }" >> build.gradle
+
             - name: Build java client
               working-directory: java
               run: |
