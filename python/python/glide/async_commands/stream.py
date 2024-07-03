@@ -276,21 +276,18 @@ class StreamGroupOptions:
     MAKE_STREAM_REDIS_API = "MKSTREAM"
     ENTRIES_READ_REDIS_API = "ENTRIESREAD"
 
-    def __init__(
-        self, make_stream: bool = False, entries_read_id: Optional[TEncodable] = None
-    ):
+    def __init__(self, make_stream: bool = False, entries_read: Optional[int] = None):
         """
         Options for creating stream consumer groups. Can be used as an optional argument to `XGROUP CREATE`.
 
         Args:
             make_stream (bool): If set to True and the stream doesn't exist, this creates a new stream with a
                 length of 0.
-            entries_read_id: (Optional[TEncodable]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
-                used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last
-                entry. This option can only be specified if you are using Redis version 7.0.0 or above.
+            entries_read: (Optional[int]): A value representing the number of stream entries already read by the
+                group. This option can only be specified if you are using Redis version 7.0.0 or above.
         """
         self.make_stream = make_stream
-        self.entries_read_id = entries_read_id
+        self.entries_read = entries_read
 
     def to_args(self) -> List[TEncodable]:
         """
@@ -303,8 +300,8 @@ class StreamGroupOptions:
         if self.make_stream is True:
             args.append(self.MAKE_STREAM_REDIS_API)
 
-        if self.entries_read_id is not None:
-            args.extend([self.ENTRIES_READ_REDIS_API, self.entries_read_id])
+        if self.entries_read is not None:
+            args.extend([self.ENTRIES_READ_REDIS_API, str(self.entries_read)])
 
         return args
 
