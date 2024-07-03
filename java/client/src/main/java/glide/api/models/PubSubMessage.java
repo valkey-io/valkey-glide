@@ -32,10 +32,10 @@ public class PubSubMessage {
 
     @Override
     public String toString() {
-        String res = String.format("%s, channel = %s", message, channel);
+        String res = String.format("(%s, channel = %s", message, channel);
         if (pattern.isPresent()) {
             res += ", pattern = " + pattern.get();
         }
-        return res;
+        return res + ")";
     }
 }

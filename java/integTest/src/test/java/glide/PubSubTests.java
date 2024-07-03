@@ -32,6 +32,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -45,13 +46,14 @@ import lombok.SneakyThrows;
 import org.apache.commons.lang3.tuple.Pair;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
-// @Timeout(30) // sec
+@Timeout(30) // sec
 public class PubSubTests {
 
     // TODO protocol version
@@ -289,7 +291,7 @@ public class PubSubTests {
 
     /** Similar to `test_sharded_pubsub` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "use callback = {0}")
+    @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
     public void sharded_pubsub(MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
@@ -312,7 +314,7 @@ public class PubSubTests {
 
     /** Similar to `test_sharded_pubsub_many_channels` in python client tests. */
     @SneakyThrows
-    @ParameterizedTest(name = "use callback = {0}")
+    @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
     public void sharded_pubsub_many_channels(MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
@@ -549,7 +551,7 @@ public class PubSubTests {
      * Similar to `test_pubsub_combined_exact_pattern_and_sharded_one_client` in python client tests.
      */
     @SneakyThrows
-    @ParameterizedTest(name = "use callback = {0}")
+    @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
     public void combined_exact_pattern_and_sharded_one_client(MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
@@ -605,12 +607,91 @@ public class PubSubTests {
                 messages.stream().map(m -> Pair.of(1, m)).collect(Collectors.toSet()), listener, method);
     }
 
+    @SneakyThrows
+    @Test
+    public void coexistense_of_sync_and_async_read() {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
+        skipTestsOnMac();
+
+        String prefix = "channel.";
+        String pattern = prefix + "*";
+        String shardPrefix = "{shard}";
+        int numChannels = 256;
+        var messages = new ArrayList<PubSubMessage>(numChannels * 2);
+        var shardedMessages = new ArrayList<PubSubMessage>(numChannels);
+        Map<PubSubClusterChannelMode, Set<String>> subscriptions =
+                Map.of(
+                        PubSubClusterChannelMode.EXACT, new HashSet<>(),
+                        PubSubClusterChannelMode.PATTERN, Set.of(pattern),
+                        PubSubClusterChannelMode.SHARDED, new HashSet<>());
+
+        for (var i = 0; i < numChannels; i++) {
+            var channel = i + "-" + UUID.randomUUID();
+            subscriptions.get(PubSubClusterChannelMode.EXACT).add(channel);
+            var message = i + "-" + UUID.randomUUID();
+            messages.add(new PubSubMessage(message, channel));
+        }
+
+        for (var i = 0; i < numChannels; i++) {
+            var channel = shardPrefix + "-" + i + "-" + UUID.randomUUID();
+            subscriptions.get(PubSubClusterChannelMode.SHARDED).add(channel);
+            var message = i + "-" + UUID.randomUUID();
+            shardedMessages.add(new PubSubMessage(message, channel));
+        }
+
+        for (var j = 0; j < numChannels; j++) {
+            var message = j + "-" + UUID.randomUUID();
+            var channel = prefix + "-" + j + "-" + UUID.randomUUID();
+            messages.add(new PubSubMessage(message, channel, pattern));
+        }
+
+        var listener = createListener(false, false, 1, subscriptions);
+        var sender = (RedisClusterClient) createClient(false);
+        clients.addAll(List.of(listener, sender));
+
+        for (var pubsubMessage : messages) {
+            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+        }
+        for (var pubsubMessage : shardedMessages) {
+            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+        }
+
+        Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
+
+        messages.addAll(shardedMessages);
+
+        var received = new HashSet<PubSubMessage>(messages.size());
+        var rand = new Random();
+        while (true) {
+            if (rand.nextBoolean()) {
+                CompletableFuture<PubSubMessage> messagePromise = listener.getPubSubMessage();
+                if (messagePromise.isDone()) {
+                    received.add(messagePromise.get());
+                } else {
+                    break; // all messages read
+                }
+            } else {
+                try {
+                    var message =
+                            CompletableFuture.supplyAsync(listener::tryGetPubSubMessage).get(1, TimeUnit.SECONDS);
+                    received.add(message);
+                } catch (TimeoutException ignored) {
+                    break; // all messages read
+                }
+            }
+        }
+
+        // redis can reorder the messages, so we can't validate that the order (without big delays
+        // between sends)
+        assertEquals(new HashSet<>(messages), received);
+    }
+
     /**
      * Similar to `test_pubsub_combined_exact_pattern_and_sharded_multi_client` in python client
      * tests.
      */
     @SneakyThrows
-    @ParameterizedTest(name = "use callback = {0}")
+    @ParameterizedTest
     @EnumSource(MessageReadMethod.class)
     public void combined_exact_pattern_and_sharded_multi_client(MessageReadMethod method) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");

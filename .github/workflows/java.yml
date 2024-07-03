@@ -126,7 +126,7 @@ jobs:
                     - 17
         runs-on: ubuntu-latest
         container: amazonlinux:latest
-        timeout-minutes: 15
+        timeout-minutes: 35
         steps:
             - name: Install git
               run: |

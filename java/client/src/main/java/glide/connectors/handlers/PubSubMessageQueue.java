@@ -8,13 +8,14 @@ import java.util.concurrent.Future;
 
 /** A FIFO message queue for {@link PubSubMessage}. */
 public class PubSubMessageQueue {
+    // fields are protected to ease testing
     /** The queue itself. */
-    private final LinkedList<PubSubMessage> messageQueue = new LinkedList<>();
+    protected final LinkedList<PubSubMessage> messageQueue = new LinkedList<>();
 
     /**
      * The head of the queue stored aside as a {@link Future}. Stores a promise to the first message.
      */
-    private CompletableFuture<PubSubMessage> head = new CompletableFuture<>();
+    protected CompletableFuture<PubSubMessage> head = new CompletableFuture<>();
 
     /** An object to synchronize threads. */
     private final Object lock = new Object();
@@ -36,7 +37,7 @@ public class PubSubMessageQueue {
         synchronized (lock) {
             switch (state) {
                 case SET_UNREAD:
-                    messageQueue.push(message);
+                    messageQueue.addLast(message);
                     break;
                 case UNSET_UNREAD:
                     head.complete(message);
@@ -45,7 +46,7 @@ public class PubSubMessageQueue {
                 case UNSET_READ:
                     head.complete(message);
                     head = new CompletableFuture<>();
-                    state = HeadState.SET_UNREAD;
+                    state = HeadState.UNSET_UNREAD;
                     break;
             }
         }
