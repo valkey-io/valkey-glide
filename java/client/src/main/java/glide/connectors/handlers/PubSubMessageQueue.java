@@ -39,6 +39,9 @@ public class PubSubMessageQueue {
                     messageQueue.push(message);
                     break;
                 case UNSET_UNREAD:
+                    head.complete(message);
+                    state = HeadState.SET_UNREAD;
+                    break;
                 case UNSET_READ:
                     head.complete(message);
                     head = new CompletableFuture<>();
