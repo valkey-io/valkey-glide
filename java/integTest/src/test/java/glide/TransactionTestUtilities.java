@@ -935,7 +935,6 @@ public class TransactionTestUtilities {
             "1-0", // xadd(streamKey3, Map.of("f0", "v0"), id("1-0"))
             OK, // xgroupCreate(streamKey3, groupName3, "0")
             new Map[] {}, // xinfoGroups(streamKey3)
-
         };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
