@@ -13,8 +13,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands and transactions for the "Scripting and Function" group for a cluster client.
  *
- * @see <a href="https://redis.io/docs/latest/commands/?group=scripting">Scripting and Function
- *     Commands</a>
+ * @see <a href="https://redis.io/commands/?group=scripting">Scripting and Function Commands</a>
  */
 public interface ScriptingAndFunctionsClusterCommands {
 
@@ -23,7 +22,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
      *     already exists.
@@ -42,7 +41,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
      *     already exists.
@@ -60,7 +59,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Loads a library to Redis.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
      *     already exists.
@@ -81,7 +80,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Loads a library to Redis.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-load/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-load/">valkey.io</a> for details.
      * @param libraryCode The source code that implements the library.
      * @param replace Whether the given library should overwrite a library with the same name if it
      *     already exists.
@@ -104,7 +103,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to a random node.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Info about all libraries and their functions.
      * @example
@@ -130,7 +129,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to a random node.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Info about queried libraries and their functions.
@@ -156,7 +155,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns information about the functions and libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -186,7 +185,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns information about the functions and libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -218,7 +217,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -233,7 +232,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
      * @return <code>OK</code>.
@@ -249,7 +248,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Deletes all function libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
@@ -265,7 +264,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Deletes all function libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-flush/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-flush/">valkey.io</a> for details.
      * @param mode The flushing mode, could be either {@link FlushMode#SYNC} or {@link
      *     FlushMode#ASYNC}.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -284,7 +283,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @return <code>OK</code>.
      * @example
@@ -300,7 +299,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @return <code>OK</code>.
      * @example
@@ -315,7 +314,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Deletes a library and all its functions.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -332,7 +331,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Deletes a library and all its functions.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-delete/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-delete/">valkey.io</a> for details.
      * @param libName The library name to delete.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -350,7 +349,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to a random node.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-dump/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
      * @return The serialized payload of all loaded libraries.
      * @example
      *     <pre>{@code
@@ -364,7 +363,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Returns the serialized payload of all loaded libraries.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-dump/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-dump/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return The serialized payload of all loaded libraries.
@@ -381,8 +380,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @return <code>OK</code>.
      * @example
@@ -398,8 +396,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
      * @return <code>OK</code>.
@@ -415,8 +412,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Restores libraries from the serialized payload returned by {@link #functionDump(Route)}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -433,8 +429,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Restores libraries from the serialized payload returned by {@link #functionDump(Route)}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for
-     *     details.
+     * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
      * @param payload The serialized data from {@link #functionDump()}.
      * @param policy A policy for handling existing libraries.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -455,7 +450,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * To route to a replica please refer to {@link #fcallReadOnly(String)}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
      * @example
@@ -472,7 +467,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * To route to a replica please refer to {@link #fcallReadOnly(String)}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
      * @example
@@ -487,7 +482,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -506,7 +501,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -527,7 +522,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * To route to a replica please refer to {@link #fcallReadOnly(String, String[])}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
@@ -547,7 +542,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * To route to a replica please refer to {@link #fcallReadOnly(String, String[])}.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
@@ -565,7 +560,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
@@ -585,7 +580,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
@@ -607,7 +602,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
      * @example
@@ -623,7 +618,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @return The invoked function's return value.
      * @example
@@ -638,7 +633,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded read-only function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -657,7 +652,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded read-only function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
@@ -677,7 +672,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
@@ -696,7 +691,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command is routed to a random node depending on the client's {@link ReadFrom} strategy.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
@@ -714,7 +709,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded read-only function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
@@ -735,7 +730,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * Invokes a previously loaded read-only function.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param arguments An <code>array</code> of <code>function</code> arguments. <code>arguments
      *     </code> should not represent names of keys.
@@ -758,7 +753,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-kill/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-kill/">valkey.io</a> for details.
      * @return <code>OK</code> if function is terminated. Otherwise, throws an error.
      * @example
      *     <pre>{@code
@@ -773,7 +768,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * <code>FUNCTION KILL</code> terminates read-only functions only.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-kill/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-kill/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code> if function is terminated. Otherwise, throws an error.
@@ -791,7 +786,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * The command will be routed to all primary nodes.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @return A <code>Map</code> with two keys:
      *     <ul>
      *       <li><code>running_script</code> with information about the running script.
@@ -824,7 +819,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * available execution engines.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/function-stats/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/function-stats/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return A <code>Map</code> with two keys:

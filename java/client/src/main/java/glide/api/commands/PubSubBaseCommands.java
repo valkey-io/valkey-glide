@@ -6,14 +6,14 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands for the "Pub/Sub" group for standalone and cluster clients.
  *
- * @see <a href="https://redis.io/docs/latest/commands/?group=pubsub">Pub/Sub Commands</a>
+ * @see <a href="https://redis.io/commands/?group=pubsub">Pub/Sub Commands</a>
  */
 public interface PubSubBaseCommands {
 
     /**
      * Publishes message on pubsub channel.
      *
-     * @see <a href="https://valkey.io/commands/publish/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/publish/">valkey.io</a> for details.
      * @param channel The channel to publish the message on.
      * @param message The message to publish.
      * @return <code>OK</code>.

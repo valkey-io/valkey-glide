@@ -11,7 +11,7 @@ import glide.api.models.configuration.RequestRoutingConfiguration.Route;
  * ScriptingAndFunctionsClusterCommands#functionRestore(byte[], FunctionRestorePolicy)}, and {@link
  * ScriptingAndFunctionsClusterCommands#functionRestore(byte[], FunctionRestorePolicy, Route)}.
  *
- * @see <a href="https://redis.io/docs/latest/commands/function-restore/">redis.io</a> for details.
+ * @see <a href="https://valkey.io/commands/function-restore/">valkey.io</a> for details.
  */
 public enum FunctionRestorePolicy {
     /**

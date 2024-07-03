@@ -9,8 +9,7 @@ import java.util.concurrent.CompletableFuture;
  * Supports commands and transactions for the "Scripting and Function" group for standalone and
  * cluster clients.
  *
- * @see <a href="https://redis.io/docs/latest/commands/?group=scripting">Scripting and Function
- *     Commands</a>
+ * @see <a href="https://redis.io/commands/?group=scripting">Scripting and Function Commands</a>
  */
 public interface ScriptingAndFunctionsBaseCommands {
 
@@ -26,7 +25,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *     </ul>
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of keys accessed by the function. To ensure the correct
      *     execution of functions, both in standalone and clustered deployments, all names of keys
@@ -55,7 +54,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *     </ul>
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of keys accessed by the function. To ensure the correct
      *     execution of functions, both in standalone and clustered deployments, all names of keys
@@ -84,7 +83,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *     </ul>
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of keys accessed by the function. To ensure the correct
      *     execution of functions, both in standalone and clustered deployments, all names of keys
@@ -112,7 +111,7 @@ public interface ScriptingAndFunctionsBaseCommands {
      *     </ul>
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://redis.io/docs/latest/commands/fcall_ro/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/fcall_ro/">valkey.io</a> for details.
      * @param function The function name.
      * @param keys An <code>array</code> of keys accessed by the function. To ensure the correct
      *     execution of functions, both in standalone and clustered deployments, all names of keys

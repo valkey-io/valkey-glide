@@ -6,7 +6,7 @@ import java.util.concurrent.CompletableFuture;
 /**
  * Supports commands for the "Pub/Sub" group for a cluster client.
  *
- * @see <a href="https://redis.io/docs/latest/commands/publish/">Pub/Sub Commands</a>
+ * @see <a href="https://valkey.io/commands/publish/">Pub/Sub Commands</a>
  */
 public interface PubSubClusterCommands {
 
@@ -14,7 +14,7 @@ public interface PubSubClusterCommands {
      * Publishes message on pubsub channel in sharded mode.
      *
      * @since Redis 7.0 and above.
-     * @see <a href="https://valkey.io/commands/spublish/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/spublish/">valkey.io</a> for details.
      * @param channel The channel to publish the message on.
      * @param message The message to publish.
      * @return <code>OK</code>.

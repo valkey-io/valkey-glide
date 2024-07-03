@@ -13,7 +13,7 @@ public interface TransactionsCommands {
      * Flushes all the previously watched keys for a transaction. Executing a transaction will
      * automatically flush all previously watched keys.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/unwatch/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code

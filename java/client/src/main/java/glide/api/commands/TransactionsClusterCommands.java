@@ -15,7 +15,7 @@ public interface TransactionsClusterCommands {
      * automatically flush all previously watched keys.<br>
      * The command will be routed to all primary nodes.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/unwatch/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
@@ -29,7 +29,7 @@ public interface TransactionsClusterCommands {
      * Flushes all the previously watched keys for a transaction. Executing a transaction will
      * automatically flush all previously watched keys.
      *
-     * @see <a href="https://redis.io/docs/latest/commands/unwatch/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/unwatch/">valkey.io</a> for details.
      * @param route Specifies the routing configuration for the command. The client will route the
      *     command to the nodes defined by <code>route</code>.
      * @return <code>OK</code>.
