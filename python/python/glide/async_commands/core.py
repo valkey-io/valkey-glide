@@ -46,6 +46,7 @@ from glide.async_commands.sorted_set import (
 )
 from glide.async_commands.stream import (
     StreamAddOptions,
+    StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
     StreamRangeBound,
@@ -3186,6 +3187,111 @@ class CoreCommands(Protocol):
         return cast(
             List[List[Union[bytes, int]]],
             await self._execute_command(RequestType.XPending, args),
+        )
+
+    async def xclaim(
+        self,
+        key: TEncodable,
+        group: TEncodable,
+        consumer: TEncodable,
+        min_idle_time_ms: int,
+        ids: List[TEncodable],
+        options: Optional[StreamClaimOptions] = None,
+    ) -> Mapping[bytes, List[List[bytes]]]:
+        """
+        Changes the ownership of a pending message.
+
+        See https://valkey.io/commands/xclaim for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group (TEncodable): The consumer group name.
+            consumer (TEncodable): The group consumer.
+            min_idle_time_ms (int): The minimum idle time for the message to be claimed.
+            ids (List[TEncodable]): A array of entry ids.
+            options (Optional[StreamClaimOptions]): Stream claim options.
+
+        Returns:
+            A Mapping of message entries with the format
+                {"entryId": [["entry", "data"], ...], ...} that are claimed by the consumer.
+
+        Examples:
+            # read messages from streamId for consumer1
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "consumer1")
+                {
+                    b"mystream": {
+                        b"1-0": [[b"field1", b"value1"]],
+                    }
+                }
+                # "1-0" is now read, and we can assign the pending messages to consumer2
+            >>> await client.xclaim("mystream", "mygroup", "consumer2", 0, ["1-0"])
+                {b"1-0": [[b"field1", b"value1"]]}
+        """
+
+        args = [key, group, consumer, str(min_idle_time_ms), *ids]
+
+        if options:
+            args.extend(options.to_args())
+
+        return cast(
+            Mapping[bytes, List[List[bytes]]],
+            await self._execute_command(RequestType.XClaim, args),
+        )
+
+    async def xclaim_just_id(
+        self,
+        key: TEncodable,
+        group: TEncodable,
+        consumer: TEncodable,
+        min_idle_time_ms: int,
+        ids: List[TEncodable],
+        options: Optional[StreamClaimOptions] = None,
+    ) -> List[TEncodable]:
+        """
+        Changes the ownership of a pending message. This function returns a List with
+        only the message/entry IDs, and is equivalent to using JUSTID in the Redis API.
+
+        See https://valkey.io/commands/xclaim for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group (TEncodable): The consumer group name.
+            consumer (TEncodable): The group consumer.
+            min_idle_time_ms (int): The minimum idle time for the message to be claimed.
+            ids (List[TEncodable]): A array of entry ids.
+            options (Optional[StreamClaimOptions]): Stream claim options.
+
+        Returns:
+            A List of message ids claimed by the consumer.
+
+        Examples:
+            # read messages from streamId for consumer1
+            >>> await client.xreadgroup({"mystream": ">"}, "mygroup", "consumer1")
+                {
+                    b"mystream": {
+                        b"1-0": [[b"field1", b"value1"]],
+                    }
+                }
+                # "1-0" is now read, and we can assign the pending messages to consumer2
+            >>> await client.xclaim_just_id("mystream", "mygroup", "consumer2", 0, ["1-0"])
+                ["1-0"]
+        """
+
+        args = [
+            key,
+            group,
+            consumer,
+            str(min_idle_time_ms),
+            *ids,
+            StreamClaimOptions.JUST_ID_REDIS_API,
+        ]
+
+        if options:
+            args.extend(options.to_args())
+
+        return cast(
+            List[TEncodable],
+            await self._execute_command(RequestType.XClaim, args),
         )
 
     async def xautoclaim(

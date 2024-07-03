@@ -42,6 +42,7 @@ from glide.async_commands.stream import (
     MaxId,
     MinId,
     StreamAddOptions,
+    StreamClaimOptions,
     StreamGroupOptions,
     StreamReadGroupOptions,
     TrimByMinId,
@@ -570,10 +571,12 @@ async def transaction_test(
     args.append(b"0-1")
     transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-2"))
     args.append(b"0-2")
+    transaction.xadd(key11, [("foo", "bar")], StreamAddOptions(id="0-3"))
+    args.append(b"0-3")
     transaction.xlen(key11)
-    args.append(2)
-    transaction.xread({key11: "0-1"})
-    args.append({key11.encode(): {b"0-2": [[b"foo", b"bar"]]}})
+    args.append(3)
+    transaction.xread({key11: "0-2"})
+    args.append({key11.encode(): {b"0-3": [[b"foo", b"bar"]]}})
     transaction.xrange(key11, IdBound("0-1"), IdBound("0-1"))
     args.append({b"0-1": [[b"foo", b"bar"]]})
     transaction.xrevrange(key11, IdBound("0-1"), IdBound("0-1"))
@@ -586,7 +589,8 @@ async def transaction_test(
     group_name1 = get_random_string(10)
     group_name2 = get_random_string(10)
     consumer = get_random_string(10)
-    transaction.xgroup_create(key11, group_name1, "0-1")
+    consumer2 = get_random_string(10)
+    transaction.xgroup_create(key11, group_name1, "0-2")
     args.append(OK)
     transaction.xgroup_create(
         key11, group_name2, "0-0", StreamGroupOptions(make_stream=True)
@@ -596,12 +600,29 @@ async def transaction_test(
     args.append([])
     transaction.xgroup_create_consumer(key11, group_name1, consumer)
     args.append(True)
+    transaction.xgroup_set_id(key11, group_name1, "0-2")
+    args.append(OK)
+    transaction.xreadgroup({key11: ">"}, group_name1, consumer)
+    args.append({key11.encode(): {b"0-3": [[b"foo", b"bar"]]}})
     transaction.xreadgroup(
-        {key11: ">"}, group_name1, consumer, StreamReadGroupOptions(count=5)
+        {key11: "0-3"}, group_name1, consumer, StreamReadGroupOptions(count=2)
     )
-    args.append({key11.encode(): {b"0-2": [[b"foo", b"bar"]]}})
+    args.append({key11.encode(): {}})
+    transaction.xclaim(key11, group_name1, consumer, 0, ["0-1"])
+    args.append({})
+    transaction.xclaim(
+        key11, group_name1, consumer, 0, ["0-3"], StreamClaimOptions(is_force=True)
+    )
+    args.append({b"0-3": [[b"foo", b"bar"]]})
+    transaction.xclaim_just_id(key11, group_name1, consumer, 0, ["0-3"])
+    args.append([b"0-3"])
+    transaction.xclaim_just_id(
+        key11, group_name1, consumer, 0, ["0-4"], StreamClaimOptions(is_force=True)
+    )
+    args.append([])
+
     transaction.xpending(key11, group_name1)
-    args.append([1, b"0-2", b"0-2", [[consumer.encode(), b"1"]]])
+    args.append([1, b"0-3", b"0-3", [[consumer.encode(), b"1"]]])
 
     min_version = "6.2.0"
     if not await check_if_server_version_lt(redis_client, min_version):
@@ -611,25 +632,23 @@ async def transaction_test(
         # Entries List because they no longer exist in the stream
         if await check_if_server_version_lt(redis_client, "7.0.0"):
             args.append(
-                [b"0-0", {b"0-2": [[b"foo", b"bar"]]}]
+                [b"0-0", {b"0-3": [[b"foo", b"bar"]]}]
             )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
             args.append(
-                [b"0-0", [b"0-2"]]
+                [b"0-0", [b"0-3"]]
             )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
         else:
             args.append(
-                [b"0-0", {b"0-2": [[b"foo", b"bar"]]}, []]
+                [b"0-0", {b"0-3": [[b"foo", b"bar"]]}, []]
             )  # transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
             args.append(
-                [b"0-0", [b"0-2"], []]
+                [b"0-0", [b"0-3"], []]
             )  # transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
 
-    transaction.xack(key11, group_name1, ["0-2"])
+    transaction.xack(key11, group_name1, ["0-3"])
     args.append(1)
     transaction.xpending_range(key11, group_name1, MinId(), MaxId(), 1)
     args.append([])
-    transaction.xgroup_set_id(key11, group_name1, "0-2")
-    args.append(OK)
     transaction.xgroup_del_consumer(key11, group_name1, consumer)
     args.append(0)
     transaction.xgroup_destroy(key11, group_name1)
@@ -637,7 +656,7 @@ async def transaction_test(
     transaction.xgroup_destroy(key11, group_name2)
     args.append(True)
 
-    transaction.xdel(key11, ["0-2", "0-3"])
+    transaction.xdel(key11, ["0-3", "0-5"])
     args.append(1)
 
     transaction.lpush(key17, ["2", "1", "4", "3", "a"])
