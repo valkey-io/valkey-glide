@@ -887,6 +887,8 @@ public class CommandTests {
                                 new GlideString[0])),
                 Arguments.of(
                         "xread", null, clusterClient.xread(Map.of("abc", "stream1", "zxy", "stream2"))),
+                Arguments.of(
+                        "xread binary", null, clusterClient.xreadBinary(Map.of(gs("abc"), gs("stream1"), gs("zxy"), gs("stream2")))),
                 Arguments.of("copy", "6.2.0", clusterClient.copy("abc", "def", true)),
                 Arguments.of("msetnx", null, clusterClient.msetnx(Map.of("abc", "def", "ghi", "jkl"))),
                 Arguments.of("lcs", "7.0.0", clusterClient.lcs("abc", "def")),

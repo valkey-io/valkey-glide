@@ -4522,6 +4522,78 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void xread_binary(BaseClient client) {
+        GlideString key1 = gs("{key}:1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}:2" + UUID.randomUUID());
+        String field1 = "f1_";
+        String field2 = "f2_";
+        String field3 = "f3_";
+
+        // setup first entries in streams key1 and key2
+        Map<GlideString, GlideString> timestamp_1_1_map = new LinkedHashMap<>();
+        timestamp_1_1_map.put(gs(field1), gs(field1 + "1"));
+        timestamp_1_1_map.put(gs(field3), gs(field3 + "1"));
+        GlideString timestamp_1_1 =
+                client.xadd(key1, timestamp_1_1_map, StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
+
+        GlideString timestamp_2_1 =
+                client
+                        .xadd(key2, Map.of(gs(field2), gs(field2 + "1")), StreamAddOptions.builder().id("2-1").build())
+                        .get();
+        assertNotNull(timestamp_2_1);
+
+        // setup second entries in streams key1 and key2
+        GlideString timestamp_1_2 =
+                client
+                        .xadd(key1, Map.of(gs(field1), gs(field1 + "2")), StreamAddOptions.builder().id("1-2").build())
+                        .get();
+        assertNotNull(timestamp_1_2);
+
+        GlideString timestamp_2_2 =
+                client
+                        .xadd(key2, Map.of(gs(field2), gs(field2 + "2")), StreamAddOptions.builder().id("2-2").build())
+                        .get();
+        assertNotNull(timestamp_2_2);
+
+        // setup third entries in streams key1 and key2
+        Map<GlideString, GlideString> timestamp_1_3_map = new LinkedHashMap<>();
+        timestamp_1_3_map.put(gs(field1), gs(field1 + "3"));
+        timestamp_1_3_map.put(gs(field3), gs(field3 + "3"));
+        GlideString timestamp_1_3 =
+                client.xadd(key1, timestamp_1_3_map, StreamAddOptions.builder().id("1-3").build()).get();
+        assertNotNull(timestamp_1_3);
+
+        GlideString timestamp_2_3 =
+                client
+                        .xadd(key2, Map.of(gs(field2), gs(field2 + "3")), StreamAddOptions.builder().id("2-3").build())
+                        .get();
+        assertNotNull(timestamp_2_3);
+
+        Map<GlideString, Map<GlideString, GlideString[][]>> result =
+                client.xreadBinary(Map.of(key1, timestamp_1_1, key2, timestamp_2_1)).get();
+
+        // check key1
+        Map<GlideString, GlideString[][]> expected_key1 = new LinkedHashMap<>();
+        expected_key1.put(timestamp_1_2, new GlideString[][] {{gs(field1), gs(field1 + "2")}});
+        expected_key1.put(
+                timestamp_1_3,
+                new GlideString[][] {
+                    {gs(field1), gs(field1 + "3")},
+                    {gs(field3), gs(field3 + "3")}
+                });
+        assertDeepEquals(expected_key1, result.get(key1));
+
+        // check key2
+        Map<GlideString, GlideString[][]> expected_key2 = new LinkedHashMap<>();
+        expected_key2.put(timestamp_2_2, new GlideString[][] {{gs(field2), gs(field2 + "2")}});
+        expected_key2.put(timestamp_2_3, new GlideString[][] {{gs(field2), gs(field2 + "3")}});
+        assertDeepEquals(expected_key2, result.get(key2));
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void xread_return_failures(BaseClient client) {
         String key1 = "{key}:1" + UUID.randomUUID();
         String nonStreamKey = "{key}:3" + UUID.randomUUID();
@@ -4569,6 +4641,62 @@ public class SharedCommandTests {
                     () ->
                             testClient
                                     .xread(Map.of(key1, timestamp_1_1), StreamReadOptions.builder().block(0L).build())
+                                    .get(3, TimeUnit.SECONDS));
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void xread_binary_return_failures(BaseClient client) {
+        GlideString key1 = gs("{key}:1" + UUID.randomUUID());
+        GlideString nonStreamKey = gs("{key}:3" + UUID.randomUUID());
+        String field1 = "f1_";
+
+        // setup first entries in streams key1 and key2
+        Map<GlideString, GlideString> timestamp_1_1_map = new LinkedHashMap<>();
+        timestamp_1_1_map.put(gs(field1), gs(field1 + "1"));
+        GlideString timestamp_1_1 =
+                client.xadd(key1, timestamp_1_1_map, StreamAddOptions.builder().id("1-1").build()).get();
+        assertNotNull(timestamp_1_1);
+
+        // Key exists, but it is not a stream
+        assertEquals(OK, client.set(nonStreamKey, gs("bar")).get());
+        ExecutionException executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xreadBinary(Map.of(nonStreamKey, timestamp_1_1, key1, timestamp_1_1)).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.xreadBinary(Map.of(key1, timestamp_1_1, nonStreamKey, timestamp_1_1)).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        try (var testClient =
+                client instanceof RedisClient
+                        ? RedisClient.CreateClient(commonClientConfig().build()).get()
+                        : RedisClusterClient.CreateClient(commonClusterClientConfig().build()).get()) {
+
+            // ensure that commands doesn't time out even if timeout > request timeout
+            long oneSecondInMS = 1000L;
+            assertNull(
+                    testClient
+                            .xreadBinary(
+                                    Map.of(key1, timestamp_1_1),
+                                    StreamReadOptions.builder().block(oneSecondInMS).build())
+                            .get());
+
+            // with 0 timeout (no timeout) should never time out,
+            // but we wrap the test with timeout to avoid test failing or stuck forever
+            assertThrows(
+                    TimeoutException.class, // <- future timeout, not command timeout
+                    () ->
+                            testClient
+                                    .xreadBinary(
+                                        Map.of(key1, timestamp_1_1), 
+                                        StreamReadOptions.builder().block(0L).build())
                                     .get(3, TimeUnit.SECONDS));
         }
     }

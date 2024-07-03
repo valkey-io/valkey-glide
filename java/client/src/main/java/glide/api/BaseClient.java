@@ -602,6 +602,17 @@ public abstract class BaseClient
 
     /**
      * @param response A Protobuf response
+     * @return A map of <code>GlideString</code> to <code>V</code> or <code>null</code>
+     * @param <V> Value type.
+     */
+    @SuppressWarnings("unchecked") // raw Map cast to Map<GlideString, V>
+    protected <V> Map<GlideString, V> handleMapOrNullResponseBinary(Response response) throws RedisException {
+        return handleRedisResponse(
+                Map.class, EnumSet.of(ResponseFlags.IS_NULLABLE), response);
+    }
+
+    /**
+     * @param response A Protobuf response
      * @return A map of a map of <code>String[][]</code>
      */
     protected Map<String, Map<String, String[][]>> handleXReadResponse(Response response)
@@ -615,6 +626,23 @@ public abstract class BaseClient
                         Collectors.toMap(
                                 Map.Entry::getKey,
                                 e -> castMapOf2DArray((Map<String, Object[][]>) e.getValue(), String.class)));
+    }
+
+    /**
+     * @param response A Protobuf response
+     * @return A map of a map of <code>GlideString[][]</code>
+     */
+    protected Map<GlideString, Map<GlideString, GlideString[][]>> handleXReadResponseBinary(Response response)
+            throws RedisException {
+        Map<GlideString, Object> mapResponse = handleMapOrNullResponseBinary(response);
+        if (mapResponse == null) {
+            return null;
+        }
+        return mapResponse.entrySet().stream()
+                .collect(
+                        Collectors.toMap(
+                                Map.Entry::getKey,
+                                e -> castMapOf2DArray((Map<GlideString, Object[][]>) e.getValue(), GlideString.class)));
     }
 
     @SuppressWarnings("unchecked") // raw Set cast to Set<String>
@@ -2204,12 +2232,24 @@ public abstract class BaseClient
             @NonNull Map<String, String> keysAndIds) {
         return xread(keysAndIds, StreamReadOptions.builder().build());
     }
+    @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
+            @NonNull Map<GlideString, GlideString> keysAndIds) {
+        return xreadBinary(keysAndIds, StreamReadOptions.builder().build());
+    }
 
     @Override
     public CompletableFuture<Map<String, Map<String, String[][]>>> xread(
             @NonNull Map<String, String> keysAndIds, @NonNull StreamReadOptions options) {
         String[] arguments = options.toArgs(keysAndIds);
         return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> xreadBinary(
+            @NonNull Map<GlideString, GlideString> keysAndIds, @NonNull StreamReadOptions options) {
+        GlideString[] arguments = options.toArgsBinary(keysAndIds);
+        return commandManager.submitNewCommand(XRead, arguments, this::handleXReadResponseBinary);
     }
 
     @Override

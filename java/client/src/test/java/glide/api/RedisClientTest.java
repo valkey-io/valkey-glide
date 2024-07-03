@@ -6227,6 +6227,41 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void xread_binary_multiple_keys() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        GlideString keyTwo = gs("two");
+        GlideString streamIdTwo = gs("id-two");
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult = new LinkedHashMap<>();
+        completedResult.put(keyOne, Map.of(streamIdOne, fieldValues));
+        completedResult.put(keyTwo, Map.of(streamIdTwo, fieldValues));
+        GlideString[] arguments = {gs(READ_STREAMS_REDIS_API), keyOne, keyTwo, streamIdOne, streamIdTwo};
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XRead), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        Map<GlideString, GlideString> keysAndIds = new LinkedHashMap<>();
+        keysAndIds.put(keyOne, streamIdOne);
+        keysAndIds.put(keyTwo, streamIdTwo);
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response = service.xreadBinary(keysAndIds);
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void xread_with_options() {
         // setup
         String keyOne = "one";
@@ -6261,6 +6296,48 @@ public class RedisClientTest {
                         Map.of(keyOne, streamIdOne),
                         StreamReadOptions.builder().block(block).count(count).build());
         Map<String, Map<String, String[][]>> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(completedResult, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void xread_binary_with_options() {
+        // setup
+        GlideString keyOne = gs("one");
+        GlideString streamIdOne = gs("id-one");
+        Long block = 2L;
+        Long count = 10L;
+        GlideString[][] fieldValues = {{gs("field"), gs("value")}};
+        Map<GlideString, Map<GlideString, GlideString[][]>> completedResult =
+                Map.of(keyOne, Map.of(streamIdOne, fieldValues));
+        GlideString[] arguments = {
+            gs(READ_COUNT_REDIS_API),
+            gs(count.toString()),
+            gs(READ_BLOCK_REDIS_API),
+            gs(block.toString()),
+            gs(READ_STREAMS_REDIS_API),
+            keyOne,
+            streamIdOne
+        };
+
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> testResponse =
+                new CompletableFuture<>();
+        testResponse.complete(completedResult);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Map<GlideString, GlideString[][]>>>submitNewCommand(
+                        eq(XRead), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Map<GlideString, GlideString[][]>>> response =
+                service.xreadBinary(
+                        Map.of(keyOne, streamIdOne),
+                        StreamReadOptions.builder().block(block).count(count).build());
+        Map<GlideString, Map<GlideString, GlideString[][]>> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);

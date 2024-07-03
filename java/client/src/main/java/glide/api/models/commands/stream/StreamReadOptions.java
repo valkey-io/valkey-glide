@@ -8,6 +8,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 import lombok.experimental.SuperBuilder;
+import glide.api.models.GlideString;
+import static glide.api.models.GlideString.gs;
 
 /**
  * Optional arguments for {@link StreamBaseCommands#xread(Map, StreamReadOptions)}
@@ -57,5 +59,32 @@ public class StreamReadOptions {
         optionArgs.addAll(entrySet.stream().map(Map.Entry::getValue).collect(Collectors.toList()));
 
         return optionArgs.toArray(new String[0]);
+    }
+
+    /**
+     * Converts options and the key-to-id input for {@link StreamBaseCommands#xreadBinary(Map,
+     * StreamReadOptions)} into a GlideString[].
+     *
+     * @return GlideString[]
+     */
+    public GlideString[] toArgsBinary(Map<GlideString, GlideString> streams) {
+        List<GlideString> optionArgs = new ArrayList<>();
+
+        if (this.count != null) {
+            optionArgs.add(gs(READ_COUNT_REDIS_API));
+            optionArgs.add(gs(count.toString()));
+        }
+
+        if (this.block != null) {
+            optionArgs.add(gs(READ_BLOCK_REDIS_API));
+            optionArgs.add(gs(block.toString()));
+        }
+
+        optionArgs.add(gs(READ_STREAMS_REDIS_API));
+        Set<Map.Entry<GlideString, GlideString>> entrySet = streams.entrySet();
+        optionArgs.addAll(entrySet.stream().map(Map.Entry::getKey).collect(Collectors.toList()));
+        optionArgs.addAll(entrySet.stream().map(Map.Entry::getValue).collect(Collectors.toList()));
+
+        return optionArgs.toArray(new GlideString[0]);
     }
 }
