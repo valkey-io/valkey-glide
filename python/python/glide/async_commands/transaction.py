@@ -1956,17 +1956,24 @@ class BaseTransaction:
         )
 
     def function_kill(self: TTransaction) -> TTransaction:
-            """
-            Kill a function that is currently executing.
+        """
+        Kill a function that is currently executing.
 
-            See https://valkey.io/commands/function-kill/ for more details.
+        See https://valkey.io/commands/function-kill/ for more details.
 
-            Command Response:
-                TOK: A simple `OK`.
+        Args:
+        route (Optional[Route]): The command will be routed to all primaries, unless `route` is provided,
+            in which case the client will route the command to the nodes defined by `route`.
 
-            Since: Redis 7.0.0.
-            """
-            return self.append_command(RequestType.FunctionKill,[],)
+        Command Response:
+            TOK: A simple `OK`.
+
+        Since: Redis 7.0.0.
+        """
+        return self.append_command(
+            RequestType.FunctionKill,
+            [],
+        )
 
     def fcall(
         self: TTransaction,
