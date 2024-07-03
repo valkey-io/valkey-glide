@@ -377,9 +377,9 @@ class StandaloneCommands(CoreCommands):
 
         Returns:
             TFunctionStatsResponse: A `Mapping` with two keys:
-            - `running_script` with information about the running script.
-            - `engines` with information about available engines and their stats.
-            See example for more details.
+                - `running_script` with information about the running script.
+                - `engines` with information about available engines and their stats.
+                See example for more details.
 
         Examples:
             >>> await client.function_stats()

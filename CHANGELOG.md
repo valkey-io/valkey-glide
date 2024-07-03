@@ -201,6 +201,7 @@
 * Node: Added LINDEX command ([#999](https://github.com/aws/glide-for-redis/pull/999))
 * Python, Node: Added ZPOPMAX command ([#996](https://github.com/aws/glide-for-redis/pull/996), [#1009](https://github.com/aws/glide-for-redis/pull/1009))
 * Python: Added DBSIZE command ([#1040](https://github.com/aws/glide-for-redis/pull/1040))
+* Python: Added FUNCTION STATS command ([#1794](https://github.com/aws/glide-for-redis/pull/1794))
 
 #### Features
 * Python, Node: Added support in Lua Scripts ([#775](https://github.com/aws/glide-for-redis/pull/775), [#860](https://github.com/aws/glide-for-redis/pull/860))

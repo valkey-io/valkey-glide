@@ -293,14 +293,14 @@ def check_function_stats_response(
         function_count (int): Expected functions count.
     """
     running_script_info = response.get(b"running_script")
-    if running_script_info == None and len(running_function) != 0:
+    if running_script_info is None and len(running_function) != 0:
         pytest.fail("No running function info")
 
-    if running_script_info != None and len(running_function) == 0:
+    if running_script_info is not None and len(running_function) == 0:
         command = cast(dict, running_script_info).get(b"command")
         pytest.fail("Unexpected running function info: " + " ".join(cast(str, command)))
 
-    if running_script_info != None:
+    if running_script_info is not None:
         command = cast(dict, running_script_info).get(b"command")
         assert running_function == command
         # command line format is:
