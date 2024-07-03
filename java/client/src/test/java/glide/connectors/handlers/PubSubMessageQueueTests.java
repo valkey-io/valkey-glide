@@ -86,7 +86,7 @@ public class PubSubMessageQueueTests {
         checkFutureStatus(queue.head, true);
         assertSame(msg3, queue.head.get());
         // read more
-        assertSame(msg2, queue.pop().get());
+        assertSame(msg3, queue.pop().get());
         // MQ and `head` are both empty
         assertTrue(queue.messageQueue.isEmpty());
         checkFutureStatus(queue.head, false);
