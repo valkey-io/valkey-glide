@@ -332,7 +332,10 @@ public class PubSubTests {
         GlideString pattern = gs(prefix + "*");
         Map<GlideString, GlideString> message2channels =
                 Map.of(
-                        gs(prefix + "1"), gs(UUID.randomUUID().toString()), gs(prefix + "2"), gs(UUID.randomUUID().toString()));
+                        gs(prefix + "1"),
+                        gs(UUID.randomUUID().toString()),
+                        gs(prefix + "2"),
+                        gs(UUID.randomUUID().toString()));
         var subscriptions =
                 Map.of(
                         standalone ? PubSubChannelMode.PATTERN : PubSubClusterChannelMode.PATTERN,

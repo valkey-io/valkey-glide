@@ -1,9 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.api.commands;
 
-import java.util.concurrent.CompletableFuture;
-
 import glide.api.models.GlideString;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Supports commands for the "Pub/Sub" group for standalone and cluster clients.

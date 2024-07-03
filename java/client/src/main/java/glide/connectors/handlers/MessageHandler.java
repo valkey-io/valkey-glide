@@ -4,7 +4,6 @@ package glide.connectors.handlers;
 import static glide.api.models.GlideString.gs;
 
 import glide.api.logging.Logger;
-import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.exceptions.RedisException;
@@ -62,7 +61,9 @@ public class MessageHandler {
                         "Transport disconnected, messages might be lost");
                 break;
             case PMessage:
-                handle(new PubSubMessage(gs((String) values[2]), gs((String) values[1]), gs((String) values[0])));
+                handle(
+                        new PubSubMessage(
+                                gs((String) values[2]), gs((String) values[1]), gs((String) values[0])));
                 return;
             case Message:
             case SMessage:

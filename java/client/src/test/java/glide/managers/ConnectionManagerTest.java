@@ -182,12 +182,15 @@ public class ConnectionManagerTest {
                                                 Map.of(
                                                         EXACT.ordinal(),
                                                                 PubSubChannelsOrPatterns.newBuilder()
-                                                                        .addChannelsOrPatterns(ByteString.copyFrom(gs("channel_1").getBytes()))
-                                                                        .addChannelsOrPatterns(ByteString.copyFrom(gs("channel_2").getBytes()))
+                                                                        .addChannelsOrPatterns(
+                                                                                ByteString.copyFrom(gs("channel_1").getBytes()))
+                                                                        .addChannelsOrPatterns(
+                                                                                ByteString.copyFrom(gs("channel_2").getBytes()))
                                                                         .build(),
                                                         PATTERN.ordinal(),
                                                                 PubSubChannelsOrPatterns.newBuilder()
-                                                                        .addChannelsOrPatterns(ByteString.copyFrom(gs("*chatRoom*").getBytes()))
+                                                                        .addChannelsOrPatterns(
+                                                                                ByteString.copyFrom(gs("*chatRoom*").getBytes()))
                                                                         .build()))
                                         .build())
                         .build();

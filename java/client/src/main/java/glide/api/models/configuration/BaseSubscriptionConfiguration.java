@@ -9,7 +9,6 @@ import glide.api.models.configuration.ClusterSubscriptionConfiguration.PubSubClu
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSubChannelMode;
 import glide.api.models.configuration.StandaloneSubscriptionConfiguration.StandaloneSubscriptionConfigurationBuilder;
 import glide.api.models.exceptions.ConfigurationError;
-import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Optional;
@@ -72,7 +71,7 @@ public abstract class BaseSubscriptionConfiguration {
         protected Optional<Object> context = Optional.empty();
 
         protected <M extends ChannelMode> void addSubscription(
-            Map<M, Set<GlideString>> subscriptions, M mode, GlideString channelOrPattern) {
+                Map<M, Set<GlideString>> subscriptions, M mode, GlideString channelOrPattern) {
             if (!subscriptions.containsKey(mode)) {
                 // Note: Use a LinkedHashSet to preserve order for ease of debugging and unit testing.
                 subscriptions.put(mode, new LinkedHashSet<>());

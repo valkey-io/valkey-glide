@@ -2,12 +2,11 @@
 package glide.api.models.configuration;
 
 import glide.api.RedisClusterClient;
+import glide.api.models.GlideString;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-
-import glide.api.models.GlideString;
 import lombok.Getter;
 
 /**
