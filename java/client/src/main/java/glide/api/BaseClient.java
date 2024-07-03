@@ -297,6 +297,7 @@ public abstract class BaseClient
 
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
+    public static final GlideString TOK = GlideString.of(OK);
 
     protected final CommandManager commandManager;
     protected final ConnectionManager connectionManager;
@@ -3801,6 +3802,18 @@ public abstract class BaseClient
                     handleLongResponse(response);
                     return OK;
                 });
+    }
+
+    @Override
+    public CompletableFuture<GlideString> publish(@NonNull GlideString message, @NonNull GlideString channel) {
+        return commandManager.submitNewCommand(
+            Publish,
+            new GlideString[] {channel, message},
+            response -> {
+                // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                handleLongResponse(response);
+                return TOK;
+            });
     }
 
     @Override

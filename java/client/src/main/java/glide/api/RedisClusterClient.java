@@ -1005,6 +1005,23 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> publish(
+        @NonNull GlideString message, @NonNull GlideString channel, boolean sharded) {
+        if (!sharded) {
+            return publish(message, channel);
+        }
+
+        return commandManager.submitNewCommand(
+            SPublish,
+            new GlideString[] {channel, message},
+            response -> {
+                // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                handleLongResponse(response);
+                return TOK;
+            });
+    }
+
+    @Override
     public CompletableFuture<String> unwatch(@NonNull Route route) {
         return commandManager.submitNewCommand(
                 UnWatch, new String[0], route, this::handleStringResponse);
