@@ -44,6 +44,7 @@ from glide.async_commands.sorted_set import (
 )
 from glide.async_commands.stream import (
     StreamAddOptions,
+    StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
     StreamRangeBound,
@@ -4549,6 +4550,81 @@ class BaseTransaction:
             args.extend(["MAXLEN", str(max_len)])
 
         return self.append_command(RequestType.LPos, args)
+
+    def xclaim(
+        self: TTransaction,
+        key: TEncodable,
+        group: TEncodable,
+        consumer: TEncodable,
+        min_idle_time_ms: int,
+        ids: List[TEncodable],
+        options: Optional[StreamClaimOptions] = None,
+    ) -> TTransaction:
+        """
+        Changes the ownership of a pending message.
+
+        See https://valkey.io/commands/xclaim for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group (TEncodable): The consumer group name.
+            consumer (TEncodable): The group consumer.
+            min_idle_time_ms (int): The minimum idle time for the message to be claimed.
+            ids (List[TEncodable]): A array of entry ids.
+            options (Optional[StreamClaimOptions]): Stream claim options.
+
+        Returns:
+            A Mapping of message entries with the format
+                {"entryId": [["entry", "data"], ...], ...} that are claimed by the consumer.
+        """
+
+        args = [key, group, consumer, str(min_idle_time_ms), *ids]
+
+        if options:
+            args.extend(options.to_args())
+
+        return self.append_command(RequestType.XClaim, args)
+
+    def xclaim_just_id(
+        self: TTransaction,
+        key: TEncodable,
+        group: TEncodable,
+        consumer: TEncodable,
+        min_idle_time_ms: int,
+        ids: List[TEncodable],
+        options: Optional[StreamClaimOptions] = None,
+    ) -> TTransaction:
+        """
+        Changes the ownership of a pending message. This function returns a List with
+        only the message/entry IDs, and is equivalent to using JUSTID in the Redis API.
+
+        See https://valkey.io/commands/xclaim for more details.
+
+        Args:
+            key (TEncodable): The key of the stream.
+            group (TEncodable): The consumer group name.
+            consumer (TEncodable): The group consumer.
+            min_idle_time_ms (int): The minimum idle time for the message to be claimed.
+            ids (List[TEncodable]): A array of entry ids.
+            options (Optional[StreamClaimOptions]): Stream claim options.
+
+        Returns:
+            A List of message ids claimed by the consumer.
+        """
+
+        args = [
+            key,
+            group,
+            consumer,
+            str(min_idle_time_ms),
+            *ids,
+            StreamClaimOptions.JUST_ID_REDIS_API,
+        ]
+
+        if options:
+            args.extend(options.to_args())
+
+        return self.append_command(RequestType.XClaim, args)
 
 
 class Transaction(BaseTransaction):
