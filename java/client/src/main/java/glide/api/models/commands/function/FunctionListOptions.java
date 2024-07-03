@@ -8,7 +8,7 @@ import glide.api.commands.ScriptingAndFunctionsCommands;
  * Option for {@link ScriptingAndFunctionsCommands#functionList()} and {@link
  * ScriptingAndFunctionsClusterCommands#functionList()} command.
  *
- * @see <a href="https://redis.io/docs/latest/commands/function-list/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a>
  */
 public class FunctionListOptions {
     /** Causes the server to include the libraries source implementation in the reply. */

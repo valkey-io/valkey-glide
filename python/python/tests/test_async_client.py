@@ -61,6 +61,7 @@ from glide.async_commands.stream import (
     MaxId,
     MinId,
     StreamAddOptions,
+    StreamClaimOptions,
     StreamGroupOptions,
     StreamPendingOptions,
     StreamReadGroupOptions,
@@ -5338,7 +5339,7 @@ class TestCommands:
                     key,
                     group_name1,
                     stream_id,
-                    StreamGroupOptions(entries_read_id="10"),
+                    StreamGroupOptions(entries_read=10),
                 )
         else:
             assert (
@@ -5346,19 +5347,10 @@ class TestCommands:
                     key,
                     group_name1,
                     stream_id,
-                    StreamGroupOptions(entries_read_id="10"),
+                    StreamGroupOptions(entries_read=10),
                 )
                 == OK
             )
-
-            # invalid entries_read_id - cannot be the zero ("0-0") ID
-            with pytest.raises(RequestError):
-                await redis_client.xgroup_create(
-                    key,
-                    group_name2,
-                    stream_id,
-                    StreamGroupOptions(entries_read_id="0-0"),
-                )
 
         # key exists, but it is not a stream
         assert await redis_client.set(string_key, "foo") == OK
@@ -5779,7 +5771,7 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_xpending(self, redis_client: TGlideClient):
+    async def test_xpending_xclaim(self, redis_client: TGlideClient):
         key = get_random_string(10)
         group_name = get_random_string(10)
         consumer1 = get_random_string(10)
@@ -5790,6 +5782,7 @@ class TestCommands:
         stream_id1_2 = "1-2"
         stream_id1_3 = "1-3"
         stream_id1_4 = "1-4"
+        stream_id1_5 = "1-5"
 
         # create group and consumer for group
         assert (
@@ -5899,12 +5892,60 @@ class TestCommands:
         range_result[4].remove(idle_time)
         assert range_result[4] == [stream_id1_4.encode(), consumer2.encode(), 1]
 
-        # acknowledge streams 1-1 to 1-3 and remove them from the xpending results
+        # use xclaim to claim stream 2 and 4 for consumer 1
+        assert await redis_client.xclaim(
+            key, group_name, consumer1, 0, [stream_id1_2, stream_id1_4]
+        ) == {
+            stream_id1_2.encode(): [[b"f1_2", b"v1_2"]],
+            stream_id1_4.encode(): [[b"f1_4", b"v1_4"]],
+        }
+
+        # claiming non exists id
+        assert (
+            await redis_client.xclaim(
+                key, group_name, consumer1, 0, ["1526569498055-0"]
+            )
+            == {}
+        )
+
+        assert await redis_client.xclaim_just_id(
+            key, group_name, consumer1, 0, [stream_id1_2, stream_id1_4]
+        ) == [stream_id1_2.encode(), stream_id1_4.encode()]
+
+        # add one more stream
+        assert (
+            await redis_client.xadd(
+                key, [("f1_5", "v1_5")], StreamAddOptions(stream_id1_5)
+            )
+            == stream_id1_5.encode()
+        )
+
+        # using force, we can xclaim the message without reading it
+        claim_force_result = await redis_client.xclaim(
+            key,
+            group_name,
+            consumer2,
+            0,
+            [stream_id1_5],
+            StreamClaimOptions(retry_count=99, is_force=True),
+        )
+        assert claim_force_result == {stream_id1_5.encode(): [[b"f1_5", b"v1_5"]]}
+
+        force_pending_result = await redis_client.xpending_range(
+            key, group_name, IdBound(stream_id1_5), IdBound(stream_id1_5), 1
+        )
+        assert force_pending_result[0][0] == stream_id1_5.encode()
+        assert force_pending_result[0][1] == consumer2.encode()
+        assert force_pending_result[0][3] == 99
+
+        # acknowledge streams 1-1, 1-2, 1-3, 1-5 and remove them from the xpending results
         assert (
             await redis_client.xack(
-                key, group_name, [stream_id1_1, stream_id1_2, stream_id1_3]
+                key,
+                group_name,
+                [stream_id1_1, stream_id1_2, stream_id1_3, stream_id1_5],
             )
-            == 3
+            == 4
         )
 
         range_result = await redis_client.xpending_range(
@@ -5912,7 +5953,7 @@ class TestCommands:
         )
         assert len(range_result) == 1
         assert range_result[0][0] == stream_id1_4.encode()
-        assert range_result[0][1] == consumer2.encode()
+        assert range_result[0][1] == consumer1.encode()
 
         range_result = await redis_client.xpending_range(
             key, group_name, MinId(), IdBound(stream_id1_3), 10
@@ -5935,11 +5976,10 @@ class TestCommands:
             MinId(),
             MaxId(),
             10,
-            StreamPendingOptions(min_idle_time_ms=1, consumer_name=consumer2),
+            StreamPendingOptions(min_idle_time_ms=1, consumer_name=consumer1),
         )
-        assert len(range_result) == 1
-        assert range_result[0][0] == stream_id1_4.encode()
-        assert range_result[0][1] == consumer2.encode()
+        # note: streams ID 0-0 and 0-4 are still pending, all others were acknowledged
+        assert len(range_result) == 2
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -6111,6 +6151,108 @@ class TestCommands:
         with pytest.raises(RequestError):
             await redis_client.xpending_range(
                 string_key, group_name, MinId(), MaxId(), 10
+            )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_xclaim_edge_cases_and_failures(self, redis_client: TGlideClient):
+        key = get_random_string(10)
+        non_existing_key = get_random_string(10)
+        string_key = get_random_string(10)
+        group_name = get_random_string(10)
+        consumer = get_random_string(10)
+        stream_id0 = "0"
+        stream_id1_0 = "1-0"
+        stream_id1_1 = "1-1"
+
+        # create group and consumer for the group
+        assert (
+            await redis_client.xgroup_create(
+                key, group_name, stream_id0, StreamGroupOptions(make_stream=True)
+            )
+            == OK
+        )
+        assert (
+            await redis_client.xgroup_create_consumer(key, group_name, consumer) is True
+        )
+
+        # Add stream entry and mark as pending:
+        assert (
+            await redis_client.xadd(
+                key, [("f1_0", "v1_0")], StreamAddOptions(stream_id1_0)
+            )
+            == stream_id1_0.encode()
+        )
+
+        # read the entire stream with consumer and mark messages as pending
+        assert await redis_client.xreadgroup({key: ">"}, group_name, consumer) == {
+            key.encode(): {stream_id1_0.encode(): [[b"f1_0", b"v1_0"]]}
+        }
+
+        # claim with invalid stream entry IDs
+        with pytest.raises(RequestError):
+            await redis_client.xclaim_just_id(key, group_name, consumer, 1, ["invalid"])
+
+        # claim with empty stream entry IDs returns no results
+        empty_claim = await redis_client.xclaim_just_id(
+            key, group_name, consumer, 1, []
+        )
+        assert len(empty_claim) == 0
+
+        claim_options = StreamClaimOptions(idle=1)
+
+        # non-existent key throws a RequestError (NOGROUP)
+        with pytest.raises(RequestError) as e:
+            await redis_client.xclaim(
+                non_existing_key, group_name, consumer, 1, [stream_id1_0]
+            )
+        assert "NOGROUP" in str(e)
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.xclaim(
+                non_existing_key,
+                group_name,
+                consumer,
+                1,
+                [stream_id1_0],
+                claim_options,
+            )
+        assert "NOGROUP" in str(e)
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.xclaim_just_id(
+                non_existing_key, group_name, consumer, 1, [stream_id1_0]
+            )
+        assert "NOGROUP" in str(e)
+
+        with pytest.raises(RequestError) as e:
+            await redis_client.xclaim_just_id(
+                non_existing_key,
+                group_name,
+                consumer,
+                1,
+                [stream_id1_0],
+                claim_options,
+            )
+        assert "NOGROUP" in str(e)
+
+        # key exists but it is not a stream
+        assert await redis_client.set(string_key, "foo") == OK
+        with pytest.raises(RequestError):
+            await redis_client.xclaim(
+                string_key, group_name, consumer, 1, [stream_id1_0]
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xclaim(
+                string_key, group_name, consumer, 1, [stream_id1_0], claim_options
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xclaim_just_id(
+                string_key, group_name, consumer, 1, [stream_id1_0]
+            )
+        with pytest.raises(RequestError):
+            await redis_client.xclaim_just_id(
+                string_key, group_name, consumer, 1, [stream_id1_0], claim_options
             )
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -6466,10 +6608,10 @@ class TestCommands:
             )
 
         if not await check_if_server_version_lt(redis_client, "7.0.0"):
-            # verify xgroup_set_id with entries_read_id effects the returned value from xinfo_groups
+            # verify xgroup_set_id with entries_read effects the returned value from xinfo_groups
             assert (
                 await redis_client.xgroup_set_id(
-                    key, group_name1, stream_id1_1, entries_read_id="1"
+                    key, group_name1, stream_id1_1, entries_read=1
                 )
                 == OK
             )
@@ -6584,17 +6726,10 @@ class TestCommands:
         else:
             assert (
                 await redis_client.xgroup_set_id(
-                    key, group_name, stream_id1_1, entries_read_id=stream_id0
+                    key, group_name, stream_id1_1, entries_read=0
                 )
                 == OK
             )
-
-            # the entries_read_id cannot be the first, last, or zero ID. Here we pass the first ID and assert that an
-            # error is raised.
-            with pytest.raises(RequestError):
-                await redis_client.xgroup_set_id(
-                    key, group_name, stream_id1_1, entries_read_id=stream_id1_0
-                )
 
         # xreadgroup should only return entry 1-2 since we reset the last delivered ID to 1-1
         assert await redis_client.xreadgroup({key: ">"}, group_name, consumer_name) == {
@@ -8423,6 +8558,96 @@ class TestCommands:
         assert await redis_client.select(0) == OK
         # DB 0 should still have no keys, so random_key should still return None
         assert await redis_client.random_key() is None
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_dump_restore(self, redis_client: TGlideClient):
+        key1 = f"{{key}}-1{get_random_string(10)}"
+        key2 = f"{{key}}-2{get_random_string(10)}"
+        key3 = f"{{key}}-3{get_random_string(10)}"
+        nonExistingKey = f"{{key}}-4{get_random_string(10)}"
+        value = get_random_string(5)
+
+        await redis_client.set(key1, value)
+
+        # Dump an existing key
+        bytesData = await redis_client.dump(key1)
+        assert bytesData is not None
+
+        # Dump non-existing key
+        assert await redis_client.dump(nonExistingKey) is None
+
+        # Restore to a new key and verify its value
+        assert await redis_client.restore(key2, 0, bytesData) == OK
+        newValue = await redis_client.get(key2)
+        assert newValue == value.encode()
+
+        # Restore to an existing key
+        with pytest.raises(RequestError) as e:
+            await redis_client.restore(key2, 0, bytesData)
+        assert "Target key name already exists" in str(e)
+
+        # Restore using a value with checksum error
+        with pytest.raises(RequestError) as e:
+            await redis_client.restore(key3, 0, value.encode())
+        assert "payload version or checksum are wrong" in str(e)
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_dump_restore_options(self, redis_client: TGlideClient):
+        key1 = f"{{key}}-1{get_random_string(10)}"
+        key2 = f"{{key}}-2{get_random_string(10)}"
+        key3 = f"{{key}}-3{get_random_string(10)}"
+        value = get_random_string(5)
+
+        await redis_client.set(key1, value)
+
+        # Dump an existing key
+        bytesData = await redis_client.dump(key1)
+        assert bytesData is not None
+
+        # Restore without option
+        assert await redis_client.restore(key2, 0, bytesData) == OK
+
+        # Restore with REPLACE option
+        assert await redis_client.restore(key2, 0, bytesData, replace=True) == OK
+
+        # Restore to an existing key holding different value with REPLACE option
+        assert await redis_client.sadd(key3, ["a"]) == 1
+        assert await redis_client.restore(key3, 0, bytesData, replace=True) == OK
+
+        # Restore with REPLACE, ABSTTL, and positive TTL
+        assert (
+            await redis_client.restore(key2, 1000, bytesData, replace=True, absttl=True)
+            == OK
+        )
+
+        # Restore with REPLACE, ABSTTL, and negative TTL
+        with pytest.raises(RequestError) as e:
+            await redis_client.restore(key2, -10, bytesData, replace=True, absttl=True)
+        assert "Invalid TTL value" in str(e)
+
+        # Restore with REPLACE and positive idletime
+        assert (
+            await redis_client.restore(key2, 0, bytesData, replace=True, idletime=10)
+            == OK
+        )
+
+        # Restore with REPLACE and negative idletime
+        with pytest.raises(RequestError) as e:
+            await redis_client.restore(key2, 0, bytesData, replace=True, idletime=-10)
+        assert "Invalid IDLETIME value" in str(e)
+
+        # Restore with REPLACE and positive frequency
+        assert (
+            await redis_client.restore(key2, 0, bytesData, replace=True, frequency=10)
+            == OK
+        )
+
+        # Restore with REPLACE and negative frequency
+        with pytest.raises(RequestError) as e:
+            await redis_client.restore(key2, 0, bytesData, replace=True, frequency=-10)
+        assert "Invalid FREQ value" in str(e)
 
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])

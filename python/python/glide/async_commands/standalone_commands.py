@@ -42,7 +42,7 @@ class StandaloneCommands(CoreCommands):
     ) -> bytes:
         """
         Get information and statistics about the Redis server.
-        See https://redis.io/commands/info/ for details.
+        See https://valkey.io/commands/info/ for details.
 
         Args:
             sections (Optional[List[InfoSection]]): A list of InfoSection values specifying which sections of
@@ -80,7 +80,7 @@ class StandaloneCommands(CoreCommands):
     async def select(self, index: int) -> TOK:
         """
         Change the currently selected Redis database.
-        See https://redis.io/commands/select/ for details.
+        See https://valkey.io/commands/select/ for details.
 
         Args:
             index (int): The index of the database to select.
@@ -93,7 +93,7 @@ class StandaloneCommands(CoreCommands):
     async def config_resetstat(self) -> TOK:
         """
         Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
-        See https://redis.io/commands/config-resetstat/ for details.
+        See https://valkey.io/commands/config-resetstat/ for details.
 
         Returns:
             OK: Returns "OK" to confirm that the statistics were successfully reset.
@@ -103,7 +103,7 @@ class StandaloneCommands(CoreCommands):
     async def config_rewrite(self) -> TOK:
         """
         Rewrite the configuration file with the current configuration.
-        See https://redis.io/commands/config-rewrite/ for details.
+        See https://valkey.io/commands/config-rewrite/ for details.
 
         Returns:
             OK: OK is returned when the configuration was rewritten properly. Otherwise, an error is raised.
@@ -115,7 +115,7 @@ class StandaloneCommands(CoreCommands):
     ) -> int:
         """
         Returns the current connection id.
-        See https://redis.io/commands/client-id/ for more information.
+        See https://valkey.io/commands/client-id/ for more information.
 
         Returns:
             int: the id of the client.
@@ -125,7 +125,7 @@ class StandaloneCommands(CoreCommands):
     async def ping(self, message: Optional[TEncodable] = None) -> bytes:
         """
         Ping the Redis server.
-        See https://redis.io/commands/ping/ for more details.
+        See https://valkey.io/commands/ping/ for more details.
 
         Args:
            message (Optional[TEncodable]): An optional message to include in the PING command. If not provided,
@@ -146,7 +146,7 @@ class StandaloneCommands(CoreCommands):
     async def config_get(self, parameters: List[TEncodable]) -> Dict[bytes, bytes]:
         """
         Get the values of configuration parameters.
-        See https://redis.io/commands/config-get/ for details.
+        See https://valkey.io/commands/config-get/ for details.
 
         Args:
             parameters (List[TEncodable]): A list of configuration parameter names to retrieve values for.
@@ -168,7 +168,7 @@ class StandaloneCommands(CoreCommands):
     async def config_set(self, parameters_map: Mapping[TEncodable, TEncodable]) -> TOK:
         """
         Set configuration parameters to the specified values.
-        See https://redis.io/commands/config-set/ for details.
+        See https://valkey.io/commands/config-set/ for details.
 
         Args:
             parameters_map (Mapping[TEncodable, TEncodable]): A map consisting of configuration
@@ -189,7 +189,7 @@ class StandaloneCommands(CoreCommands):
     async def client_getname(self) -> Optional[bytes]:
         """
         Get the name of the primary's connection.
-        See https://redis.io/commands/client-getname/ for more details.
+        See https://valkey.io/commands/client-getname/ for more details.
 
         Returns:
             Optional[bytes]: Returns the name of the client connection as a byte string if a name is set,
@@ -206,7 +206,7 @@ class StandaloneCommands(CoreCommands):
     async def dbsize(self) -> int:
         """
         Returns the number of keys in the currently selected database.
-        See https://redis.io/commands/dbsize for more details.
+        See https://valkey.io/commands/dbsize for more details.
 
         Returns:
             int: The number of keys in the currently selected database.
@@ -221,7 +221,7 @@ class StandaloneCommands(CoreCommands):
         """
         Echoes the provided `message` back.
 
-        See https://redis.io/commands/echo for more details.
+        See https://valkey.io/commands/echo for more details.
 
         Args:
             message (TEncodable): The message to be echoed back.
@@ -413,7 +413,7 @@ class StandaloneCommands(CoreCommands):
         """
         Returns the server time.
 
-        See https://redis.io/commands/time/ for more details.
+        See https://valkey.io/commands/time/ for more details.
 
         Returns:
             List[bytes]:  The current server time as a two items `array`:

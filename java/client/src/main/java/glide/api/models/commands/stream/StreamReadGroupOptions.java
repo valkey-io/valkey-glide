@@ -2,6 +2,7 @@
 package glide.api.models.commands.stream;
 
 import glide.api.commands.StreamBaseCommands;
+import glide.api.models.GlideString;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -13,7 +14,7 @@ import lombok.experimental.SuperBuilder;
  * Optional arguments for {@link StreamBaseCommands#xreadgroup(Map, String, String,
  * StreamReadGroupOptions)}
  *
- * @see <a href="https://valkey.io/commands/xreadgroup/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/xreadgroup/">valkey.io</a>
  */
 @SuperBuilder
 public final class StreamReadGroupOptions extends StreamReadOptions {
@@ -34,6 +35,36 @@ public final class StreamReadGroupOptions extends StreamReadOptions {
             this.noack = true;
             return self();
         }
+    }
+
+    /**
+     * Converts options and the key-to-id input for {@link StreamBaseCommands#xreadgroup(Map, ArgType,
+     * ArgType, StreamReadGroupOptions)} into a GlideString[].
+     *
+     * @return GlideString[]
+     */
+    public <ArgType> GlideString[] toArgs(ArgType group, ArgType consumer) {
+        List<GlideString> optionArgs = new ArrayList<>();
+        optionArgs.add(GlideString.of(READ_GROUP_REDIS_API));
+        optionArgs.add(GlideString.of(group));
+        optionArgs.add(GlideString.of(consumer));
+
+        if (this.count != null) {
+            optionArgs.add(GlideString.of(READ_COUNT_REDIS_API));
+            optionArgs.add(GlideString.of(count.toString()));
+        }
+
+        if (this.block != null) {
+            optionArgs.add(GlideString.of(READ_BLOCK_REDIS_API));
+            optionArgs.add(GlideString.of(block.toString()));
+        }
+
+        if (this.noack) {
+            optionArgs.add(GlideString.of(READ_NOACK_REDIS_API));
+        }
+
+        optionArgs.add(GlideString.of(READ_STREAMS_REDIS_API));
+        return optionArgs.toArray(new GlideString[0]);
     }
 
     /**

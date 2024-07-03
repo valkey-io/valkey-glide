@@ -2,10 +2,8 @@
 package glide.api.models.commands.geospatial;
 
 import glide.api.commands.GeospatialIndicesBaseCommands;
-import glide.api.models.GlideString;
 import glide.api.models.commands.ConditionalChange;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import lombok.Getter;
@@ -14,7 +12,7 @@ import lombok.Getter;
  * Optional arguments for {@link GeospatialIndicesBaseCommands#geoadd(String, Map, GeoAddOptions)}
  * command.
  *
- * @see <a href="https://redis.io/commands/geoadd/">redis.io</a>
+ * @see <a href="https://valkey.io/commands/geoadd/">valkey.io</a>
  */
 @Getter
 public final class GeoAddOptions {
@@ -79,14 +77,5 @@ public final class GeoAddOptions {
         }
 
         return arguments.toArray(new String[0]);
-    }
-
-    /**
-     * Converts GeoAddOptions into a GlideString[].
-     *
-     * @return GlideString[]
-     */
-    public GlideString[] toGlideStringArgs() {
-        return Arrays.stream(toArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }

@@ -20,7 +20,7 @@ public interface HashBaseCommands {
     /**
      * Retrieves the value associated with <code>field</code> in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hget/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hget/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to retrieve from the database.
      * @return The value associated with <code>field</code>, or <code>null</code> when <code>field
@@ -39,7 +39,7 @@ public interface HashBaseCommands {
     /**
      * Retrieves the value associated with <code>field</code> in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hget/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hget/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to retrieve from the database.
      * @return The value associated with <code>field</code>, or <code>null</code> when <code>field
@@ -58,7 +58,7 @@ public interface HashBaseCommands {
     /**
      * Sets the specified fields to their respective values in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hset/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hset/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
      *     be set in the hash stored at the specified key.
@@ -74,7 +74,7 @@ public interface HashBaseCommands {
     /**
      * Sets the specified fields to their respective values in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hset/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hset/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fieldValueMap A field-value map consisting of fields and their corresponding values to
      *     be set in the hash stored at the specified key.
@@ -93,7 +93,7 @@ public interface HashBaseCommands {
      * If <code>key</code> does not exist, a new key holding a hash is created.<br>
      * If <code>field</code> already exists, this operation has no effect.
      *
-     * @see <a href="https://redis.io/commands/hsetnx/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hsetnx/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field to set the value for.
      * @param value The value to set.
@@ -116,7 +116,7 @@ public interface HashBaseCommands {
      * If <code>key</code> does not exist, a new key holding a hash is created.<br>
      * If <code>field</code> already exists, this operation has no effect.
      *
-     * @see <a href="https://redis.io/commands/hsetnx/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hsetnx/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field to set the value for.
      * @param value The value to set.
@@ -137,7 +137,7 @@ public interface HashBaseCommands {
      * Removes the specified fields from the hash stored at <code>key</code>. Specified fields that do
      * not exist within this hash are ignored.
      *
-     * @see <a href="https://redis.io/commands/hdel/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hdel/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to remove from the hash stored at <code>key</code>.
      * @return The number of fields that were removed from the hash, not including specified but
@@ -155,7 +155,7 @@ public interface HashBaseCommands {
      * Removes the specified fields from the hash stored at <code>key</code>. Specified fields that do
      * not exist within this hash are ignored.
      *
-     * @see <a href="https://redis.io/commands/hdel/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hdel/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields to remove from the hash stored at <code>key</code>.
      * @return The number of fields that were removed from the hash, not including specified but
@@ -172,7 +172,7 @@ public interface HashBaseCommands {
     /**
      * Returns the number of fields contained in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hlen/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return The number of fields in the hash, or <code>0</code> when the key does not exist.<br>
      *     If <code>key</code> holds a value that is not a hash, an error is returned.
@@ -190,7 +190,7 @@ public interface HashBaseCommands {
     /**
      * Returns the number of fields contained in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hlen/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hlen/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return The number of fields in the hash, or <code>0</code> when the key does not exist.<br>
      *     If <code>key</code> holds a value that is not a hash, an error is returned.
@@ -208,7 +208,7 @@ public interface HashBaseCommands {
     /**
      * Returns all values in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hvals/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return An <code>array</code> of values in the hash, or an <code>empty array</code> when the
      *     key does not exist.
@@ -223,7 +223,7 @@ public interface HashBaseCommands {
     /**
      * Returns all values in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hvals/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hvals/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return An <code>array</code> of values in the hash, or an <code>empty array</code> when the
      *     key does not exist.
@@ -238,7 +238,7 @@ public interface HashBaseCommands {
     /**
      * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
      * @return An array of values associated with the given fields, in the same order as they are
@@ -257,7 +257,7 @@ public interface HashBaseCommands {
     /**
      * Returns the values associated with the specified fields in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hmget/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hmget/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param fields The fields in the hash stored at <code>key</code> to retrieve from the database.
      * @return An array of values associated with the given fields, in the same order as they are
@@ -276,7 +276,7 @@ public interface HashBaseCommands {
     /**
      * Returns if <code>field</code> is an existing field in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hexists/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field to check in the hash stored at <code>key</code>.
      * @return <code>True</code> if the hash contains the specified field. If the hash does not
@@ -295,7 +295,7 @@ public interface HashBaseCommands {
     /**
      * Returns if <code>field</code> is an existing field in the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hexists/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hexists/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field to check in the hash stored at <code>key</code>.
      * @return <code>True</code> if the hash contains the specified field. If the hash does not
@@ -314,7 +314,7 @@ public interface HashBaseCommands {
     /**
      * Returns all fields and values of the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hgetall/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return A <code>Map</code> of fields and their values stored in the hash. Every field name in
      *     the map is associated with its corresponding value.<br>
@@ -330,7 +330,7 @@ public interface HashBaseCommands {
     /**
      * Returns all fields and values of the hash stored at <code>key</code>.
      *
-     * @see <a href="https://redis.io/commands/hgetall/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hgetall/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return A <code>Map</code> of fields and their values stored in the hash. Every field name in
      *     the map is associated with its corresponding value.<br>
@@ -349,7 +349,7 @@ public interface HashBaseCommands {
      * hash stored at <code>key</code> is decremented. If <code>field</code> or <code>key</code> does
      * not exist, it is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hincrby/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to increment or decrement its
      *     value.
@@ -371,7 +371,7 @@ public interface HashBaseCommands {
      * hash stored at <code>key</code> is decremented. If <code>field</code> or <code>key</code> does
      * not exist, it is set to 0 before performing the operation.
      *
-     * @see <a href="https://redis.io/commands/hincrby/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hincrby/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to increment or decrement its
      *     value.
@@ -394,7 +394,7 @@ public interface HashBaseCommands {
      * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
      * operation.
      *
-     * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hincrbyfloat/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to increment or decrement its
      *     value.
@@ -417,7 +417,7 @@ public interface HashBaseCommands {
      * field</code> or <code>key</code> does not exist, it is set to 0 before performing the
      * operation.
      *
-     * @see <a href="https://redis.io/commands/hincrbyfloat/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hincrbyfloat/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param field The field in the hash stored at <code>key</code> to increment or decrement its
      *     value.
@@ -501,7 +501,7 @@ public interface HashBaseCommands {
      * Returns a random field name from the hash value stored at <code>key</code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @return A random field name from the hash stored at <code>key</code>, or <code>null</code> when
      *     the key does not exist.
@@ -514,11 +514,27 @@ public interface HashBaseCommands {
     CompletableFuture<String> hrandfield(String key);
 
     /**
+     * Returns a random field name from the hash value stored at <code>key</code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @return A random field name from the hash stored at <code>key</code>, or <code>null</code> when
+     *     the key does not exist.
+     * @example
+     *     <pre>{@code
+     * GlideString field = client.hrandfield(gs("my_hash")).get();
+     * System.out.printf("A random field from the hash is '%s'", field);
+     * }</pre>
+     */
+    CompletableFuture<GlideString> hrandfield(GlideString key);
+
+    /**
      * Retrieves up to <code>count</code> random field names from the hash value stored at <code>key
      * </code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
@@ -534,11 +550,31 @@ public interface HashBaseCommands {
     CompletableFuture<String[]> hrandfieldWithCount(String key, long count);
 
     /**
+     * Retrieves up to <code>count</code> random field names from the hash value stored at <code>key
+     * </code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param count The number of field names to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.
+     * @return An <code>array</code> of random field names from the hash stored at <code>key</code>,
+     *     or an <code>empty array</code> when the key does not exist.
+     * @example
+     *     <pre>{@code
+     * GlideString[] fields = client.hrandfieldWithCount(gs("my_hash"), 10).get();
+     * System.out.printf("Random fields from the hash are '%s'", GlideString.join(", ", fields));
+     * }</pre>
+     */
+    CompletableFuture<GlideString[]> hrandfieldWithCount(GlideString key, long count);
+
+    /**
      * Retrieves up to <code>count</code> random field names along with their values from the hash
      * value stored at <code>key</code>.
      *
      * @since Redis 6.2 and above.
-     * @see <a href="https://redis.io/commands/hrandfield/">redis.io</a> for details.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
      * @param key The key of the hash.
      * @param count The number of field names to return.<br>
      *     If <code>count</code> is positive, returns unique elements.<br>
@@ -554,6 +590,28 @@ public interface HashBaseCommands {
      * }</pre>
      */
     CompletableFuture<String[][]> hrandfieldWithCountWithValues(String key, long count);
+
+    /*
+     * Retrieves up to <code>count</code> random field names along with their values from the hash
+     * value stored at <code>key</code>.
+     *
+     * @since Redis 6.2 and above.
+     * @see <a href="https://valkey.io/commands/hrandfield/">valkey.io</a> for details.
+     * @param key The key of the hash.
+     * @param count The number of field names to return.<br>
+     *     If <code>count</code> is positive, returns unique elements.<br>
+     *     If negative, allows for duplicates.
+     * @return A 2D <code>array</code> of <code>[fieldName, value]</code> <code>arrays</code>, where
+     *     <code>fieldName</code> is a random field name from the hash and <code>value</code> is the
+     *     associated value of the field name.<br>
+     *     If the hash does not exist or is empty, the response will be an empty <code>array</code>.
+     * @example
+     *     <pre>{@code
+     * GlideString[][] fields = client.hrandfieldWithCountWithValues(gs("my_hash"), 1).get();
+     * System.out.printf("A random field from the hash is '%s' and the value is '%s'", fields[0][0], fields[0][1]);
+     * }</pre>
+     */
+    CompletableFuture<GlideString[][]> hrandfieldWithCountWithValues(GlideString key, long count);
 
     /**
      * Iterates fields of Hash types and their associated values.
