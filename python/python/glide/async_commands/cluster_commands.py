@@ -561,7 +561,7 @@ class ClusterCommands(CoreCommands):
         """
         Returns the serialized payload of all loaded libraries.
 
-        See https://valkey.io/docs/latest/commands/function-dump/ for more details.
+        See https://valkey.io/commands/function-dump/ for more details.
 
         Args:
             route (Optional[Route]): The command will be routed to a random node, unless
@@ -572,11 +572,10 @@ class ClusterCommands(CoreCommands):
             TClusterResponse[bytes]: The serialized payload of all loaded libraries.
 
         Examples:
-            >>> await client.function_dump()
-                <binary data>
+            >>> payload = await client.function_dump()
                 # The serialized payload of all loaded libraries. This response can
                 # be used to restore loaded functions on any Valkey instance.
-            >>> await client.function_restore(<binary data>)
+            >>> await client.function_restore(payload)
                 "OK" # The serialized dump response was used to restore the libraries.
 
         Since: Redis 7.0.0.
@@ -595,7 +594,7 @@ class ClusterCommands(CoreCommands):
         """
         Restores libraries from the serialized payload returned by the `function_dump` command.
 
-        See https://valkey.io/docs/latest/commands/function-restore/ for more details.
+        See https://valkey.io/commands/function-restore/ for more details.
 
         Args:
             payload (bytes): The serialized data from the `function_dump` command.
@@ -608,10 +607,13 @@ class ClusterCommands(CoreCommands):
             TOK: OK.
 
         Examples:
-            >>> await client.function_restore(data, AllPrimaries())
-                "OK"
-            >>> await client.function_restore(data, FunctionRestorePolicy.FLUSH, AllPrimaries())
-                "OK"
+            >>> payload = await client.function_dump()
+                # The serialized payload of all loaded libraries. This response can
+                # be used to restore loaded functions on any Valkey instance.
+            >>> await client.function_restore(payload, AllPrimaries())
+                "OK" # The serialized dump response was used to restore the libraries with the specified route.
+            >>> await client.function_restore(payload, FunctionRestorePolicy.FLUSH, AllPrimaries())
+                "OK" # The serialized dump response was used to restore the libraries with the specified route and policy.
 
         Since: Redis 7.0.0.
         """

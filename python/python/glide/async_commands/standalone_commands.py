@@ -372,11 +372,10 @@ class StandaloneCommands(CoreCommands):
             bytes: The serialized payload of all loaded libraries.
 
         Examples:
-            >>> await client.function_dump()
-                <binary data>
+            >>> payload = await client.function_dump()
                 # The serialized payload of all loaded libraries. This response can
                 # be used to restore loaded functions on any Valkey instance.
-            >>> await client.function_restore(<binary data>)
+            >>> await client.function_restore(payload)
                 "OK" # The serialized dump response was used to restore the libraries.
 
         Since: Redis 7.0.0.
@@ -399,10 +398,13 @@ class StandaloneCommands(CoreCommands):
             TOK: OK.
 
         Examples:
-            >>> await client.function_restore(data)
-                "OK"
-            >>> await client.function_restore(data, FunctionRestorePolicy.FLUSH)
-                "OK"
+            >>> payload = await client.function_dump()
+                # The serialized payload of all loaded libraries. This response can
+                # be used to restore loaded functions on any Valkey instance.
+            >>> await client.function_restore(payload)
+                "OK" # The serialized dump response was used to restore the libraries.
+            >>> await client.function_restore(payload, FunctionRestorePolicy.FLUSH)
+                "OK" # The serialized dump response was used to restore the libraries with the specified policy.
 
         Since: Redis 7.0.0.
         """
