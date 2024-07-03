@@ -5,6 +5,7 @@ import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.SortOptions;
 import glide.api.models.commands.SortOptionsBinary;
+import glide.api.models.commands.scan.ScanOptions;
 import glide.api.models.configuration.ReadFrom;
 import java.util.concurrent.CompletableFuture;
 
@@ -342,4 +343,63 @@ public interface GenericCommands {
      */
     CompletableFuture<Long> sortStore(
             GlideString key, GlideString destination, SortOptionsBinary sortOptions);
+
+    /**
+     * Iterates incrementally over a database for matching keys.
+     *
+     * @see <a href="https://valkey.io/commands/scan/">valkey.io</a> for details.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the scan.<br>
+     *     The second element is always an <code>Array</code> of matched keys from the database.
+     * @example
+     *     <pre>{@code
+     * // Assume database contains a set with 200 keys
+     * String cursor = "0";
+     * Object[] result;
+     * do {
+     *     result = client.scan(cursor, options).get();
+     *     cursor = result[0].toString();
+     *     Object[] stringResults = (Object[]) result[1];
+     *     String keyList = Arrays.stream(stringResults)
+     *         .map(obj -> (String)obj)
+     *         .collect(Collectors.joining(", "));
+     *     System.out.println("\nSCAN iteration: " + keyList);
+     * } while (!cursor.equals("0"));
+     * </pre>
+     */
+    CompletableFuture<Object[]> scan(String cursor);
+
+    /**
+     * Iterates incrementally over a database for matching keys.
+     *
+     * @see <a href="https://valkey.io/commands/scan/">valkey.io</a> for details.
+     * @param cursor The cursor that points to the next iteration of results. A value of <code>"0"
+     *     </code> indicates the start of the search.
+     * @param options The {@link ScanOptions}.
+     * @return An <code>Array</code> of <code>Objects</code>. The first element is always the <code>
+     *     cursor</code> for the next iteration of results. <code>"0"</code> will be the <code>cursor
+     *     </code> returned on the last iteration of the scan.<br>
+     *     The second element is always an <code>Array</code> of matched keys from the database.
+     * @example
+     *     <pre>{@code
+     * // Assume database contains a set with 200 keys
+     * String cursor = "0";
+     * Object[] result;
+     * // match keys on pattern *11*
+     * ScanOptions options = ScanOptions.builder().matchPattern("*11*").build();
+     * do {
+     *     result = client.scan(cursor, options).get();
+     *     cursor = result[0].toString();
+     *     Object[] stringResults = (Object[]) result[1];
+     *     String keyList = Arrays.stream(stringResults)
+     *         .map(obj -> (String)obj)
+     *         .collect(Collectors.joining(", "));
+     *     System.out.println("\nSCAN iteration: " + keyList);
+     * } while (!cursor.equals("0"));
+     * </pre>
+     */
+    CompletableFuture<Object[]> scan(String cursor, ScanOptions options);
 }
