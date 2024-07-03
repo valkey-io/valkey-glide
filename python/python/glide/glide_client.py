@@ -134,6 +134,13 @@ class BaseClient(CoreCommands):
             if "no running event loop" in str(e):
                 # event loop already closed
                 pass
+        try:
+            # Safety mechanism to clean up resources on the Rust core side by attempting
+            # to close the UDS if close() wasn't properly called by the user.
+            self._writer.close()
+        except Exception:
+            # Ignore any exceptions that occur during the writer close operation.
+            pass
 
     async def close(self, err_message: Optional[str] = None) -> None:
         """
