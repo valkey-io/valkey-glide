@@ -295,15 +295,15 @@ public interface GeospatialIndicesBaseCommands {
      * @return An <code>array</code> of matched member names.
      * @example
      *     <pre>{@code
-     * Object[] expected = new String[] {"Catania", "Palermo"};
-     * Object[] result =
+     * String[] expected = new String[] {"Catania", "Palermo"};
+     * String[] result =
      *                client
      *                        .geosearch(
      *                                "a1",
      *                                new GeoSearchOrigin.MemberOrigin("Palermo"),
      *                                new GeoSearchShape(200, GeoUnit.KILOMETERS))
      *                        .get();
-     * assert expected.equals(result);
+     * assert Arrays.equals(expected, result);
      * }</pre>
      */
     CompletableFuture<String[]> geosearch(
@@ -334,15 +334,15 @@ public interface GeospatialIndicesBaseCommands {
      * @return An <code>array</code> of matched member names.
      * @example
      *     <pre>{@code
-     * Object[] expected = new GlideString[] {gs("Catania"), gs("Palermo")};
-     * Object[] result =
+     * GlideString[] expected = new GlideString[] {gs("Catania"), gs("Palermo")};
+     * GlideString[] result =
      *                client
      *                        .geosearch(
      *                                gs("a1"),
      *                                new GeoSearchOrigin.MemberOriginBinary(gs("Palermo")),
      *                                new GeoSearchShape(200, GeoUnit.KILOMETERS))
      *                        .get();
-     * assert expected.equals(result);
+     * assert Arrays.equals(expected, result);
      * }</pre>
      */
     CompletableFuture<GlideString[]> geosearch(
@@ -375,8 +375,8 @@ public interface GeospatialIndicesBaseCommands {
      * @return An <code>array</code> of matched member names.
      * @example
      *     <pre>{@code
-     * Object[] expected = new String[] {"Catania", "Palermo"};
-     * Object[] result =
+     * String[] expected = new String[] {"Catania", "Palermo"};
+     * String[] result =
      *                client
      *                        .geosearch(
      *                                "a1",
@@ -384,7 +384,7 @@ public interface GeospatialIndicesBaseCommands {
      *                                new GeoSearchShape(200, GeoUnit.KILOMETERS),
      *                                SortOrder.ASC)
      *                        .get();
-     * assert expected.equals(result);
+     * assert Arrays.equals(expected, result);
      * }</pre>
      */
     CompletableFuture<String[]> geosearch(
@@ -420,8 +420,8 @@ public interface GeospatialIndicesBaseCommands {
      * @return An <code>array</code> of matched member names.
      * @example
      *     <pre>{@code
-     * Object[] expected = new GlideString[] {gs("Catania"), gs("Palermo")};
-     * Object[] result =
+     * GlideString[] expected = new GlideString[] {gs("Catania"), gs("Palermo")};
+     * GlideString[] result =
      *                client
      *                        .geosearch(
      *                                gs("a1"),
@@ -429,7 +429,7 @@ public interface GeospatialIndicesBaseCommands {
      *                                new GeoSearchShape(200, GeoUnit.KILOMETERS),
      *                                SortOrder.ASC)
      *                        .get();
-     * assert expected.equals(result);
+     * assert Arrays.equals(expected, result);
      * }</pre>
      */
     CompletableFuture<GlideString[]> geosearch(
