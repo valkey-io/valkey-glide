@@ -483,7 +483,6 @@ public class PubSubTests {
     @MethodSource("getTestScenarios")
     public void combined_exact_and_pattern_multiple_clients(
             boolean standalone, MessageReadMethod method) {
-        if (!standalone) return;
         skipTestsOnMac();
         String prefix = "channel.";
         String pattern = prefix + "*";
