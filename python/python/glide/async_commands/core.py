@@ -2984,7 +2984,7 @@ class CoreCommands(Protocol):
         key: TEncodable,
         group_name: TEncodable,
         stream_id: TEncodable,
-        entries_read_id: Optional[TEncodable] = None,
+        entries_read: Optional[int] = None,
     ) -> TOK:
         """
         Set the last delivered ID for a consumer group.
@@ -2995,9 +2995,8 @@ class CoreCommands(Protocol):
             key (TEncodable): The key of the stream.
             group_name (TEncodable): The consumer group name.
             stream_id (TEncodable): The stream entry ID that should be set as the last delivered ID for the consumer group.
-            entries_read_id (Optional[TEncodable]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
-                used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last
-                entry. This argument can only be specified if you are using Redis version 7.0.0 or above.
+            entries_read: (Optional[int]): A value representing the number of stream entries already read by the
+                group. This option can only be specified if you are using Redis version 7.0.0 or above.
 
         Returns:
             TOK: A simple "OK" response.
@@ -3007,8 +3006,8 @@ class CoreCommands(Protocol):
                 OK  # The last delivered ID for consumer group "mygroup" was set to 0.
         """
         args: List[TEncodable] = [key, group_name, stream_id]
-        if entries_read_id is not None:
-            args.extend(["ENTRIESREAD", entries_read_id])
+        if entries_read is not None:
+            args.extend(["ENTRIESREAD", str(entries_read)])
 
         return cast(
             TOK,
