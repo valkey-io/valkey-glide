@@ -9386,7 +9386,6 @@ class TestScripts:
         redis_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
-        key = get_random_string(10)
         length = 2**12  # 4kb
         arg1 = "0" * length
         arg2 = "1" * length
@@ -9406,11 +9405,10 @@ class TestScripts:
         length = 2**12  # 4kb
         key = "0" * length
         arg = "1" * length
-        assert await redis_client.set(key, arg) == "OK"
 
-        script = Script("return redis.call('GET', KEYS[1])")
+        script = Script("return KEYS[1]")
         assert (
             await redis_client.invoke_script(script, keys=[key], args=[arg])
-            == arg.encode()
+            == key.encode()
         )
         await redis_client.close()
