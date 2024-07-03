@@ -1005,7 +1005,7 @@ public class RedisClusterClient extends BaseClient
     }
 
     @Override
-    public CompletableFuture<GlideString> publish(
+    public CompletableFuture<String> publish(
             @NonNull GlideString message, @NonNull GlideString channel, boolean sharded) {
         if (!sharded) {
             return publish(message, channel);
@@ -1017,7 +1017,7 @@ public class RedisClusterClient extends BaseClient
                 response -> {
                     // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
                     handleLongResponse(response);
-                    return TOK;
+                    return OK;
                 });
     }
 

@@ -86,7 +86,7 @@ public abstract class BaseSubscriptionConfiguration {
         /**
          * Set a callback and a context.
          *
-         * @param callback The {@link #callback}.
+         * @param callback The {@link #callback}. This can be null to unset the callback.
          * @param context The {@link #context}.
          */
         public B callback(MessageCallback callback, Object context) {
@@ -103,7 +103,7 @@ public abstract class BaseSubscriptionConfiguration {
          * Set a callback without context. <code>null</code> will be supplied to all callback calls as a
          * context.
          *
-         * @param callback The {@link #callback}.
+         * @param callback The {@link #callback}. This can be null to unset the callback.
          */
         public B callback(MessageCallback callback) {
             if (callback == null && this.context.isPresent()) {

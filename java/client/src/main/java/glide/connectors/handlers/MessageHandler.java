@@ -1,9 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.handlers;
 
-import static glide.api.models.GlideString.gs;
-
 import glide.api.logging.Logger;
+import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
 import glide.api.models.configuration.BaseSubscriptionConfiguration.MessageCallback;
 import glide.api.models.exceptions.RedisException;
@@ -49,8 +48,8 @@ public class MessageHandler {
             throw new RedisException("Received invalid push: empty or in incorrect format.");
         }
         @SuppressWarnings("unchecked")
-        Map<String, Object> push = (Map<String, Object>) data;
-        PushKind pushType = Enum.valueOf(PushKind.class, (String) push.get("kind"));
+        Map<GlideString, Object> push = (Map<GlideString, Object>) data;
+        PushKind pushType = Enum.valueOf(PushKind.class, ((GlideString) push.get("kind")).getString());
         Object[] values = (Object[]) push.get("values");
 
         switch (pushType) {
@@ -63,11 +62,11 @@ public class MessageHandler {
             case PMessage:
                 handle(
                         new PubSubMessage(
-                                gs((String) values[2]), gs((String) values[1]), gs((String) values[0])));
+                                (GlideString) values[2], (GlideString) values[1], (GlideString) values[0]));
                 return;
             case Message:
             case SMessage:
-                handle(new PubSubMessage(gs((String) values[1]), gs((String) values[0])));
+                handle(new PubSubMessage((GlideString) values[1], (GlideString) values[0]));
                 return;
             case Subscribe:
             case PSubscribe:

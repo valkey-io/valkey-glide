@@ -298,8 +298,6 @@ public abstract class BaseClient
     /** Redis simple string response with "OK" */
     public static final String OK = ConstantResponse.OK.toString();
 
-    public static final GlideString TOK = GlideString.of(OK);
-
     protected final CommandManager commandManager;
     protected final ConnectionManager connectionManager;
     protected final ConcurrentLinkedDeque<PubSubMessage> messageQueue;
@@ -432,12 +430,12 @@ public abstract class BaseClient
 
     protected static MessageHandler buildMessageHandler(BaseClientConfiguration config) {
         if (config.getSubscriptionConfiguration() == null) {
-            return new MessageHandler(Optional.empty(), Optional.empty(), responseResolver);
+            return new MessageHandler(Optional.empty(), Optional.empty(), binaryResponseResolver);
         }
         return new MessageHandler(
                 config.getSubscriptionConfiguration().getCallback(),
                 config.getSubscriptionConfiguration().getContext(),
-                responseResolver);
+                binaryResponseResolver);
     }
 
     protected static ChannelHandler buildChannelHandler(
@@ -3806,7 +3804,7 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<GlideString> publish(
+    public CompletableFuture<String> publish(
             @NonNull GlideString message, @NonNull GlideString channel) {
         return commandManager.submitNewCommand(
                 Publish,
@@ -3814,7 +3812,7 @@ public abstract class BaseClient
                 response -> {
                     // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
                     handleLongResponse(response);
-                    return TOK;
+                    return OK;
                 });
     }
 

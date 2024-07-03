@@ -35,9 +35,9 @@ public interface PubSubBaseCommands {
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * String response = client.publish("The cat said 'meow'!", "announcements").get();
+     * String response = client.publish(gs("The cat said 'meow'!"), gs("announcements")).get();
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<GlideString> publish(GlideString message, GlideString channel);
+    CompletableFuture<String> publish(GlideString message, GlideString channel);
 }

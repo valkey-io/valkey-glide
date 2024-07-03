@@ -41,9 +41,9 @@ public interface PubSubClusterCommands {
      * @return <code>OK</code>.
      * @example
      *     <pre>{@code
-     * String response = client.publish("The cat said 'meow'!", "announcements", true).get();
+     * String response = client.publish(gs("The cat said 'meow'!"), gs("announcements"), true).get();
      * assert response.equals("OK");
      * }</pre>
      */
-    CompletableFuture<GlideString> publish(GlideString message, GlideString channel, boolean sharded);
+    CompletableFuture<String> publish(GlideString message, GlideString channel, boolean sharded);
 }

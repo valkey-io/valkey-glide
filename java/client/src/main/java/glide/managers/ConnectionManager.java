@@ -149,7 +149,6 @@ public class ConnectionManager {
             var subscriptionsBuilder = PubSubSubscriptions.newBuilder();
             for (var entry : configuration.getSubscriptionConfiguration().getSubscriptions().entrySet()) {
                 var channelsBuilder = PubSubChannelsOrPatterns.newBuilder();
-                System.out.println(entry.getValue());
                 for (var channel : entry.getValue()) {
                     channelsBuilder.addChannelsOrPatterns(ByteString.copyFrom(channel.getBytes()));
                 }
