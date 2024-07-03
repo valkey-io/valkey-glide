@@ -269,3 +269,23 @@ def check_function_list_response(
             break
 
     assert has_lib is True
+
+def check_function_stats_response(response, running_function, lib_count, function_count):
+    running_script_info = response.get(b"running_script")
+    if running_script_info == None and len(running_function) != 0:
+        pytest.fail("No running function info")
+
+    if running_script_info != None and len(running_function) == 0:
+        command = running_script_info.get(b"command")
+        pytest.fail("Unexpected running function info: " + " ".join(command))
+
+    if running_script_info != None:
+        command = running_script_info.get(b"command")
+        assert running_function == command
+        # command line format is:
+        # fcall|fcall_ro <function name> <num keys> <key>* <arg>*
+        assert running_function[1] == running_script_info.get(b"name")
+
+    expected = {b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}}
+    assert expected == response.get(b"engines")
+

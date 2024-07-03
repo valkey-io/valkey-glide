@@ -90,6 +90,7 @@ from glide.routes import (
 from tests.conftest import create_client
 from tests.utils.utils import (
     check_function_list_response,
+    check_function_stats_response,
     check_if_server_version_lt,
     compare_maps,
     convert_bytes_to_string_object,
@@ -7631,25 +7632,6 @@ class TestCommands:
             await redis_client.function_delete(lib_name)
         assert "Library not found" in str(e)
 
-    def check_function_stats_response(response, running_function, lib_count, function_count):
-        running_script_info = response["running_script"]
-        if running_script_info == None and len(running_function) != 0:
-            pytest.fail("No running function info")
-
-        if running_script_info != None and len(running_function) == 0:
-            command = running_script_info["command"]
-            pytest.fail("Unexpected running function info: " + " ".join(command))
-
-        if running_script_info != None:
-            command = running_script_info["command"]
-            assert running_function == command
-            # command line format is:
-            # fcall|fcall_ro <function name> <num keys> <key>* <arg>*
-            assert running_function[1] == running_script_info["name"]
-
-        expected = {"LUA": {"libraries_count": lib_count, "functions_count": function_count}}
-        assert expected == response["engines"]
-
     @pytest.mark.parametrize("cluster_mode", [False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_function_stats(self, redis_client: GlideClient):
@@ -7692,17 +7674,20 @@ class TestCommands:
         assert await redis_client.function_load(code, True) == lib_name.encode()
 
         response = await redis_client.function_stats()
-        check_function_stats_response(response, [], 1, 1)
+        for node_response in response.values():
+            check_function_stats_response(node_response, [], 1, 1)
 
         code = generate_lua_lib_code(lib_name + "_2", {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"}, False)
 
         assert await redis_client.function_stats()
-        check_function_stats_response(response, [], 2, 3)
+        for node_response in response.values():
+            check_function_stats_response(node_response, [], 2, 3)
 
         assert await redis_client.function_flush(FlushMode.SYNC) == OK
 
         assert await redis_client.function_stats()
-        check_function_stats_response(response, [], 0, 0)
+        for node_response in response.values():
+            check_function_stats_response(node_response, [], 0, 0)
 
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -7726,7 +7711,7 @@ class TestCommands:
         if single_route:
             check_function_stats_response(response, [], 1, 1)
         else:
-            for node_response in response:
+            for node_response in response.values():
                 check_function_stats_response(node_response, [], 1, 1)
 
         code = generate_lua_lib_code(lib_name + "_2", {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"}, False)
@@ -7736,7 +7721,7 @@ class TestCommands:
         if single_route:
             check_function_stats_response(response, [], 2, 3)
         else:
-            for node_response in response:
+            for node_response in response.values():
                 check_function_stats_response(node_response, [], 2, 3)
             
         assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
@@ -7745,7 +7730,7 @@ class TestCommands:
         if single_route:
             check_function_stats_response(response, [], 0, 0)
         else:
-            for node_response in response:
+            for node_response in response.values():
                 check_function_stats_response(node_response, [], 0, 0)
 
     @pytest.mark.parametrize("cluster_mode", [True])
