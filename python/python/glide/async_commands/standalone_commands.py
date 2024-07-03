@@ -12,7 +12,14 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, Transaction
-from glide.constants import OK, TOK, TEncodable, TFunctionListResponse, TFunctionStatsResponse, TResult
+from glide.constants import (
+    OK,
+    TOK,
+    TEncodable,
+    TFunctionListResponse,
+    TFunctionStatsResponse,
+    TResult,
+)
 from glide.protobuf.redis_request_pb2 import RequestType
 
 
@@ -394,10 +401,7 @@ class StandaloneCommands(CoreCommands):
         """
         return cast(
             TFunctionStatsResponse,
-            await self._execute_command(
-                RequestType.FunctionStats,
-                []
-            )
+            await self._execute_command(RequestType.FunctionStats, []),
         )
 
     async def time(self) -> List[bytes]:

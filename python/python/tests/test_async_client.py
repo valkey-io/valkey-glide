@@ -7642,7 +7642,7 @@ class TestCommands:
         lib_name = "functionStats"
         func_name = lib_name
         assert await redis_client.function_flush(FlushMode.SYNC) == OK
-        
+
         # function $funcName returns first argument
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
         assert await redis_client.function_load(code, True) == lib_name.encode()
@@ -7650,8 +7650,14 @@ class TestCommands:
         response = await redis_client.function_stats()
         check_function_stats_response(response, [], 1, 1)
 
-        code = generate_lua_lib_code(lib_name + "_2", {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"}, False)
-        assert await redis_client.function_load(code, True) == (lib_name + "_2").encode()
+        code = generate_lua_lib_code(
+            lib_name + "_2",
+            {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"},
+            False,
+        )
+        assert (
+            await redis_client.function_load(code, True) == (lib_name + "_2").encode()
+        )
 
         response = await redis_client.function_stats()
         check_function_stats_response(response, [], 2, 3)
@@ -7671,7 +7677,7 @@ class TestCommands:
         lib_name = "functionStats_without_route"
         func_name = lib_name
         assert await redis_client.function_flush(FlushMode.SYNC) == OK
-        
+
         # function $funcName returns first argument
         code = generate_lua_lib_code(lib_name, {func_name: "return args[1]"}, False)
         assert await redis_client.function_load(code, True) == lib_name.encode()
@@ -7680,8 +7686,14 @@ class TestCommands:
         for node_response in response.values():
             check_function_stats_response(node_response, [], 1, 1)
 
-        code = generate_lua_lib_code(lib_name + "_2", {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"}, False)
-        assert await redis_client.function_load(code, True) == (lib_name + "_2").encode()
+        code = generate_lua_lib_code(
+            lib_name + "_2",
+            {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"},
+            False,
+        )
+        assert (
+            await redis_client.function_load(code, True) == (lib_name + "_2").encode()
+        )
 
         response = await redis_client.function_stats()
         for node_response in response.values():
@@ -7703,7 +7715,11 @@ class TestCommands:
         if await check_if_server_version_lt(redis_client, min_version):
             return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
 
-        route = SlotKeyRoute(SlotType.PRIMARY, get_random_string(10)) if single_route else AllPrimaries()
+        route = (
+            SlotKeyRoute(SlotType.PRIMARY, get_random_string(10))
+            if single_route
+            else AllPrimaries()
+        )
         lib_name = "functionStats_with_route_" + str(single_route)
         func_name = lib_name
         assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
@@ -7719,8 +7735,15 @@ class TestCommands:
             for node_response in response.values():
                 check_function_stats_response(node_response, [], 1, 1)
 
-        code = generate_lua_lib_code(lib_name + "_2", {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"}, False)
-        assert await redis_client.function_load(code, True, route) == (lib_name + "_2").encode()
+        code = generate_lua_lib_code(
+            lib_name + "_2",
+            {func_name + "_2": "return 'OK'", func_name + "_3": "return 42"},
+            False,
+        )
+        assert (
+            await redis_client.function_load(code, True, route)
+            == (lib_name + "_2").encode()
+        )
 
         response = await redis_client.function_stats(route)
         if single_route:
@@ -7728,7 +7751,7 @@ class TestCommands:
         else:
             for node_response in response.values():
                 check_function_stats_response(node_response, [], 2, 3)
-            
+
         assert await redis_client.function_flush(FlushMode.SYNC, route) == OK
 
         response = await redis_client.function_stats(route)

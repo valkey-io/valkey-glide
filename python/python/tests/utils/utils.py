@@ -4,7 +4,12 @@ import string
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
 from glide.async_commands.core import InfoSection
-from glide.constants import TClusterResponse, TFunctionListResponse, TFunctionStatsResponse, TResult
+from glide.constants import (
+    TClusterResponse,
+    TFunctionListResponse,
+    TFunctionStatsResponse,
+    TResult,
+)
 from glide.glide_client import TGlideClient
 from packaging import version
 
@@ -270,11 +275,12 @@ def check_function_list_response(
 
     assert has_lib is True
 
+
 def check_function_stats_response(
     response: TFunctionStatsResponse,
     running_function: List[bytes],
     lib_count: int,
-    function_count: int
+    function_count: int,
 ):
     """
     Validate whether `FUNCTION STATS` response contains required info.
@@ -300,6 +306,7 @@ def check_function_stats_response(
         # fcall|fcall_ro <function name> <num keys> <key>* <arg>*
         assert running_function[1] == running_script_info.get(b"name")
 
-    expected = {b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}}
+    expected = {
+        b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}
+    }
     assert expected == response.get(b"engines")
-

@@ -555,7 +555,9 @@ class ClusterCommands(CoreCommands):
             await self._execute_command(RequestType.FCallReadOnly, args, route),
         )
 
-    async def function_stats(self, route: Optional[Route] = None) -> TClusterResponse[TFunctionStatsResponse]:
+    async def function_stats(
+        self, route: Optional[Route] = None
+    ) -> TClusterResponse[TFunctionStatsResponse]:
         """
         Returns information about the function that's currently running and information about the
         available execution engines.
@@ -572,7 +574,7 @@ class ClusterCommands(CoreCommands):
                 - `engines` with information about available engines and their stats.
                 See example for more details.
 
-        Examples: 
+        Examples:
             >>> await client.function_stats(RandomNode())
                 {
                     'running_script': {
@@ -592,7 +594,7 @@ class ClusterCommands(CoreCommands):
         """
         return cast(
             TClusterResponse[TFunctionStatsResponse],
-            await self._execute_command(RequestType.FunctionStats, [], route)
+            await self._execute_command(RequestType.FunctionStats, [], route),
         )
 
     async def time(

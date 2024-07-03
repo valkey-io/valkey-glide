@@ -47,13 +47,7 @@ TFunctionStatsResponse = Mapping[
     Union[
         None,
         Mapping[
-            bytes,
-            Union[
-                Mapping[bytes, Mapping[bytes, int]],
-                bytes,
-                int,
-                List[bytes]
-            ]
-        ]
-    ]
+            bytes, Union[Mapping[bytes, Mapping[bytes, int]], bytes, int, List[bytes]]
+        ],
+    ],
 ]
