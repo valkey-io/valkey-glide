@@ -382,9 +382,9 @@ class StreamClaimOptions:
 
         Args:
             idle (Optional[int]): Set the idle time (last time it was delivered) of the message in milliseconds. If idle
-                is not specified, an idle of 0 is assumed, that is, the time count is reset because the message now has a
+                is not specified, an idle of `0` is assumed, that is, the time count is reset because the message now has a
                 new owner trying to process it.
-            idle_unix_time (Optional[str]): This is the same as idle but instead of a relative amount of milliseconds,
+            idle_unix_time (Optional[int]): This is the same as idle but instead of a relative amount of milliseconds,
                 it sets the idle time to a specific Unix time (in milliseconds). This is useful in order to rewrite the AOF
                 file generating `XCLAIM` commands.
             retry_count (Optional[int]): Set the retry counter to the specified value. This counter is incremented every

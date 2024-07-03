@@ -4565,9 +4565,6 @@ class BaseTransaction:
 
         See https://valkey.io/commands/xclaim for more details.
 
-        Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
-
         Args:
             key (TEncodable): The key of the stream.
             group (TEncodable): The consumer group name.
@@ -4602,9 +4599,6 @@ class BaseTransaction:
         only the message/entry IDs, and is equivalent to using JUSTID in the Redis API.
 
         See https://valkey.io/commands/xclaim for more details.
-
-        Note:
-            When in cluster mode, the command may route to multiple nodes when `keys` map to different hash slots.
 
         Args:
             key (TEncodable): The key of the stream.
