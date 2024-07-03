@@ -273,7 +273,7 @@ public class PubSubTests {
         var sender = (RedisClusterClient) createClient(false);
         clients.addAll(List.of(listener, sender));
 
-        sender.spublish(channel, pubsubMessage).get();
+        sender.publish(channel, pubsubMessage, true).get();
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the message
 
         verifyReceivedPubsubMessages(
@@ -308,9 +308,9 @@ public class PubSubTests {
         clients.addAll(List.of(listener, sender));
 
         for (var pubsubMessage : pubsubMessages) {
-            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage(), true).get();
         }
-        sender.spublish(UUID.randomUUID().toString(), UUID.randomUUID().toString()).get();
+        sender.publish(UUID.randomUUID().toString(), UUID.randomUUID().toString(), true).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
@@ -563,7 +563,7 @@ public class PubSubTests {
             sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
         }
         for (var pubsubMessage : shardedMessages) {
-            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage(), true).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -640,7 +640,7 @@ public class PubSubTests {
             sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
         }
         for (var pubsubMessage : shardedMessages) {
-            sender.spublish(pubsubMessage.getChannel(), pubsubMessage.getMessage()).get();
+            sender.publish(pubsubMessage.getChannel(), pubsubMessage.getMessage(), true).get();
         }
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
@@ -714,7 +714,7 @@ public class PubSubTests {
 
         listenerPattern.publish(channel, exactMessage.getMessage()).get();
         listenerSharded.publish(channel, patternMessage.getMessage()).get();
-        listenerExact.spublish(channel, shardedMessage.getMessage()).get();
+        listenerExact.publish(channel, shardedMessage.getMessage(), true).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
@@ -776,7 +776,7 @@ public class PubSubTests {
 
         listenerPattern.publish(channel, exactMessage.getMessage()).get();
         listenerSharded.publish(channel, patternMessage.getMessage()).get();
-        listenerExact.spublish(channel, shardedMessage.getMessage()).get();
+        listenerExact.publish(channel, shardedMessage.getMessage(), true).get();
 
         Thread.sleep(MESSAGE_DELIVERY_DELAY); // deliver the messages
 
@@ -816,9 +816,9 @@ public class PubSubTests {
         var clusterClient = (RedisClusterClient) createClient(false);
         var transaction =
                 new ClusterTransaction()
-                        .spublish("abc", "one")
-                        .spublish("mnk", "two")
-                        .spublish("xyz", "three");
+                        .publish("abc", "one", true)
+                        .publish("mnk", "two", true)
+                        .publish("xyz", "three", true);
         var exception =
                 assertThrows(ExecutionException.class, () -> clusterClient.exec(transaction).get());
         assertInstanceOf(RequestException.class, exception.getCause());
@@ -875,7 +875,7 @@ public class PubSubTests {
         } else {
             var transaction =
                     new ClusterTransaction()
-                            .spublish(shardedMessage.getChannel(), shardedMessage.getMessage())
+                            .publish(shardedMessage.getChannel(), shardedMessage.getMessage(), true)
                             .publish(exactMessage.getChannel(), exactMessage.getMessage())
                             .publish(patternMessage.getChannel(), patternMessage.getMessage());
             ((RedisClusterClient) sender).exec(transaction).get();

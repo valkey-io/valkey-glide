@@ -987,6 +987,19 @@ public class RedisClusterClient extends BaseClient
                 new GlideString[0],
                 route,
                 response -> handleFunctionStatsBinaryResponse(response, route instanceof SingleNodeRoute));
+    public CompletableFuture<String> publish(@NonNull String channel, @NonNull String message, boolean sharded) {
+        if (!sharded) {
+            return publish(channel, message);
+        }
+
+        return commandManager.submitNewCommand(
+            SPublish,
+            new String[] {channel, message},
+            response -> {
+                // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
+                handleLongResponse(response);
+                return OK;
+            });
     }
 
     @Override
@@ -1038,18 +1051,6 @@ public class RedisClusterClient extends BaseClient
                 .submitClusterScan(cursor, options, this::handleArrayResponse)
                 .thenApply(
                         result -> new Object[] {new NativeClusterScanCursor(result[0].toString()), result[1]});
-    }
-
-    @Override
-    public CompletableFuture<String> spublish(@NonNull String channel, @NonNull String message) {
-        return commandManager.submitNewCommand(
-                SPublish,
-                new String[] {channel, message},
-                response -> {
-                    // Check, but ignore the number - it is never valid. A GLIDE bug/limitation TODO
-                    handleLongResponse(response);
-                    return OK;
-                });
     }
 
     @Override
