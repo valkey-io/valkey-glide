@@ -227,6 +227,42 @@ def generate_lua_lib_code(
     return code
 
 
+def create_lua_lib_with_long_running_function(lib_name: str, func_name: str, timeout: int,
+                                              read_only: bool) -> str:
+    """
+    Create a Lub Lib with a RO function which runs an endless loop up to timeout sec.
+    Execution takes at least 5 sec regardless of the timeout configured.
+    If read_only is false, function sets a dummy value to the first key given.
+
+    Args:
+        lib_name (str): Name of the Lua library.
+        func_name (str): Name of the function to be created
+        timeout (int): Timeout in seconds.
+        read_only (bool): Whether the function is read-only.
+
+    Returns:
+        str: String containing the Lua code.
+    """
+    code = f"""#!lua name={lib_name}
+        local function {lib_name}_{func_name}(keys, args)
+          local started = tonumber(redis.pcall('time')[1])
+          redis.pcall('set', keys[1], 42)
+          while (true) do
+            local now = tonumber(redis.pcall('time')[1])
+            if now > started + {timeout} then
+              return 'Timed out {timeout} sec'
+            end
+          end
+          return 'OK'
+        end
+        redis.register_function{{
+        function_name='{func_name}',
+        callback={lib_name}_{func_name},
+        {f"flags={{ 'no-writes' }}" if read_only else ""}
+        }}"""
+    return code
+
+
 def check_function_list_response(
     response: TClusterResponse[TFunctionListResponse],
     lib_name: str,
