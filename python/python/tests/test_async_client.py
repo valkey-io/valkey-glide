@@ -6885,14 +6885,40 @@ class TestCommands:
             self, redis_client: TGlideClient, protocol
     ):
         key = get_random_string(10)
+        string_key = get_random_string(10)
         non_existing_key = get_random_string(10)
-        group_name = get_random_string(10)
-        consumer = get_random_string(10)
-        stream_id0_0 = "0-0"
         stream_id1_0 = "1-0"
-        stream_id1_1 = "1-1"
 
+        # setup: create empty stream
+        assert await redis_client.xadd(key, [("field", "value")], StreamAddOptions(stream_id1_0)) == stream_id1_0.encode()
+        assert await redis_client.xdel(key, [stream_id1_0]) == 1
 
+        # XINFO STREAM called against empty stream
+        result = await redis_client.xinfo_stream(key)
+        assert result.get(b"length") == 0
+        assert result.get(b"max-deleted-entry-id") == stream_id1_0.encode()
+        assert result.get(b"first-entry") is None
+        assert result.get(b"last-entry") is None
+
+        # XINFO STREAM FULL called against empty stream. Negative count values are ignored.
+        result_full = await redis_client.xinfo_stream_full(key, count=-3)
+        assert result_full.get(b"length") == 0
+        assert result.get(b"max-deleted-entry-id") == stream_id1_0.encode()
+        assert result.get(b"entries") == []
+        assert result.get(b"groups") == []
+
+        # calling XINFO STREAM with a non-existing key raises an error
+        with pytest.raises(RequestError):
+            await redis_client.xinfo_stream(non_existing_key)
+        with pytest.raises(RequestError):
+            await redis_client.xinfo_stream_full(non_existing_key)
+
+        # key exists, but it is not a stream
+        assert await redis_client.set(string_key, "foo")
+        with pytest.raises(RequestError):
+            await redis_client.xinfo_stream(string_key)
+        with pytest.raises(RequestError):
+            await redis_client.xinfo_stream_full(string_key)
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
