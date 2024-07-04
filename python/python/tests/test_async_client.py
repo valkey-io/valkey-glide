@@ -4892,10 +4892,6 @@ class TestCommands:
             await glide_client.sort(key)
         assert "can't be converted into double" in str(e).lower()
 
-        with pytest.raises(RequestError) as e:
-            await glide_client.sort_ro(key)
-        assert "can't be converted into double" in str(e).lower()
-
         if not skip_sort_ro_test:
             with pytest.raises(RequestError) as e:
                 await glide_client.sort_ro(key)
