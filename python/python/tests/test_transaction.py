@@ -1046,7 +1046,7 @@ class TestTransaction:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_transaction_xinfo_stream(
-        self, redis_client: TGlideClient, cluster_mode: bool
+        self, glide_client: TGlideClient, cluster_mode: bool, protocol
     ):
         key = get_random_string(10)
         stream_id1_0 = "1-0"
@@ -1055,7 +1055,7 @@ class TestTransaction:
         transaction.xinfo_stream(key)
         transaction.xinfo_stream_full(key)
 
-        response = await redis_client.exec(transaction)
+        response = await glide_client.exec(transaction)
         assert response is not None
         # transaction.xadd(key, [("foo", "bar")], StreamAddOptions(stream_id1_0))
         assert response[0] == stream_id1_0.encode()
