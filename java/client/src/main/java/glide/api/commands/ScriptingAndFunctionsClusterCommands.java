@@ -840,7 +840,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      *   if (runningScriptInfo != null) {
      *     GlideString[] commandLine = (GlideString[]) runningScriptInfo.get(gs("command"));
      *     System.out.printf("Node '%s' is currently running function '%s' with command line '%s', which has been running for %d ms%n",
-     *         node, runningScriptInfo.get(gs("name")), String.join(" ", commandLine), (long) runningScriptInfo.get(gs("duration_ms")));
+     *         node, runningScriptInfo.get(gs("name")), String.join(" ", Arrays.toString(commandLine)), (long) runningScriptInfo.get(gs("duration_ms")));
      *   }
      *   Map<GlideString, Object> enginesInfo = response.get(node).get(gs("engines"));
      *   for (String engineName : enginesInfo.keySet()) {
@@ -907,7 +907,7 @@ public interface ScriptingAndFunctionsClusterCommands {
      * if (runningScriptInfo != null) {
      *   GlideString[] commandLine = (GlideString[]) runningScriptInfo.get(gs("command"));
      *   System.out.printf("Node is currently running function '%s' with command line '%s', which has been running for %d ms%n",
-     *       runningScriptInfo.get(gs("name")), String.join(" ", commandLine), (long)runningScriptInfo.get(gs("duration_ms")));
+     *       runningScriptInfo.get(gs("name")), String.join(" ", Arrays.toString(commandLine)), (long)runningScriptInfo.get(gs("duration_ms")));
      * }
      * Map<GlideString, Object> enginesInfo = response.get(gs("engines"));
      * for (GlideString engineName : enginesInfo.keySet()) {

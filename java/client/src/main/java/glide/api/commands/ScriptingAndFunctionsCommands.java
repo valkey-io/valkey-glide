@@ -337,12 +337,12 @@ public interface ScriptingAndFunctionsCommands {
      *     See example for more details.
      * @example
      *     <pre>{@code
-     * Map<String, Map<GlideString, Object>> response = client.functionStats().get();
+     * Map<GlideString, Map<GlideString, Object>> response = client.functionStats().get();
      * Map<GlideString, Object> runningScriptInfo = response.get(gs("running_script"));
      * if (runningScriptInfo != null) {
      *   GlideString[] commandLine = (GlideString[]) runningScriptInfo.get(gs("command"));
      *   System.out.printf("Server is currently running function '%s' with command line '%s', which has been running for %d ms%n",
-     *       runningScriptInfo.get(gs("name")), String.join(" ", commandLine), (long)runningScriptInfo.get(gs("duration_ms")));
+     *       runningScriptInfo.get(gs("name")), String.join(" ", Arrays.toString(commandLine)), (long)runningScriptInfo.get(gs("duration_ms")));
      * }
      * Map<GlideString, Object> enginesInfo = response.get(gs("engines"));
      * for (GlideString engineName : enginesInfo.keySet()) {

@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-
+import java.util.Arrays;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.configuration.NodeAddress;
@@ -220,7 +220,7 @@ public class TestUtilities {
         }
         if (runningScriptInfo != null && runningFunction.length == 0) {
             GlideString[] command = (GlideString[]) runningScriptInfo.get(gs("command"));
-            fail("Unexpected running function info: " + String.join(" ", command.toString()));
+            fail("Unexpected running function info: " + String.join(" ", Arrays.toString(command)));
         }
 
         if (runningScriptInfo != null) {
