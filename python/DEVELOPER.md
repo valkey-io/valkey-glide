@@ -66,12 +66,18 @@ protoc --version
 
 ```bash
 brew update
-brew install python3 git gcc pkgconfig protobuf@3 openssl
-pip3 install virtualenv
+brew install python3 git gcc pkgconfig protobuf@3 openssl virtualenv
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
 # Check that the Rust compiler is installed
 rustc --version
+# Verify the Protobuf compiler installation
+protoc --version
+
+# If protoc is not found or does not work correctly, update the PATH
+echo 'export PATH="/opt/homebrew/opt/protobuf@3/bin:$PATH"' >> /Users/$USER/.bash_profile
+source /Users/$USER/.bash_profile
+protoc --version
 ```
 
 #### Building and installation steps
