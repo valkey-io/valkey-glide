@@ -814,7 +814,7 @@ public class RedisClusterClient extends BaseClient
             @NonNull GlideString function, @NonNull GlideString[] arguments) {
         GlideString[] args =
                 concatenateArrays(new GlideString[] {function, gs("0")}, arguments); // 0 - key count
-        return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+        return commandManager.submitNewCommand(FCall, args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Override
@@ -842,8 +842,8 @@ public class RedisClusterClient extends BaseClient
                 route,
                 response ->
                         route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
-                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+                                ? ClusterValue.ofSingleValue(handleBinaryObjectOrNullResponse(response))
+                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
     }
 
     @Override
@@ -880,7 +880,8 @@ public class RedisClusterClient extends BaseClient
             @NonNull GlideString function, @NonNull GlideString[] arguments) {
         GlideString[] args =
                 concatenateArrays(new GlideString[] {function, gs("0")}, arguments); // 0 - key count
-        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+        return commandManager.submitNewCommand(
+                FCallReadOnly, args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Override
@@ -908,8 +909,8 @@ public class RedisClusterClient extends BaseClient
                 route,
                 response ->
                         route instanceof SingleNodeRoute
-                                ? ClusterValue.ofSingleValue(handleObjectOrNullResponse(response))
-                                : ClusterValue.ofMultiValue(handleMapResponse(response)));
+                                ? ClusterValue.ofSingleValue(handleBinaryObjectOrNullResponse(response))
+                                : ClusterValue.ofMultiValueBinary(handleBinaryStringMapResponse(response)));
     }
 
     @Override

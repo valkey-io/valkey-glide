@@ -1192,10 +1192,10 @@ public class CommandTests {
         var fcallResult =
                 clusterClient.fcall(funcName, new GlideString[] {gs("one"), gs("two")}, route).get();
         if (route instanceof SingleNodeRoute) {
-            assertEquals("one", fcallResult.getSingleValue());
+            assertEquals(gs("one"), fcallResult.getSingleValue());
         } else {
             for (var nodeResponse : fcallResult.getMultiValue().values()) {
-                assertEquals("one", nodeResponse);
+                assertEquals(gs("one"), nodeResponse);
             }
         }
         fcallResult =
@@ -1203,10 +1203,10 @@ public class CommandTests {
                         .fcallReadOnly(funcName, new GlideString[] {gs("one"), gs("two")}, route)
                         .get();
         if (route instanceof SingleNodeRoute) {
-            assertEquals("one", fcallResult.getSingleValue());
+            assertEquals(gs("one"), fcallResult.getSingleValue());
         } else {
             for (var nodeResponse : fcallResult.getMultiValue().values()) {
-                assertEquals("one", nodeResponse);
+                assertEquals(gs("one"), nodeResponse);
             }
         }
 
@@ -1432,9 +1432,9 @@ public class CommandTests {
         assertEquals(libName, clusterClient.functionLoad(code, false).get());
 
         assertEquals(
-                "one", clusterClient.fcall(funcName, new GlideString[] {gs("one"), gs("two")}).get());
+                gs("one"), clusterClient.fcall(funcName, new GlideString[] {gs("one"), gs("two")}).get());
         assertEquals(
-                "one",
+                gs("one"),
                 clusterClient.fcallReadOnly(funcName, new GlideString[] {gs("one"), gs("two")}).get());
 
         var flist = clusterClient.functionListBinary(false).get();
@@ -1570,13 +1570,13 @@ public class CommandTests {
                 clusterClient
                         .fcall(funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0])
                         .get();
-        assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
+        assertArrayEquals(new Object[] {gs(key + 1), gs(key + 2)}, (Object[]) functionResult);
         functionResult =
                 clusterClient
                         .fcallReadOnly(
                                 funcName, new GlideString[] {gs(key + 1), gs(key + 2)}, new GlideString[0])
                         .get();
-        assertArrayEquals(new Object[] {key + 1, key + 2}, (Object[]) functionResult);
+        assertArrayEquals(new Object[] {gs(key + 1), gs(key + 2)}, (Object[]) functionResult);
 
         //  TODO: change to binary transaction version once available:
         // var transaction =
@@ -2308,7 +2308,7 @@ public class CommandTests {
                 assertInstanceOf(RequestException.class, exception.getCause());
                 assertTrue(exception.getMessage().toLowerCase().contains("unkillable"));
 
-                assertEquals("Timed out 6 sec", promise.get());
+                assertEquals(gs("Timed out 6 sec"), promise.get());
 
                 exception =
                         assertThrows(ExecutionException.class, () -> clusterClient.functionKill(route).get());

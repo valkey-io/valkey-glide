@@ -599,12 +599,12 @@ public class CommandTests {
                 regularClient
                         .fcall(funcName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
                         .get();
-        assertEquals("one", functionResult);
+        assertEquals(gs("one"), functionResult);
         functionResult =
                 regularClient
                         .fcallReadOnly(funcName, new GlideString[0], new GlideString[] {gs("one"), gs("two")})
                         .get();
-        assertEquals("one", functionResult);
+        assertEquals(gs("one"), functionResult);
 
         var flist = regularClient.functionListBinary(false).get();
         var expectedDescription =
@@ -990,7 +990,7 @@ public class CommandTests {
                 assertInstanceOf(RequestException.class, exception.getCause());
                 assertTrue(exception.getMessage().toLowerCase().contains("unkillable"));
 
-                assertEquals("Timed out 6 sec", promise.get());
+                assertEquals(gs("Timed out 6 sec"), promise.get());
 
                 exception =
                         assertThrows(ExecutionException.class, () -> regularClient.functionKill().get());
