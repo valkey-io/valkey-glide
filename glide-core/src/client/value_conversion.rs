@@ -878,14 +878,15 @@ pub(crate) fn convert_to_expected_type(
                 }
 
                 let mut groups_as_maps = Vec::new();
-                for group_value in groups {
-                    let Value::Array(mut group) = group_value.clone() else {
+                let mut consumers_indices = Vec::new();
+                for group_value in &groups {
+                    let Value::Array(group) = group_value.clone() else {
                         return Err((ErrorKind::TypeError, "Incorrect value type received").into());
                     };
 
                     let consumers_key = Value::SimpleString("consumers".into());
                     let consumers_index = group
-                        .iter_mut()
+                        .iter()
                         .position(
                             |key| {
                                 let res = convert_to_expected_type(key.clone(), Some(ExpectedReturnType::SimpleString));
@@ -927,7 +928,11 @@ pub(crate) fn convert_to_expected_type(
                         }))?);
                     }
 
-                    groups[consumers_index] = Value::Array(consumers_as_maps);
+                    consumers_indices.push((consumers_index, consumers_as_maps));
+                }
+
+                for (index, map) in consumers_indices {
+                    groups[index] = Value::Array(map);
                 }
 
                 array[groups_index] = Value::Array(groups_as_maps);
@@ -1302,8 +1307,7 @@ pub(crate) fn expected_type_for_cmd(cmd: &Cmd) -> Option<ExpectedReturnType> {
             }
         }
         b"XINFO STREAM" => {
-            if cmd.position(b"FULL").is_some()
-            {
+            if cmd.position(b"FULL").is_some() {
                 Some(ExpectedReturnType::XInfoStreamFullReturnType)
             } else {
                 Some(ExpectedReturnType::Map {
