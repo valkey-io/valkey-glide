@@ -3,8 +3,14 @@ import random
 import string
 from typing import Any, Dict, List, Mapping, Optional, Set, TypeVar, Union, cast
 
+import pytest
 from glide.async_commands.core import InfoSection
-from glide.constants import TClusterResponse, TFunctionListResponse, TResult
+from glide.constants import (
+    TClusterResponse,
+    TFunctionListResponse,
+    TFunctionStatsResponse,
+    TResult,
+)
 from glide.glide_client import TGlideClient
 from packaging import version
 
@@ -73,9 +79,9 @@ def get_random_string(length):
 async def check_if_server_version_lt(client: TGlideClient, min_version: str) -> bool:
     # TODO: change it to pytest fixture after we'll implement a sync client
     info_str = await client.info([InfoSection.SERVER])
-    redis_version = parse_info_response(info_str).get("redis_version")
-    assert redis_version is not None
-    return version.parse(redis_version) < version.parse(min_version)
+    server_version = parse_info_response(info_str).get("redis_version")
+    assert server_version is not None
+    return version.parse(server_version) < version.parse(min_version)
 
 
 def compare_maps(
@@ -269,3 +275,39 @@ def check_function_list_response(
             break
 
     assert has_lib is True
+
+
+def check_function_stats_response(
+    response: TFunctionStatsResponse,
+    running_function: List[bytes],
+    lib_count: int,
+    function_count: int,
+):
+    """
+    Validate whether `FUNCTION STATS` response contains required info.
+
+    Args:
+        response (TFunctionStatsResponse): The response from server.
+        running_function (List[bytes]): Command line of running function expected. Empty, if nothing expected.
+        lib_count (int): Expected libraries count.
+        function_count (int): Expected functions count.
+    """
+    running_script_info = response.get(b"running_script")
+    if running_script_info is None and len(running_function) != 0:
+        pytest.fail("No running function info")
+
+    if running_script_info is not None and len(running_function) == 0:
+        command = cast(dict, running_script_info).get(b"command")
+        pytest.fail("Unexpected running function info: " + " ".join(cast(str, command)))
+
+    if running_script_info is not None:
+        command = cast(dict, running_script_info).get(b"command")
+        assert running_function == command
+        # command line format is:
+        # fcall|fcall_ro <function name> <num keys> <key>* <arg>*
+        assert running_function[1] == cast(dict, running_script_info).get(b"name")
+
+    expected = {
+        b"LUA": {b"libraries_count": lib_count, b"functions_count": function_count}
+    }
+    assert expected == response.get(b"engines")

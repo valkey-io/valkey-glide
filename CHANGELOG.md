@@ -85,6 +85,7 @@
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
 * Node: Rename RedisClient to GlideClient and RedisClusterClient to GlideClusterClient ([#1670](https://github.com/aws/glide-for-redis/pull/1670))
 * Python: Rename RedisClient to GlideClient, RedisClusterClient to GlideClusterClient and BaseRedisClient to BaseClient([#1669](https://github.com/aws/glide-for-redis/pull/1669))
+* Python: Rename ClusterClientConfiguration to GlideClusterClientConfiguration ([#1806](https://github.com/aws/glide-for-redis/pull/1806))
 
 ## 0.4.1 (2024-02-06)
 
@@ -207,6 +208,7 @@
 * Node: Added LINDEX command ([#999](https://github.com/aws/glide-for-redis/pull/999))
 * Python, Node: Added ZPOPMAX command ([#996](https://github.com/aws/glide-for-redis/pull/996), [#1009](https://github.com/aws/glide-for-redis/pull/1009))
 * Python: Added DBSIZE command ([#1040](https://github.com/aws/glide-for-redis/pull/1040))
+* Python: Added FUNCTION STATS command ([#1794](https://github.com/aws/glide-for-redis/pull/1794))
 
 #### Features
 * Python, Node: Added support in Lua Scripts ([#775](https://github.com/aws/glide-for-redis/pull/775), [#860](https://github.com/aws/glide-for-redis/pull/860))

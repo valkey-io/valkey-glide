@@ -65,7 +65,7 @@ class BaseTransaction:
     Base class encompassing shared commands for both standalone and cluster mode implementations in transaction.
 
     Command Response:
-        The response for each command depends on the executed Redis command. Specific response types
+        The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
 
     Example:
@@ -165,12 +165,12 @@ class BaseTransaction:
             key (TEncodable): the key to store.
             value (TEncodable): the value to store with the given key.
             conditional_set (Optional[ConditionalChange], optional): set the key only if the given condition is met.
-                Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
+                Equivalent to [`XX` | `NX`] in the Valkey API. Defaults to None.
             expiry (Optional[ExpirySet], optional): set expiriation to the given key.
-                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Redis API. Defaults to None.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Valkey API. Defaults to None.
             return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
-                Equivalent to `GET` in the Redis API. Defaults to False.
+                Equivalent to `GET` in the Valkey API. Defaults to False.
 
         Command response:
             Optional[bytes]:
@@ -282,7 +282,7 @@ class BaseTransaction:
         sections: Optional[List[InfoSection]] = None,
     ) -> TTransaction:
         """
-        Get information and statistics about the Redis server.
+        Get information and statistics about the server.
         See https://valkey.io/commands/info/ for details.
 
         Args:
@@ -345,7 +345,7 @@ class BaseTransaction:
 
     def config_resetstat(self: TTransaction) -> TTransaction:
         """
-        Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+        Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
         See https://valkey.io/commands/config-resetstat/ for details.
 
         Command response:
@@ -487,7 +487,7 @@ class BaseTransaction:
 
     def ping(self: TTransaction, message: Optional[TEncodable] = None) -> TTransaction:
         """
-        Ping the Redis server.
+        Ping the server.
         See https://valkey.io/commands/ping/ for more details.
 
         Args:
@@ -958,7 +958,7 @@ class BaseTransaction:
         Command response:
             Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -989,7 +989,7 @@ class BaseTransaction:
         Command response:
             Optional[Mapping[bytes, List[bytes]]]: A map of `key` name mapped to an array of popped elements, or None if no elements could be popped and the timeout expired.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(timeout), str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -1210,7 +1210,7 @@ class BaseTransaction:
         Command response:
             Optional[bytes]: The popped element, or `None` if `source` does not exist.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         return self.append_command(
             RequestType.LMove, [source, destination, where_from.value, where_to.value]
@@ -1242,7 +1242,7 @@ class BaseTransaction:
         Command response:
             Optional[bytes]: The popped element, or `None` if `source` does not exist or if the operation timed-out.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         return self.append_command(
             RequestType.BLMove,
@@ -1756,7 +1756,7 @@ class BaseTransaction:
         Commands response:
             int: The expiration Unix timestamp in seconds, -2 if `key` does not exist or -1 if `key` exists but has no associated expire.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return self.append_command(RequestType.ExpireTime, [key])
 
@@ -1773,7 +1773,7 @@ class BaseTransaction:
         Commands response:
             int: The expiration Unix timestamp in milliseconds, -2 if `key` does not exist, or -1 if `key` exists but has no associated expiration.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return self.append_command(RequestType.PExpireTime, [key])
 
@@ -1868,7 +1868,7 @@ class BaseTransaction:
         self: TTransaction, library_code: TEncodable, replace: bool = False
     ) -> TTransaction:
         """
-        Loads a library to Redis.
+        Loads a library to Valkey.
 
         See https://valkey.io/commands/function-load/ for more details.
 
@@ -1880,7 +1880,7 @@ class BaseTransaction:
         Commands response:
             bytes: The library name that was loaded.
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return self.append_command(
             RequestType.FunctionLoad,
@@ -1905,7 +1905,7 @@ class BaseTransaction:
             TFunctionListResponse: Info about all or
                 selected libraries and their functions.
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = []
         if library_name_pattern is not None:
@@ -1931,7 +1931,7 @@ class BaseTransaction:
         Commands response:
             TOK: A simple `OK`.
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return self.append_command(
             RequestType.FunctionFlush,
@@ -1950,7 +1950,7 @@ class BaseTransaction:
         Commands response:
             TOK: A simple `OK`.
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return self.append_command(
             RequestType.FunctionDelete,
@@ -1976,7 +1976,7 @@ class BaseTransaction:
         Command Response:
             TResult:
                 The invoked function's return value.
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = []
         if keys is not None:
@@ -2009,7 +2009,7 @@ class BaseTransaction:
         Command Response:
             TResult: The return value depends on the function that was executed.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = []
         if keys is not None:
@@ -2019,6 +2019,23 @@ class BaseTransaction:
         if arguments is not None:
             args.extend(arguments)
         return self.append_command(RequestType.FCallReadOnly, args)
+
+    def function_stats(self: TTransaction) -> TTransaction:
+        """
+        Returns information about the function that's currently running and information about the
+        available execution engines.
+
+        See https://valkey.io/commands/function-stats/ for more details
+
+        Command Response:
+            TFunctionStatsResponse: A `Mapping` with two keys:
+                - `running_script` with information about the running script.
+                - `engines` with information about available engines and their stats.
+                See example for more details.
+
+        Since: Redis version 7.0.0.
+        """
+        return self.append_command(RequestType.FunctionStats, [])
 
     def function_dump(self: TTransaction) -> TTransaction:
         """
@@ -2411,7 +2428,7 @@ class BaseTransaction:
             stream_id (TEncodable): The stream entry ID that should be set as the last delivered ID for the consumer group.
             entries_read_id (Optional[str]): An arbitrary ID (that isn't the first ID, last ID, or the zero ID ("0-0"))
                 used to find out how many entries are between the arbitrary ID (excluding it) and the stream's last
-                entry. This argument can only be specified if you are using Redis version 7.0.0 or above.
+                entry. This argument can only be specified if you are using Valkey version 7.0.0 or above.
 
         Command response:
             TOK: A simple "OK" response.
@@ -2578,11 +2595,11 @@ class BaseTransaction:
                 scanned.
                 - A mapping of the claimed entries, with the keys being the claimed entry IDs and the values being a
                 2D list of the field-value pairs in the format `[[field1, value1], [field2, value2], ...]`.
-                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
                 message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                 deleted from the Pending Entries List.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
         if count is not None:
@@ -2621,11 +2638,11 @@ class BaseTransaction:
                 to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
                 scanned.
                 - A list of the IDs for the claimed entries.
-                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
                 message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                 deleted from the Pending Entries List.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = [key, group_name, consumer_name, str(min_idle_time_ms), start]
         if count is not None:
@@ -2827,7 +2844,7 @@ class BaseTransaction:
                 (int): The Geohash integer, if `with_hash` is set to True.
                 List[float]: The coordinates as a two item [longitude,latitude] array, if `with_coord` is set to True.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = _create_geosearch_args(
             [key],
@@ -2877,7 +2894,7 @@ class BaseTransaction:
         Commands response:
             int: The number of elements in the resulting sorted set stored at `destination`.s
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = _create_geosearch_args(
             [destination, source],
@@ -3294,7 +3311,7 @@ class BaseTransaction:
             Optional[List[Union[int, float]]]: A list containing the rank and score of `member` in the sorted set.
             If `key` doesn't exist, or if `member` is not present in the set, None will be returned.
 
-        Since: Redis version 7.2.0.
+        Since: Valkey version 7.2.0.
         """
         return self.append_command(RequestType.ZRank, [key, member, "WITHSCORE"])
 
@@ -3337,7 +3354,7 @@ class BaseTransaction:
                 in the sorted set, where ranks are ordered from high to low based on scores.
                 If `key` doesn't exist, or if `member` is not present in the set, `None` will be returned.
 
-        Since: Redis version 7.2.0.
+        Since: Valkey version 7.2.0.
         """
         return self.append_command(RequestType.ZRevRank, [key, member, "WITHSCORE"])
 
@@ -3822,7 +3839,7 @@ class BaseTransaction:
                 which elements were popped, and a member-score mapping of the popped elements. If no members could be
                 popped, returns None.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(len(keys))] + keys + [filter.value]
         if count is not None:
@@ -3865,7 +3882,7 @@ class BaseTransaction:
                 which elements were popped, and a member-score mapping. If no members could be popped and the timeout
                 expired, returns None.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(timeout), str(len(keys))] + keys + [modifier.value]
         if count is not None:
@@ -3891,7 +3908,7 @@ class BaseTransaction:
         Command response:
             int: The cardinality of the intersection of the given sorted sets, or the `limit` if reached.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(len(keys))] + keys
         if limit is not None:
@@ -4069,7 +4086,7 @@ class BaseTransaction:
         numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
         being the penultimate, and so on.
 
-        If you are using Redis 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
+        If you are using Valkey 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
         `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
         are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
         specified, `start=0` and `end=2` means to look at the first three bytes.
@@ -4082,7 +4099,7 @@ class BaseTransaction:
             start (int): The starting offset.
             end (int): The ending offset.
             index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
-                using Redis version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
+                using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
                 If no index type is provided, the indexes will be assumed to be byte indexes.
 
         Command response:
@@ -4167,14 +4184,14 @@ class BaseTransaction:
         Command response:
             List[int]: An array of results from the "GET" subcommands.
 
-        Since: Redis version 6.0.0.
+        Since: Valkey version 6.0.0.
         """
         args = [key] + _create_bitfield_read_only_args(subcommands)
         return self.append_command(RequestType.BitFieldReadOnly, args)
 
     def object_encoding(self: TTransaction, key: TEncodable) -> TTransaction:
         """
-        Returns the internal encoding for the Redis object stored at `key`.
+        Returns the internal encoding for the Valkey object stored at `key`.
 
         See https://valkey.io/commands/object-encoding for more details.
 
@@ -4312,14 +4329,14 @@ class BaseTransaction:
         Args:
             key (TEncodable): The key to get.
             expiry (Optional[ExpirySet], optional): set expiriation to the given key.
-                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Valkey API.
 
         Command Response:
             Optional[bytes]:
                 If `key` exists, return the value stored at `key`
                 If 'key` does not exist, return 'None'
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [key]
         if expiry is not None:
@@ -4332,7 +4349,7 @@ class BaseTransaction:
         parameters: Optional[List[int]] = None,
     ) -> TTransaction:
         """
-        Displays a piece of generative computer art and the Redis version.
+        Displays a piece of generative computer art and the Valkey version.
 
         See https://valkey.io/commands/lolwut for more details.
 
@@ -4343,7 +4360,7 @@ class BaseTransaction:
                 For version `6`, those are number of columns and number of lines.
 
         Command Response:
-            bytes: A piece of generative computer art along with the current Redis version.
+            bytes: A piece of generative computer art along with the current Valkey version.
         """
         args: List[TEncodable] = []
         if version is not None:
@@ -4507,7 +4524,7 @@ class BaseTransaction:
             A Bytes String containing the longest common subsequence between the 2 strings.
             An empty Bytes String is returned if the keys do not exist or have no common subsequences.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [key1, key2]
 
@@ -4536,7 +4553,7 @@ class BaseTransaction:
         Command Response:
             The length of the longest common subsequence between the 2 strings.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [key1, key2, "LEN"]
 
@@ -4575,7 +4592,7 @@ class BaseTransaction:
                   represent the location of the common subsequences in the strings held by key1 and key2,
                   with the length of the match after each matches, if with_match_len is enabled.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [key1, key2, "IDX"]
 
@@ -4636,7 +4653,7 @@ class BaseTransaction:
             or None if `element` is not in the list.
             With the `count` option, a list of indices of matching elements will be returned.
 
-        Since: Redis version 6.0.6.
+        Since: Valkey version 6.0.6.
         """
         args = [key, element]
 
@@ -4696,7 +4713,7 @@ class BaseTransaction:
     ) -> TTransaction:
         """
         Changes the ownership of a pending message. This function returns a List with
-        only the message/entry IDs, and is equivalent to using JUSTID in the Redis API.
+        only the message/entry IDs, and is equivalent to using JUSTID in the Valkey API.
 
         See https://valkey.io/commands/xclaim for more details.
 
@@ -4718,7 +4735,7 @@ class BaseTransaction:
             consumer,
             str(min_idle_time_ms),
             *ids,
-            StreamClaimOptions.JUST_ID_REDIS_API,
+            StreamClaimOptions.JUST_ID_VALKEY_API,
         ]
 
         if options:
@@ -4729,10 +4746,10 @@ class BaseTransaction:
 
 class Transaction(BaseTransaction):
     """
-    Extends BaseTransaction class for standalone Redis commands that are not supported in Redis cluster mode.
+    Extends BaseTransaction class for standalone commands that are not supported in cluster mode.
 
     Command Response:
-        The response for each command depends on the executed Redis command. Specific response types
+        The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
 
     Example:
@@ -4764,7 +4781,7 @@ class Transaction(BaseTransaction):
 
     def select(self, index: int) -> "Transaction":
         """
-        Change the currently selected Redis database.
+        Change the currently selected database.
         See https://valkey.io/commands/select/ for details.
 
         Args:
@@ -4821,6 +4838,55 @@ class Transaction(BaseTransaction):
         """
         args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
         return self.append_command(RequestType.Sort, args)
+
+    def sort_ro(
+        self: TTransaction,
+        key: TEncodable,
+        by_pattern: Optional[TEncodable] = None,
+        limit: Optional[Limit] = None,
+        get_patterns: Optional[List[TEncodable]] = None,
+        order: Optional[OrderBy] = None,
+        alpha: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        This command is routed depending on the client's `ReadFrom` strategy.
+
+        See https://valkey.io/commands/sort for more details.
+
+        Args:
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            by_pattern (Optional[TEncodable]): A pattern to sort by external keys instead of by the elements stored at the key themselves.
+                The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
+                from the key replaces the asterisk to create the key name. For example, if `key` contains IDs of objects,
+                `by_pattern` can be used to sort these IDs based on an attribute of the objects, like their weights or
+                timestamps.
+                E.g., if `by_pattern` is `weight_*`, the command will sort the elements by the values of the
+                keys `weight_<element>`.
+                If not provided, elements are sorted by their value.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
+            get_pattern (Optional[TEncodable]): A pattern used to retrieve external keys' values, instead of the elements at `key`.
+                The pattern should contain an asterisk (*) as a placeholder for the element values, where the value
+                from `key` replaces the asterisk to create the key name. This allows the sorted elements to be
+                transformed based on the related keys values. For example, if `key` contains IDs of users, `get_pattern`
+                can be used to retrieve specific attributes of these users, such as their names or email addresses.
+                E.g., if `get_pattern` is `name_*`, the command will return the values of the keys `name_<element>`
+                for each sorted element. Multiple `get_pattern` arguments can be provided to retrieve multiple attributes.
+                The special value `#` can be used to include the actual element from `key` being sorted.
+                If not provided, only the sorted elements themselves are returned.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+
+        Command response:
+            List[Optional[bytes]]: Returns a list of sorted elements.
+
+        Since: Redis version 7.0.0.
+        """
+        args = _build_sort_args(key, by_pattern, limit, get_patterns, order, alpha)
+        return self.append_command(RequestType.SortReadOnly, args)
 
     def sort_store(
         self: TTransaction,
@@ -4897,7 +4963,7 @@ class Transaction(BaseTransaction):
         Command response:
             bool: True if the source was copied. Otherwise, return False.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = [source, destination]
         if destinationDB is not None:
@@ -4930,7 +4996,7 @@ class ClusterTransaction(BaseTransaction):
     Extends BaseTransaction class for cluster mode commands that are not supported in standalone.
 
     Command Response:
-        The response for each command depends on the executed Redis command. Specific response types
+        The response for each command depends on the executed command. Specific response types
         are documented alongside each method.
     """
 
@@ -4943,6 +5009,7 @@ class ClusterTransaction(BaseTransaction):
     ) -> TTransaction:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        This command is routed to primary only.
         To store the result into a new key, see `sort_store`.
 
         See https://valkey.io/commands/sort for more details.
@@ -4960,6 +5027,36 @@ class ClusterTransaction(BaseTransaction):
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         return self.append_command(RequestType.Sort, args)
+
+    def sort_ro(
+        self: TTransaction,
+        key: TEncodable,
+        limit: Optional[Limit] = None,
+        order: Optional[OrderBy] = None,
+        alpha: Optional[bool] = None,
+    ) -> TTransaction:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        This command is routed depending on the client's `ReadFrom` strategy.
+
+        See https://valkey.io/commands/sort for more details.
+
+        Args:
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+
+        Command response:
+            List[bytes]: A list of sorted elements.
+
+        Since: Redis version 7.0.0.
+        """
+        args = _build_sort_args(key, None, limit, None, order, alpha)
+        return self.append_command(RequestType.SortReadOnly, args)
 
     def sort_store(
         self: TTransaction,
@@ -5011,7 +5108,7 @@ class ClusterTransaction(BaseTransaction):
         Command response:
             bool: True if the source was copied. Otherwise, return False.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = [source, destination]
         if replace is not None:
@@ -5031,7 +5128,7 @@ class ClusterTransaction(BaseTransaction):
         Args:
             message (str): Message to publish
             channel (str): Channel to publish the message on.
-            sharded (bool): Use sharded pubsub mode. Available since Redis version 7.0.
+            sharded (bool): Use sharded pubsub mode. Available since Valkey version 7.0.
 
         Returns:
             int: Number of subscriptions in that shard that received the message.
