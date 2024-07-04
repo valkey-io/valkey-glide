@@ -80,6 +80,7 @@
 * Java: Added SCAN command ([#1751](https://github.com/aws/glide-for-redis/pull/1751))
 * Python: Type migration for entries_read ([#1768](https://github.com/aws/glide-for-redis/pull/1768))
 * Python: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#1769](https://github.com/aws/glide-for-redis/pull/1769))
+* Python: Added transaction supports for DUMP, RESTORE, FUNCTION DUMP and FUNCTION RESTORE ([#1814](https://github.com/aws/glide-for-redis/pull/1814))
 
 ### Breaking Changes
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
