@@ -32,6 +32,7 @@ import glide.api.models.configuration.StandaloneSubscriptionConfiguration.PubSub
 import glide.api.models.exceptions.ConfigurationError;
 import glide.api.models.exceptions.RequestException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -887,7 +888,7 @@ public class PubSubTests {
             "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
     public void pubsub_exact_max_size_message(boolean standalone) {
         final GlideString channel = gs(UUID.randomUUID().toString());
-        final GlideString message = gs("1".repeat(1 << 25)); // 33MB
+        final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
         final GlideString message2 = gs("2".repeat(1 << 25)); // 3MB
 
         Map<? extends ChannelMode, Set<GlideString>> subscriptions =
@@ -895,43 +896,29 @@ public class PubSubTests {
                         ? Map.of(PubSubChannelMode.EXACT, Set.of(channel))
                         : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
         var listener = createClientWithSubscriptions(standalone, subscriptions);
-        var sender = createClientWithSubscriptions(standalone, subscriptions);
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
 
-        try {
-            assertEquals(OK, sender.publish(message, channel).get());
-            assertEquals(OK, sender.publish(message2, channel).get());
+        assertEquals(OK, sender.publish(message, channel).get());
+        assertEquals(OK, sender.publish(message2, channel).get());
 
-            // Allow the message to propagate.
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            PubSubMessage asyncMessage = listener.getPubSubMessage().get();
-            PubSubMessage syncMessage = listener.tryGetPubSubMessage();
-            assertEquals(message, asyncMessage.getMessage());
-            assertEquals(channel, asyncMessage.getChannel());
-            assertTrue(asyncMessage.getPattern().isEmpty());
+        PubSubMessage asyncMessage = listener.getPubSubMessage().get();
+        assertEquals(message, asyncMessage.getMessage());
+        assertEquals(channel, asyncMessage.getChannel());
+        assertTrue(asyncMessage.getPattern().isEmpty());
 
-            assertEquals(message2, syncMessage.getMessage());
-            assertEquals(channel, syncMessage.getChannel());
-            assertTrue(syncMessage.getPattern().isEmpty());
+        PubSubMessage syncMessage = listener.tryGetPubSubMessage();
+        assertEquals(message2, syncMessage.getMessage());
+        assertEquals(channel, syncMessage.getChannel());
+        assertTrue(syncMessage.getPattern().isEmpty());
 
-            // Assert there are no more messages to read.
-            assertThrows(
-                    TimeoutException.class,
-                    () -> {
-                        listener.getPubSubMessage().get(3, TimeUnit.SECONDS);
-                    });
-            assertNull(listener.tryGetPubSubMessage());
-        } finally {
-            if (!standalone) {
-                // Since all tests run on the same cluster, when closing the client, garbage collector can
-                // be called
-                // after another test will start running.
-                // In cluster mode, we check how many subscriptions received the message.
-                // So to avoid flakiness, we make sure to unsubscribe from the channels.
-                ((RedisClusterClient) listener)
-                        .customCommand(new String[] {"UNSUBSCRIBE", channel.toString()});
-            }
-        }
+        // Assert there are no more messages to read.
+        assertThrows(
+                TimeoutException.class, () -> listener.getPubSubMessage().get(3, TimeUnit.SECONDS));
+        assertNull(listener.tryGetPubSubMessage());
     }
 
     @SneakyThrows
@@ -943,50 +930,39 @@ public class PubSubTests {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
         final GlideString channel = gs(UUID.randomUUID().toString());
-        final GlideString message = gs("1".repeat(1 << 25)); // 33MB
+        final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
         final GlideString message2 = gs("2".repeat(1 << 25)); // 3MB
 
         Map<? extends ChannelMode, Set<GlideString>> subscriptions =
                 Map.of(PubSubClusterChannelMode.SHARDED, Set.of(channel));
         var listener = createClientWithSubscriptions(standalone, subscriptions);
-        var sender = createClientWithSubscriptions(standalone, subscriptions);
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
 
-        try {
-            assertEquals(OK, sender.publish(message, channel).get());
-            assertEquals(OK, sender.publish(message2, channel).get());
+        assertEquals(OK, sender.publish(message, channel).get());
+        assertEquals(OK, ((RedisClusterClient) sender).publish(message2, channel, true).get());
 
-            // Allow the message to propagate.
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            PubSubMessage asyncMessage = listener.getPubSubMessage().get();
-            PubSubMessage syncMessage = listener.tryGetPubSubMessage();
-            assertEquals(message, asyncMessage.getMessage());
-            assertEquals(channel, asyncMessage.getChannel());
-            assertTrue(asyncMessage.getPattern().isEmpty());
+        PubSubMessage asyncMessage = listener.getPubSubMessage().get();
+        assertEquals(message, asyncMessage.getMessage());
+        assertEquals(channel, asyncMessage.getChannel());
+        assertTrue(asyncMessage.getPattern().isEmpty());
 
-            assertEquals(message2, syncMessage.getMessage());
-            assertEquals(channel, syncMessage.getChannel());
-            assertTrue(syncMessage.getPattern().isEmpty());
+        PubSubMessage syncMessage = listener.tryGetPubSubMessage();
+        assertEquals(message2, syncMessage.getMessage());
+        assertEquals(channel, syncMessage.getChannel());
+        assertTrue(syncMessage.getPattern().isEmpty());
 
-            // Assert there are no more messages to read.
-            assertThrows(
-                    TimeoutException.class,
-                    () -> {
-                        listener.getPubSubMessage().get(3, TimeUnit.SECONDS);
-                    });
+        // Assert there are no more messages to read.
+        assertThrows(
+                TimeoutException.class,
+                () -> {
+                    listener.getPubSubMessage().get(3, TimeUnit.SECONDS);
+                });
 
-            assertNull(listener.tryGetPubSubMessage());
-        } finally {
-            if (!standalone) {
-                // Since all tests run on the same cluster, when closing the client, garbage collector can
-                // be called
-                // after another test will start running.
-                // In cluster mode, we check how many subscriptions received the message.
-                // So to avoid flakiness, we make sure to unsubscribe from the channels.
-                ((RedisClusterClient) listener)
-                        .customCommand(new String[] {"UNSUBSCRIBE", channel.toString()});
-            }
-        }
+        assertNull(listener.tryGetPubSubMessage());
     }
 
     @SneakyThrows
@@ -996,7 +972,7 @@ public class PubSubTests {
             "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
     public void pubsub_exact_max_size_message_callback(boolean standalone) {
         final GlideString channel = gs(UUID.randomUUID().toString());
-        final GlideString message = gs("1".repeat(1 << 25)); // 33MB
+        final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
 
         ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
         final MessageCallback callback =
@@ -1016,34 +992,18 @@ public class PubSubTests {
                         subscriptions,
                         Optional.ofNullable(callback),
                         Optional.of(callbackMessages));
-        var sender =
-                createClientWithSubscriptions(
-                        standalone,
-                        subscriptions,
-                        Optional.ofNullable(callback),
-                        Optional.of(callbackMessages));
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
 
-        try {
-            assertEquals(OK, sender.publish(message, channel).get());
+        assertEquals(OK, sender.publish(message, channel).get());
 
-            // Allow the message to propagate.
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            assertEquals(1, callbackMessages.size());
-            assertEquals(message, callbackMessages.get(0).getMessage());
-            assertEquals(channel, callbackMessages.get(0).getChannel());
-            assertNull(callbackMessages.get(0).getPattern());
-        } finally {
-            if (!standalone) {
-                // Since all tests run on the same cluster, when closing the client, garbage collector can
-                // be called
-                // after another test will start running.
-                // In cluster mode, we check how many subscriptions received the message.
-                // So to avoid flakiness, we make sure to unsubscribe from the channels.
-                ((RedisClusterClient) listener)
-                        .customCommand(new String[] {"UNSUBSCRIBE", channel.toString()});
-            }
-        }
+        assertEquals(1, callbackMessages.size());
+        assertEquals(message, callbackMessages.get(0).getMessage());
+        assertEquals(channel, callbackMessages.get(0).getChannel());
+        assertTrue(callbackMessages.get(0).getPattern().isEmpty());
     }
 
     @SneakyThrows
@@ -1055,7 +1015,7 @@ public class PubSubTests {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
 
         final GlideString channel = gs(UUID.randomUUID().toString());
-        final GlideString message = gs("1".repeat(1 << 25)); // 33MB
+        final GlideString message = gs("1".repeat(512 * 1024 * 1024)); // 512MB
 
         ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
         final MessageCallback callback =
@@ -1073,32 +1033,16 @@ public class PubSubTests {
                         subscriptions,
                         Optional.ofNullable(callback),
                         Optional.of(callbackMessages));
-        var sender =
-                createClientWithSubscriptions(
-                        standalone,
-                        subscriptions,
-                        Optional.ofNullable(callback),
-                        Optional.of(callbackMessages));
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
 
-        try {
-            assertEquals(OK, ((RedisClusterClient) sender).publish(message, channel, true).get());
+        assertEquals(OK, ((RedisClusterClient) sender).publish(message, channel, true).get());
 
-            // Allow the message to propagate.
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            assertEquals(1, callbackMessages.size());
-            assertEquals(message, callbackMessages.get(0).getMessage());
-        } finally {
-            if (!standalone) {
-                // Since all tests run on the same cluster, when closing the client, garbage collector can
-                // be called
-                // after another test will start running.
-                // In cluster mode, we check how many subscriptions received the message.
-                // So to avoid flakiness, we make sure to unsubscribe from the channels.
-                ((RedisClusterClient) listener)
-                        .customCommand(new String[] {"UNSUBSCRIBE", channel.toString()});
-            }
-        }
+        assertEquals(1, callbackMessages.size());
+        assertEquals(message, callbackMessages.get(0).getMessage());
     }
 
     /** Test the behavior if the callback supplied to a subscription throws an uncaught exception. */
@@ -1115,7 +1059,6 @@ public class PubSubTests {
         ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
         final MessageCallback callback =
                 (pubSubMessage, context) -> {
-                    new Exception().printStackTrace();
                     if (pubSubMessage.getMessage().equals(errorMsg)) {
                         throw new RuntimeException("Test callback error message");
                     }
@@ -1134,41 +1077,29 @@ public class PubSubTests {
                         subscriptions,
                         Optional.ofNullable(callback),
                         Optional.of(callbackMessages));
-        var sender =
-                createClient(standalone);
+        var sender = createClient(standalone);
+        clients.addAll(Arrays.asList(listener, sender));
 
-        try {
-            assertEquals(OK, sender.publish(message1, channel).get());
-            assertEquals(OK, sender.publish(message2, channel).get());
-        //    assertEquals(OK, sender.publish(errorMsg, channel).get());
-            assertEquals(OK, sender.publish(message3, channel).get());
+        assertEquals(OK, sender.publish(message1, channel).get());
+        assertEquals(OK, sender.publish(message2, channel).get());
+        assertEquals(OK, sender.publish(errorMsg, channel).get());
+        assertEquals(OK, sender.publish(message3, channel).get());
 
-            // Allow the message to propagate.
-            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+        // Allow the message to propagate.
+        Thread.sleep(MESSAGE_DELIVERY_DELAY);
 
-            assertEquals(3, callbackMessages.size());
-            assertEquals(message1, callbackMessages.get(0).getMessage());
-            assertEquals(channel, callbackMessages.get(0).getChannel());
-            assertTrue(callbackMessages.get(0).getPattern().isEmpty());
+        assertEquals(3, callbackMessages.size());
+        assertEquals(message1, callbackMessages.get(0).getMessage());
+        assertEquals(channel, callbackMessages.get(0).getChannel());
+        assertTrue(callbackMessages.get(0).getPattern().isEmpty());
 
-            assertEquals(message2, callbackMessages.get(1).getMessage());
-            assertEquals(channel, callbackMessages.get(1).getChannel());
-            assertTrue(callbackMessages.get(1).getPattern().isEmpty());
+        assertEquals(message2, callbackMessages.get(1).getMessage());
+        assertEquals(channel, callbackMessages.get(1).getChannel());
+        assertTrue(callbackMessages.get(1).getPattern().isEmpty());
 
-            // Ensure we can receive message 3 which is after the message that triggers a throw.
-            assertEquals(message3, callbackMessages.get(2).getMessage());
-            assertEquals(channel, callbackMessages.get(2).getChannel());
-            assertTrue(callbackMessages.get(2).getPattern().isEmpty());
-        } finally {
-            if (!standalone) {
-                // Since all tests run on the same cluster, when closing the client, garbage collector can
-                // be called
-                // after another test will start running.
-                // In cluster mode, we check how many subscriptions received the message.
-                // So to avoid flakiness, we make sure to unsubscribe from the channels.
-                ((RedisClusterClient) listener)
-                        .customCommand(new String[] {"UNSUBSCRIBE", channel.toString()});
-            }
-        }
+        // Ensure we can receive message 3 which is after the message that triggers a throw.
+        assertEquals(message3, callbackMessages.get(2).getMessage());
+        assertEquals(channel, callbackMessages.get(2).getChannel());
+        assertTrue(callbackMessages.get(2).getPattern().isEmpty());
     }
 }
