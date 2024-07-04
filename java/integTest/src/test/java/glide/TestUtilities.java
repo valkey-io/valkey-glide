@@ -9,6 +9,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import glide.api.BaseClient;
+import glide.api.RedisClient;
+import glide.api.RedisClusterClient;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.configuration.NodeAddress;
@@ -349,5 +352,25 @@ public class TestUtilities {
         return code.replace("$timeout", Integer.toString(timeout))
                 .replace("$funcName", funcName)
                 .replace("$libName", libName);
+    }
+
+    public static void waitForNotBusy(BaseClient client) {
+        // If function wasn't killed, and it didn't time out - it blocks the server and cause rest
+        // test to fail.
+        boolean isBusy = true;
+        do {
+            try {
+                if (client instanceof RedisClusterClient) {
+                    ((RedisClusterClient) client).functionKill().get();
+                } else if (client instanceof RedisClient) {
+                    ((RedisClient) client).functionKill().get();
+                }
+            } catch (Exception busy) {
+                // should throw `notbusy` error, because the function should be killed before
+                if (busy.getMessage().toLowerCase().contains("notbusy")) {
+                    isBusy = false;
+                }
+            }
+        } while (isBusy);
     }
 }
