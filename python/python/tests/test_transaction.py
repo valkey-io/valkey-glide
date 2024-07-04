@@ -1137,4 +1137,4 @@ class TestTransaction:
             assert result2[0] == OK
 
             # Test clean up
-            # await redis_client.function_flush()
+            await redis_client.function_flush()
