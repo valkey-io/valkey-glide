@@ -654,6 +654,18 @@ public abstract class BaseClient
         return data;
     }
 
+    /** Process a <code>FUNCTION LIST</code> standalone response. */
+    @SuppressWarnings("unchecked")
+    protected Map<GlideString, Object>[] handleFunctionListResponseBinary(Object[] response) {
+        Map<GlideString, Object>[] data = castArray(response, Map.class);
+        for (Map<GlideString, Object> libraryInfo : data) {
+            Object[] functions = (Object[]) libraryInfo.get(gs("functions"));
+            var functionInfo = castArray(functions, Map.class);
+            libraryInfo.put(gs("functions"), functionInfo);
+        }
+        return data;
+    }
+
     /** Process a <code>FUNCTION STATS</code> standalone response. */
     protected Map<String, Map<String, Object>> handleFunctionStatsResponse(
             Map<String, Map<String, Object>> response) {
