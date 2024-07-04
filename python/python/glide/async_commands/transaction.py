@@ -2046,7 +2046,7 @@ class BaseTransaction:
         Command response:
             bytes: The serialized payload of all loaded libraries.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return self.append_command(RequestType.FunctionDump, [])
 
@@ -2067,7 +2067,7 @@ class BaseTransaction:
         Command response:
             TOK: A simple "OK" response.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [payload]
         if policy is not None:
@@ -2089,8 +2089,6 @@ class BaseTransaction:
         Command response:
             Optional[bytes]: The serialized value of the data stored at `key`. If `key` does not
                 exist, `None` will be returned.
-
-        Since: Redis version 7.0.0.
         """
         return self.append_command(RequestType.Dump, [key])
 
@@ -2122,8 +2120,6 @@ class BaseTransaction:
 
         Command response:
             TOK: A simple "OK" response.
-
-        Since: Redis version 7.0.0.
         """
         args = [key, str(ttl), value]
         if replace is True:
