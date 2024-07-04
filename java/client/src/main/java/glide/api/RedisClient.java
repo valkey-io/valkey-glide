@@ -48,6 +48,7 @@ import glide.api.commands.GenericCommands;
 import glide.api.commands.ScriptingAndFunctionsCommands;
 import glide.api.commands.ServerManagementCommands;
 import glide.api.commands.TransactionsCommands;
+import glide.api.models.ArgsBuilder;
 import glide.api.models.GlideString;
 import glide.api.models.Transaction;
 import glide.api.models.commands.FlushMode;
@@ -450,7 +451,7 @@ public class RedisClient extends BaseClient
     @Override
     public CompletableFuture<GlideString[]> sort(
             @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] arguments = ArrayUtils.addFirst(sortOptions.toGlideStringArgs(), key);
+        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
         return commandManager.submitNewCommand(
                 Sort,
                 arguments,
@@ -470,7 +471,8 @@ public class RedisClient extends BaseClient
     @Override
     public CompletableFuture<GlideString[]> sortReadOnly(
             @NonNull GlideString key, @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] arguments = ArrayUtils.addFirst(sortOptions.toGlideStringArgs(), key);
+        GlideString[] arguments = new ArgsBuilder().add(key).add(sortOptions.toArgs()).toArray();
+
         return commandManager.submitNewCommand(
                 SortReadOnly,
                 arguments,
@@ -491,9 +493,15 @@ public class RedisClient extends BaseClient
             @NonNull GlideString key,
             @NonNull GlideString destination,
             @NonNull SortOptionsBinary sortOptions) {
-        GlideString[] storeArguments = new GlideString[] {gs(STORE_COMMAND_STRING), destination};
+
         GlideString[] arguments =
-                concatenateArrays(new GlideString[] {key}, sortOptions.toGlideStringArgs(), storeArguments);
+                new ArgsBuilder()
+                        .add(key)
+                        .add(sortOptions.toArgs())
+                        .add(STORE_COMMAND_STRING)
+                        .add(destination)
+                        .toArray();
+
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 
