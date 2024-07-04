@@ -1,7 +1,6 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.ffi.resolvers;
 
-import glide.api.models.GlideString;
 import response.ResponseOuterClass.Response;
 
 public class RedisValueResolver {
@@ -27,7 +26,8 @@ public class RedisValueResolver {
 
     /**
      * Resolve a value received from Redis using given C-style pointer. This method does not assume
-     * that strings are valid UTF-8 encoded strings and will expose this data as {@link GlideString}.
+     * that strings are valid UTF-8 encoded strings and will expose this data as a <code>byte[]</code>
+     * .
      *
      * @param pointer A memory pointer from {@link Response}
      * @return A RESP3 value

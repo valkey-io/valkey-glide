@@ -1,6 +1,8 @@
 /** Copyright Valkey GLIDE Project Contributors - SPDX Identifier: Apache-2.0 */
 package glide.connectors.handlers;
 
+import static glide.api.models.GlideString.gs;
+
 import glide.api.logging.Logger;
 import glide.api.models.GlideString;
 import glide.api.models.PubSubMessage;
@@ -49,7 +51,7 @@ public class MessageHandler {
         }
         @SuppressWarnings("unchecked")
         Map<GlideString, Object> push = (Map<GlideString, Object>) data;
-        PushKind pushType = Enum.valueOf(PushKind.class, ((GlideString) push.get("kind")).getString());
+        PushKind pushType = Enum.valueOf(PushKind.class, push.get("kind").toString());
         Object[] values = (Object[]) push.get("values");
 
         switch (pushType) {
@@ -62,11 +64,11 @@ public class MessageHandler {
             case PMessage:
                 handle(
                         new PubSubMessage(
-                                (GlideString) values[2], (GlideString) values[1], (GlideString) values[0]));
+                                gs((byte[]) values[2]), gs((byte[]) values[1]), gs((byte[]) values[0])));
                 return;
             case Message:
             case SMessage:
-                handle(new PubSubMessage((GlideString) values[1], (GlideString) values[0]));
+                handle(new PubSubMessage(gs((byte[]) values[1]), gs((byte[]) values[0])));
                 return;
             case Subscribe:
             case PSubscribe:
