@@ -65,8 +65,8 @@ from ..glide import ClusterScanCursor, Script
 class ConditionalChange(Enum):
     """
     A condition to the `SET`, `ZADD` and `GEOADD` commands.
-    - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Redis API
-    - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Redis API
+    - ONLY_IF_EXISTS - Only update key / elements that already exist. Equivalent to `XX` in the Valkey API.
+    - ONLY_IF_DOES_NOT_EXIST - Only set key / add elements that does not already exist. Equivalent to `NX` in the Valkey API.
     """
 
     ONLY_IF_EXISTS = "XX"
@@ -75,56 +75,56 @@ class ConditionalChange(Enum):
 
 class ExpiryType(Enum):
     """SET option: The type of the expiry.
-    - SEC - Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
-    - MILLSEC - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
-    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+    - SEC - Set the specified expire time, in seconds. Equivalent to `EX` in the Valkey API.
+    - MILLSEC - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Valkey API.
+    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Valkey API.
     - UNIX_MILLSEC - Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the
-        Redis API.
-    - KEEP_TTL - Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Redis API.
+        Valkey API.
+    - KEEP_TTL - Retain the time to live associated with the key. Equivalent to `KEEPTTL` in the Valkey API.
     """
 
-    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Redis API
-    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Redis API
-    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Redis API
-    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Redis API
-    KEEP_TTL = 4, Type[None]  # Equivalent to `KEEPTTL` in the Redis API
+    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Valkey API
+    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Valkey API
+    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Valkey API
+    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Valkey API
+    KEEP_TTL = 4, Type[None]  # Equivalent to `KEEPTTL` in the Valkey API
 
 
 class ExpiryTypeGetEx(Enum):
     """GetEx option: The type of the expiry.
-    - EX - Set the specified expire time, in seconds. Equivalent to `EX` in the Redis API.
-    - PX - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Redis API.
-    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Redis API.
+    - EX - Set the specified expire time, in seconds. Equivalent to `EX` in the Valkey API.
+    - PX - Set the specified expire time, in milliseconds. Equivalent to `PX` in the Valkey API.
+    - UNIX_SEC - Set the specified Unix time at which the key will expire, in seconds. Equivalent to `EXAT` in the Valkey API.
     - UNIX_MILLSEC - Set the specified Unix time at which the key will expire, in milliseconds. Equivalent to `PXAT` in the
-        Redis API.
-    - PERSIST - Remove the time to live associated with the key. Equivalent to `PERSIST` in the Redis API.
+        Valkey API.
+    - PERSIST - Remove the time to live associated with the key. Equivalent to `PERSIST` in the Valkey API.
     """
 
-    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Redis API
-    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Redis API
-    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Redis API
-    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Redis API
-    PERSIST = 4, Type[None]  # Equivalent to `PERSIST` in the Redis API
+    SEC = 0, Union[int, timedelta]  # Equivalent to `EX` in the Valkey API
+    MILLSEC = 1, Union[int, timedelta]  # Equivalent to `PX` in the Valkey API
+    UNIX_SEC = 2, Union[int, datetime]  # Equivalent to `EXAT` in the Valkey API
+    UNIX_MILLSEC = 3, Union[int, datetime]  # Equivalent to `PXAT` in the Valkey API
+    PERSIST = 4, Type[None]  # Equivalent to `PERSIST` in the Valkey API
 
 
 class InfoSection(Enum):
     """
     INFO option: a specific section of information:
 
-    -SERVER: General information about the Redis server
+    -SERVER: General information about the server
     -CLIENTS: Client connections section
     -MEMORY: Memory consumption related information
     -PERSISTENCE: RDB and AOF related information
     -STATS: General statistics
     -REPLICATION: Master/replica replication information
     -CPU: CPU consumption statistics
-    -COMMANDSTATS: Redis command statistics
-    -LATENCYSTATS: Redis command latency percentile distribution statistics
-    -SENTINEL: Redis Sentinel section (only applicable to Sentinel instances)
-    -CLUSTER: Redis Cluster section
+    -COMMANDSTATS: Valkey command statistics
+    -LATENCYSTATS: Valkey command latency percentile distribution statistics
+    -SENTINEL: Valkey Sentinel section (only applicable to Sentinel instances)
+    -CLUSTER: Valkey Cluster section
     -MODULES: Modules section
     -KEYSPACE: Database related statistics
-    -ERRORSTATS: Redis error statistics
+    -ERRORSTATS: Valkey error statistics
     -ALL: Return all sections (excluding module generated ones)
     -DEFAULT: Return only the default set of sections
     -EVERYTHING: Includes all and modules
@@ -154,11 +154,11 @@ class ExpireOptions(Enum):
     """
     EXPIRE option: options for setting key expiry.
 
-    - HasNoExpiry: Set expiry only when the key has no expiry (Equivalent to "NX" in Redis).
-    - HasExistingExpiry: Set expiry only when the key has an existing expiry (Equivalent to "XX" in Redis).
+    - HasNoExpiry: Set expiry only when the key has no expiry (Equivalent to "NX" in Valkey).
+    - HasExistingExpiry: Set expiry only when the key has an existing expiry (Equivalent to "XX" in Valkey).
     - NewExpiryGreaterThanCurrent: Set expiry only when the new expiry is greater than the current one (Equivalent
-        to "GT" in Redis).
-    - NewExpiryLessThanCurrent: Set expiry only when the new expiry is less than the current one (Equivalent to "LT" in Redis).
+        to "GT" in Valkey).
+    - NewExpiryLessThanCurrent: Set expiry only when the new expiry is less than the current one (Equivalent to "LT" in Valkey).
     """
 
     HasNoExpiry = "NX"
@@ -402,12 +402,12 @@ class CoreCommands(Protocol):
             key (TEncodable): the key to store.
             value (TEncodable): the value to store with the given key.
             conditional_set (Optional[ConditionalChange], optional): set the key only if the given condition is met.
-                Equivalent to [`XX` | `NX`] in the Redis API. Defaults to None.
+                Equivalent to [`XX` | `NX`] in the Valkey API. Defaults to None.
             expiry (Optional[ExpirySet], optional): set expiriation to the given key.
-                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Redis API. Defaults to None.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `KEEPTTL`] in the Valkey API. Defaults to None.
             return_old_value (bool, optional): Return the old value stored at key, or None if key did not exist.
                 An error is returned and SET aborted if the value stored at key is not a string.
-                Equivalent to `GET` in the Redis API. Defaults to False.
+                Equivalent to `GET` in the Valkey API. Defaults to False.
 
         Returns:
             Optional[bytes]:
@@ -708,7 +708,7 @@ class CoreCommands(Protocol):
 
         Examples:
             >>> await client.set("key", "Hello World")
-            >>> await client.setrange("key", 6, "Redis")
+            >>> await client.setrange("key", 6, "Glide")
                 11  # The length of the string stored at `key` after it was modified.
         """
         return cast(
@@ -1397,7 +1397,7 @@ class CoreCommands(Protocol):
             >>> await client.lmpop(["testKey"], ListDirection.LEFT, 2)
                {b"testKey": [b"three", b"two"]}
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -1440,7 +1440,7 @@ class CoreCommands(Protocol):
             >>> await client.blmpop(["testKey"], ListDirection.LEFT, 0.1, 2)
                {b"testKey": [b"three", b"two"]}
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(timeout), str(len(keys)), *keys, direction.value]
         if count is not None:
@@ -1740,7 +1740,7 @@ class CoreCommands(Protocol):
             >>> await client.lrange("testKey2", 0, -1)
                 [b"one", b"three", b"four"]
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         return cast(
             Optional[bytes],
@@ -1790,7 +1790,7 @@ class CoreCommands(Protocol):
             >>> updated_array2 = await client.lrange("testKey2", 0, -1)
                 [b"one", b"three", bb"four"]
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         return cast(
             Optional[bytes],
@@ -2493,7 +2493,7 @@ class CoreCommands(Protocol):
             >>> await client.expiretime("my_key")
                 1718614954
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return cast(int, await self._execute_command(RequestType.ExpireTime, [key]))
 
@@ -2520,7 +2520,7 @@ class CoreCommands(Protocol):
             >>> await client.pexpiretime("my_key")
                 1718615446670
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         return cast(int, await self._execute_command(RequestType.PExpireTime, [key]))
 
@@ -3013,7 +3013,7 @@ class CoreCommands(Protocol):
             group_name (TEncodable): The consumer group name.
             stream_id (TEncodable): The stream entry ID that should be set as the last delivered ID for the consumer group.
             entries_read: (Optional[int]): A value representing the number of stream entries already read by the
-                group. This option can only be specified if you are using Redis version 7.0.0 or above.
+                group. This option can only be specified if you are using Valkey version 7.0.0 or above.
 
         Returns:
             TOK: A simple "OK" response.
@@ -3265,7 +3265,7 @@ class CoreCommands(Protocol):
     ) -> List[TEncodable]:
         """
         Changes the ownership of a pending message. This function returns a List with
-        only the message/entry IDs, and is equivalent to using JUSTID in the Redis API.
+        only the message/entry IDs, and is equivalent to using JUSTID in the Valkey API.
 
         See https://valkey.io/commands/xclaim for more details.
 
@@ -3299,7 +3299,7 @@ class CoreCommands(Protocol):
             consumer,
             str(min_idle_time_ms),
             *ids,
-            StreamClaimOptions.JUST_ID_REDIS_API,
+            StreamClaimOptions.JUST_ID_VALKEY_API,
         ]
 
         if options:
@@ -3340,12 +3340,12 @@ class CoreCommands(Protocol):
                 scanned.
                 - A mapping of the claimed entries, with the keys being the claimed entry IDs and the values being a
                 2D list of the field-value pairs in the format `[[field1, value1], [field2, value2], ...]`.
-                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
                 message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                 deleted from the Pending Entries List.
 
         Examples:
-            # Redis version < 7.0.0:
+            # Valkey version < 7.0.0:
             >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [
                     b"0-0",
@@ -3359,7 +3359,7 @@ class CoreCommands(Protocol):
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned.
 
-            # Redis version 7.0.0 and above:
+            # Valkey version 7.0.0 and above:
             >>> await client.xautoclaim("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [
                     b"0-0",
@@ -3375,7 +3375,7 @@ class CoreCommands(Protocol):
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
                 # exists in the stream.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [
             key,
@@ -3423,25 +3423,25 @@ class CoreCommands(Protocol):
                 to the next ID in the stream after the entries that were scanned, or "0-0" if the entire stream was
                 scanned.
                 - A list of the IDs for the claimed entries.
-                - If you are using Redis 7.0.0 or above, the response list will also include a list containing the
+                - If you are using Valkey 7.0.0 or above, the response list will also include a list containing the
                 message IDs that were in the Pending Entries List but no longer exist in the stream. These IDs are
                 deleted from the Pending Entries List.
 
         Examples:
-            # Redis version < 7.0.0:
+            # Valkey version < 7.0.0:
             >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [b"0-0", [b"1-1"]]
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned.
 
-            # Redis version 7.0.0 and above:
+            # Valkey version 7.0.0 and above:
             >>> await client.xautoclaim_just_id("my_stream", "my_group", "my_consumer", 3_600_000, "0-0")
                 [b"0-0", [b"1-1"], [b"1-2"]]
                 # Stream entry "1-1" was idle for over an hour and was thus claimed by "my_consumer". The entire stream
                 # was scanned. Additionally, entry "1-2" was removed from the Pending Entries List because it no longer
                 # exists in the stream.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [
             key,
@@ -3484,8 +3484,8 @@ class CoreCommands(Protocol):
                         b"consumers": 2,
                         b"pending": 2,
                         b"last-delivered-id": b"1638126030001-0",
-                        b"entries-read": 2,  # The "entries-read" field was added in Redis version 7.0.0.
-                        b"lag": 0,  # The "lag" field was added in Redis version 7.0.0.
+                        b"entries-read": 2,  # The "entries-read" field was added in Valkey version 7.0.0.
+                        b"lag": 0,  # The "lag" field was added in Valkey version 7.0.0.
                     },
                     {
                         b"name": b"some-other-group",
@@ -3529,7 +3529,7 @@ class CoreCommands(Protocol):
                         b"name": b"Alice",
                         b"pending": 1,
                         b"idle": 9104628,
-                        b"inactive": 18104698,  # The "inactive" field was added in Redis version 7.2.0.
+                        b"inactive": 18104698,  # The "inactive" field was added in Valkey version 7.2.0.
                     },
                     {
                         b"name": b"Bob",
@@ -3760,7 +3760,7 @@ class CoreCommands(Protocol):
                     ],
                 ]  # Returns locations within the square box of 400 km, with the center being a specific point, from nearest to farthest with the dist, hash and coords.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = _create_geosearch_args(
             [key],
@@ -3825,7 +3825,7 @@ class CoreCommands(Protocol):
             >>> await client.zrange_withscores("my_dest_sorted_set", RangeByIndex(0, -1))
                 {b"Catania": 56.4412578701582, b"Palermo": 190.44242984775784} # The elements within te search area, with the distance as score.
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = _create_geosearch_args(
             [destination, source],
@@ -4370,7 +4370,7 @@ class CoreCommands(Protocol):
             >>> await client.zrank_withscore("my_sorted_set", "non_existing_member")
                 None  # Indicates that "non_existing_member" is not present in the sorted set "my_sorted_set".
 
-        Since: Redis version 7.2.0.
+        Since: Valkey version 7.2.0.
         """
         return cast(
             Optional[List[Union[int, float]]],
@@ -4427,7 +4427,7 @@ class CoreCommands(Protocol):
             >>> await client.zrevrank("my_sorted_set", "member2")
                 [2, 8.2]  # "member2" with score 8.2 has the third-highest score in the sorted set "my_sorted_set"
 
-        Since: Redis version 7.2.0.
+        Since: Valkey version 7.2.0.
         """
         return cast(
             Optional[List[Union[int, float]]],
@@ -5145,7 +5145,7 @@ class CoreCommands(Protocol):
             >>> await client.zmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 2)
                 [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [str(len(keys))] + keys + [filter.value]
         if count is not None:
@@ -5198,7 +5198,7 @@ class CoreCommands(Protocol):
             >>> await client.bzmpop(["zSet1", "zSet2"], ScoreFilter.MAX, 0.5, 2)
                 [b'zSet1', {b'three': 3.0, b'two': 2.0}]  # "three" with score 3.0 and "two" with score 2.0 were popped from "zSet1".
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(timeout), str(len(keys))] + keys + [modifier.value]
         if count is not None:
@@ -5238,7 +5238,7 @@ class CoreCommands(Protocol):
             >>> await client.zintercard(["key1", "key2"], 1)
                 1  # A `limit` of 1 was provided, so the intersection computation exits early and yields the `limit` value of 1.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [str(len(keys))] + keys
         if limit is not None:
@@ -5257,10 +5257,10 @@ class CoreCommands(Protocol):
     ) -> TResult:
         """
         Invokes a Lua script with its keys and arguments.
-        This method simplifies the process of invoking scripts on a Redis server by using an object that represents a Lua script.
+        This method simplifies the process of invoking scripts on a the server by using an object that represents a Lua script.
         The script loading, argument preparation, and execution will all be handled internally.
-        If the script has not already been loaded, it will be loaded automatically using the Redis `SCRIPT LOAD` command.
-        After that, it will be invoked using the Redis `EVALSHA` command.
+        If the script has not already been loaded, it will be loaded automatically using the `SCRIPT LOAD` command.
+        After that, it will be invoked using the `EVALSHA` command.
 
         See https://valkey.io/commands/script-load/ and https://valkey.io/commands/evalsha/ for more details.
 
@@ -5502,7 +5502,7 @@ class CoreCommands(Protocol):
         numbers indicating offsets starting at the end of the list, with `-1` being the last element of the list, `-2`
         being the penultimate, and so on.
 
-        If you are using Redis 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
+        If you are using Valkey 7.0.0 or above, the optional `index_type` can also be provided to specify whether the
         `start` and `end` offsets specify BIT or BYTE offsets. If `index_type` is not provided, BYTE offsets
         are assumed. If BIT is specified, `start=0` and `end=2` means to look at the first three bits. If BYTE is
         specified, `start=0` and `end=2` means to look at the first three bytes.
@@ -5515,7 +5515,7 @@ class CoreCommands(Protocol):
             start (int): The starting offset.
             end (int): The ending offset.
             index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
-                using Redis version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
+                using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
                 If no index type is provided, the indexes will be assumed to be byte indexes.
 
         Returns:
@@ -5635,7 +5635,7 @@ class CoreCommands(Protocol):
             >>> await client.bitfield_read_only("my_key", [BitFieldGet(UnsignedEncoding(2), Offset(1))])
                 [2]  # The value at offset 1 with an unsigned encoding of 2 is 3.
 
-        Since: Redis version 6.0.0.
+        Since: Valkey version 6.0.0.
         """
         args = [key] + _create_bitfield_read_only_args(subcommands)
         return cast(
@@ -5667,7 +5667,7 @@ class CoreCommands(Protocol):
 
     async def object_freq(self, key: TEncodable) -> Optional[int]:
         """
-        Returns the logarithmic access frequency counter of a Redis object stored at `key`.
+        Returns the logarithmic access frequency counter of a Valkey object stored at `key`.
 
         See https://valkey.io/commands/object-freq for more details.
 
@@ -5795,7 +5795,7 @@ class CoreCommands(Protocol):
         Args:
             key (TEncodable): The key to get.
             expiry (Optional[ExpiryGetEx], optional): set expiriation to the given key.
-                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Redis API.
+                Equivalent to [`EX` | `PX` | `EXAT` | `PXAT` | `PERSIST`] in the Valkey API.
 
         Returns:
             Optional[bytes]:
@@ -5813,7 +5813,7 @@ class CoreCommands(Protocol):
             >>> await client.getex(b"key")
                 None
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args = [key]
         if expiry is not None:
@@ -5940,7 +5940,7 @@ class CoreCommands(Protocol):
             # Assume "key" contains a set with 130 members
             >>> result_cursor = "0"
             >>> while True:
-            ...     result = await redis_client.sscan("key", "0", match="*")
+            ...     result = await client.sscan("key", "0", match="*")
             ...     new_cursor = str(result [0])
             ...     print("Cursor: ", new_cursor)
             ...     print("Members: ", result[1])
@@ -6001,7 +6001,7 @@ class CoreCommands(Protocol):
             # Assume "key" contains a sorted set with multiple members
             >>> result_cursor = "0"
             >>> while True:
-            ...     result = await redis_client.zscan("key", "0", match="*", count=5)
+            ...     result = await client.zscan("key", "0", match="*", count=5)
             ...     new_cursor = str(result [0])
             ...     print("Cursor: ", new_cursor)
             ...     print("Members: ", result[1])
@@ -6062,7 +6062,7 @@ class CoreCommands(Protocol):
             # Assume "key" contains a hash with multiple members
             >>> result_cursor = "0"
             >>> while True:
-            ...     result = await redis_client.hscan("key", "0", match="*", count=3)
+            ...     result = await client.hscan("key", "0", match="*", count=3)
             ...     new_cursor = str(result [0])
             ...     print("Cursor: ", new_cursor)
             ...     print("Members: ", result[1])
@@ -6110,7 +6110,8 @@ class CoreCommands(Protocol):
         Example:
             >>> await client.fcall("Deep_Thought")
                 b'new_value' # Returns the function's return value.
-        Since: Redis version 7.0.0.
+
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = []
         if keys is not None:
@@ -6153,7 +6154,7 @@ class CoreCommands(Protocol):
                     "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"])
                 42 # The return value on the function that was executed
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = []
         if keys is not None:
@@ -6188,7 +6189,7 @@ class CoreCommands(Protocol):
             >>> await client.watch("sampleKey")
                 'OK'
             >>> transaction.set("sampleKey", "foobar")
-            >>> await redis_client.exec(transaction)
+            >>> await client.exec(transaction)
                 'OK' # Executes successfully and keys are unwatched.
 
             >>> await client.watch("sampleKey")
@@ -6196,7 +6197,7 @@ class CoreCommands(Protocol):
             >>> transaction.set("sampleKey", "foobar")
             >>> await client.set("sampleKey", "hello world")
                 'OK'
-            >>> await redis_client.exec(transaction)
+            >>> await client.exec(transaction)
                 None  # None is returned when the watched key is modified before transaction execution.
         """
 
@@ -6284,7 +6285,7 @@ class CoreCommands(Protocol):
             >>> await client.lcs("testKey1", "testKey2")
                 b'acd'
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [key1, key2]
 
@@ -6322,7 +6323,7 @@ class CoreCommands(Protocol):
             >>> await client.lcs_len("testKey1", "testKey2")
                 3  # the length of the longest common subsequence between these 2 strings (b"acd") is 3.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [key1, key2, "LEN"]
 
@@ -6409,7 +6410,7 @@ class CoreCommands(Protocol):
                     b'len': 7
                 }
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [key1, key2, "IDX"]
 
@@ -6464,7 +6465,7 @@ class CoreCommands(Protocol):
             >>> await client.lpos(key, 'c', count = 0)
                 [2, 6, 7]
 
-        Since: Redis version 6.0.6.
+        Since: Valkey version 6.0.6.
         """
         args: List[TEncodable] = [key, element]
 

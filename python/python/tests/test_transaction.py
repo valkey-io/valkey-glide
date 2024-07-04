@@ -636,7 +636,7 @@ async def transaction_test(
     if not await check_if_server_version_lt(glide_client, min_version):
         transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
         transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
-        # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # if using Valkey 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
         # Entries List because they no longer exist in the stream
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             args.append(
@@ -960,7 +960,7 @@ class TestTransaction:
     async def test_standalone_copy_transaction(self, glide_client: GlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot

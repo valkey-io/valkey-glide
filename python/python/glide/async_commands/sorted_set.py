@@ -73,7 +73,7 @@ class ScoreBoundary:
     """
 
     def __init__(self, value: float, is_inclusive: bool = True):
-        # Convert the score boundary to the Redis protocol format
+        # Convert the score boundary to Valkey protocol format
         self.value = str(value) if is_inclusive else f"({value}"
 
 
@@ -87,7 +87,7 @@ class LexBoundary:
     """
 
     def __init__(self, value: str, is_inclusive: bool = True):
-        # Convert the lexicographic boundary to the Redis protocol format
+        # Convert the lexicographic boundary to Valkey protocol format
         self.value = f"[{value}" if is_inclusive else f"({value}"
 
 
@@ -213,7 +213,7 @@ class GeoSearchByRadius:
 
     def to_args(self) -> List[str]:
         """
-        Convert the search criteria to the corresponding part of the Redis command.
+        Convert the search criteria to the corresponding part of the command.
 
         Returns:
             List[str]: List representation of the search criteria.
@@ -241,7 +241,7 @@ class GeoSearchByBox:
 
     def to_args(self) -> List[str]:
         """
-        Convert the search criteria to the corresponding part of the Redis command.
+        Convert the search criteria to the corresponding part of the command.
 
         Returns:
             List[str]: List representation of the search criteria.
@@ -268,7 +268,7 @@ class GeoSearchCount:
 
     def to_args(self) -> List[str]:
         """
-        Convert the count option to the corresponding part of the Redis command.
+        Convert the count option to the corresponding part of the command.
 
         Returns:
             List[str]: List representation of the count option.

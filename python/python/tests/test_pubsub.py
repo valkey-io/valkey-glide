@@ -469,7 +469,7 @@ class TestPubSub:
         )
         min_version = "7.0.0"
         if await check_if_server_version_lt(publishing_client, min_version):
-            pytest.skip(reason=f"Redis version required >= {min_version}")
+            pytest.skip(reason=f"Valkey version required >= {min_version}")
 
         try:
             assert (
@@ -527,7 +527,7 @@ class TestPubSub:
 
         min_version = "7.0.0"
         if await check_if_server_version_lt(publishing_client, min_version):
-            pytest.skip(reason=f"Redis version required >= {min_version}")
+            pytest.skip(reason=f"Valkey version required >= {min_version}")
 
         try:
             assert (
@@ -621,7 +621,7 @@ class TestPubSub:
 
         min_version = "7.0.0"
         if await check_if_server_version_lt(publishing_client, min_version):
-            pytest.skip(reason=f"Redis version required >= {min_version}")
+            pytest.skip(reason=f"Valkey version required >= {min_version}")
 
         try:
             # Publish messages to each channel
@@ -1323,9 +1323,9 @@ class TestPubSub:
             pub_sub_exact,
         )
 
-        # Setup PUBSUB for sharded channels (Redis version > 7)
+        # Setup PUBSUB for sharded channels (Valkey version > 7)
         if await check_if_server_version_lt(publishing_client, "7.0.0"):
-            pytest.skip("Redis version required >= 7.0.0")
+            pytest.skip("Valkey version required >= 7.0.0")
 
         if method == MethodTesting.Callback:
             context = callback_messages_pattern
@@ -1507,9 +1507,9 @@ class TestPubSub:
             pub_sub_exact,
         )
 
-        # (Redis version > 7)
+        # (Valkey version > 7)
         if await check_if_server_version_lt(publishing_client, "7.0.0"):
-            pytest.skip("Redis version required >= 7.0.0")
+            pytest.skip("Valkey version required >= 7.0.0")
 
         # Setup PUBSUB for pattern channel
         if method == MethodTesting.Callback:
@@ -1764,9 +1764,9 @@ class TestPubSub:
         _, client_sharded = await create_two_clients(
             request, cluster_mode, pub_sub_sharded
         )
-        # (Redis version > 7)
+        # (Valkey version > 7)
         if await check_if_server_version_lt(client_pattern, "7.0.0"):
-            pytest.skip("Redis version required >= 7.0.0")
+            pytest.skip("Valkey version required >= 7.0.0")
 
         try:
             # Publish messages to each channel - both clients publishing
@@ -2067,9 +2067,9 @@ class TestPubSub:
             request, cluster_mode, pub_sub
         )
 
-        # (Redis version > 7)
+        # (Valkey version > 7)
         if await check_if_server_version_lt(publishing_client, "7.0.0"):
-            pytest.skip("Redis version required >= 7.0.0")
+            pytest.skip("Valkey version required >= 7.0.0")
 
         try:
             assert (

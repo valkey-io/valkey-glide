@@ -6,12 +6,12 @@ from typing import List, Optional, Union
 
 class Limit:
     """
-    Represents a limit argument for range queries in various Redis commands.
+    Represents a limit argument for range queries in various commands.
 
     The `LIMIT` argument is commonly used to specify a subset of results from the matching elements,
     similar to the `LIMIT` clause in SQL (e.g., `SELECT LIMIT offset, count`).
 
-    This class can be utilized in multiple Redis commands that support limit options,
+    This class can be utilized in multiple commands that support limit options,
     such as [ZRANGE](https://valkey.io/commands/zrange), [SORT](https://valkey.io/commands/sort/), and others.
 
     Args:

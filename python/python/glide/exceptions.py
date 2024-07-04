@@ -3,7 +3,7 @@
 from typing import Optional
 
 
-class RedisError(Exception):
+class GlideError(Exception):
     """
     Base class for errors.
     """
@@ -15,7 +15,7 @@ class RedisError(Exception):
         return self.__class__.__name__
 
 
-class ClosingError(RedisError):
+class ClosingError(GlideError):
     """
     Errors that report that the client has closed and is no longer usable.
     """
@@ -23,7 +23,7 @@ class ClosingError(RedisError):
     pass
 
 
-class RequestError(RedisError):
+class RequestError(GlideError):
     """
     Errors that were reported during a request.
     """

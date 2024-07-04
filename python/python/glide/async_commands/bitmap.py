@@ -9,7 +9,7 @@ class BitmapIndexType(Enum):
     Enumeration specifying if index arguments are BYTE indexes or BIT indexes. Can be specified in `OffsetOptions`,
     which is an optional argument to the `BITCOUNT` command.
 
-    Since: Redis version 7.0.0.
+    Since: Valkey version 7.0.0.
     """
 
     BYTE = "BYTE"
@@ -36,7 +36,7 @@ class OffsetOptions:
             start (int): The starting offset index.
             end (int): The ending offset index.
             index_type (Optional[BitmapIndexType]): The index offset type. This option can only be specified if you are
-                using Redis version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
+                using Valkey version 7.0.0 or above. Could be either `BitmapIndexType.BYTE` or `BitmapIndexType.BIT`.
                 If no index type is provided, the indexes will be assumed to be byte indexes.
         """
         self.start = start

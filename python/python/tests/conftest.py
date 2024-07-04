@@ -9,7 +9,7 @@ from glide.config import (
     GlideClientConfiguration,
     NodeAddress,
     ProtocolVersion,
-    RedisCredentials,
+    ServerCredentials,
 )
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
 from glide.logger import Level as logLevel
@@ -28,14 +28,14 @@ def pytest_addoption(parser):
         "--host",
         default=DEFAULT_HOST,
         action="store",
-        help="Redis host endpoint, defaults to `%(default)s`",
+        help="Server host endpoint, defaults to `%(default)s`",
     )
 
     parser.addoption(
         "--port",
         default=DEFAULT_PORT,
         action="store",
-        help="Redis port, defaults to `%(default)s`",
+        help="Server port, defaults to `%(default)s`",
     )
 
     parser.addoption(
@@ -217,7 +217,7 @@ async def glide_client(
 async def create_client(
     request,
     cluster_mode: bool,
-    credentials: Optional[RedisCredentials] = None,
+    credentials: Optional[ServerCredentials] = None,
     database_id: int = 0,
     addresses: Optional[List[NodeAddress]] = None,
     client_name: Optional[str] = None,
