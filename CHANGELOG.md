@@ -78,6 +78,7 @@
 * Python: Added SCAN command ([#1623](https://github.com/aws/glide-for-redis/pull/1623))
 * Python: Added DUMP and Restore commands ([#1733](https://github.com/aws/glide-for-redis/pull/1733))
 * Java: Added SCAN command ([#1751](https://github.com/aws/glide-for-redis/pull/1751))
+* Python: Added FUNCTION KILL command ([#1797](https://github.com/aws/glide-for-redis/pull/1797))
 * Python: Type migration for entries_read ([#1768](https://github.com/aws/glide-for-redis/pull/1768))
 * Python: Added FUNCTION DUMP and FUNCTION RESTORE commands ([#1769](https://github.com/aws/glide-for-redis/pull/1769))
 
