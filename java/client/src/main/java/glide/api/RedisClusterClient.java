@@ -1185,8 +1185,8 @@ public class RedisClusterClient extends BaseClient
                     Logger.log(
                             Logger.Level.ERROR,
                             "ClusterScanCursor",
-                            () -> "Error releasing cursor " + cursorHandle + ": " + ex.getMessage());
-                    Logger.log(Logger.Level.ERROR, "ClusterScanCursor", ex);
+                            () -> "Error releasing cursor " + cursorHandle,
+                            ex);
                 } finally {
                     // Mark the cursor as closed to avoid double-free (if close() gets called more than once).
                     isClosed = true;
