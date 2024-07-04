@@ -305,13 +305,21 @@ class BaseClient(CoreCommands):
             )
         request = RedisRequest()
         request.callback_idx = self._get_callback_index()
-        request.script_invocation.hash = hash
-        request.script_invocation.args[:] = (
-            [self._encode_arg(elem) for elem in args] if args is not None else []
-        )
-        request.script_invocation.keys[:] = (
-            [self._encode_arg(elem) for elem in keys] if keys is not None else []
-        )
+        (encoded_keys, keys_size) = self._encode_and_sum_size(keys)
+        (encoded_args, args_size) = self._encode_and_sum_size(args)
+        if (keys_size + args_size) < MAX_REQUEST_ARGS_LEN:
+            request.script_invocation.hash = hash
+            request.script_invocation.keys[:] = encoded_keys
+            request.script_invocation.args[:] = encoded_args
+
+        else:
+            request.script_invocation_pointers.hash = hash
+            request.script_invocation_pointers.keys_pointer = create_leaked_bytes_vec(
+                encoded_keys
+            )
+            request.script_invocation_pointers.args_pointer = create_leaked_bytes_vec(
+                encoded_args
+            )
         set_protobuf_route(request, route)
         return await self._write_request_await_response(request)
 

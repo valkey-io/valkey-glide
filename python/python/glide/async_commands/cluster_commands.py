@@ -58,7 +58,7 @@ class ClusterCommands(CoreCommands):
         route: Optional[Route] = None,
     ) -> TClusterResponse[bytes]:
         """
-        Get information and statistics about the Redis server.
+        Get information and statistics about the server.
         See https://valkey.io/commands/info/ for details.
 
         Args:
@@ -87,7 +87,7 @@ class ClusterCommands(CoreCommands):
     ) -> Optional[List[TResult]]:
         """
         Execute a transaction by processing the queued commands.
-        See https://redis.io/topics/Transactions/ for details on Redis Transactions.
+        See https://redis.io/topics/Transactions/ for details on Transactions.
 
         Args:
             transaction (ClusterTransaction): A `ClusterTransaction` object containing a list of commands to be executed.
@@ -109,7 +109,7 @@ class ClusterCommands(CoreCommands):
         route: Optional[Route] = None,
     ) -> TOK:
         """
-        Resets the statistics reported by Redis using the INFO and LATENCY HISTOGRAM commands.
+        Resets the statistics reported by the server using the INFO and LATENCY HISTOGRAM commands.
         See https://valkey.io/commands/config-resetstat/ for details.
 
         Args:
@@ -173,7 +173,7 @@ class ClusterCommands(CoreCommands):
         self, message: Optional[TEncodable] = None, route: Optional[Route] = None
     ) -> bytes:
         """
-        Ping the Redis server.
+        Ping the server.
         See https://valkey.io/commands/ping/ for more details.
 
         Args:
@@ -324,10 +324,10 @@ class ClusterCommands(CoreCommands):
             {Address (bytes) : response (bytes) , ... } with type of Dict[bytes, bytes].
 
         Examples:
-            >>> await client.echo(b"Glide-for-Redis")
-                b'Glide-for-Redis'
-            >>> await client.echo("Glide-for-Redis", AllNodes())
-                {b'addr': b'Glide-for-Redis', b'addr2': b'Glide-for-Redis', b'addr3': b'Glide-for-Redis'}
+            >>> await client.echo(b"Valkey GLIDE")
+                b'Valkey GLIDE'
+            >>> await client.echo("Valkey GLIDE", AllNodes())
+                {b'addr': b'Valkey GLIDE', b'addr2': b'Valkey GLIDE', b'addr3': b'Valkey GLIDE'}
         """
         return cast(
             TClusterResponse[bytes],
@@ -341,7 +341,7 @@ class ClusterCommands(CoreCommands):
         route: Optional[Route] = None,
     ) -> bytes:
         """
-        Loads a library to Redis.
+        Loads a library to Valkey.
 
         See https://valkey.io/commands/function-load/ for more details.
 
@@ -360,7 +360,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.function_load(code, True, RandomNode())
                 b"mylib"
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             bytes,
@@ -405,7 +405,7 @@ class ClusterCommands(CoreCommands):
                     b"library_code": b"#!lua name=mylib \n redis.register_function('myfunc', function(keys, args) return args[1] end)"
                 }]
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args = []
         if library_name_pattern is not None:
@@ -441,7 +441,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.function_flush(FlushMode.SYNC)
                 "OK"
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
@@ -472,7 +472,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.function_delete("my_lib")
                 "OK"
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             TOK,
@@ -510,7 +510,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.fcall("Deep_Thought", ["Answer", "to", "the", "Ultimate", "Question", "of", "Life,", "the", "Universe,", "and", "Everything"], RandomNode())
                 b'new_value' # Returns the function's return value.
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args = [function, "0"]
         if arguments is not None:
@@ -545,7 +545,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.fcall_ro_route("Deep_Thought", ALL_NODES)
                 42 # The return value on the function that was executed
 
-        Since: Redis version 7.0.0.
+        Since: Valkey version 7.0.0.
         """
         args: List[TEncodable] = [function, "0"]
         if arguments is not None:
@@ -578,7 +578,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.function_restore(payload)
                 "OK" # The serialized dump response was used to restore the libraries.
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         return cast(
             TClusterResponse[bytes],
@@ -615,7 +615,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.function_restore(payload, FunctionRestorePolicy.FLUSH, AllPrimaries())
                 "OK" # The serialized dump response was used to restore the libraries with the specified route and policy.
 
-        Since: Redis 7.0.0.
+        Since: Valkey 7.0.0.
         """
         args: List[TEncodable] = [payload]
         if policy is not None:
@@ -691,6 +691,7 @@ class ClusterCommands(CoreCommands):
     ) -> List[bytes]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        This command is routed to primary nodes only.
         To store the result into a new key, see `sort_store`.
 
         By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
@@ -726,6 +727,55 @@ class ClusterCommands(CoreCommands):
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         result = await self._execute_command(RequestType.Sort, args)
+        return cast(List[bytes], result)
+
+    async def sort_ro(
+        self,
+        key: TEncodable,
+        limit: Optional[Limit] = None,
+        order: Optional[OrderBy] = None,
+        alpha: Optional[bool] = None,
+    ) -> List[bytes]:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        This command is routed depending on the client's `ReadFrom` strategy.
+
+        By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
+
+        See https://valkey.io/commands/sort for more details.
+
+        Args:
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+
+        Returns:
+            List[bytes]: A list of sorted elements.
+
+        Examples:
+            >>> await client.lpush("mylist", '3', '1', '2')
+            >>> await client.sort_ro("mylist")
+            [b'1', b'2', b'3']
+
+            >>> await client.sort_ro("mylist", order=OrderBy.DESC)
+            [b'3', b'2', b'1']
+
+            >>> await client.lpush("mylist", '2', '1', '2', '3', '3', '1')
+            >>> await client.sort_ro("mylist", limit=Limit(2, 3))
+            [b'1', b'2', b'2']
+
+            >>> await client.lpush("mylist", "a", "b", "c", "d")
+            >>> await client.sort_ro("mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
+            [b'b', b'a']
+
+        Since: Redis version 7.0.0.
+        """
+        args = _build_sort_args(key, None, limit, None, order, alpha)
+        result = await self._execute_command(RequestType.SortReadOnly, args)
         return cast(List[bytes], result)
 
     async def sort_store(
@@ -782,7 +832,7 @@ class ClusterCommands(CoreCommands):
         Args:
             message (TEncodable): Message to publish.
             channel (TEncodable): Channel to publish the message on.
-            sharded (bool): Use sharded pubsub mode. Available since Redis version 7.0.
+            sharded (bool): Use sharded pubsub mode. Available since Valkey version 7.0.
 
         Returns:
             int: Number of subscriptions in that node that received the message.
@@ -892,7 +942,7 @@ class ClusterCommands(CoreCommands):
             >>> await client.get("destination")
                 b"sheep"
 
-        Since: Redis version 6.2.0.
+        Since: Valkey version 6.2.0.
         """
         args: List[TEncodable] = [source, destination]
         if replace is True:
@@ -909,7 +959,7 @@ class ClusterCommands(CoreCommands):
         route: Optional[Route] = None,
     ) -> TClusterResponse[bytes]:
         """
-        Displays a piece of generative computer art and the Redis version.
+        Displays a piece of generative computer art and the Valkey version.
 
         See https://valkey.io/commands/lolwut for more details.
 
@@ -922,13 +972,13 @@ class ClusterCommands(CoreCommands):
                 in which case the client will route the command to the nodes defined by `route`.
 
         Returns:
-            TClusterResponse[bytes]: A piece of generative computer art along with the current Redis version.
+            TClusterResponse[bytes]: A piece of generative computer art along with the current Valkey version.
             When specifying a route other than a single node, response will be:
             {Address (bytes) : response (bytes) , ... } with type of Dict[bytes, bytes].
 
         Examples:
             >>> await client.lolwut(6, [40, 20], RandomNode());
-                b"Redis ver. 7.2.3" # Indicates the current Redis version
+                b"Redis ver. 7.2.3" # Indicates the current Valkey version
         """
         args: List[TEncodable] = []
         if version is not None:
@@ -1058,28 +1108,28 @@ class ClusterCommands(CoreCommands):
 
         Examples:
             >>> # In the following example, we will iterate over the keys in the cluster.
-                await redis_client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
+                await client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
                 cursor = ClusterScanCursor()
                 all_keys = []
                 while not cursor.is_finished():
-                    cursor, keys = await redis_client.scan(cursor, count=10)
+                    cursor, keys = await client.scan(cursor, count=10)
                     all_keys.extend(keys)
                 print(all_keys) # [b'key1', b'key2', b'key3']
             >>> # In the following example, we will iterate over the keys in the cluster that match the pattern "*key*".
-                await redis_client.mset({b"key1": b"value1", b"key2": b"value2", b"not_my_key": b"value3", b"something_else": b"value4"})
+                await client.mset({b"key1": b"value1", b"key2": b"value2", b"not_my_key": b"value3", b"something_else": b"value4"})
                 cursor = ClusterScanCursor()
                 all_keys = []
                 while not cursor.is_finished():
-                    cursor, keys = await redis_client.scan(cursor, match=b"*key*", count=10)
+                    cursor, keys = await client.scan(cursor, match=b"*key*", count=10)
                     all_keys.extend(keys)
                 print(all_keys) # [b'my_key1', b'my_key2', b'not_my_key']
             >>> # In the following example, we will iterate over the keys in the cluster that are of type STRING.
-                await redis_client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
-                await redis_client.sadd(b"this_is_a_set", [b"value4"])
+                await client.mset({b'key1': b'value1', b'key2': b'value2', b'key3': b'value3'})
+                await client.sadd(b"this_is_a_set", [b"value4"])
                 cursor = ClusterScanCursor()
                 all_keys = []
                 while not cursor.is_finished():
-                    cursor, keys = await redis_client.scan(cursor, type=ObjectType.STRING)
+                    cursor, keys = await client.scan(cursor, type=ObjectType.STRING)
                     all_keys.extend(keys)
                 print(all_keys) # [b'key1', b'key2', b'key3']
         """

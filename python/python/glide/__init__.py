@@ -67,14 +67,14 @@ from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
     BackoffStrategy,
     BaseClientConfiguration,
-    ClusterClientConfiguration,
     GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     NodeAddress,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
     ProtocolVersion,
     ReadFrom,
-    RedisCredentials,
+    ServerCredentials,
 )
 from glide.constants import OK
 from glide.exceptions import (
@@ -82,7 +82,7 @@ from glide.exceptions import (
     ConfigurationError,
     ConnectionError,
     ExecAbortError,
-    RedisError,
+    GlideError,
     RequestError,
     TimeoutError,
 )
@@ -110,10 +110,10 @@ __all__ = [
     # Config
     "BaseClientConfiguration",
     "GlideClientConfiguration",
-    "ClusterClientConfiguration",
+    "GlideClusterClientConfiguration",
     "BackoffStrategy",
     "ReadFrom",
-    "RedisCredentials",
+    "ServerCredentials",
     "NodeAddress",
     "ProtocolVersion",
     "PeriodicChecksManualInterval",
@@ -196,7 +196,7 @@ __all__ = [
     "ConfigurationError",
     "ConnectionError",
     "ExecAbortError",
-    "RedisError",
+    "GlideError",
     "RequestError",
     "TimeoutError",
 ]
