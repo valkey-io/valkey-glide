@@ -5350,7 +5350,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void xinfoGroupsWithXinfoConsumers(BaseClient client) {
+    public void xinfoGroups_with_xinfoConsumers(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String groupName1 = "group1" + UUID.randomUUID();
         String groupName2 = "group2" + UUID.randomUUID();
@@ -5380,7 +5380,7 @@ public class SharedCommandTests {
                         .get());
         assertEquals(OK, client.xgroupCreate(key, groupName1, streamId0_0).get());
 
-        Map result =
+        Map<String, Map<String, String[][]>> result =
                 client
                         .xreadgroup(
                                 Map.of(key, ">"),
@@ -5393,9 +5393,9 @@ public class SharedCommandTests {
 
         // Sleep to ensure the idle time value and inactive time value returned by xinfo_consumers is >0
         Thread.sleep(2000);
-        Map[] consumers = client.xinfoConsumers(key, groupName1).get();
+        Map<String, Object>[] consumers = client.xinfoConsumers(key, groupName1).get();
         assertEquals(1, consumers.length);
-        Map consumerInfo = consumers[0];
+        Map<String, Object> consumerInfo = consumers[0];
         assertEquals(consumer1, consumerInfo.get("name"));
         assertEquals(1L, consumerInfo.get("pending"));
         assertTrue((Long) consumerInfo.get("idle") > 0L);
@@ -5405,15 +5405,16 @@ public class SharedCommandTests {
         }
 
         // Test with GlideString
-        consumers = client.xinfoConsumers(gs(key), gs(groupName1)).get();
-        assertEquals(1, consumers.length);
-        consumerInfo = consumers[0];
-        assertEquals(consumer1, consumerInfo.get("name"));
-        assertEquals(1L, consumerInfo.get("pending"));
-        assertTrue((Long) consumerInfo.get("idle") > 0L);
+        Map<GlideString, Object>[] binaryConsumers =
+                client.xinfoConsumers(gs(key), gs(groupName1)).get();
+        assertEquals(1, binaryConsumers.length);
+        Map<GlideString, Object> binaryConsumerInfo = binaryConsumers[0];
+        assertEquals(gs(consumer1), binaryConsumerInfo.get(gs("name")));
+        assertEquals(1L, binaryConsumerInfo.get(gs("pending")));
+        assertTrue((Long) binaryConsumerInfo.get(gs("idle")) > 0L);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.2.0")) {
-            assertTrue((Long) consumerInfo.get("inactive") > 0L);
+            assertTrue((Long) binaryConsumerInfo.get(gs("inactive")) > 0L);
         }
 
         // Create consumer2 and read the rest of the entries with it
@@ -5439,9 +5440,9 @@ public class SharedCommandTests {
                         .xadd(key, Map.of("f5", "v5"), StreamAddOptions.builder().id(streamId1_3).build())
                         .get());
 
-        Map[] groups = client.xinfoGroups(key).get();
+        Map<String, Object>[] groups = client.xinfoGroups(key).get();
         assertEquals(1, groups.length);
-        Map group1Info = groups[0];
+        Map<String, Object> group1Info = groups[0];
         assertEquals(groupName1, group1Info.get("name"));
         assertEquals(2L, group1Info.get("consumers"));
         assertEquals(3L, group1Info.get("pending"));
@@ -5454,18 +5455,22 @@ public class SharedCommandTests {
         }
 
         // Test with GlideString
-        groups = client.xinfoGroups(gs(key)).get();
-        assertEquals(1, groups.length);
-        group1Info = groups[0];
-        assertEquals(groupName1, group1Info.get("name"));
-        assertEquals(2L, group1Info.get("consumers"));
-        assertEquals(3L, group1Info.get("pending"));
-        assertEquals(streamId1_2, group1Info.get("last-delivered-id"));
+        Map<GlideString, Object>[] binaryGroups = client.xinfoGroups(gs(key)).get();
+        assertEquals(1, binaryGroups.length);
+        Map<GlideString, Object> binaryGroup1Info = binaryGroups[0];
+        assertEquals(gs(groupName1), binaryGroup1Info.get(gs("name")));
+        assertEquals(2L, binaryGroup1Info.get(gs("consumers")));
+        assertEquals(3L, binaryGroup1Info.get(gs("pending")));
+        assertEquals(gs(streamId1_2), binaryGroup1Info.get(gs("last-delivered-id")));
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             assertEquals(
-                    3L, group1Info.get("entries-read")); // We have read stream entries 1-0, 1-1, and 1-2
+                    3L,
+                    binaryGroup1Info.get(
+                            gs("entries-read"))); // We have read stream entries 1-0, 1-1, and 1-2
             assertEquals(
-                    1L, group1Info.get("lag")); // We still have not read one entry in the stream, entry 1-3
+                    1L,
+                    binaryGroup1Info.get(
+                            gs("lag"))); // We still have not read one entry in the stream, entry 1-3
         }
 
         // Verify xgroup_set_id effects the returned value from xinfo_groups
@@ -5478,11 +5483,9 @@ public class SharedCommandTests {
         assertEquals(3L, group1Info.get("pending"));
         assertEquals(streamId1_1, group1Info.get("last-delivered-id"));
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
-            assertEquals(
-                    null,
+            assertNull(
                     group1Info.get("entries-read")); // Gets set to None when we change the last delivered ID
-            assertEquals(
-                    null, group1Info.get("lag")); // Gets set to None when we change the last delivered ID
+            assertNull(group1Info.get("lag")); // Gets set to None when we change the last delivered ID
 
             // Verify xgroup_set_id with entries_read_id effects the returned value from xinfo_groups
             assertEquals(OK, client.xgroupSetId(key, groupName1, streamId1_1, 1L).get());
@@ -5508,7 +5511,7 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
-    public void xinfoGroupsWithXinfoConsumersAndEdgeCases(BaseClient client) {
+    public void xinfoGroups_with_xinfoConsumers_and_edge_cases(BaseClient client) {
         String key = UUID.randomUUID().toString();
         String stringKey = UUID.randomUUID().toString();
         String nonExistentKey = UUID.randomUUID().toString();
@@ -5541,12 +5544,12 @@ public class SharedCommandTests {
         assertInstanceOf(RequestException.class, executionException.getCause());
 
         // No groups exist yet
-        assertDeepEquals(new Map[] {}, client.xinfoGroups(key).get());
+        assertEquals(0, client.xinfoGroups(key).get().length);
 
         assertEquals(OK, client.xgroupCreate(key, groupName, streamId1_0).get());
 
         // No consumers exist yet
-        assertDeepEquals(new Map[] {}, client.xinfoConsumers(key, groupName).get());
+        assertEquals(0, client.xinfoConsumers(key, groupName).get().length);
 
         // Key exists, but it is not a stream
         assertEquals(OK, client.set(stringKey, "foo").get());

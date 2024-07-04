@@ -1288,7 +1288,7 @@ public interface StreamBaseCommands {
      *     attributes of a consumer group for the stream at <code>key</code>.
      * @example
      *     <pre>{@code
-     * Map[] groups = client.xinfoGroups("key").get();
+     * Map<String, Object>[] groups = client.xinfoGroups("key").get();
      * for (int i = 0; i < groups.length; i ++) {
      *     System.out.println("Info of group: " + groups[0].get("name"));
      *     System.out.println("\tname: " + groups[0].get("name"));
@@ -1312,15 +1312,15 @@ public interface StreamBaseCommands {
      *     attributes of a consumer group for the stream at <code>key</code>.
      * @example
      *     <pre>{@code
-     * Map[] groups = client.xinfoGroups(gs("key")).get();
+     * Map<GlideString, Object>[] groups = client.xinfoGroups(gs("key")).get();
      * for (int i = 0; i < groups.length; i ++) {
-     *     System.out.println("Info of group: " + groups[0].get("name"));
-     *     System.out.println("\tname: " + groups[0].get("name"));
-     *     System.out.println("\tconsumers: " + groups[0].get("consumers"));
-     *     System.out.println("\tpending: " + groups[0].get("pending"));
-     *     System.out.println("\tlast-delivered-id: " + groups[0].get("last-delivered-id"));
-     *     System.out.println("\tentries-read: " + groups[0].get("entries-read"));
-     *     System.out.println("\tlag: " + groups[0].get("lag"));
+     *     System.out.println("Info of group: " + groups[0].get(gs("name")));
+     *     System.out.println("\tname: " + groups[0].get(gs("name")));
+     *     System.out.println("\tconsumers: " + groups[0].get(gs("consumers")));
+     *     System.out.println("\tpending: " + groups[0].get(gs("pending")));
+     *     System.out.println("\tlast-delivered-id: " + groups[0].get(gs("last-delivered-id")));
+     *     System.out.println("\tentries-read: " + groups[0].get(gs("entries-read")));
+     *     System.out.println("\tlag: " + groups[0].get(gs("lag")));
      * }
      * }</pre>
      */
@@ -1337,7 +1337,7 @@ public interface StreamBaseCommands {
      *     of a consumer for the given consumer group of the stream at <code>key</code>.
      * @example
      *     <pre>{@code
-     * Map[] consumers = client.xinfoConsumers("key", "groupName").get();
+     * Map<String, Object>[] consumers = client.xinfoConsumers("key", "groupName").get();
      * for (int i = 0; i < consumers.length; i ++) {
      *     System.out.println("Info of consumer: " + consumers[0].get("name"));
      *     System.out.println("\tname: " + consumers[0].get("name"));
@@ -1360,13 +1360,13 @@ public interface StreamBaseCommands {
      *     of a consumer for the given consumer group of the stream at <code>key</code>.
      * @example
      *     <pre>{@code
-     * Map[] consumers = client.xinfoConsumers(gs("key"), gs("groupName")).get();
+     * Map<GlideString, Object>[] consumers = client.xinfoConsumers(gs("key"), gs("groupName")).get();
      * for (int i = 0; i < consumers.length; i ++) {
-     *     System.out.println("Info of consumer: " + consumers[0].get("name"));
-     *     System.out.println("\tname: " + consumers[0].get("name"));
-     *     System.out.println("\tpending: " + consumers[0].get("pending"));
-     *     System.out.println("\tidle: " + consumers[0].get("idle"));
-     *     System.out.println("\tinactive: " + consumers[0].get("inactive"));
+     *     System.out.println("Info of consumer: " + consumers[0].get(gs("name")));
+     *     System.out.println("\tname: " + consumers[0].get(gs("name")));
+     *     System.out.println("\tpending: " + consumers[0].get(gs("pending")));
+     *     System.out.println("\tidle: " + consumers[0].get(gs("idle")));
+     *     System.out.println("\tinactive: " + consumers[0].get(gs("inactive")));
      * }
      * }</pre>
      */

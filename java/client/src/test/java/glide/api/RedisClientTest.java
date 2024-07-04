@@ -13296,17 +13296,17 @@ public class RedisClientTest {
         Map<GlideString, Object>[] mockResult =
                 new Map[] {
                     Map.of(
-                            "name",
-                            "groupName",
-                            "consumers",
+                            gs("name"),
+                            gs("groupName"),
+                            gs("consumers"),
                             2,
-                            "pending",
+                            gs("pending"),
                             2,
-                            "last-delivered-id",
-                            "1638126030001-0",
-                            "entries-read",
+                            gs("last-delivered-id"),
+                            gs("1638126030001-0"),
+                            gs("entries-read"),
                             2,
-                            "lag",
+                            gs("lag"),
                             2)
                 };
 
@@ -13365,7 +13365,15 @@ public class RedisClientTest {
         GlideString[] arguments = {key, groupName};
         Map<GlideString, Object>[] mockResult =
                 new Map[] {
-                    Map.of("name", "groupName", "pending", 2, "idle", 9104628, "inactive", 18104698)
+                    Map.of(
+                            gs("name"),
+                            gs("groupName"),
+                            gs("pending"),
+                            2,
+                            gs("idle"),
+                            9104628,
+                            gs("inactive"),
+                            18104698)
                 };
 
         CompletableFuture<Map<GlideString, Object>[]> testResponse = new CompletableFuture<>();

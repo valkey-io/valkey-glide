@@ -2724,7 +2724,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XInfoGroups,
                 new GlideString[] {key},
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> castArray(handleArrayResponseBinary(response), Map.class));
     }
 
     @Override
@@ -2742,7 +2742,7 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(
                 XInfoConsumers,
                 new GlideString[] {key, groupName},
-                response -> castArray(handleArrayResponse(response), Map.class));
+                response -> castArray(handleArrayResponseBinary(response), Map.class));
     }
 
     @Override
