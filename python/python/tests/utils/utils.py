@@ -236,6 +236,10 @@ def generate_lua_lib_code(
 def create_lua_lib_with_long_running_function(
     lib_name: str, func_name: str, timeout: int, readonly: bool
 ) -> str:
+    """
+    Create a lua lib with a (optionally) RO function which runs an endless loop up to timeout sec.
+    Execution takes at least 5 sec regardless of the timeout configured.
+    """
     code = (
         f"#!lua name={lib_name}\n"
         f"local function {lib_name}_{func_name}(keys, args)\n"
@@ -257,7 +261,6 @@ def create_lua_lib_with_long_running_function(
     if readonly:
         code += "flags={ 'no-writes' }\n"
     code += "}"
-    print(code)
     return code
 
 
