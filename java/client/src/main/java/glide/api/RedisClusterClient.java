@@ -611,7 +611,7 @@ public class RedisClusterClient extends BaseClient
     public CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new GlideString[] {gs(WITH_CODE_REDIS_API)} : new GlideString[0],
+                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
 
@@ -631,11 +631,11 @@ public class RedisClusterClient extends BaseClient
             @NonNull GlideString libNamePattern, boolean withCode) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode
-                        ? new GlideString[] {
-                            gs(LIBRARY_NAME_REDIS_API), libNamePattern, gs(WITH_CODE_REDIS_API)
-                        }
-                        : new GlideString[] {gs(LIBRARY_NAME_REDIS_API), libNamePattern},
+                new ArgsBuilder()
+                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(libNamePattern)
+                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .toArray(),
                 response -> handleFunctionListResponseBinary(handleArrayResponseBinary(response)));
     }
 
@@ -653,7 +653,7 @@ public class RedisClusterClient extends BaseClient
             boolean withCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode ? new GlideString[] {gs(WITH_CODE_REDIS_API)} : new GlideString[0],
+                new ArgsBuilder().addIf(WITH_CODE_REDIS_API, withCode).toArray(),
                 route,
                 response -> handleFunctionListResponseBinary(response, route));
     }
@@ -674,11 +674,11 @@ public class RedisClusterClient extends BaseClient
             @NonNull GlideString libNamePattern, boolean withCode, @NonNull Route route) {
         return commandManager.submitNewCommand(
                 FunctionList,
-                withCode
-                        ? new GlideString[] {
-                            gs(LIBRARY_NAME_REDIS_API), libNamePattern, gs(WITH_CODE_REDIS_API)
-                        }
-                        : new GlideString[] {gs(LIBRARY_NAME_REDIS_API), libNamePattern},
+                new ArgsBuilder()
+                        .add(LIBRARY_NAME_REDIS_API)
+                        .add(libNamePattern)
+                        .addIf(WITH_CODE_REDIS_API, withCode)
+                        .toArray(),
                 route,
                 response -> handleFunctionListResponseBinary(response, route));
     }
