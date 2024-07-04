@@ -6,7 +6,6 @@ import static glide.api.models.GlideString.gs;
 import glide.api.commands.GenericCommands;
 import glide.api.models.GlideString;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import lombok.Singular;
 import lombok.experimental.SuperBuilder;
@@ -64,7 +63,7 @@ public class SortOptionsBinary extends SortBaseOptions {
      *
      * @return a String array that holds the sub commands and their arguments.
      */
-    public String[] toStringArgs() {
+    public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>(List.of(super.toArgs()));
 
         if (byPattern != null) {
@@ -80,14 +79,5 @@ public class SortOptionsBinary extends SortBaseOptions {
         }
 
         return optionArgs.toArray(new String[0]);
-    }
-
-    /**
-     * Creates the arguments to be used in <code>SORT</code> and <code>SORT_RO</code> commands.
-     *
-     * @return a GlideString array that holds the sub commands and their arguments.
-     */
-    public GlideString[] toGlideStringArgs() {
-        return Arrays.stream(toStringArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }

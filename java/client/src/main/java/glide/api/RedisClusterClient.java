@@ -51,6 +51,7 @@ import glide.api.commands.ScriptingAndFunctionsClusterCommands;
 import glide.api.commands.ServerManagementClusterCommands;
 import glide.api.commands.TransactionsClusterCommands;
 import glide.api.logging.Logger;
+import glide.api.models.ArgsBuilder;
 import glide.api.models.ClusterTransaction;
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
@@ -987,7 +988,8 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<GlideString[]> sort(
             @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
-        GlideString[] arguments = ArrayUtils.addFirst(sortClusterOptions.toGlideStringArgs(), key);
+        GlideString[] arguments = new ArgsBuilder().add(key).add(sortClusterOptions.toArgs()).toArray();
+
         return commandManager.submitNewCommand(
                 Sort,
                 arguments,
@@ -1007,7 +1009,7 @@ public class RedisClusterClient extends BaseClient
     @Override
     public CompletableFuture<GlideString[]> sortReadOnly(
             @NonNull GlideString key, @NonNull SortClusterOptions sortClusterOptions) {
-        GlideString[] arguments = ArrayUtils.addFirst(sortClusterOptions.toGlideStringArgs(), key);
+        GlideString[] arguments = new ArgsBuilder().add(key).add(sortClusterOptions.toArgs()).toArray();
         return commandManager.submitNewCommand(
                 SortReadOnly,
                 arguments,
@@ -1030,10 +1032,14 @@ public class RedisClusterClient extends BaseClient
             @NonNull GlideString key,
             @NonNull GlideString destination,
             @NonNull SortClusterOptions sortClusterOptions) {
-        GlideString[] storeArguments = new GlideString[] {gs(STORE_COMMAND_STRING), destination};
         GlideString[] arguments =
-                concatenateArrays(
-                        new GlideString[] {key}, sortClusterOptions.toGlideStringArgs(), storeArguments);
+                new ArgsBuilder()
+                        .add(key)
+                        .add(sortClusterOptions.toArgs())
+                        .add(STORE_COMMAND_STRING)
+                        .add(destination)
+                        .toArray();
+
         return commandManager.submitNewCommand(Sort, arguments, this::handleLongResponse);
     }
 
