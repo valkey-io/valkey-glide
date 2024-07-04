@@ -1,10 +1,10 @@
 # Developer Guide
 
-This document describes how to set up your development environment to build and test the GLIDE for Redis Python wrapper.
+This document describes how to set up your development environment to build and test the Valkey GLIDE Python wrapper.
 
 ### Development Overview
 
-The GLIDE for Redis Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
+The Valkey GLIDE Python wrapper consists of both Python and Rust code. Rust bindings for Python are implemented using [PyO3](https://github.com/PyO3/pyo3), and the Python package is built using [maturin](https://github.com/PyO3/maturin). The Python and Rust components communicate using the [protobuf](https://github.com/protocolbuffers/protobuf) protocol.
 
 ### Build from source
 
@@ -161,7 +161,7 @@ git submodule update
 During the initial build, Python protobuf files were created in `python/python/glide/protobuf`. If modifications are made to the protobuf definition files (.proto files located in `glide-core/src/protofuf`), it becomes necessary to regenerate the Python protobuf files. To do so, run:
 
 ```bash
-GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/glide-for-redis
+GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/valkey-glide
 protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
 ```
 
@@ -170,7 +170,7 @@ protoc -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_ou
 To generate the protobuf files with Python Interface files (pyi) for type-checking purposes, ensure you have installed `mypy-protobuf` with pip, and then execute the following command:
 
 ```bash
-GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/glide-for-redis
+GLIDE_ROOT_FOLDER_PATH=. # e.g. /home/ubuntu/valkey-glide
 MYPY_PROTOC_PATH=`which protoc-gen-mypy`
 protoc --plugin=protoc-gen-mypy=${MYPY_PROTOC_PATH} -Iprotobuf=${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/ --python_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide --mypy_out=${GLIDE_ROOT_FOLDER_PATH}/python/python/glide ${GLIDE_ROOT_FOLDER_PATH}/glide-core/src/protobuf/*.proto
 ```
