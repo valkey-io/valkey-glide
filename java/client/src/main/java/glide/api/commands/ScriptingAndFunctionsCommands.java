@@ -82,6 +82,31 @@ public interface ScriptingAndFunctionsCommands {
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Info about all libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object>[] response = client.functionList(true).get();
+     * for (Map<String, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get("library_code"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode);
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Info about queried libraries and their functions.
@@ -102,6 +127,33 @@ public interface ScriptingAndFunctionsCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Object>[]> functionList(String libNamePattern, boolean withCode);
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
+     * @param libNamePattern A wildcard pattern for matching library names.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Info about queried libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * Map<String, Object>[] response = client.functionList("myLib?_backup", true).get();
+     * for (Map<String, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get("library_name"), libraryInfo.get("engine"));
+     *     Map<String, Object>[] functions = (Map<String, Object>[]) libraryInfo.get("functions");
+     *     for (Map<String, Object> function : functions) {
+     *         Set<String> flags = (Set<String>) function.get("flags");
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get("name"), String. join(", ", flags), function.get("description"));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get("library_code"));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>[]> functionListBinary(
+            GlideString libNamePattern, boolean withCode);
 
     /**
      * Deletes all function libraries.

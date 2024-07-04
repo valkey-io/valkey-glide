@@ -130,6 +130,32 @@ public interface ScriptingAndFunctionsClusterCommands {
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Info about all libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * Map<GlideString, Object>[] response = client.functionList(true).get();
+     * for (Map<GlideString, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get(gs("library_name")), libraryInfo.get(gs("engine")));
+     *     Map<GlideString, Object>[] functions = (Map<GlideString, Object>[]) libraryInfo.get(gs("functions"));
+     *     for (Map<GlideString, Object> function : functions) {
+     *         Set<GlideString> flags = (Set<GlideString>) function.get(gs("flags"));
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get(gs("name")), gs(String.join(", ", flags)), function.get(gs("description")));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get(gs("library_code")));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>[]> functionListBinary(boolean withCode);
+
+    /**
+     * Returns information about the functions and libraries.<br>
+     * The command will be routed to a random node.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @return Info about queried libraries and their functions.
@@ -150,6 +176,34 @@ public interface ScriptingAndFunctionsClusterCommands {
      * }</pre>
      */
     CompletableFuture<Map<String, Object>[]> functionList(String libNamePattern, boolean withCode);
+
+    /**
+     * Returns information about the functions and libraries.<br>
+     * The command will be routed to a random node.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
+     * @param libNamePattern A wildcard pattern for matching library names.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @return Info about queried libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * Map<GlideString, Object>[] response = client.functionList(gs("myLib?_backup"), true).get();
+     * for (Map<GlideString, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get(gs("library_name")), libraryInfo.get(gs("engine")));
+     *     Map<GlideString, Object>[] functions = (Map<GlideString, Object>[]) libraryInfo.get(gs("functions"));
+     *     for (Map<GlideString, Object> function : functions) {
+     *         Set<GlideString> flags = (Set<GlideString>) function.get(gs("flags"));
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get(gs("name")), gs(String.join(", ", flags)), function.get(gs("description")));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get(gs("library_code")));
+     * }
+     * }</pre>
+     */
+    CompletableFuture<Map<GlideString, Object>[]> functionListBinary(
+            GlideString libNamePattern, boolean withCode);
 
     /**
      * Returns information about the functions and libraries.
@@ -186,6 +240,36 @@ public interface ScriptingAndFunctionsClusterCommands {
      *
      * @since Redis 7.0 and above.
      * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return Info about all libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Map<GlideString, Object>[]> response = client.functionList(true, ALL_NODES).get();
+     * for (String node : response.getMultiValue().keySet()) {
+     *   for (Map<GlideString, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get(gs("library_name")), libraryInfo.get(gs("engine")));
+     *     Map<GlideString, Object>[] functions = (Map<GlideString, Object>[]) libraryInfo.get(gs("functions"));
+     *     for (Map<GlideString, Object> function : functions) {
+     *         Set<GlideString> flags = (Set<GlideString>) function.get(gs("flags"));
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get(gs("name")), gs(String.join(", ", flags)), function.get(gs("description")));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get(gs("library_code")));
+     *   }
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> functionListBinary(
+            boolean withCode, Route route);
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
      * @param libNamePattern A wildcard pattern for matching library names.
      * @param withCode Specifies whether to request the library code from the server or not.
      * @param route Specifies the routing configuration for the command. The client will route the
@@ -211,6 +295,37 @@ public interface ScriptingAndFunctionsClusterCommands {
      */
     CompletableFuture<ClusterValue<Map<String, Object>[]>> functionList(
             String libNamePattern, boolean withCode, Route route);
+
+    /**
+     * Returns information about the functions and libraries.
+     *
+     * @since Redis 7.0 and above.
+     * @see <a href="https://valkey.io/commands/function-list/">valkey.io</a> for details.
+     * @param libNamePattern A wildcard pattern for matching library names.
+     * @param withCode Specifies whether to request the library code from the server or not.
+     * @param route Specifies the routing configuration for the command. The client will route the
+     *     command to the nodes defined by <code>route</code>.
+     * @return Info about queried libraries and their functions.
+     * @example
+     *     <pre>{@code
+     * ClusterValue<Map<String, Object>[]> response = client.functionList(gs("myLib?_backup"), true, ALL_NODES).get();
+     * for (String node : response.getMultiValue().keySet()) {
+     *   for (Map<GlideString, Object> libraryInfo : response) {
+     *     System.out.printf("Server has library '%s' which runs on %s engine%n",
+     *         libraryInfo.get(gs("library_name")), libraryInfo.get(gs("engine")));
+     *     Map<GlideString, Object>[] functions = (Map<GlideString, Object>[]) libraryInfo.get(gs("functions"));
+     *     for (Map<GlideString, Object> function : functions) {
+     *         Set<GlideString> flags = (Set<GlideString>) function.get(gs("flags"));
+     *         System.out.printf("Library has function '%s' with flags '%s' described as %s%n",
+     *             function.get(gs("name")), gs(String.join(", ", flags)), function.get(gs("description")));
+     *     }
+     *     System.out.printf("Library code:%n%s%n", libraryInfo.get(gs("library_code")));
+     *   }
+     * }
+     * }</pre>
+     */
+    CompletableFuture<ClusterValue<Map<GlideString, Object>[]>> functionListBinary(
+            GlideString libNamePattern, boolean withCode, Route route);
 
     /**
      * Deletes all function libraries.<br>
