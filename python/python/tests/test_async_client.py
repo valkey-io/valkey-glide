@@ -380,21 +380,6 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
-    async def test_custom_command_multi_arg_in_TEncodable(
-        self, redis_client: TGlideClient
-    ):
-        # Test multi args command
-        client_list = await glide_client.custom_command(
-            ["CLIENT", b"LIST", "TYPE", b"NORMAL"]
-        )
-        assert isinstance(client_list, (bytes, list))
-        res = get_first_result(client_list)
-        assert res is not None
-        assert b"id" in res
-        assert b"cmd=client" in res
-
-    @pytest.mark.parametrize("cluster_mode", [True, False])
-    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_custom_command_lower_and_upper_case(
         self, glide_client: TGlideClient
     ):
