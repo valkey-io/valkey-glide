@@ -3068,6 +3068,42 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void script_large_keys_and_or_args(BaseClient client) {
+        String str1 = "0".repeat(1 << 12); // 4k
+        String str2 = "0".repeat(1 << 12); // 4k
+
+        try (Script script = new Script("return KEYS[1]", false)) {
+            // 1 very big key
+            Object response =
+                    client.invokeScript(script, ScriptOptions.builder().key(str1 + str2).build()).get();
+            assertEquals(str1 + str2, response);
+        }
+
+        try (Script script = new Script("return KEYS[1]", false)) {
+            // 2 big keys
+            Object response =
+                    client.invokeScript(script, ScriptOptions.builder().key(str1).key(str2).build()).get();
+            assertEquals(str1, response);
+        }
+
+        try (Script script = new Script("return ARGV[1]", false)) {
+            // 1 very big arg
+            Object response =
+                    client.invokeScript(script, ScriptOptions.builder().arg(str1 + str2).build()).get();
+            assertEquals(str1 + str2, response);
+        }
+
+        try (Script script = new Script("return ARGV[1]", false)) {
+            // 1 big arg + 1 big key
+            Object response =
+                    client.invokeScript(script, ScriptOptions.builder().arg(str1).key(str2).build()).get();
+            assertEquals(str2, response);
+        }
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void invokeScript_gs_test(BaseClient client) {
         GlideString key1 = gs(UUID.randomUUID().toString());
         GlideString key2 = gs(UUID.randomUUID().toString());
