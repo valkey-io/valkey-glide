@@ -563,7 +563,7 @@ class ClusterCommands(CoreCommands):
         Returns information about the function that's currently running and information about the
         available execution engines.
 
-        See https://redis.io/commands/function-stats/ for more details
+        See https://valkey.io/commands/function-stats/ for more details
 
         Args:
             route (Optional[Route]): Specifies the routing configuration for the command. The client

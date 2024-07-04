@@ -2024,7 +2024,7 @@ class BaseTransaction:
         Returns information about the function that's currently running and information about the
         available execution engines.
 
-        See https://redis.io/commands/function-stats/ for more details
+        See https://valkey.io/commands/function-stats/ for more details
 
         Command Response:
             TFunctionStatsResponse: A `Mapping` with two keys:
