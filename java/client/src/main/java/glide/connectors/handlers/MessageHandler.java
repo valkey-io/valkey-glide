@@ -22,6 +22,19 @@ import response.ResponseOuterClass.Response;
 @RequiredArgsConstructor
 public class MessageHandler {
 
+    /** A wrapper for exceptions thrown from {@link MessageCallback} implementations. */
+    static class MessageCallbackException extends Exception {
+        private MessageCallbackException(Exception cause) {
+            super(cause);
+        }
+
+        @Override
+        public synchronized Exception getCause() {
+            // Overridden to restrict the return type to Exception rather than Throwable.
+            return (Exception) super.getCause();
+        }
+    }
+
     // TODO maybe store `BaseSubscriptionConfiguration` as is?
     /**
      * A user callback to call for every incoming message, if given. If missing, messages are pushed
@@ -39,7 +52,7 @@ public class MessageHandler {
     private final ConcurrentLinkedDeque<PubSubMessage> queue = new ConcurrentLinkedDeque<>();
 
     /** Process a push (PUBSUB) message received as a part of {@link Response} from GLIDE. */
-    public void handle(Response response) {
+    void handle(Response response) throws MessageCallbackException {
         Object data = responseResolver.apply(response);
         if (!(data instanceof Map)) {
             Logger.log(
@@ -97,9 +110,14 @@ public class MessageHandler {
     }
 
     /** Process a {@link PubSubMessage} received. */
-    private void handle(PubSubMessage message) {
+    private void handle(PubSubMessage message) throws MessageCallbackException {
         if (callback.isPresent()) {
-            callback.get().accept(message, context.orElse(null));
+            try {
+                callback.get().accept(message, context.orElse(null));
+            } catch (Exception callbackException) {
+                throw new MessageCallbackException(callbackException);
+            }
+            // Note: Error subclasses are uncaught and will just propagate.
         } else {
             queue.push(message);
         }
