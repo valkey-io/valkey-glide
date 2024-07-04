@@ -859,7 +859,7 @@ pub(crate) fn convert_to_expected_type(
                 if array.get(groups_index + 1).is_none() {
                     return Err((ErrorKind::TypeError, "No groups value found.").into());
                 }
- 
+
                 let Value::Array(groups) = array[groups_index + 1].clone() else {
                     return Err((ErrorKind::TypeError, "Incorrect value type received. Wanted an Array.").into());
                 };
@@ -879,7 +879,7 @@ pub(crate) fn convert_to_expected_type(
 
                 let mut groups_as_maps = Vec::new();
                 for group_value in &groups {
-                    let Value::Array(group) = group_value.clone() else {
+                    let Value::Array(mut group) = group_value.clone() else {
                         return Err((ErrorKind::TypeError, "Incorrect value type received for group value. Wanted an Array").into());
                     };
 
@@ -930,7 +930,12 @@ pub(crate) fn convert_to_expected_type(
                         }))?);
                     }
 
-                    groups_as_maps.push(Value::Map(vec![(Value::BulkString("consumers".to_string().into_bytes()), Value::Array(consumers_as_maps))]));
+                    group[consumers_index + 1] = Value::Array(consumers_as_maps);
+                    let group_map = convert_to_expected_type(Value::Array(group), Some(ExpectedReturnType::Map {
+                        key_type: &Some(ExpectedReturnType::BulkString),
+                        value_type: &None,
+                    }))?;
+                    groups_as_maps.push(group_map);
                 }
 
                 array[groups_index + 1] = Value::Array(groups_as_maps);
@@ -1441,14 +1446,14 @@ mod tests {
                                             Value::BulkString("1-0".to_string().into_bytes()),
                                             Value::Int(1),
                                         ])]),
-                                    )
+                                    ),
                                 ]),
                                 Value::Map(vec![(
                                     Value::BulkString("pending".to_string().into_bytes()),
                                     Value::Array(vec![]),
                                 )]),
                             ]),
-                        )
+                        ),
                     ]),
                     Value::Map(vec![(
                         Value::BulkString("consumers".to_string().into_bytes()),
