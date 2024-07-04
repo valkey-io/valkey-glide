@@ -9776,6 +9776,36 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void lcs_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString notExistingKey = gs("{key}-4" + UUID.randomUUID());
+
+        // keys does not exist or is empty
+        assertEquals(gs(""), client.lcs(key1, key2).get());
+
+        // setting string values
+        client.set(key1, gs("abcd"));
+        client.set(key2, gs("bcde"));
+        client.set(key3, gs("wxyz"));
+
+        // getting the lcs
+        assertEquals(gs(""), client.lcs(key1, key3).get());
+        assertEquals(gs("bcd"), client.lcs(key1, key2).get());
+
+        // non set keys are used
+        client.sadd(notExistingKey, new GlideString[] {gs("setmember")}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcs(notExistingKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void lcs_with_len_option(BaseClient client) {
         assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
         // setup
@@ -9800,6 +9830,36 @@ public class SharedCommandTests {
         client.sadd(nonStringKey, new String[] {"setmember"}).get();
         ExecutionException executionException =
                 assertThrows(ExecutionException.class, () -> client.lcs(nonStringKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lcs_with_len_option_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString key3 = gs("{key}-3" + UUID.randomUUID());
+        GlideString notExistingKey = gs("{key}-4" + UUID.randomUUID());
+
+        // keys does not exist or is empty
+        assertEquals(0, client.lcsLen(key1, key2).get());
+
+        // setting string values
+        client.set(key1, gs("abcd"));
+        client.set(key2, gs("bcde"));
+        client.set(key3, gs("wxyz"));
+
+        // getting the lcs
+        assertEquals(0, client.lcsLen(key1, key3).get());
+        assertEquals(3, client.lcsLen(key1, key2).get());
+
+        // non set keys are used
+        client.sadd(notExistingKey, new GlideString[] {gs("setmember")}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcs(notExistingKey, key1).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
@@ -10146,6 +10206,89 @@ public class SharedCommandTests {
                 assertThrows(
                         ExecutionException.class,
                         () -> client.lcsIdxWithMatchLen(nonStringKey, key1, 10L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
+    public void lcsIdx_binary(BaseClient client) {
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7.0.0");
+        // setup
+        GlideString key1 = gs("{key}-1" + UUID.randomUUID());
+        GlideString key2 = gs("{key}-2" + UUID.randomUUID());
+        GlideString notExistingKey = gs("{key}-4" + UUID.randomUUID());
+
+        // keys does not exist or is empty
+        Map<String, Object> result = client.lcsIdx(key1, key2).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+        result = client.lcsIdx(key1, key2, 10L).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+        result = client.lcsIdxWithMatchLen(key1, key2).get();
+        assertDeepEquals(new Object[0], result.get("matches"));
+        assertEquals(0L, result.get("len"));
+
+        // setting string values
+        client.set(key1, gs("abcdefghijk"));
+        client.set(key2, gs("defjkjuighijk"));
+
+        // LCS with only IDX
+        Object expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
+        result = client.lcsIdx(key1, key2).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and WITHMATCHLEN
+        expectedMatchesObject =
+                new Object[] {
+                    new Object[] {new Long[] {6L, 10L}, new Long[] {8L, 12L}, 5L},
+                    new Object[] {new Long[] {3L, 5L}, new Long[] {0L, 2L}, 3L}
+                };
+        result = client.lcsIdxWithMatchLen(key1, key2).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and MINMATCHLEN
+        expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}};
+        result = client.lcsIdx(key1, key2, 4).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX and a negative MINMATCHLEN
+        expectedMatchesObject = new Long[][][] {{{6L, 10L}, {8L, 12L}}, {{3L, 5L}, {0L, 2L}}};
+        result = client.lcsIdx(key1, key2, -1L).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // LCS with IDX, MINMATCHLEN, and WITHMATCHLEN
+        expectedMatchesObject =
+                new Object[] {new Object[] {new Long[] {6L, 10L}, new Long[] {8L, 12L}, 5L}};
+        result = client.lcsIdxWithMatchLen(key1, key2, 4L).get();
+        assertDeepEquals(expectedMatchesObject, result.get("matches"));
+        assertEquals(8L, result.get("len"));
+
+        // non-string keys are used
+        client.sadd(notExistingKey, new GlideString[] {gs("setmember")}).get();
+        ExecutionException executionException =
+                assertThrows(ExecutionException.class, () -> client.lcsIdx(notExistingKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lcsIdx(notExistingKey, key1, 10L).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class, () -> client.lcsIdxWithMatchLen(notExistingKey, key1).get());
+        assertInstanceOf(RequestException.class, executionException.getCause());
+
+        executionException =
+                assertThrows(
+                        ExecutionException.class,
+                        () -> client.lcsIdxWithMatchLen(notExistingKey, key1, 10L).get());
         assertInstanceOf(RequestException.class, executionException.getCause());
     }
 
