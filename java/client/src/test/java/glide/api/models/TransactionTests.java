@@ -975,7 +975,8 @@ public class TransactionTests {
         results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "JUSTID")));
 
         transaction.xautoclaimJustId("key", "group", "consumer", 99L, "0-0", 1234L);
-        results.add(Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "1234", "JUSTID")));
+        results.add(
+                Pair.of(XAutoClaim, buildArgs("key", "group", "consumer", "99", "0-0", "1234", "JUSTID")));
 
         transaction.time();
         results.add(Pair.of(Time, buildArgs()));
