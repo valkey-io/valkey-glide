@@ -71,8 +71,8 @@ from glide.async_commands.stream import (
 )
 from glide.async_commands.transaction import ClusterTransaction, Transaction
 from glide.config import (
-    ClusterClientConfiguration,
     GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     ProtocolVersion,
     ServerCredentials,
 )

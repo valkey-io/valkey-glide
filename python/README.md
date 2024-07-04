@@ -51,10 +51,10 @@ To install GLIDE for Redis using `pip`, follow these steps:
 
 ```python:
 >>> import asyncio
->>> from glide import ClusterClientConfiguration, NodeAddress, GlideClusterClient
+>>> from glide import GlideClusterClientConfiguration, NodeAddress, GlideClusterClient
 >>> async def test_cluster_client():
 ...     addresses = [NodeAddress("redis.example.com", 6379)]
-...     config = ClusterClientConfiguration(addresses)
+...     config = GlideClusterClientConfiguration(addresses)
 ...     client = await GlideClusterClient.create(config)
 ...     set_result = await client.set("foo", "bar")
 ...     print(f"Set response is {set_result}")

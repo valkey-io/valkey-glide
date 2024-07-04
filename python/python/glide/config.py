@@ -345,7 +345,7 @@ class GlideClientConfiguration(BaseClientConfiguration):
         return None, None
 
 
-class ClusterClientConfiguration(BaseClientConfiguration):
+class GlideClusterClientConfiguration(BaseClientConfiguration):
     """
     Represents the configuration settings for a Cluster Glide client.
 
@@ -369,7 +369,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
             These checks evaluate changes in the cluster's topology, triggering a slot refresh when detected.
             Periodic checks ensure a quick and efficient process by querying a limited number of nodes.
             Defaults to PeriodicChecksStatus.ENABLED_DEFAULT_CONFIGS.
-        pubsub_subscriptions (Optional[ClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
+        pubsub_subscriptions (Optional[GlideClusterClientConfiguration.PubSubSubscriptions]): Pubsub subscriptions to be used for the client.
             Will be applied via SUBSCRIBE/PSUBSCRIBE/SSUBSCRIBE commands during connection establishment.
 
     Notes:
@@ -395,7 +395,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         """Describes pubsub configuration for cluster mode client.
 
         Attributes:
-            channels_and_patterns (Dict[ClusterClientConfiguration.PubSubChannelModes, Set[str]]):
+            channels_and_patterns (Dict[GlideClusterClientConfiguration.PubSubChannelModes, Set[str]]):
                 Channels and patterns by modes.
             callback (Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]):
                 Optional callback to accept the incoming messages.
@@ -404,7 +404,7 @@ class ClusterClientConfiguration(BaseClientConfiguration):
         """
 
         channels_and_patterns: Dict[
-            ClusterClientConfiguration.PubSubChannelModes, Set[str]
+            GlideClusterClientConfiguration.PubSubChannelModes, Set[str]
         ]
         callback: Optional[Callable[[CoreCommands.PubSubMsg, Any], None]]
         context: Any

@@ -39,7 +39,7 @@ async def test_standalone_client(host: str = "localhost", port: int = 6379):
     # When in Redis is in standalone mode, add address of the primary node,
     # and any replicas you'd like to be able to read from.
     addresses = [NodeAddress(host, port)]
-    # Check `GlideClientConfiguration/ClusterClientConfiguration` for additional options.
+    # Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
     config = BaseClientConfiguration(
         addresses=addresses,
         client_name="test_standalone_client",
@@ -59,7 +59,7 @@ async def test_standalone_client(host: str = "localhost", port: int = 6379):
 async def test_cluster_client(host: str = "localhost", port: int = 6379):
     # When in Redis is cluster mode, add address of any nodes, and the client will find all nodes in the cluster.
     addresses = [NodeAddress(host, port)]
-    # Check `GlideClientConfiguration/ClusterClientConfiguration` for additional options.
+    # Check `GlideClientConfiguration/GlideClusterClientConfiguration` for additional options.
     config = BaseClientConfiguration(
         addresses=addresses,
         client_name="test_cluster_client",

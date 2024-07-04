@@ -5,8 +5,8 @@ from typing import AsyncGenerator, List, Optional, Union
 
 import pytest
 from glide.config import (
-    ClusterClientConfiguration,
     GlideClientConfiguration,
+    GlideClusterClientConfiguration,
     NodeAddress,
     ProtocolVersion,
     ServerCredentials,
@@ -224,7 +224,7 @@ async def create_client(
     protocol: ProtocolVersion = ProtocolVersion.RESP3,
     timeout: Optional[int] = None,
     cluster_mode_pubsub: Optional[
-        ClusterClientConfiguration.PubSubSubscriptions
+        GlideClusterClientConfiguration.PubSubSubscriptions
     ] = None,
     standalone_mode_pubsub: Optional[
         GlideClientConfiguration.PubSubSubscriptions
@@ -237,7 +237,7 @@ async def create_client(
         assert database_id == 0
         k = min(3, len(pytest.redis_cluster.nodes_addr))
         seed_nodes = random.sample(pytest.redis_cluster.nodes_addr, k=k)
-        cluster_config = ClusterClientConfiguration(
+        cluster_config = GlideClusterClientConfiguration(
             addresses=seed_nodes if addresses is None else addresses,
             use_tls=use_tls,
             credentials=credentials,
