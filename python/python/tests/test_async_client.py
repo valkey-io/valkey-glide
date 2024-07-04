@@ -140,6 +140,9 @@ class TestGlideClients:
         assert value == "שלום hello 汉字"
         await glide_client.set(key, value)
         assert await glide_client.get(key) == value.encode()
+        # check set and get in bytes
+        await glide_client.set(key.encode(), value.encode())
+        assert await glide_client.get(key.encode()) == value.encode()
 
     @pytest.mark.parametrize("value_size", [100, 2**16])
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -362,6 +365,21 @@ class TestCommands:
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_custom_command_multi_arg_in_TEncodable(
+        self, glide_client: TGlideClient
+    ):
+        # Test multi args command
+        client_list = await glide_client.custom_command(
+            ["CLIENT", b"LIST", "TYPE", b"NORMAL"]
+        )
+        assert isinstance(client_list, (bytes, list))
+        res = get_first_result(client_list)
+        assert res is not None
+        assert b"id" in res
+        assert b"cmd=client" in res
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_custom_command_lower_and_upper_case(
         self, glide_client: TGlideClient
     ):
@@ -447,6 +465,23 @@ class TestCommands:
         with pytest.raises(RequestError) as e:
             await glide_client.move(key, -1)
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_move_with_bytes(self, glide_client: GlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+
+        assert await glide_client.select(0) == OK
+
+        assert await glide_client.set(key, value) == OK
+        assert await glide_client.get(key.encode()) == value.encode()
+
+        assert await glide_client.move(key.encode(), 1) is True
+        assert await glide_client.get(key) is None
+        assert await glide_client.get(key.encode()) is None
+        assert await glide_client.select(1) == OK
+        assert await glide_client.get(key) == value.encode()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_delete(self, glide_client: TGlideClient):
@@ -492,6 +527,7 @@ class TestCommands:
         assert await glide_client.set(key, value) == OK
         assert await glide_client.getrange(key, 0, 3) == value_encoded[:4]
         assert await glide_client.getrange(key, -3, -1) == value_encoded[-3:]
+        assert await glide_client.getrange(key.encode(), -3, -1) == value_encoded[-3:]
         assert await glide_client.getrange(key, 0, -1) == value_encoded
 
         # out of range
@@ -2706,10 +2742,11 @@ class TestCommands:
     async def test_geosearchstore_by_radius(self, glide_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
+        # Checking when parts of the value contain bytes
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
-            "Palermo": GeospatialData(13.361389, 38.115556),
+            b"Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
-            "edge1": GeospatialData(12.758489, 38.788135),
+            b"edge1": GeospatialData(12.758489, 38.788135),
             "edge2": GeospatialData(17.241510, 38.788135),
         }
         result = {
@@ -4671,6 +4708,10 @@ class TestCommands:
         assert (await glide_client.type(key)).lower() == b"string"
         assert await glide_client.delete([key]) == 1
 
+        assert await glide_client.set(key.encode(), "value") == OK
+        assert (await glide_client.type(key.encode())).lower() == b"string"
+        assert await glide_client.delete([key.encode()]) == 1
+
         assert await glide_client.lpush(key, ["value"]) == 1
         assert (await glide_client.type(key)).lower() == b"list"
         assert await glide_client.delete([key]) == 1
@@ -4708,12 +4749,21 @@ class TestCommands:
             "user:5",
         )
 
-        # Prepare some data
+        # Prepare some data. Some keys and values randomaly encoded
         assert await glide_client.hset(user_key1, {"name": "Alice", "age": "30"}) == 2
-        assert await glide_client.hset(user_key2, {"name": "Bob", "age": "25"}) == 2
+        assert (
+            await glide_client.hset(user_key2.encode(), {"name": "Bob", "age": "25"})
+            == 2
+        )
         assert await glide_client.hset(user_key3, {"name": "Charlie", "age": "35"}) == 2
-        assert await glide_client.hset(user_key4, {"name": "Dave", "age": "20"}) == 2
-        assert await glide_client.hset(user_key5, {"name": "Eve", "age": "40"}) == 2
+        assert (
+            await glide_client.hset(user_key4, {"name": "Dave", "age".encode(): "20"})
+            == 2
+        )
+        assert (
+            await glide_client.hset(user_key5, {"name": "Eve", "age": "40".encode()})
+            == 2
+        )
         assert await glide_client.lpush("user_ids", ["5", "4", "3", "2", "1"]) == 5
 
         # SORT_RO Available since: 7.0.0
