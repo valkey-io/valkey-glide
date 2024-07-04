@@ -9668,3 +9668,48 @@ class TestScripts:
         assert (
             await glide_client.invoke_script(script, keys=[key2]) == "value2".encode()
         )
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_large_keys_no_args(self, request, cluster_mode, protocol):
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+        )
+        length = 2**13  # 8kb
+        key = "0" * length
+        script = Script("return KEYS[1]")
+        assert await redis_client.invoke_script(script, keys=[key]) == key.encode()
+        await redis_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_large_args_no_keys(self, request, cluster_mode, protocol):
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+        )
+        length = 2**12  # 4kb
+        arg1 = "0" * length
+        arg2 = "1" * length
+
+        script = Script("return ARGV[2]")
+        assert (
+            await redis_client.invoke_script(script, args=[arg1, arg2]) == arg2.encode()
+        )
+        await redis_client.close()
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_script_large_keys_and_args(self, request, cluster_mode, protocol):
+        redis_client = await create_client(
+            request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
+        )
+        length = 2**12  # 4kb
+        key = "0" * length
+        arg = "1" * length
+
+        script = Script("return KEYS[1]")
+        assert (
+            await redis_client.invoke_script(script, keys=[key], args=[arg])
+            == key.encode()
+        )
+        await redis_client.close()

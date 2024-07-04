@@ -7,8 +7,7 @@ use crate::cluster_scan_container::get_cluster_scan_cursor;
 use crate::connection_request::ConnectionRequest;
 use crate::errors::{error_message, error_type, RequestErrorType};
 use crate::redis_request::{
-    command, redis_request, ClusterScan, Command, RedisRequest, Routes, ScriptInvocation,
-    SlotTypes, Transaction,
+    command, redis_request, ClusterScan, Command, RedisRequest, Routes, SlotTypes, Transaction,
 };
 use crate::response;
 use crate::response::Response;
@@ -17,7 +16,7 @@ use bytes::Bytes;
 use directories::BaseDirs;
 use dispose::{Disposable, Dispose};
 use logger_core::{log_debug, log_error, log_info, log_trace, log_warn};
-use protobuf::Message;
+use protobuf::{Chars, Message};
 use redis::cluster_routing::{
     MultipleNodeRoutingInfo, Route, RoutingInfo, SingleNodeRoutingInfo, SlotAddr,
 };
@@ -364,15 +363,24 @@ async fn cluster_scan(cluster_scan: ClusterScan, mut client: Client) -> ClientUs
 }
 
 async fn invoke_script(
-    script: ScriptInvocation,
+    hash: Chars,
+    keys: Option<Vec<Bytes>>,
+    args: Option<Vec<Bytes>>,
     mut client: Client,
     routing: Option<RoutingInfo>,
 ) -> ClientUsageResult<Value> {
     // convert Vec<bytes> to vec<[u8]>
-    let keys: Vec<&[u8]> = script.keys.iter().map(|e| e.as_ref()).collect();
-    let args: Vec<&[u8]> = script.args.iter().map(|e| e.as_ref()).collect();
+    let keys: Vec<&[u8]> = keys
+        .as_ref()
+        .map(|keys| keys.iter().map(|e| e.as_ref()).collect())
+        .unwrap_or_default();
+    let args: Vec<&[u8]> = args
+        .as_ref()
+        .map(|keys| keys.iter().map(|e| e.as_ref()).collect())
+        .unwrap_or_default();
+
     client
-        .invoke_script(&script.hash, &keys, &args, routing)
+        .invoke_script(&hash, &keys, &args, routing)
         .await
         .map_err(|err| err.into())
 }
@@ -490,7 +498,28 @@ fn handle_request(request: RedisRequest, client: Client, writer: Rc<Writer>) {
                 }
                 redis_request::Command::ScriptInvocation(script) => {
                     match get_route(request.route.0, None) {
-                        Ok(routes) => invoke_script(script, client, routes).await,
+                        Ok(routes) => {
+                            invoke_script(
+                                script.hash,
+                                Some(script.keys),
+                                Some(script.args),
+                                client,
+                                routes,
+                            )
+                            .await
+                        }
+                        Err(e) => Err(e),
+                    }
+                }
+                redis_request::Command::ScriptInvocationPointers(script) => {
+                    let keys = script
+                        .keys_pointer
+                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
+                    let args = script
+                        .args_pointer
+                        .map(|pointer| *unsafe { Box::from_raw(pointer as *mut Vec<Bytes>) });
+                    match get_route(request.route.0, None) {
+                        Ok(routes) => invoke_script(script.hash, keys, args, client, routes).await,
                         Err(e) => Err(e),
                     }
                 }
