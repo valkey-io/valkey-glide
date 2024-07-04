@@ -3,8 +3,6 @@ package glide.api;
 
 import static glide.api.models.GlideString.gs;
 import static glide.api.models.commands.SortBaseOptions.STORE_COMMAND_STRING;
-import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
-import static glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldArgs;
 import static glide.api.models.commands.bitmap.BitFieldOptions.createBitFieldGlideStringArgs;
 import static glide.api.models.commands.stream.StreamClaimOptions.JUST_ID_REDIS_API;
@@ -1763,7 +1761,7 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Object> invokeScript(@NonNull Script script) {
-        if (script.getBinarySafeOutput()) {
+        if (script.getBinaryOutput()) {
             return commandManager.submitScript(
                     script, List.of(), List.of(), this::handleBinaryObjectOrNullResponse);
         } else {
@@ -1775,7 +1773,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object> invokeScript(
             @NonNull Script script, @NonNull ScriptOptions options) {
-        if (script.getBinarySafeOutput()) {
+        if (script.getBinaryOutput()) {
             return commandManager.submitScript(
                     script,
                     options.getKeys().stream().map(GlideString::gs).collect(Collectors.toList()),
@@ -1793,7 +1791,7 @@ public abstract class BaseClient
     @Override
     public CompletableFuture<Object> invokeScript(
             @NonNull Script script, @NonNull ScriptOptionsGlideString options) {
-        if (script.getBinarySafeOutput()) {
+        if (script.getBinaryOutput()) {
             return commandManager.submitScript(
                     script, options.getKeys(), options.getArgs(), this::handleBinaryObjectOrNullResponse);
         } else {
