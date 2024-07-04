@@ -8294,7 +8294,7 @@ class TestCommands:
                     # a RequestError may occur if the function is not yet running
                     # sleep and try again
                     timeout += 0.5
-                    await asyncio.sleep(0.5)\
+                    await asyncio.sleep(0.5)
 
         await asyncio.gather(
             endless_fcall_route_call(),
