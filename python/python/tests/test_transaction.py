@@ -1125,7 +1125,7 @@ class TestTransaction:
             # Verify function_restore - use result1[2] from above
             transaction2 = ClusterTransaction() if cluster_mode else Transaction()
             transaction2.function_restore(result1[2], FunctionRestorePolicy.REPLACE)
-            if cluster_mode:
+            if isinstance(redis_client, GlideClusterClient):
                 result2 = await redis_client.exec(
                     transaction2, SlotIdRoute(SlotType.PRIMARY, 1)
                 )
