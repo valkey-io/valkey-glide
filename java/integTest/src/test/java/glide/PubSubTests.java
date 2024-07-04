@@ -995,8 +995,6 @@ public class PubSubTests {
     @Disabled(
             "No way of currently testing this, see https://github.com/aws/glide-for-redis/issues/1649")
     public void pubsub_exact_max_size_message_callback(boolean standalone) {
-        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0"), "This feature added in redis 7");
-
         final GlideString channel = gs(UUID.randomUUID().toString());
         final GlideString message = gs("1".repeat(1 << 25)); // 33MB
 
@@ -1103,69 +1101,61 @@ public class PubSubTests {
         }
     }
 
-    //    @pytest.mark.parametrize("cluster_mode", [True])
-    //    async def test_pubsub_sharded_max_size_message_callback(
-    //        self, request, cluster_mode: bool
-    //    ):
-    //        """
-    //        Tests publishing and receiving maximum size messages in sharded PUBSUB with callback
-    // method.
-    //
-    //        This test verifies that very large messages (512MB - BulkString max size) can be
-    // published and received
-    //        correctly. It ensures that the PUBSUB system
-    //        can handle maximum size messages without errors and that the callback message
-    //        retrieval method works as expected.
-    //
-    //        The test covers the following scenarios:
-    //        - Setting up PUBSUB subscription for a specific sharded channel with a callback.
-    //        - Publishing a maximum size message to the channel.
-    //        - Verifying that the message is received correctly using the callback method.
-    //        """
-    //    channel = get_random_string(10)
-    //    message = get_random_string(512 * 1024 * 1024)
-    //    publish_response = 1 if cluster_mode else OK
-    //
-    //    callback_messages: List[CoreCommands.PubSubMsg] = []
-    //    callback, context = new_message, callback_messages
-    //
-    //        pub_sub = create_pubsub_subscription(
-    //        cluster_mode,
-    //        {ClusterClientConfiguration.PubSubChannelModes.Sharded: {channel}},
-    //    {},
-    // callback=callback,
-    // context=context,
-    //    )
-    //
-    // publishing_client, listening_client = await create_two_clients(
-    //    request, cluster_mode, pub_sub
-    //    )
-    //
-    //        # (Redis version > 7)
-    //    if await check_if_server_version_lt(publishing_client, "7.0.0"):
-    //    pytest.skip("Redis version required >= 7.0.0")
-    //
-    //        try:
-    //            assert (
-    // await cast(GlideClusterClient, publishing_client).publish(
-    //    message, channel, sharded=True
-    // )
-    //                == publish_response
-    //            )
-    //                # allow the message to propagate
-    // await asyncio.sleep(5)
-    //
-    //            assert len(callback_messages) == 1
-    //
-    //    assert callback_messages[0].message == message
-    //            assert callback_messages[0].channel == channel
-    //            assert callback_messages[0].pattern is None
-    //
-    //        finally:
-    //            if cluster_mode:
-    //    # Since all tests run on the same cluster, when closing the client, garbage collector can be
-    // called after another test will start running
-    //                # In cluster mode, we check how many subscriptions received the message
-    //                # So to avoid flakiness, we make sure to unsubscribe from the channels
-    // await listening_client.custom_command(["UNSUBSCRIBE", channel])
+    /** Test the behavior if the callback supplied to a subscription throws an uncaught exception. */
+    @SneakyThrows
+    @ParameterizedTest(name = "standalone = {0}")
+    @ValueSource(booleans = {true, false})
+    @Disabled(
+            "This test is for demonstrating behavior when there's an exception from a user callback and"
+                    + " will always fail.")
+    public void pubsub_test_callback_exception(boolean standalone) {
+        final GlideString channel = gs(UUID.randomUUID().toString());
+        final GlideString message = gs("message");
+
+        ArrayList<PubSubMessage> callbackMessages = new ArrayList<>();
+        final MessageCallback callback =
+                (pubSubMessage, context) -> {
+                    throw new RuntimeException("Test exception.");
+                };
+
+        Map<? extends ChannelMode, Set<GlideString>> subscriptions =
+                standalone
+                        ? Map.of(PubSubChannelMode.EXACT, Set.of(channel))
+                        : Map.of(PubSubClusterChannelMode.EXACT, Set.of(channel));
+
+        var listener =
+                createClientWithSubscriptions(
+                        standalone,
+                        subscriptions,
+                        Optional.ofNullable(callback),
+                        Optional.of(callbackMessages));
+        var sender =
+                createClientWithSubscriptions(
+                        standalone,
+                        subscriptions,
+                        Optional.ofNullable(callback),
+                        Optional.of(callbackMessages));
+
+        try {
+            assertEquals(OK, sender.publish(message, channel).get());
+
+            // Allow the message to propagate.
+            Thread.sleep(MESSAGE_DELIVERY_DELAY);
+
+            assertEquals(1, callbackMessages.size());
+            assertEquals(message, callbackMessages.get(0).getMessage());
+            assertEquals(channel, callbackMessages.get(0).getChannel());
+            assertNull(callbackMessages.get(0).getPattern());
+        } finally {
+            if (!standalone) {
+                // Since all tests run on the same cluster, when closing the client, garbage collector can
+                // be called
+                // after another test will start running.
+                // In cluster mode, we check how many subscriptions received the message.
+                // So to avoid flakiness, we make sure to unsubscribe from the channels.
+                ((RedisClusterClient) listener)
+                        .customCommand(new String[] {"UNSUBSCRIBE", channel.toString()});
+            }
+        }
+    }
 }
