@@ -9,14 +9,14 @@ Refer to the [Supported Engine Versions table](https://github.com/aws/glide-for-
 
 ## Current Status
 
-We've made GLIDE for Redis an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders.
+We've made Valkey GLIDE an open-source project, and are releasing it in Preview to the community to gather feedback, and actively collaborate on the project roadmap. We welcome questions and contributions from all Redis stakeholders.
 This preview release is recommended for testing purposes only.
 
 # Getting Started - Node Wrapper
 
 ## System Requirements
 
-The beta release of GLIDE for Redis was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
+The beta release of Valkey GLIDE was tested on Intel x86_64 using Ubuntu 22.04.1, Amazon Linux 2023 (AL2023), and macOS 12.7.
 
 ## NodeJS supported version
 

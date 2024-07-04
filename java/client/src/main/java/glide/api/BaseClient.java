@@ -148,6 +148,8 @@ import static redis_request.RedisRequestOuterClass.RequestType.XGroupCreateConsu
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDelConsumer;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupDestroy;
 import static redis_request.RedisRequestOuterClass.RequestType.XGroupSetId;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoConsumers;
+import static redis_request.RedisRequestOuterClass.RequestType.XInfoGroups;
 import static redis_request.RedisRequestOuterClass.RequestType.XLen;
 import static redis_request.RedisRequestOuterClass.RequestType.XPending;
 import static redis_request.RedisRequestOuterClass.RequestType.XRange;
@@ -2761,6 +2763,40 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<String, Object>[]> xinfoGroups(@NonNull String key) {
+        return commandManager.submitNewCommand(
+                XInfoGroups,
+                new String[] {key},
+                response -> castArray(handleArrayResponse(response), Map.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>[]> xinfoGroups(@NonNull GlideString key) {
+        return commandManager.submitNewCommand(
+                XInfoGroups,
+                new GlideString[] {key},
+                response -> castArray(handleArrayResponseBinary(response), Map.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>[]> xinfoConsumers(
+            @NonNull String key, @NonNull String groupName) {
+        return commandManager.submitNewCommand(
+                XInfoConsumers,
+                new String[] {key, groupName},
+                response -> castArray(handleArrayResponse(response), Map.class));
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Object>[]> xinfoConsumers(
+            @NonNull GlideString key, @NonNull GlideString groupName) {
+        return commandManager.submitNewCommand(
+                XInfoConsumers,
+                new GlideString[] {key, groupName},
+                response -> castArray(handleArrayResponseBinary(response), Map.class));
+    }
+
+    @Override
     public CompletableFuture<Long> pttl(@NonNull String key) {
         return commandManager.submitNewCommand(PTTL, new String[] {key}, this::handleLongResponse);
     }
@@ -3627,7 +3663,7 @@ public abstract class BaseClient
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {function, gs(Long.toString(keys.length))}, keys, arguments);
-        return commandManager.submitNewCommand(FCall, args, this::handleObjectOrNullResponse);
+        return commandManager.submitNewCommand(FCall, args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Override
@@ -3646,7 +3682,8 @@ public abstract class BaseClient
         GlideString[] args =
                 concatenateArrays(
                         new GlideString[] {function, gs(Long.toString(keys.length))}, keys, arguments);
-        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+        return commandManager.submitNewCommand(
+                FCallReadOnly, args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Override
