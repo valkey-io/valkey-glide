@@ -691,6 +691,7 @@ class ClusterCommands(CoreCommands):
     ) -> List[bytes]:
         """
         Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        This command is routed to primary nodes only.
         To store the result into a new key, see `sort_store`.
 
         By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
@@ -726,6 +727,55 @@ class ClusterCommands(CoreCommands):
         """
         args = _build_sort_args(key, None, limit, None, order, alpha)
         result = await self._execute_command(RequestType.Sort, args)
+        return cast(List[bytes], result)
+
+    async def sort_ro(
+        self,
+        key: TEncodable,
+        limit: Optional[Limit] = None,
+        order: Optional[OrderBy] = None,
+        alpha: Optional[bool] = None,
+    ) -> List[bytes]:
+        """
+        Sorts the elements in the list, set, or sorted set at `key` and returns the result.
+        The `sort_ro` command can be used to sort elements based on different criteria and apply transformations on sorted elements.
+        This command is routed depending on the client's `ReadFrom` strategy.
+
+        By default, sorting is numeric, and elements are compared by their value interpreted as double precision floating point numbers.
+
+        See https://valkey.io/commands/sort for more details.
+
+        Args:
+            key (TEncodable): The key of the list, set, or sorted set to be sorted.
+            limit (Optional[Limit]): Limiting the range of the query by setting offset and result count. See `Limit` class for more information.
+            order (Optional[OrderBy]): Specifies the order to sort the elements.
+                Can be `OrderBy.ASC` (ascending) or `OrderBy.DESC` (descending).
+            alpha (Optional[bool]): When `True`, sorts elements lexicographically. When `False` (default), sorts elements numerically.
+                Use this when the list, set, or sorted set contains string values that cannot be converted into double precision floating point numbers.
+
+        Returns:
+            List[bytes]: A list of sorted elements.
+
+        Examples:
+            >>> await client.lpush("mylist", '3', '1', '2')
+            >>> await client.sort_ro("mylist")
+            [b'1', b'2', b'3']
+
+            >>> await client.sort_ro("mylist", order=OrderBy.DESC)
+            [b'3', b'2', b'1']
+
+            >>> await client.lpush("mylist", '2', '1', '2', '3', '3', '1')
+            >>> await client.sort_ro("mylist", limit=Limit(2, 3))
+            [b'1', b'2', b'2']
+
+            >>> await client.lpush("mylist", "a", "b", "c", "d")
+            >>> await client.sort_ro("mylist", limit=Limit(2, 2), order=OrderBy.DESC, alpha=True)
+            [b'b', b'a']
+
+        Since: Redis version 7.0.0.
+        """
+        args = _build_sort_args(key, None, limit, None, order, alpha)
+        result = await self._execute_command(RequestType.SortReadOnly, args)
         return cast(List[bytes], result)
 
     async def sort_store(
