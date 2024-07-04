@@ -838,8 +838,7 @@ pub(crate) fn convert_to_expected_type(
                 // - convert any group in the group array to a map, if there are any groups
                 // - convert the root of the response into a map
                 let groups_key = Value::SimpleString("groups".into());
-                let mut error_while_converting_key = false;
-                let groups_index = array
+                let opt_groups_index = array
                     .iter()
                     .position(
                         |key| {
@@ -849,19 +848,23 @@ pub(crate) fn convert_to_expected_type(
                                     converted_key == groups_key
                                 },
                                 Err(_) => {
-                                    error_while_converting_key = true;
                                     false
                                 }
                             }
                         }
-                    ).unwrap();
+                    );
 
-                if error_while_converting_key {
-                    return Err((ErrorKind::TypeError, "Error while trying to compare keys").into());
+                let Some(groups_index) = opt_groups_index else {
+                    return Err((ErrorKind::TypeError, "Groups key not found").into());
+                };
+                dbg!(groups_index);
+
+                if array.get(groups_index + 1).is_none() {
+                    return Err((ErrorKind::TypeError, "No groups value found.").into());
                 }
-
-                let Value::Array(mut groups) = array[groups_index].clone() else {
-                    return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+ 
+                let Value::Array(mut groups) = array[groups_index + 1].clone() else {
+                    return Err((ErrorKind::TypeError, "Incorrect value type received. Wanted an Array.").into());
                 };
 
                 if groups.is_empty() {
@@ -871,21 +874,20 @@ pub(crate) fn convert_to_expected_type(
                     }))?;
 
                     let Value::Map(map) = converted_response else {
-                        return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                        return Err((ErrorKind::TypeError, "Incorrect value type received. Wanted a Map.").into());
                     };
 
                     return Ok(Value::Map(map));
                 }
 
                 let mut groups_as_maps = Vec::new();
-                let mut consumers_indices = Vec::new();
                 for group_value in &groups {
                     let Value::Array(group) = group_value.clone() else {
-                        return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                        return Err((ErrorKind::TypeError, "Incorrect value type received for group value. Wanted an Array").into());
                     };
 
                     let consumers_key = Value::SimpleString("consumers".into());
-                    let consumers_index = group
+                    let opt_consumers_index = group
                         .iter()
                         .position(
                             |key| {
@@ -895,19 +897,23 @@ pub(crate) fn convert_to_expected_type(
                                         converted_key == consumers_key
                                     },
                                     Err(_) => {
-                                        error_while_converting_key = true;
+                                        //error_while_converting_key = true;
                                         false
                                     }
                                 }
                             }
-                        ).unwrap();
+                        );
 
-                    if error_while_converting_key {
-                        return Err((ErrorKind::TypeError, "Error while trying to compare keys").into());
+                    let Some(consumers_index) = opt_consumers_index else {
+                        return Err((ErrorKind::TypeError, "No consumers key found").into());
+                    };
+
+                    if group.get(consumers_index + 1).is_none() {
+                        return Err((ErrorKind::TypeError, "No consumers value found.").into());
                     }
 
-                    let Value::Array(ref consumers) = group[consumers_index] else {
-                        return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                    let Value::Array(ref consumers) = group[consumers_index + 1] else {
+                        return Err((ErrorKind::TypeError, "Incorrect value type received for consumers. Wanted an Array.").into());
                     };
 
                     if consumers.is_empty() {
@@ -928,21 +934,17 @@ pub(crate) fn convert_to_expected_type(
                         }))?);
                     }
 
-                    consumers_indices.push((consumers_index, consumers_as_maps));
+                    groups_as_maps.push(Value::Map(vec![(Value::BulkString("consumers".to_string().into_bytes()), Value::Array(consumers_as_maps))]));
                 }
 
-                for (index, map) in consumers_indices {
-                    groups[index] = Value::Array(map);
-                }
-
-                array[groups_index] = Value::Array(groups_as_maps);
+                array[groups_index + 1] = Value::Array(groups_as_maps);
                 let converted_response = convert_to_expected_type(Value::Array(array.to_vec()), Some(ExpectedReturnType::Map {
                     key_type: &Some(ExpectedReturnType::BulkString),
                     value_type: &None,
                 }))?;
 
                 let Value::Map(map) = converted_response else {
-                    return Err((ErrorKind::TypeError, "Incorrect value type received").into());
+                    return Err((ErrorKind::TypeError, "Incorrect value type received for response. Wanted a Map.").into());
                 };
 
                 Ok(Value::Map(map))
@@ -1368,17 +1370,15 @@ mod tests {
             Value::BulkString("length".to_string().into_bytes()),
             Value::Int(2),
             Value::BulkString("entries".to_string().into_bytes()),
-            Value::Array(vec![
+            Value::Array(vec![Value::Array(vec![
+                Value::BulkString("1-0".to_string().into_bytes()),
                 Value::Array(vec![
-                    Value::BulkString("1-0".to_string().into_bytes()),
-                    Value::Array(vec![
-                        Value::BulkString("a".to_string().into_bytes()),
-                        Value::BulkString("b".to_string().into_bytes()),
-                        Value::BulkString("c".to_string().into_bytes()),
-                        Value::BulkString("d".to_string().into_bytes()),
-                    ])
+                    Value::BulkString("a".to_string().into_bytes()),
+                    Value::BulkString("b".to_string().into_bytes()),
+                    Value::BulkString("c".to_string().into_bytes()),
+                    Value::BulkString("d".to_string().into_bytes()),
                 ]),
-            ]),
+            ])]),
             Value::BulkString("groups".to_string().into_bytes()),
             Value::Array(vec![
                 Value::Array(vec![
@@ -1386,12 +1386,10 @@ mod tests {
                     Value::Array(vec![
                         Value::Array(vec![
                             Value::BulkString("pending".to_string().into_bytes()),
-                            Value::Array(vec![
-                                Value::Array(vec![
-                                    Value::BulkString("1-0".to_string().into_bytes()),
-                                    Value::Int(1),
-                                ]),
-                            ]),
+                            Value::Array(vec![Value::Array(vec![
+                                Value::BulkString("1-0".to_string().into_bytes()),
+                                Value::Int(1),
+                            ])]),
                         ]),
                         Value::Array(vec![
                             Value::BulkString("pending".to_string().into_bytes()),
@@ -1413,51 +1411,39 @@ mod tests {
             ),
             (
                 Value::BulkString("entries".to_string().into_bytes()),
-                Value::Array(vec![
+                Value::Array(vec![Value::Array(vec![
+                    Value::BulkString("1-0".to_string().into_bytes()),
                     Value::Array(vec![
-                        Value::BulkString("1-0".to_string().into_bytes()),
-                        Value::Array(vec![
-                            Value::BulkString("a".to_string().into_bytes()),
-                            Value::BulkString("b".to_string().into_bytes()),
-                            Value::BulkString("c".to_string().into_bytes()),
-                            Value::BulkString("d".to_string().into_bytes()),
-                        ])
+                        Value::BulkString("a".to_string().into_bytes()),
+                        Value::BulkString("b".to_string().into_bytes()),
+                        Value::BulkString("c".to_string().into_bytes()),
+                        Value::BulkString("d".to_string().into_bytes()),
                     ]),
-                ]),
+                ])]),
             ),
             (
                 Value::BulkString("groups".to_string().into_bytes()),
                 Value::Array(vec![
-                    Value::Map(vec![
-                        (
-                            Value::BulkString("consumers".to_string().into_bytes()),
-                            Value::Array(vec![
-                                Value::Map(vec![
-                                    (
-                                        Value::BulkString("pending".to_string().into_bytes()),
-                                        Value::Array(vec![
-                                            Value::Array(vec![
-                                                Value::BulkString("1-0".to_string().into_bytes()),
-                                                Value::Int(1),
-                                            ]),
-                                        ]),
-                                    ),
-                                ]),
-                                Value::Map(vec![
-                                    (
-                                        Value::BulkString("pending".to_string().into_bytes()),
-                                        Value::Array(vec![]),
-                                    ),
-                                ]),
-                            ]),
-                        ),
-                    ]),
-                    Value::Map(vec![
-                        (
-                            Value::BulkString("consumers".to_string().into_bytes()),
-                            Value::Array(vec![]),
-                        ),
-                    ]),
+                    Value::Map(vec![(
+                        Value::BulkString("consumers".to_string().into_bytes()),
+                        Value::Array(vec![
+                            Value::Map(vec![(
+                                Value::BulkString("pending".to_string().into_bytes()),
+                                Value::Array(vec![Value::Array(vec![
+                                    Value::BulkString("1-0".to_string().into_bytes()),
+                                    Value::Int(1),
+                                ])]),
+                            )]),
+                            Value::Map(vec![(
+                                Value::BulkString("pending".to_string().into_bytes()),
+                                Value::Array(vec![]),
+                            )]),
+                        ]),
+                    )]),
+                    Value::Map(vec![(
+                        Value::BulkString("consumers".to_string().into_bytes()),
+                        Value::Array(vec![]),
+                    )]),
                 ]),
             ),
         ]);
@@ -1487,12 +1473,10 @@ mod tests {
             Value::Array(vec![]),
         ]);
 
-        let resp3_empty_groups = Value::Map(vec![
-            (
-                Value::BulkString("groups".to_string().into_bytes()),
-                Value::Array(vec![]),
-            )
-        ]);
+        let resp3_empty_groups = Value::Map(vec![(
+            Value::BulkString("groups".to_string().into_bytes()),
+            Value::Array(vec![]),
+        )]);
 
         // We want the RESP2 response to be converted into RESP3 format.
         assert_eq!(
