@@ -2802,10 +2802,9 @@ public abstract class BaseClient
             @NonNull String consumer,
             long minIdleTime,
             @NonNull String start) {
-        String[] args =
-                concatenateArrays(new String[] {key, group, consumer, Long.toString(minIdleTime), start});
+        String[] args = new String[] {key, group, consumer, Long.toString(minIdleTime), start};
         return commandManager.submitNewCommand(
-                XAutoClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+                XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
@@ -2828,13 +2827,11 @@ public abstract class BaseClient
             long minIdleTime,
             @NonNull String start,
             long count) {
-        String[] args =
-                concatenateArrays(
-                        new String[] {
+        String[] args = new String[] {
                             key, group, consumer, Long.toString(minIdleTime), start, "COUNT", Long.toString(count)
-                        });
+                        };
         return commandManager.submitNewCommand(
-                XAutoClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+                XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
@@ -2859,11 +2856,9 @@ public abstract class BaseClient
             @NonNull String consumer,
             long minIdleTime,
             @NonNull String start) {
-        String[] args =
-                concatenateArrays(
-                        new String[] {key, group, consumer, Long.toString(minIdleTime), start, "JUSTID"});
+        String[] args = new String[] {key, group, consumer, Long.toString(minIdleTime), start, "JUSTID"};
         return commandManager.submitNewCommand(
-                XAutoClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+                XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override
@@ -2886,9 +2881,7 @@ public abstract class BaseClient
             long minIdleTime,
             @NonNull String start,
             long count) {
-        String[] args =
-                concatenateArrays(
-                        new String[] {
+        String[] args = new String[] {
                             key,
                             group,
                             consumer,
@@ -2897,9 +2890,9 @@ public abstract class BaseClient
                             "COUNT",
                             Long.toString(count),
                             "JUSTID"
-                        });
+                        };
         return commandManager.submitNewCommand(
-                XAutoClaim, args, response -> castArray(handleArrayResponse(response), String.class));
+                XAutoClaim, args, this::handleArrayResponse);
     }
 
     @Override

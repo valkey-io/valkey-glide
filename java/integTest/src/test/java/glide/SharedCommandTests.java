@@ -7119,6 +7119,89 @@ public class SharedCommandTests {
     @SneakyThrows
     @ParameterizedTest(autoCloseArguments = false)
     @MethodSource("getClients")
+    public void xautoclaim(BaseClient client) {
+        String minVersion = "6.2.0";
+        assumeTrue(REDIS_VERSION.isGreaterThanOrEqualTo(minVersion), "This feature added in redis " + minVersion);
+        boolean isVersion7OrAbove = REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0");
+        String key = UUID.randomUUID().toString();
+        String groupName = UUID.randomUUID().toString();
+        String zeroStreamId = "0-0";
+        String consumer = UUID.randomUUID().toString();
+
+        // Add 4 stream entries for consumer
+        String streamid_0 = client.xadd(key, Map.of("f1", "v1"/*, "f2", "v2"*/)).get();
+        assertNotNull(streamid_0);
+        String streamid_1 = client.xadd(key, Map.of("field1", "value1")).get();
+        assertNotNull(streamid_1);
+        String streamid_2 = client.xadd(key, Map.of("field2", "value2")).get();
+        assertNotNull(streamid_2);
+        String streamid_3 = client.xadd(key, Map.of("field3", "value3")).get();
+        assertNotNull(streamid_3);
+
+        // create group and consumer for the group
+        assertEquals(
+            OK,
+            client
+                .xgroupCreate(
+                    key, groupName, zeroStreamId, StreamGroupOptions.builder().makeStream().build())
+                .get());
+
+        // read the entire stream for the consumer and mark messages as pending
+        var xreadgroup_result = client.xreadgroup(Map.of(key, ">"), groupName, consumer).get();
+        assertDeepEquals(
+            Map.of(
+                key,
+                Map.of(
+                    streamid_0, new String[][] {{"f1", "v1"}/*, {"f2", "v2"}*/},
+                    streamid_1, new String[][] {{"field1", "value1"}},
+                    streamid_2, new String[][] {{"field2", "value2"}},
+                    streamid_3, new String[][] {{"field3", "value3"}})),
+            xreadgroup_result);
+
+        Object[] xautoclaimResult1 = client.xautoclaim(key, groupName, consumer, 0L, zeroStreamId, 1L).get();
+        assertEquals(streamid_1, xautoclaimResult1[0]);
+        assertDeepEquals(Map.of(streamid_0, new String[][] {{"f1", "v1"}/*, {"f2", "v2"}*/}), xautoclaimResult1[1]);
+
+        // if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        //     Entries List because they no longer exist in the stream
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertDeepEquals(new Object[]{}, xautoclaimResult1[2]);
+        }
+
+        // delete entry 1-2
+        assertEquals(1, client.xdel(key, new String[] {streamid_2}).get());
+
+        // autoclaim the rest of the entries
+        Object[] xautoclaimResult2 = client.xautoclaim(key, groupName, consumer, 0L, streamid_1).get();
+        assertEquals(zeroStreamId, xautoclaimResult2[0]); // "0-0" is returned to indicate the entire stream was scanned.
+        assertDeepEquals(Map.of(
+            streamid_1, new String[][] {{"field1", "value1"}},
+            streamid_3, new String[][] {{"field3", "value3"}}
+            ),
+            xautoclaimResult2[1]
+            );
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertDeepEquals(new String[]{streamid_2}, xautoclaimResult2[2]);
+        }
+
+        // autoclaim with JUSTID: result at index 1 does not contain fields/values of the claimed entries, only IDs
+        Object[] justIdResult = client.xautoclaimJustId(key, groupName, consumer, 0L, zeroStreamId).get();
+        assertEquals(zeroStreamId, justIdResult[0]);
+        if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
+            assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_3}, justIdResult[1]);
+            assertDeepEquals(new Object[] {}, justIdResult[2]);
+        }
+        else {
+            // in Redis < 7.0.0, specifically for XAUTOCLAIM with JUSTID, entry IDs that were in the Pending Entries List
+            //     but are no longer in the stream still show up in the response
+            assertDeepEquals(new String[] {streamid_0, streamid_1, streamid_2, streamid_3}, justIdResult[1]);
+        }
+
+    }
+
+    @SneakyThrows
+    @ParameterizedTest(autoCloseArguments = false)
+    @MethodSource("getClients")
     public void zrandmember(BaseClient client) {
         String key1 = UUID.randomUUID().toString();
         String key2 = UUID.randomUUID().toString();
