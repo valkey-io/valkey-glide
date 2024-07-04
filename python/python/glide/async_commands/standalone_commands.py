@@ -12,7 +12,7 @@ from glide.async_commands.core import (
     InfoSection,
     _build_sort_args,
 )
-from glide.async_commands.transaction import BaseTransaction, Transaction
+from glide.async_commands.transaction import Transaction
 from glide.constants import OK, TOK, TEncodable, TFunctionListResponse, TResult
 from glide.protobuf.redis_request_pb2 import RequestType
 
@@ -59,20 +59,20 @@ class StandaloneCommands(CoreCommands):
 
     async def exec(
         self,
-        transaction: BaseTransaction | Transaction,
+        transaction: Transaction,
     ) -> Optional[List[TResult]]:
         """
         Execute a transaction by processing the queued commands.
         See https://redis.io/topics/Transactions/ for details on Redis Transactions.
 
         Args:
-            transaction (Transaction): A Transaction object containing a list of commands to be executed.
+            transaction (Transaction): A `Transaction` object containing a list of commands to be executed.
 
         Returns:
             Optional[List[TResult]]: A list of results corresponding to the execution of each command
-            in the transaction. If a command returns a value, it will be included in the list. If a command
-            doesn't return a value, the list entry will be None.
-            If the transaction failed due to a WATCH command, `exec` will return `None`.
+                in the transaction. If a command returns a value, it will be included in the list. If a command
+                doesn't return a value, the list entry will be `None`.
+                If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
         commands = transaction.commands[:]
         return await self._execute_transaction(commands)

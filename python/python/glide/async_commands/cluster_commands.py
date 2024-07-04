@@ -12,7 +12,7 @@ from glide.async_commands.core import (
     InfoSection,
     _build_sort_args,
 )
-from glide.async_commands.transaction import BaseTransaction, ClusterTransaction
+from glide.async_commands.transaction import ClusterTransaction
 from glide.constants import (
     TOK,
     TClusterResponse,
@@ -82,7 +82,7 @@ class ClusterCommands(CoreCommands):
 
     async def exec(
         self,
-        transaction: BaseTransaction | ClusterTransaction,
+        transaction: ClusterTransaction,
         route: Optional[TSingleNodeRoute] = None,
     ) -> Optional[List[TResult]]:
         """
@@ -90,16 +90,16 @@ class ClusterCommands(CoreCommands):
         See https://redis.io/topics/Transactions/ for details on Redis Transactions.
 
         Args:
-            transaction (ClusterTransaction): A ClusterTransaction object containing a list of commands to be executed.
+            transaction (ClusterTransaction): A `ClusterTransaction` object containing a list of commands to be executed.
             route (Optional[TSingleNodeRoute]): If `route` is not provided, the transaction will be routed to the slot owner of the
-            first key found in the transaction. If no key is found, the command will be sent to a random node.
-            If `route` is provided, the client will route the command to the nodes defined by `route`.
+                first key found in the transaction. If no key is found, the command will be sent to a random node.
+                If `route` is provided, the client will route the command to the nodes defined by `route`.
 
         Returns:
             Optional[List[TResult]]: A list of results corresponding to the execution of each command
-            in the transaction. If a command returns a value, it will be included in the list. If a command
-            doesn't return a value, the list entry will be None.
-            If the transaction failed due to a WATCH command, `exec` will return `None`.
+                in the transaction. If a command returns a value, it will be included in the list. If a command
+                doesn't return a value, the list entry will be `None`.
+                If the transaction failed due to a WATCH command, `exec` will return `None`.
         """
         commands = transaction.commands[:]
         return await self._execute_transaction(commands, route)
