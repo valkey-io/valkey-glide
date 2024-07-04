@@ -5,7 +5,6 @@ import static glide.api.models.GlideString.gs;
 
 import glide.api.models.GlideString;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import lombok.experimental.SuperBuilder;
 
@@ -45,7 +44,7 @@ public abstract class BaseScanOptionsBinary {
      *
      * @return a String array that holds the options and their arguments.
      */
-    public String[] toStringArgs() {
+    public String[] toArgs() {
         List<String> optionArgs = new ArrayList<>();
 
         if (matchPattern != null) {
@@ -59,14 +58,5 @@ public abstract class BaseScanOptionsBinary {
         }
 
         return optionArgs.toArray(new String[0]);
-    }
-
-    /**
-     * Creates the arguments to be used in <code>SCAN</code> commands.
-     *
-     * @return a GlideString array that holds the options and their arguments.
-     */
-    public GlideString[] toGlideStringArgs() {
-        return Arrays.stream(toStringArgs()).map(GlideString::gs).toArray(GlideString[]::new);
     }
 }
