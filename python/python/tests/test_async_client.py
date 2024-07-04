@@ -4716,6 +4716,12 @@ class TestCommands:
         assert await glide_client.hset(user_key5, {"name": "Eve", "age": "40"}) == 2
         assert await glide_client.lpush("user_ids", ["5", "4", "3", "2", "1"]) == 5
 
+        # SORT_RO Available since: 7.0.0
+        skip_sort_ro_test = False
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(glide_client, min_version):
+            skip_sort_ro_test = True
+
         # Test sort with all arguments
         assert await glide_client.lpush(key, ["3", "1", "2"]) == 3
         result = await glide_client.sort(
@@ -4726,6 +4732,16 @@ class TestCommands:
             alpha=True,
         )
         assert result == [b"Alice", b"Bob"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                key,
+                limit=Limit(0, 2),
+                get_patterns=[b"user:*->name"],
+                order=OrderBy.ASC,
+                alpha=True,
+            )
+            assert result_ro == [b"Alice", b"Bob"]
 
         # Test sort_store with all arguments
         sort_store_result = await glide_client.sort_store(
@@ -4747,9 +4763,16 @@ class TestCommands:
             get_patterns=["user:*->name"],
             alpha=True,
         )
-        assert result == convert_string_to_bytes_object(
-            ["Dave", "Bob", "Alice", "Charlie", "Eve"]
-        )
+        assert result == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                b"user_ids",
+                by_pattern=b"user:*->age",
+                get_patterns=["user:*->name"],
+                alpha=True,
+            )
+            assert result_ro == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         # Test sort with `by` argument with missing keys to sort by
         assert await glide_client.lpush("user_ids", ["a"]) == 6
@@ -4763,6 +4786,15 @@ class TestCommands:
             [None, "Dave", "Bob", "Alice", "Charlie", "Eve"]
         )
 
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                "user_ids",
+                by_pattern=b"user:*->age",
+                get_patterns=["user:*->name"],
+                alpha=True,
+            )
+            assert result_ro == [None, b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
+
         # Test sort with `by` argument with missing keys to sort by
         result = await glide_client.sort(
             "user_ids",
@@ -4774,6 +4806,15 @@ class TestCommands:
             [None, "30", "25", "35", "20", "40"]
         )
 
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                "user_ids",
+                by_pattern=b"user:*->name",
+                get_patterns=[b"user:*->age"],
+                alpha=True,
+            )
+            assert result_ro == [None, b"30", b"25", b"35", b"20", b"40"]
+
         # Test Limit with count 0
         result = await glide_client.sort(
             "user_ids",
@@ -4781,6 +4822,14 @@ class TestCommands:
             alpha=True,
         )
         assert result == []
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                "user_ids",
+                limit=Limit(0, 0),
+                alpha=True,
+            )
+            assert result_ro == []
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4790,9 +4839,19 @@ class TestCommands:
         key = "{SameSlotKey}" + get_random_string(10)
         store = "{SameSlotKey}" + get_random_string(10)
 
+        # SORT_RO Available since: 7.0.0
+        skip_sort_ro_test = False
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(glide_client, min_version):
+            skip_sort_ro_test = True
+
         # Test sort with non-existing key
         result = await glide_client.sort("non_existing_key")
         assert result == []
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(b"non_existing_key")
+            assert result_ro == []
 
         # Test sort_store with non-existing key
         sort_store_result = await glide_client.sort_store(
@@ -4807,13 +4866,25 @@ class TestCommands:
         result = await glide_client.sort(key)
         assert result == [b"1", b"2", b"3", b"4", b"5"]
 
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(key)
+            assert result_ro == [b"1", b"2", b"3", b"4", b"5"]
+
         # limit argument
         result = await glide_client.sort(key, limit=Limit(1, 3))
         assert result == [b"2", b"3", b"4"]
 
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(key, limit=Limit(1, 3))
+            assert result_ro == [b"2", b"3", b"4"]
+
         # order argument
         result = await glide_client.sort(key, order=OrderBy.DESC)
         assert result == [b"5", b"4", b"3", b"2", b"1"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(key, order=OrderBy.DESC)
+            assert result_ro == [b"5", b"4", b"3", b"2", b"1"]
 
         assert await glide_client.lpush(key, ["a"]) == 6
 
@@ -4821,15 +4892,30 @@ class TestCommands:
             await glide_client.sort(key)
         assert "can't be converted into double" in str(e).lower()
 
+        if not skip_sort_ro_test:
+            with pytest.raises(RequestError) as e:
+                await glide_client.sort_ro(key)
+            assert "can't be converted into double" in str(e).lower()
+
         # alpha argument
         result = await glide_client.sort(key, alpha=True)
         assert result == [b"1", b"2", b"3", b"4", b"5", b"a"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(key, alpha=True)
+            assert result_ro == [b"1", b"2", b"3", b"4", b"5", b"a"]
 
         # Combining multiple arguments
         result = await glide_client.sort(
             key, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
         )
         assert result == [b"5", b"4", b"3"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                key, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
+            )
+            assert result_ro == [b"5", b"4", b"3"]
 
         # Test sort_store with combined arguments
         sort_store_result = await glide_client.sort_store(
@@ -9672,19 +9758,19 @@ class TestScripts:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_keys_no_args(self, request, cluster_mode, protocol):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
         length = 2**13  # 8kb
         key = "0" * length
         script = Script("return KEYS[1]")
-        assert await redis_client.invoke_script(script, keys=[key]) == key.encode()
-        await redis_client.close()
+        assert await glide_client.invoke_script(script, keys=[key]) == key.encode()
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_args_no_keys(self, request, cluster_mode, protocol):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
         length = 2**12  # 4kb
@@ -9693,14 +9779,14 @@ class TestScripts:
 
         script = Script("return ARGV[2]")
         assert (
-            await redis_client.invoke_script(script, args=[arg1, arg2]) == arg2.encode()
+            await glide_client.invoke_script(script, args=[arg1, arg2]) == arg2.encode()
         )
-        await redis_client.close()
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_keys_and_args(self, request, cluster_mode, protocol):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
         length = 2**12  # 4kb
@@ -9709,7 +9795,7 @@ class TestScripts:
 
         script = Script("return KEYS[1]")
         assert (
-            await redis_client.invoke_script(script, keys=[key], args=[arg])
+            await glide_client.invoke_script(script, keys=[key], args=[arg])
             == key.encode()
         )
-        await redis_client.close()
+        await glide_client.close()
