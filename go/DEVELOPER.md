@@ -85,10 +85,15 @@ brew install go make git gcc pkgconfig protobuf@3 openssl
 export PATH="$PATH:$HOME/go/bin"
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 source "$HOME/.cargo/env"
-# Check that the protobuf compiler is installed. A minimum version of 3.20.0 is required.
-protoc --version
 # Check that the Rust compiler is installed
 rustc --version
+# Verify the Protobuf compiler installation
+protoc --version
+
+# If protoc is not found or does not work correctly, update the PATH
+echo 'export PATH="/opt/homebrew/opt/protobuf@3/bin:$PATH"' >> /Users/$USER/.bash_profile
+source /Users/$USER/.bash_profile
+protoc --version
 ```
 
 #### Building and installation steps
