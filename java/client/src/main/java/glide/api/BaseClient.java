@@ -217,7 +217,9 @@ import glide.api.models.commands.ScriptOptionsGlideString;
 import glide.api.models.commands.SetOptions;
 import glide.api.models.commands.WeightAggregateOptions.Aggregate;
 import glide.api.models.commands.WeightAggregateOptions.KeyArray;
+import glide.api.models.commands.WeightAggregateOptions.KeyArrayBinary;
 import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeys;
+import glide.api.models.commands.WeightAggregateOptions.KeysOrWeightedKeysBinary;
 import glide.api.models.commands.ZAddOptions;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldReadOnlySubCommands;
 import glide.api.models.commands.bitmap.BitFieldOptions.BitFieldSubCommands;
@@ -2116,8 +2118,31 @@ public abstract class BaseClient
 
     @Override
     public CompletableFuture<Long> zunionstore(
+            @NonNull GlideString destination,
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys,
+            @NonNull Aggregate aggregate) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(destination)
+                        .add(keysOrWeightedKeys.toArgs())
+                        .add(aggregate.toArgs())
+                        .toArray();
+
+        return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(
             @NonNull String destination, @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         String[] arguments = concatenateArrays(new String[] {destination}, keysOrWeightedKeys.toArgs());
+        return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
+    }
+
+    @Override
+    public CompletableFuture<Long> zunionstore(
+            @NonNull GlideString destination, @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(destination).add(keysOrWeightedKeys.toArgs()).toArray();
         return commandManager.submitNewCommand(ZUnionStore, arguments, this::handleLongResponse);
     }
 
@@ -2146,6 +2171,14 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString[]> zunion(@NonNull KeyArrayBinary keys) {
+        return commandManager.submitNewCommand(
+                ZUnion,
+                keys.toArgs(),
+                response -> castArray(handleArrayResponseBinary(response), GlideString.class));
+    }
+
+    @Override
     public CompletableFuture<Map<String, Double>> zunionWithScores(
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys, @NonNull Aggregate aggregate) {
         String[] arguments =
@@ -2155,11 +2188,32 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<GlideString, Double>> zunionWithScores(
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys, @NonNull Aggregate aggregate) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(keysOrWeightedKeys.toArgs())
+                        .add(aggregate.toArgs())
+                        .add(WITH_SCORES_REDIS_API)
+                        .toArray();
+        return commandManager.submitNewCommand(ZUnion, arguments, this::handleBinaryStringMapResponse);
+    }
+
+    @Override
     public CompletableFuture<Map<String, Double>> zunionWithScores(
             @NonNull KeysOrWeightedKeys keysOrWeightedKeys) {
         String[] arguments =
                 concatenateArrays(keysOrWeightedKeys.toArgs(), new String[] {WITH_SCORES_REDIS_API});
         return commandManager.submitNewCommand(ZUnion, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<GlideString, Double>> zunionWithScores(
+            @NonNull KeysOrWeightedKeysBinary keysOrWeightedKeys) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(keysOrWeightedKeys.toArgs()).add(WITH_SCORES_REDIS_API).toArray();
+
+        return commandManager.submitNewCommand(ZUnion, arguments, this::handleBinaryStringMapResponse);
     }
 
     @Override
