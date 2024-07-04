@@ -2604,8 +2604,7 @@ class BaseTransaction:
             key (TEncodable): The key of the stream.
 
         Command response:
-            TXInfoStreamResponse: A mapping of stream information for the given `key`. See the example for a sample
-                response.
+            TXInfoStreamResponse: A mapping of stream information for the given `key`.
         """
         return self.append_command(RequestType.XInfoStream, [key])
 
@@ -2625,8 +2624,7 @@ class BaseTransaction:
                 entries will be returned. If not provided, defaults to `10`.
 
         Command response:
-            TXInfoStreamFullResponse: A mapping of detailed stream information for the given `key`. See the example for
-                a sample response.
+            TXInfoStreamFullResponse: A mapping of detailed stream information for the given `key`.
         """
         args = [key, "FULL"]
         if count is not None:
