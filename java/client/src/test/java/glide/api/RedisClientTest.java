@@ -11272,6 +11272,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lcs_binary() {
+        // setup
+        GlideString key1 = gs("testKey1");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments = new GlideString[] {key1, key2};
+        GlideString value = gs("foo");
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.lcs(key1, key2);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lcs_with_len_option() {
         // setup
         String key1 = "testKey1";
@@ -11297,11 +11322,61 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lcs_with_len_option_binary() {
+        // setup
+        GlideString key1 = gs("testKey1");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments = new GlideString[] {key1, key2, gs(LEN_REDIS_API)};
+        Long value = 3L;
+
+        CompletableFuture<Long> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Long>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Long> response = service.lcsLen(key1, key2);
+        Long payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lcsIdx() {
         // setup
         String key1 = "testKey1";
         String key2 = "testKey2";
         String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING};
+        Map<String, Object> value = Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.lcsIdx(key1, key2);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lcsIdx_binary() {
+        // setup
+        GlideString key1 = gs("testKey1");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments = new GlideString[] {key1, key2, gs(IDX_COMMAND_STRING)};
         Map<String, Object> value = Map.of("matches", new Long[][][] {{{1L, 3L}, {0L, 2L}}}, "len", 3L);
 
         CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
@@ -11368,11 +11443,75 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lcsIdx_with_options_binary() {
+        // setup
+        GlideString key1 = gs("testKey1");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments =
+                new GlideString[] {
+                    key1, key2, gs(IDX_COMMAND_STRING), gs(MINMATCHLEN_COMMAND_STRING), gs("2")
+                };
+        Map<String, Object> value =
+                Map.of(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.lcsIdx(key1, key2, 2);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lcsIdxWithMatchLen() {
         // setup
         String key1 = "testKey1";
         String key2 = "testKey2";
         String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING};
+        Map<String, Object> value =
+                Map.of(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.lcsIdxWithMatchLen(key1, key2);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lcsIdxWithMatchLen_binary() {
+        // setup
+        GlideString key1 = gs("testKey1");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments =
+                new GlideString[] {key1, key2, gs(IDX_COMMAND_STRING), gs(WITHMATCHLEN_COMMAND_STRING)};
         Map<String, Object> value =
                 Map.of(
                         "matches",
@@ -11410,6 +11549,44 @@ public class RedisClientTest {
                     MINMATCHLEN_COMMAND_STRING,
                     "2",
                     WITHMATCHLEN_COMMAND_STRING
+                };
+        Map<String, Object> value =
+                Map.of(
+                        "matches",
+                        new Object[] {new Object[] {new Long[] {1L, 3L}, new Long[] {0L, 2L}, 3L}},
+                        "len",
+                        3L);
+
+        CompletableFuture<Map<String, Object>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<String, Object>>submitNewCommand(eq(LCS), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<String, Object>> response = service.lcsIdxWithMatchLen(key1, key2, 2);
+        Map<String, Object> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lcsIdxWithMatchLen_with_options_binary() {
+        // setup
+        GlideString key1 = gs("testKey1");
+        GlideString key2 = gs("testKey2");
+        GlideString[] arguments =
+                new GlideString[] {
+                    key1,
+                    key2,
+                    gs(IDX_COMMAND_STRING),
+                    gs(MINMATCHLEN_COMMAND_STRING),
+                    gs("2"),
+                    gs(WITHMATCHLEN_COMMAND_STRING)
                 };
         Map<String, Object> value =
                 Map.of(
