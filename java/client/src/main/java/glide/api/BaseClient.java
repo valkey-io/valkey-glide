@@ -2457,7 +2457,7 @@ public abstract class BaseClient
             @NonNull GlideString id,
             @NonNull StreamGroupOptions options) {
         GlideString[] arguments =
-                concatenateArrays(new GlideString[] {key, groupName, id}, options.toGlideStringArgs());
+                new ArgsBuilder().add(key).add(groupName).add(id).add(options.toArgs()).toArray();
         return commandManager.submitNewCommand(XGroupCreate, arguments, this::handleStringResponse);
     }
 
