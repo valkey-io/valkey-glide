@@ -818,7 +818,8 @@ public class RedisClusterClient extends BaseClient
             @NonNull GlideString function, @NonNull GlideString[] arguments) {
         GlideString[] args =
                 concatenateArrays(new GlideString[] {function, gs("0")}, arguments); // 0 - key count
-        return commandManager.submitNewCommand(FCallReadOnly, args, this::handleObjectOrNullResponse);
+        return commandManager.submitNewCommand(
+                FCallReadOnly, args, this::handleBinaryObjectOrNullResponse);
     }
 
     @Override
