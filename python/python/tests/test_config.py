@@ -2,7 +2,7 @@
 
 from glide.config import (
     BaseClientConfiguration,
-    ClusterClientConfiguration,
+    GlideClusterClientConfiguration,
     NodeAddress,
     PeriodicChecksManualInterval,
     PeriodicChecksStatus,
@@ -38,7 +38,7 @@ def test_convert_to_protobuf():
 
 
 def test_periodic_checks_interval_to_protobuf():
-    config = ClusterClientConfiguration(
+    config = GlideClusterClientConfiguration(
         [NodeAddress("127.0.0.1")],
     )
     request = config._create_a_protobuf_conn_request(cluster_mode=True)

@@ -85,6 +85,7 @@
 * Node: Update XREAD to return a Map of Map ([#1494](https://github.com/aws/glide-for-redis/pull/1494))
 * Node: Rename RedisClient to GlideClient and RedisClusterClient to GlideClusterClient ([#1670](https://github.com/aws/glide-for-redis/pull/1670))
 * Python: Rename RedisClient to GlideClient, RedisClusterClient to GlideClusterClient and BaseRedisClient to BaseClient([#1669](https://github.com/aws/glide-for-redis/pull/1669))
+* Python: Rename ClusterClientConfiguration to GlideClusterClientConfiguration ([#1806](https://github.com/aws/glide-for-redis/pull/1806))
 
 ## 0.4.1 (2024-02-06)
 
