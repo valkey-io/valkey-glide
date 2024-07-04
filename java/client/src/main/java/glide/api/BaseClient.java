@@ -3644,14 +3644,36 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<GlideString> lcs(@NonNull GlideString key1, @NonNull GlideString key2) {
+        GlideString[] arguments = new GlideString[] {key1, key2};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleGlideStringResponse);
+    }
+
+    @Override
     public CompletableFuture<Long> lcsLen(@NonNull String key1, @NonNull String key2) {
         String[] arguments = new String[] {key1, key2, LEN_REDIS_API};
         return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
     }
 
     @Override
+    public CompletableFuture<Long> lcsLen(@NonNull GlideString key1, @NonNull GlideString key2) {
+        GlideString[] arguments = new ArgsBuilder().add(key1).add(key2).add(LEN_REDIS_API).toArray();
+        return commandManager.submitNewCommand(LCS, arguments, this::handleLongResponse);
+    }
+
+    @Override
     public CompletableFuture<Map<String, Object>> lcsIdx(@NonNull String key1, @NonNull String key2) {
         String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING};
+        return commandManager.submitNewCommand(
+                LCS, arguments, response -> handleLcsIdxResponse(handleMapResponse(response)));
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(
+            @NonNull GlideString key1, @NonNull GlideString key2) {
+        GlideString[] arguments =
+                new ArgsBuilder().add(key1).add(key2).add(IDX_COMMAND_STRING).toArray();
+
         return commandManager.submitNewCommand(
                 LCS, arguments, response -> handleLcsIdxResponse(handleMapResponse(response)));
     }
@@ -3668,9 +3690,37 @@ public abstract class BaseClient
     }
 
     @Override
+    public CompletableFuture<Map<String, Object>> lcsIdx(
+            @NonNull GlideString key1, @NonNull GlideString key2, long minMatchLen) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key1)
+                        .add(key2)
+                        .add(IDX_COMMAND_STRING)
+                        .add(MINMATCHLEN_COMMAND_STRING)
+                        .add(minMatchLen)
+                        .toArray();
+        return commandManager.submitNewCommand(
+                LCS, arguments, response -> handleLcsIdxResponse(handleMapResponse(response)));
+    }
+
+    @Override
     public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(
             @NonNull String key1, @NonNull String key2) {
         String[] arguments = new String[] {key1, key2, IDX_COMMAND_STRING, WITHMATCHLEN_COMMAND_STRING};
+        return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(
+            @NonNull GlideString key1, @NonNull GlideString key2) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key1)
+                        .add(key2)
+                        .add(IDX_COMMAND_STRING)
+                        .add(WITHMATCHLEN_COMMAND_STRING)
+                        .toArray();
         return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
     }
 
@@ -3687,6 +3737,22 @@ public abstract class BaseClient
                             String.valueOf(minMatchLen),
                             WITHMATCHLEN_COMMAND_STRING
                         });
+        return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
+    }
+
+    @Override
+    public CompletableFuture<Map<String, Object>> lcsIdxWithMatchLen(
+            @NonNull GlideString key1, @NonNull GlideString key2, long minMatchLen) {
+        GlideString[] arguments =
+                new ArgsBuilder()
+                        .add(key1)
+                        .add(key2)
+                        .add(IDX_COMMAND_STRING)
+                        .add(MINMATCHLEN_COMMAND_STRING)
+                        .add(minMatchLen)
+                        .add(WITHMATCHLEN_COMMAND_STRING)
+                        .toArray();
+
         return commandManager.submitNewCommand(LCS, arguments, this::handleMapResponse);
     }
 
