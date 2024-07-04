@@ -19,6 +19,7 @@ import static glide.utils.ArrayTransformUtils.concatenateArrays;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueGlideStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToKeyValueStringArray;
 import static glide.utils.ArrayTransformUtils.convertMapToValueKeyStringArray;
+import static glide.utils.ArrayTransformUtils.flattenMapToGlideStringArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToArray;
 import static glide.utils.ArrayTransformUtils.mapGeoDataToGlideStringArray;
 import static redis_request.RedisRequestOuterClass.RequestType.Append;
@@ -801,9 +802,21 @@ public abstract class BaseClient
     }
 
     @Override
-    public CompletableFuture<String> mset(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToKeyValueStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+    public <ArgType> CompletableFuture<String> mset(@NonNull Map<ArgType, ArgType> keyValueMap) {
+        if (!keyValueMap.isEmpty()) {
+            var key = keyValueMap.keySet().iterator().next();
+            if (key instanceof String) {
+                String[] args = convertMapToKeyValueStringArray((Map<String, String>) keyValueMap);
+                return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+            }
+            if (key instanceof GlideString) {
+                GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
+                return commandManager.submitNewCommand(MSet, args, this::handleStringResponse);
+            } else {
+                throw new IllegalArgumentException("Expected String or GlideString");
+            }
+        }
+        return commandManager.submitNewCommand(MSet, new GlideString[0], this::handleStringResponse);
     }
 
     @Override
@@ -3619,10 +3632,21 @@ public abstract class BaseClient
         return commandManager.submitNewCommand(Copy, arguments, this::handleBooleanResponse);
     }
 
-    @Override
-    public CompletableFuture<Boolean> msetnx(@NonNull Map<String, String> keyValueMap) {
-        String[] args = convertMapToKeyValueStringArray(keyValueMap);
-        return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
+    public <ArgType> CompletableFuture<Boolean> msetnx(@NonNull Map<ArgType, ArgType> keyValueMap) {
+        if (!keyValueMap.isEmpty()) {
+            var key = keyValueMap.keySet().iterator().next();
+            if (key instanceof String) {
+                String[] args = convertMapToKeyValueStringArray((Map<String, String>) keyValueMap);
+                return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
+            }
+            if (key instanceof GlideString) {
+                GlideString[] args = flattenMapToGlideStringArray(keyValueMap);
+                return commandManager.submitNewCommand(MSetNX, args, this::handleBooleanResponse);
+            } else {
+                throw new IllegalArgumentException("Expected String or GlideString");
+            }
+        }
+        return commandManager.submitNewCommand(MSet, new GlideString[0], this::handleBooleanResponse);
     }
 
     @Override
