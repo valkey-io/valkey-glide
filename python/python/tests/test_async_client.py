@@ -74,7 +74,7 @@ from glide.config import (
     ClusterClientConfiguration,
     GlideClientConfiguration,
     ProtocolVersion,
-    RedisCredentials,
+    ServerCredentials,
 )
 from glide.constants import OK, TEncodable, TResult
 from glide.glide_client import GlideClient, GlideClusterClient, TGlideClient
@@ -111,7 +111,7 @@ class TestGlideClients:
         min_version = "7.2.0"
         if await check_if_server_version_lt(glide_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         info = await glide_client.custom_command(["CLIENT", "INFO"])
         assert isinstance(info, bytes)
         info_str = info.decode()
@@ -140,6 +140,9 @@ class TestGlideClients:
         assert value == "שלום hello 汉字"
         await glide_client.set(key, value)
         assert await glide_client.get(key) == value.encode()
+        # check set and get in bytes
+        await glide_client.set(key.encode(), value.encode())
+        assert await glide_client.get(key.encode()) == value.encode()
 
     @pytest.mark.parametrize("value_size", [100, 2**16])
     @pytest.mark.parametrize("cluster_mode", [True, False])
@@ -170,7 +173,7 @@ class TestGlideClients:
     ):
         is_cluster = isinstance(glide_client, GlideClusterClient)
         password = "TEST_AUTH"
-        credentials = RedisCredentials(password)
+        credentials = ServerCredentials(password)
         try:
             await glide_client.custom_command(
                 ["CONFIG", "SET", "requirepass", password]
@@ -232,7 +235,7 @@ class TestGlideClients:
             )
             key = get_random_string(10)
             assert await glide_client.set(key, key) == OK
-            credentials = RedisCredentials(password, username)
+            credentials = ServerCredentials(password, username)
 
             testuser_client = await create_client(
                 request,
@@ -329,7 +332,7 @@ class TestCommands:
         min_version = "6.2.0"
         if await check_if_server_version_lt(glide_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key = get_random_string(10)
         value = get_random_string(10)
         res = await glide_client.set(key, value)
@@ -353,6 +356,21 @@ class TestCommands:
         # Test multi args command
         client_list = await glide_client.custom_command(
             ["CLIENT", "LIST", "TYPE", "NORMAL"]
+        )
+        assert isinstance(client_list, (bytes, list))
+        res = get_first_result(client_list)
+        assert res is not None
+        assert b"id" in res
+        assert b"cmd=client" in res
+
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_custom_command_multi_arg_in_TEncodable(
+        self, glide_client: TGlideClient
+    ):
+        # Test multi args command
+        client_list = await glide_client.custom_command(
+            ["CLIENT", b"LIST", "TYPE", b"NORMAL"]
         )
         assert isinstance(client_list, (bytes, list))
         res = get_first_result(client_list)
@@ -447,6 +465,23 @@ class TestCommands:
         with pytest.raises(RequestError) as e:
             await glide_client.move(key, -1)
 
+    @pytest.mark.parametrize("cluster_mode", [False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_move_with_bytes(self, glide_client: GlideClient):
+        key = get_random_string(10)
+        value = get_random_string(10)
+
+        assert await glide_client.select(0) == OK
+
+        assert await glide_client.set(key, value) == OK
+        assert await glide_client.get(key.encode()) == value.encode()
+
+        assert await glide_client.move(key.encode(), 1) is True
+        assert await glide_client.get(key) is None
+        assert await glide_client.get(key.encode()) is None
+        assert await glide_client.select(1) == OK
+        assert await glide_client.get(key) == value.encode()
+
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_delete(self, glide_client: TGlideClient):
@@ -492,6 +527,7 @@ class TestCommands:
         assert await glide_client.set(key, value) == OK
         assert await glide_client.getrange(key, 0, 3) == value_encoded[:4]
         assert await glide_client.getrange(key, -3, -1) == value_encoded[-3:]
+        assert await glide_client.getrange(key.encode(), -3, -1) == value_encoded[-3:]
         assert await glide_client.getrange(key, 0, -1) == value_encoded
 
         # out of range
@@ -1131,7 +1167,7 @@ class TestCommands:
     async def test_lmpop(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
@@ -1170,7 +1206,7 @@ class TestCommands:
     async def test_blmpop(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
@@ -1854,7 +1890,7 @@ class TestCommands:
     async def test_sintercard(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         key1 = f"{{testKey}}:{get_random_string(10)}"
         key2 = f"{{testKey}}:{get_random_string(10)}"
@@ -2706,10 +2742,11 @@ class TestCommands:
     async def test_geosearchstore_by_radius(self, glide_client: TGlideClient):
         key = f"{{testKey}}:{get_random_string(10)}"
         destination_key = f"{{testKey}}:{get_random_string(8)}"
+        # Checking when parts of the value contain bytes
         members_coordinates: Mapping[TEncodable, GeospatialData] = {
-            "Palermo": GeospatialData(13.361389, 38.115556),
+            b"Palermo": GeospatialData(13.361389, 38.115556),
             "Catania": GeospatialData(15.087269, 37.502669),
-            "edge1": GeospatialData(12.758489, 38.788135),
+            b"edge1": GeospatialData(12.758489, 38.788135),
             "edge2": GeospatialData(17.241510, 38.788135),
         }
         result = {
@@ -2913,7 +2950,7 @@ class TestCommands:
             == [None] * 3
         )
 
-        # Neccessary to check since we are enforcing the user to pass a list of members while redis don't
+        # Neccessary to check since we are enforcing the user to pass a list of members while valkey don't
         # But when running the command with key only (and no members) the returned value will always be an empty list
         # So in case of any changes, this test will fail and inform us that we should allow not passing any members.
         assert await glide_client.geohash(key, []) == []
@@ -2984,7 +3021,7 @@ class TestCommands:
             == [None] * 3
         )
 
-        # Neccessary to check since we are enforcing the user to pass a list of members while redis don't
+        # Neccessary to check since we are enforcing the user to pass a list of members while valkey don't
         # But when running the command with key only (and no members) the returned value will always be an empty list
         # So in case of any changes, this test will fail and inform us that we should allow not passing any members.
         assert await glide_client.geohash(key, []) == []
@@ -4415,7 +4452,7 @@ class TestCommands:
     async def test_bzmpop(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
@@ -4573,7 +4610,7 @@ class TestCommands:
     async def test_zintercard(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
@@ -4615,7 +4652,7 @@ class TestCommands:
     async def test_zmpop(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         key1 = f"{{test}}-1-f{get_random_string(10)}"
         key2 = f"{{test}}-2-f{get_random_string(10)}"
@@ -4671,6 +4708,10 @@ class TestCommands:
         assert (await glide_client.type(key)).lower() == b"string"
         assert await glide_client.delete([key]) == 1
 
+        assert await glide_client.set(key.encode(), "value") == OK
+        assert (await glide_client.type(key.encode())).lower() == b"string"
+        assert await glide_client.delete([key.encode()]) == 1
+
         assert await glide_client.lpush(key, ["value"]) == 1
         assert (await glide_client.type(key)).lower() == b"list"
         assert await glide_client.delete([key]) == 1
@@ -4708,13 +4749,28 @@ class TestCommands:
             "user:5",
         )
 
-        # Prepare some data
+        # Prepare some data. Some keys and values randomaly encoded
         assert await glide_client.hset(user_key1, {"name": "Alice", "age": "30"}) == 2
-        assert await glide_client.hset(user_key2, {"name": "Bob", "age": "25"}) == 2
+        assert (
+            await glide_client.hset(user_key2.encode(), {"name": "Bob", "age": "25"})
+            == 2
+        )
         assert await glide_client.hset(user_key3, {"name": "Charlie", "age": "35"}) == 2
-        assert await glide_client.hset(user_key4, {"name": "Dave", "age": "20"}) == 2
-        assert await glide_client.hset(user_key5, {"name": "Eve", "age": "40"}) == 2
+        assert (
+            await glide_client.hset(user_key4, {"name": "Dave", "age".encode(): "20"})
+            == 2
+        )
+        assert (
+            await glide_client.hset(user_key5, {"name": "Eve", "age": "40".encode()})
+            == 2
+        )
         assert await glide_client.lpush("user_ids", ["5", "4", "3", "2", "1"]) == 5
+
+        # SORT_RO Available since: 7.0.0
+        skip_sort_ro_test = False
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(glide_client, min_version):
+            skip_sort_ro_test = True
 
         # Test sort with all arguments
         assert await glide_client.lpush(key, ["3", "1", "2"]) == 3
@@ -4726,6 +4782,16 @@ class TestCommands:
             alpha=True,
         )
         assert result == [b"Alice", b"Bob"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                key,
+                limit=Limit(0, 2),
+                get_patterns=[b"user:*->name"],
+                order=OrderBy.ASC,
+                alpha=True,
+            )
+            assert result_ro == [b"Alice", b"Bob"]
 
         # Test sort_store with all arguments
         sort_store_result = await glide_client.sort_store(
@@ -4747,9 +4813,16 @@ class TestCommands:
             get_patterns=["user:*->name"],
             alpha=True,
         )
-        assert result == convert_string_to_bytes_object(
-            ["Dave", "Bob", "Alice", "Charlie", "Eve"]
-        )
+        assert result == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                b"user_ids",
+                by_pattern=b"user:*->age",
+                get_patterns=["user:*->name"],
+                alpha=True,
+            )
+            assert result_ro == [b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
 
         # Test sort with `by` argument with missing keys to sort by
         assert await glide_client.lpush("user_ids", ["a"]) == 6
@@ -4763,6 +4836,15 @@ class TestCommands:
             [None, "Dave", "Bob", "Alice", "Charlie", "Eve"]
         )
 
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                "user_ids",
+                by_pattern=b"user:*->age",
+                get_patterns=["user:*->name"],
+                alpha=True,
+            )
+            assert result_ro == [None, b"Dave", b"Bob", b"Alice", b"Charlie", b"Eve"]
+
         # Test sort with `by` argument with missing keys to sort by
         result = await glide_client.sort(
             "user_ids",
@@ -4774,6 +4856,15 @@ class TestCommands:
             [None, "30", "25", "35", "20", "40"]
         )
 
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                "user_ids",
+                by_pattern=b"user:*->name",
+                get_patterns=[b"user:*->age"],
+                alpha=True,
+            )
+            assert result_ro == [None, b"30", b"25", b"35", b"20", b"40"]
+
         # Test Limit with count 0
         result = await glide_client.sort(
             "user_ids",
@@ -4781,6 +4872,14 @@ class TestCommands:
             alpha=True,
         )
         assert result == []
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                "user_ids",
+                limit=Limit(0, 0),
+                alpha=True,
+            )
+            assert result_ro == []
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
@@ -4790,9 +4889,19 @@ class TestCommands:
         key = "{SameSlotKey}" + get_random_string(10)
         store = "{SameSlotKey}" + get_random_string(10)
 
+        # SORT_RO Available since: 7.0.0
+        skip_sort_ro_test = False
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(glide_client, min_version):
+            skip_sort_ro_test = True
+
         # Test sort with non-existing key
         result = await glide_client.sort("non_existing_key")
         assert result == []
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(b"non_existing_key")
+            assert result_ro == []
 
         # Test sort_store with non-existing key
         sort_store_result = await glide_client.sort_store(
@@ -4807,13 +4916,25 @@ class TestCommands:
         result = await glide_client.sort(key)
         assert result == [b"1", b"2", b"3", b"4", b"5"]
 
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(key)
+            assert result_ro == [b"1", b"2", b"3", b"4", b"5"]
+
         # limit argument
         result = await glide_client.sort(key, limit=Limit(1, 3))
         assert result == [b"2", b"3", b"4"]
 
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(key, limit=Limit(1, 3))
+            assert result_ro == [b"2", b"3", b"4"]
+
         # order argument
         result = await glide_client.sort(key, order=OrderBy.DESC)
         assert result == [b"5", b"4", b"3", b"2", b"1"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(key, order=OrderBy.DESC)
+            assert result_ro == [b"5", b"4", b"3", b"2", b"1"]
 
         assert await glide_client.lpush(key, ["a"]) == 6
 
@@ -4821,15 +4942,30 @@ class TestCommands:
             await glide_client.sort(key)
         assert "can't be converted into double" in str(e).lower()
 
+        if not skip_sort_ro_test:
+            with pytest.raises(RequestError) as e:
+                await glide_client.sort_ro(key)
+            assert "can't be converted into double" in str(e).lower()
+
         # alpha argument
         result = await glide_client.sort(key, alpha=True)
         assert result == [b"1", b"2", b"3", b"4", b"5", b"a"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(key, alpha=True)
+            assert result_ro == [b"1", b"2", b"3", b"4", b"5", b"a"]
 
         # Combining multiple arguments
         result = await glide_client.sort(
             key, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
         )
         assert result == [b"5", b"4", b"3"]
+
+        if not skip_sort_ro_test:
+            result_ro = await glide_client.sort_ro(
+                key, limit=Limit(1, 3), order=OrderBy.DESC, alpha=True
+            )
+            assert result_ro == [b"5", b"4", b"3"]
 
         # Test sort_store with combined arguments
         sort_store_result = await glide_client.sort_store(
@@ -4968,7 +5104,7 @@ class TestCommands:
         assert await glide_client.xlen(key) == 1
 
         assert await glide_client.xtrim(key, TrimByMaxLen(threshold=0, exact=True)) == 1
-        # Unlike other Redis collection types, stream keys still exist even after removing all entries
+        # Unlike other Valkey collection types, stream keys still exist even after removing all entries
         assert await glide_client.exists([key]) == 1
         assert await glide_client.xlen(key) == 0
 
@@ -5332,7 +5468,7 @@ class TestCommands:
         with pytest.raises(RequestError):
             await glide_client.xgroup_destroy(non_existing_key, group_name1)
 
-        # "ENTRIESREAD" option was added in Redis 7.0.0
+        # "ENTRIESREAD" option was added in Valkey 7.0.0
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             with pytest.raises(RequestError):
                 await glide_client.xgroup_create(
@@ -6260,7 +6396,7 @@ class TestCommands:
     async def test_xautoclaim(self, glide_client: TGlideClient, protocol):
         min_version = "6.2.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             version7_or_above = False
@@ -6317,7 +6453,7 @@ class TestCommands:
         )
         assert result[0] == stream_id1_1.encode()
         assert result[1] == {stream_id1_0.encode(): [[b"f1", b"v1"], [b"f2", b"v2"]]}
-        # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # if using Valkey 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
         # Entries List because they no longer exist in the stream
         if version7_or_above:
             assert result[2] == []
@@ -6352,7 +6488,7 @@ class TestCommands:
             ]
             assert just_id_result[2] == []
         else:
-            # in Redis < 7.0.0, specifically for XAUTOCLAIM with JUSTID, entry IDs that were in the Pending Entries List
+            # in Valkey < 7.0.0, specifically for XAUTOCLAIM with JUSTID, entry IDs that were in the Pending Entries List
             # but are no longer in the stream still show up in the response
             assert just_id_result[1] == [
                 stream_id1_0.encode(),
@@ -6368,7 +6504,7 @@ class TestCommands:
     ):
         min_version = "6.2.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             version7_or_above = False
@@ -6419,7 +6555,7 @@ class TestCommands:
         )
         assert result[0] == stream_id0_0.encode()
         assert result[1] == {stream_id1_0.encode(): [[b"f1", b"v1"]]}
-        # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # if using Valkey 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
         # Entries List because they no longer exist in the stream
         if version7_or_above:
             assert result[2] == []
@@ -6541,7 +6677,7 @@ class TestCommands:
         if not await check_if_server_version_lt(glide_client, "7.2.0"):
             assert (
                 cast(int, consumer1_info.get(b"inactive"))
-                > 0  # "inactive" was added in Redis 7.2.0
+                > 0  # "inactive" was added in Valkey 7.2.0
             )
 
         # create consumer2 and read the rest of the entries with it
@@ -7224,7 +7360,7 @@ class TestCommands:
     async def test_bitfield_read_only(self, glide_client: TGlideClient):
         min_version = "6.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         key = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -7435,7 +7571,7 @@ class TestCommands:
     async def test_function_load(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -7489,7 +7625,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -7599,7 +7735,7 @@ class TestCommands:
     async def test_function_list(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         original_functions_count = len(await glide_client.function_list())
 
@@ -7664,7 +7800,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         route = SlotKeyRoute(SlotType.PRIMARY, "1") if single_route else AllPrimaries()
 
@@ -7751,7 +7887,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         await glide_client.function_flush()
         assert len(await glide_client.function_list()) == 0
@@ -7796,7 +7932,7 @@ class TestCommands:
     async def test_function_flush(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            pytest.skip(f"Redis version required >= {min_version}")
+            pytest.skip(f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -7832,7 +7968,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            pytest.skip(f"Redis version required >= {min_version}")
+            pytest.skip(f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -7884,7 +8020,7 @@ class TestCommands:
     async def test_function_delete(self, glide_client: TGlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            pytest.skip(f"Redis version required >= {min_version}")
+            pytest.skip(f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -7915,7 +8051,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            pytest.skip(f"Redis version required >= {min_version}")
+            pytest.skip(f"Valkey version required >= {min_version}")
 
         lib_name = f"mylib1C{get_random_string(5)}"
         func_name = f"myfunc1c{get_random_string(5)}"
@@ -7956,7 +8092,7 @@ class TestCommands:
     async def test_fcall_with_key(self, glide_client: GlideClusterClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         key1 = f"{{testKey}}:1-{get_random_string(10)}"
         key2 = f"{{testKey}}:2-{get_random_string(10)}"
@@ -8003,7 +8139,7 @@ class TestCommands:
     async def test_fcall_readonly_function(self, glide_client: GlideClusterClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         lib_name = f"fcall_readonly_function{get_random_string(5)}"
         # intentionally using a REPLICA route
@@ -8053,7 +8189,7 @@ class TestCommands:
     async def test_function_dump_restore_standalone(self, glide_client: GlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         assert await glide_client.function_flush(FlushMode.SYNC) is OK
 
@@ -8127,7 +8263,7 @@ class TestCommands:
     ):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         assert await glide_client.function_flush(FlushMode.SYNC) is OK
 
@@ -8325,7 +8461,7 @@ class TestCommands:
     async def test_getex(self, glide_client: TGlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         key1 = get_random_string(10)
         non_existing_key = get_random_string(10)
@@ -8361,7 +8497,7 @@ class TestCommands:
     async def test_copy_no_database(self, glide_client: TGlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         source = f"{{testKey}}:1-{get_random_string(10)}"
         destination = f"{{testKey}}:2-{get_random_string(10)}"
@@ -8395,7 +8531,7 @@ class TestCommands:
     async def test_copy_database(self, glide_client: GlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         source = get_random_string(10)
         destination = get_random_string(10)
@@ -8654,7 +8790,7 @@ class TestCommands:
     async def test_lcs(self, glide_client: GlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key1 = "testKey1"
         value1 = "abcd"
         key2 = "testKey2"
@@ -8678,7 +8814,7 @@ class TestCommands:
     async def test_lcs_len(self, glide_client: GlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key1 = "testKey1"
         value1 = "abcd"
         key2 = "testKey2"
@@ -8702,7 +8838,7 @@ class TestCommands:
     async def test_lcs_idx(self, glide_client: GlideClient):
         min_version = "7.0.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key1 = "testKey1"
         value1 = "abcd1234"
         key2 = "testKey2"
@@ -8848,7 +8984,7 @@ class TestCommands:
         min_version = "6.0.6"
         if await check_if_server_version_lt(glide_client, min_version):
             # TODO: change it to pytest fixture after we'll implement a sync client
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
         key = f"{{key}}-1{get_random_string(5)}"
         non_list_key = f"{{key}}-2{get_random_string(5)}"
         mylist: List[TEncodable] = ["a", "a", "b", "c", "a", "b"]
@@ -9672,19 +9808,19 @@ class TestScripts:
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_keys_no_args(self, request, cluster_mode, protocol):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
         length = 2**13  # 8kb
         key = "0" * length
         script = Script("return KEYS[1]")
-        assert await redis_client.invoke_script(script, keys=[key]) == key.encode()
-        await redis_client.close()
+        assert await glide_client.invoke_script(script, keys=[key]) == key.encode()
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_args_no_keys(self, request, cluster_mode, protocol):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
         length = 2**12  # 4kb
@@ -9693,14 +9829,14 @@ class TestScripts:
 
         script = Script("return ARGV[2]")
         assert (
-            await redis_client.invoke_script(script, args=[arg1, arg2]) == arg2.encode()
+            await glide_client.invoke_script(script, args=[arg1, arg2]) == arg2.encode()
         )
-        await redis_client.close()
+        await glide_client.close()
 
     @pytest.mark.parametrize("cluster_mode", [True, False])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_script_large_keys_and_args(self, request, cluster_mode, protocol):
-        redis_client = await create_client(
+        glide_client = await create_client(
             request, cluster_mode=cluster_mode, protocol=protocol, timeout=5000
         )
         length = 2**12  # 4kb
@@ -9709,7 +9845,7 @@ class TestScripts:
 
         script = Script("return KEYS[1]")
         assert (
-            await redis_client.invoke_script(script, keys=[key], args=[arg])
+            await glide_client.invoke_script(script, keys=[key], args=[arg])
             == key.encode()
         )
-        await redis_client.close()
+        await glide_client.close()

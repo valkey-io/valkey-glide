@@ -169,11 +169,19 @@ async def transaction_test(
     args.append(len(value))
     transaction.get(key)
     args.append(value_bytes)
+    transaction.get(key.encode())
+    args.append(value_bytes)
     transaction.type(key)
+    args.append(b"string")
+    transaction.type(key.encode())
     args.append(b"string")
     transaction.echo(value)
     args.append(value_bytes)
+    transaction.echo(value.encode())
+    args.append(value_bytes)
     transaction.strlen(key)
+    args.append(len(value))
+    transaction.strlen(key.encode())
     args.append(len(value))
     transaction.append(key, value)
     args.append(len(value) * 2)
@@ -628,7 +636,7 @@ async def transaction_test(
     if not await check_if_server_version_lt(glide_client, min_version):
         transaction.xautoclaim(key11, group_name1, consumer, 0, "0-0")
         transaction.xautoclaim_just_id(key11, group_name1, consumer, 0, "0-0")
-        # if using Redis 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
+        # if using Valkey 7.0.0 or above, responses also include a list of entry IDs that were removed from the Pending
         # Entries List because they no longer exist in the stream
         if await check_if_server_version_lt(glide_client, "7.0.0"):
             args.append(
@@ -668,6 +676,14 @@ async def transaction_test(
         alpha=True,
     )
     args.append([b"2", b"3", b"4", b"a"])
+    if not await check_if_server_version_lt(glide_client, "7.0.0"):
+        transaction.sort_ro(
+            key17,
+            limit=Limit(1, 4),
+            order=OrderBy.ASC,
+            alpha=True,
+        )
+        args.append([b"2", b"3", b"4", b"a"])
     transaction.sort_store(
         key17,
         key18,
@@ -944,7 +960,7 @@ class TestTransaction:
     async def test_standalone_copy_transaction(self, glide_client: GlideClient):
         min_version = "6.2.0"
         if await check_if_server_version_lt(glide_client, min_version):
-            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+            return pytest.mark.skip(reason=f"Valkey version required >= {min_version}")
 
         keyslot = get_random_string(3)
         key = "{{{}}}:{}".format(keyslot, get_random_string(3))  # to get the same slot

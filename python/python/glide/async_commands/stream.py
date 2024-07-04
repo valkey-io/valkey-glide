@@ -42,10 +42,10 @@ class StreamTrimOptions(ABC):
 
     def to_args(self) -> List[str]:
         """
-        Convert options to arguments for Redis command.
+        Convert options to arguments for the command.
 
         Returns:
-            List[str]: List of arguments for Redis command.
+            List[str]: List of arguments for the command.
         """
         option_args = [
             self.method,
@@ -120,10 +120,10 @@ class StreamAddOptions:
 
     def to_args(self) -> List[TEncodable]:
         """
-        Convert options to arguments for Redis command.
+        Convert options to arguments for the command.
 
         Returns:
-            List[str]: List of arguments for Redis command.
+            List[str]: List of arguments for the command.
         """
         option_args: List[TEncodable] = []
         if not self.make_stream:
@@ -155,10 +155,10 @@ class MinId(StreamRangeBound):
     to get the first stream ID.
     """
 
-    MIN_RANGE_REDIS_API = "-"
+    MIN_RANGE_VALKEY_API = "-"
 
     def to_arg(self) -> str:
-        return self.MIN_RANGE_REDIS_API
+        return self.MIN_RANGE_VALKEY_API
 
 
 class MaxId(StreamRangeBound):
@@ -167,10 +167,10 @@ class MaxId(StreamRangeBound):
     to get the last stream ID.
     """
 
-    MAX_RANGE_REDIS_API = "+"
+    MAX_RANGE_VALKEY_API = "+"
 
     def to_arg(self) -> str:
-        return self.MAX_RANGE_REDIS_API
+        return self.MAX_RANGE_VALKEY_API
 
 
 class IdBound(StreamRangeBound):
@@ -209,10 +209,10 @@ class ExclusiveIdBound(StreamRangeBound):
     a timestamp and sequence number separated by a dash ("-"), for example "1526985054069-0". Stream ID bounds can also
     be incomplete, with just a timestamp.
 
-    Since: Redis version 6.2.0.
+    Since: Valkey version 6.2.0.
     """
 
-    EXCLUSIVE_BOUND_REDIS_API = "("
+    EXCLUSIVE_BOUND_VALKEY_API = "("
 
     @staticmethod
     def from_timestamp(timestamp: int) -> ExclusiveIdBound:
@@ -233,15 +233,15 @@ class ExclusiveIdBound(StreamRangeBound):
         """
         if isinstance(stream_id, bytes):
             stream_id = stream_id.decode("utf-8")
-        self.stream_id = f"{self.EXCLUSIVE_BOUND_REDIS_API}{stream_id}"
+        self.stream_id = f"{self.EXCLUSIVE_BOUND_VALKEY_API}{stream_id}"
 
     def to_arg(self) -> TEncodable:
         return self.stream_id
 
 
 class StreamReadOptions:
-    READ_COUNT_REDIS_API = "COUNT"
-    READ_BLOCK_REDIS_API = "BLOCK"
+    READ_COUNT_VALKEY_API = "COUNT"
+    READ_BLOCK_VALKEY_API = "BLOCK"
 
     def __init__(self, block_ms: Optional[int] = None, count: Optional[int] = None):
         """
@@ -249,8 +249,8 @@ class StreamReadOptions:
 
         Args:
             block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
-                until the server has the required number of entries. Equivalent to `BLOCK` in the Redis API.
-            count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Redis API.
+                until the server has the required number of entries. Equivalent to `BLOCK` in the Valkey API.
+            count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Valkey API.
         """
         self.block_ms = block_ms
         self.count = count
@@ -264,17 +264,17 @@ class StreamReadOptions:
         """
         args: List[TEncodable] = []
         if self.block_ms is not None:
-            args.extend([self.READ_BLOCK_REDIS_API, str(self.block_ms)])
+            args.extend([self.READ_BLOCK_VALKEY_API, str(self.block_ms)])
 
         if self.count is not None:
-            args.extend([self.READ_COUNT_REDIS_API, str(self.count)])
+            args.extend([self.READ_COUNT_VALKEY_API, str(self.count)])
 
         return args
 
 
 class StreamGroupOptions:
-    MAKE_STREAM_REDIS_API = "MKSTREAM"
-    ENTRIES_READ_REDIS_API = "ENTRIESREAD"
+    MAKE_STREAM_VALKEY_API = "MKSTREAM"
+    ENTRIES_READ_VALKEY_API = "ENTRIESREAD"
 
     def __init__(self, make_stream: bool = False, entries_read: Optional[int] = None):
         """
@@ -284,7 +284,7 @@ class StreamGroupOptions:
             make_stream (bool): If set to True and the stream doesn't exist, this creates a new stream with a
                 length of 0.
             entries_read: (Optional[int]): A value representing the number of stream entries already read by the
-                group. This option can only be specified if you are using Redis version 7.0.0 or above.
+                group. This option can only be specified if you are using Valkey version 7.0.0 or above.
         """
         self.make_stream = make_stream
         self.entries_read = entries_read
@@ -298,16 +298,16 @@ class StreamGroupOptions:
         """
         args: List[TEncodable] = []
         if self.make_stream is True:
-            args.append(self.MAKE_STREAM_REDIS_API)
+            args.append(self.MAKE_STREAM_VALKEY_API)
 
         if self.entries_read is not None:
-            args.extend([self.ENTRIES_READ_REDIS_API, str(self.entries_read)])
+            args.extend([self.ENTRIES_READ_VALKEY_API, str(self.entries_read)])
 
         return args
 
 
 class StreamReadGroupOptions(StreamReadOptions):
-    READ_NOACK_REDIS_API = "NOACK"
+    READ_NOACK_VALKEY_API = "NOACK"
 
     def __init__(
         self, no_ack=False, block_ms: Optional[int] = None, count: Optional[int] = None
@@ -318,10 +318,10 @@ class StreamReadGroupOptions(StreamReadOptions):
 
         Args:
             no_ack (bool): If set, messages are not added to the Pending Entries List (PEL). This is equivalent to
-                acknowledging the message when it is read. Equivalent to `NOACK` in the Redis API.
+                acknowledging the message when it is read. Equivalent to `NOACK` in the Valkey API.
             block_ms (Optional[int]): If provided, the request will be blocked for the set amount of milliseconds or
-                until the server has the required number of entries. Equivalent to `BLOCK` in the Redis API.
-            count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Redis API.
+                until the server has the required number of entries. Equivalent to `BLOCK` in the Valkey API.
+            count (Optional[int]): The maximum number of elements requested. Equivalent to `COUNT` in the Valkey API.
         """
         super().__init__(block_ms=block_ms, count=count)
         self.no_ack = no_ack
@@ -335,13 +335,13 @@ class StreamReadGroupOptions(StreamReadOptions):
         """
         args: List[TEncodable] = super().to_args()
         if self.no_ack:
-            args.append(self.READ_NOACK_REDIS_API)
+            args.append(self.READ_NOACK_VALKEY_API)
 
         return args
 
 
 class StreamPendingOptions:
-    IDLE_TIME_REDIS_API = "IDLE"
+    IDLE_TIME_VALKEY_API = "IDLE"
 
     def __init__(
         self,
@@ -353,7 +353,7 @@ class StreamPendingOptions:
 
         Args:
             min_idle_time_ms (Optional[int]): Filters pending entries by their minimum idle time in milliseconds. This
-                option can only be specified if you are using Redis version 6.2.0 or above.
+                option can only be specified if you are using Valkey version 6.2.0 or above.
             consumer_name (Optional[TEncodable]): Filters pending entries by consumer name.
         """
         self.min_idle_time = min_idle_time_ms
@@ -361,11 +361,11 @@ class StreamPendingOptions:
 
 
 class StreamClaimOptions:
-    IDLE_REDIS_API = "IDLE"
-    TIME_REDIS_API = "TIME"
-    RETRY_COUNT_REDIS_API = "RETRYCOUNT"
-    FORCE_REDIS_API = "FORCE"
-    JUST_ID_REDIS_API = "JUSTID"
+    IDLE_VALKEY_API = "IDLE"
+    TIME_VALKEY_API = "TIME"
+    RETRY_COUNT_VALKEY_API = "RETRYCOUNT"
+    FORCE_VALKEY_API = "FORCE"
+    JUST_ID_VALKEY_API = "JUSTID"
 
     def __init__(
         self,
@@ -406,19 +406,19 @@ class StreamClaimOptions:
         """
         args: List[TEncodable] = []
         if self.idle:
-            args.append(self.IDLE_REDIS_API)
+            args.append(self.IDLE_VALKEY_API)
             args.append(str(self.idle))
 
         if self.idle_unix_time:
-            args.append(self.TIME_REDIS_API)
+            args.append(self.TIME_VALKEY_API)
             args.append(str(self.idle_unix_time))
 
         if self.retry_count:
-            args.append(self.RETRY_COUNT_REDIS_API)
+            args.append(self.RETRY_COUNT_VALKEY_API)
             args.append(str(self.retry_count))
 
         if self.is_force:
-            args.append(self.FORCE_REDIS_API)
+            args.append(self.FORCE_VALKEY_API)
 
         return args
 
@@ -433,7 +433,7 @@ def _create_xpending_range_args(
 ) -> List[TEncodable]:
     args = [key, group_name]
     if options is not None and options.min_idle_time is not None:
-        args.extend([options.IDLE_TIME_REDIS_API, str(options.min_idle_time)])
+        args.extend([options.IDLE_TIME_VALKEY_API, str(options.min_idle_time)])
 
     args.extend([start.to_arg(), end.to_arg(), str(count)])
     if options is not None and options.consumer_name is not None:
