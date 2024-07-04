@@ -7851,6 +7851,23 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void randomKeyBinary() {
+        // setup
+        GlideString key1 = gs("key1");
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(key1);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(RandomKey), eq(new GlideString[0]), any()))
+                .thenReturn(testResponse);
+        CompletableFuture<GlideString> response = service.randomKeyBinary();
+
+        // verify
+        assertEquals(testResponse, response);
+    }
+
+    @SneakyThrows
+    @Test
     public void rename() {
         // setup
         String key = "key1";

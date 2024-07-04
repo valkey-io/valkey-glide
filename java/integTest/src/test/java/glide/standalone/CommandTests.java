@@ -1164,6 +1164,23 @@ public class CommandTests {
         assertNull(regularClient.randomKey().get());
     }
 
+    @SneakyThrows
+    @Test
+    public void randomKeyBinary() {
+        GlideString key1 = gs("{key}" + UUID.randomUUID());
+        GlideString key2 = gs("{key}" + UUID.randomUUID());
+
+        assertEquals(OK, regularClient.set(key1, gs("a")).get());
+        assertEquals(OK, regularClient.set(key2, gs("b")).get());
+
+        GlideString randomKeyBinary = regularClient.randomKeyBinary().get();
+        assertEquals(1L, regularClient.exists(new GlideString[] {randomKeyBinary}).get());
+
+        // no keys in database
+        assertEquals(OK, regularClient.flushall().get());
+        assertNull(regularClient.randomKeyBinary().get());
+    }
+
     @Test
     @SneakyThrows
     public void sort() {
