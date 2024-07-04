@@ -2880,6 +2880,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lpop_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] args = new GlideString[] {key};
+        GlideString value = gs("value");
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(LPop), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.lpop(key);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lpopCount_returns_success() {
         // setup
         String key = "testKey";
@@ -2897,6 +2921,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String[]> response = service.lpopCount(key, count);
         String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lpopCount_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long count = 2L;
+        GlideString[] args = new GlideString[] {key, gs(Long.toString(count))};
+        GlideString[] value = new GlideString[] {gs("value1"), gs("value2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(LPop), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.lpopCount(key, count);
+        GlideString[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -3401,6 +3450,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void rpop_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString value = gs("value");
+        GlideString[] args = new GlideString[] {key};
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(RPop), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.rpop(key);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void rpopCount_returns_success() {
         // setup
         String key = "testKey";
@@ -3418,6 +3491,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String[]> response = service.rpopCount(key, count);
         String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void rpopCount_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long count = 2L;
+        GlideString[] args = new GlideString[] {key, gs(Long.toString(count))};
+        GlideString[] value = new GlideString[] {gs("value1"), gs("value2")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(RPop), eq(args), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.rpopCount(key, count);
+        GlideString[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -4154,12 +4252,63 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zmpop_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        ScoreFilter modifier = MAX;
+        GlideString[] arguments = {gs("2"), gs("key1"), gs("key2"), gs("MAX")};
+        Object[] value = new Object[] {"key1", "elem"};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.zmpop(keys, modifier);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zmpop_with_count_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         ScoreFilter modifier = MAX;
         long count = 42;
         String[] arguments = {"2", "key1", "key2", "MAX", "COUNT", "42"};
+        Object[] value = new Object[] {"key1", "elem"};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(ZMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.zmpop(keys, modifier, count);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zmpop_binary_with_count_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        ScoreFilter modifier = MAX;
+        long count = 42;
+        GlideString[] arguments = {gs("2"), gs("key1"), gs("key2"), gs("MAX"), gs("COUNT"), gs("42")};
         Object[] value = new Object[] {"key1", "elem"};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -4206,6 +4355,32 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void bzmpop_binary_returns_success() {
+        // setup
+        double timeout = .5;
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        ScoreFilter modifier = MAX;
+        GlideString[] arguments = {gs("0.5"), gs("2"), gs("key1"), gs("key2"), gs("MAX")};
+        Object[] value = new Object[] {"key1", "elem"};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.bzmpop(keys, modifier, timeout);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bzmpop_with_count_returns_success() {
         // setup
         double timeout = .5;
@@ -4213,6 +4388,35 @@ public class RedisClientTest {
         ScoreFilter modifier = MAX;
         long count = 42;
         String[] arguments = {"0.5", "2", "key1", "key2", "MAX", "COUNT", "42"};
+        Object[] value = new Object[] {"key1", "elem"};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(BZMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.bzmpop(keys, modifier, timeout, count);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertArrayEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bzmpop_binary_with_count_returns_success() {
+        // setup
+        double timeout = .5;
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        ScoreFilter modifier = MAX;
+        long count = 42;
+        GlideString[] arguments = {
+            gs("0.5"), gs("2"), gs("key1"), gs("key2"), gs("MAX"), gs("COUNT"), gs("42")
+        };
         Object[] value = new Object[] {"key1", "elem"};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -4475,6 +4679,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zpopmin_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key};
+        Map<GlideString, Double> value = Map.of(gs("member1"), 2.5);
+
+        CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZPopMin), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Double>> response = service.zpopmin(key);
+        Map<GlideString, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void zpopmin_with_count_returns_success() {
         // setup
         String key = "testKey";
@@ -4500,11 +4729,62 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zpopmin_with_count_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long count = 2L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(count))};
+        Map<GlideString, Double> value = Map.of(gs("member1"), 2.0, gs("member2"), 3.0);
+
+        CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZPopMin), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Double>> response = service.zpopmin(key, count);
+        Map<GlideString, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bzpopmin_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         double timeout = .5;
         String[] arguments = new String[] {"key1", "key2", "0.5"};
+        Object[] value = new Object[] {"key1", "elem", 42.};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMin), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.bzpopmin(keys, timeout);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bzpopmin_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        double timeout = .5;
+        GlideString[] arguments = new GlideString[] {gs("key1"), gs("key2"), gs("0.5")};
         Object[] value = new Object[] {"key1", "elem", 42.};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -4549,11 +4829,61 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void zpopmax_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key};
+        Map<GlideString, Double> value = Map.of(gs("member1"), 2.5);
+
+        CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZPopMax), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Double>> response = service.zpopmax(key);
+        Map<GlideString, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void bzpopmax_returns_success() {
         // setup
         String[] keys = new String[] {"key1", "key2"};
         double timeout = .5;
         String[] arguments = new String[] {"key1", "key2", "0.5"};
+        Object[] value = new Object[] {"key1", "elem", 42.};
+
+        CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Object[]>submitNewCommand(eq(BZPopMax), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Object[]> response = service.bzpopmax(keys, timeout);
+        Object[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void bzpopmax_binary_returns_success() {
+        // setup
+        GlideString[] keys = new GlideString[] {gs("key1"), gs("key2")};
+        double timeout = .5;
+        GlideString[] arguments = new GlideString[] {gs("key1"), gs("key2"), gs("0.5")};
         Object[] value = new Object[] {"key1", "elem", 42.};
 
         CompletableFuture<Object[]> testResponse = new CompletableFuture<>();
@@ -4591,6 +4921,32 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Map<String, Double>> response = service.zpopmax(key, count);
         Map<String, Double> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void zpopmax_with_count_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long count = 2L;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(count))};
+        Map<GlideString, Double> value = Map.of(gs("member1"), 3.0, gs("member2"), 1.0);
+
+        CompletableFuture<Map<GlideString, Double>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, Double>>submitNewCommand(
+                        eq(ZPopMax), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, Double>> response = service.zpopmax(key, count);
+        Map<GlideString, Double> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -7889,6 +8245,31 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void blpop_binary_returns_success() {
+        // setup
+        GlideString key = gs("key");
+        double timeout = 0.5;
+        GlideString[] arguments = new GlideString[] {key, gs("0.5")};
+        GlideString[] value = new GlideString[] {gs("key"), gs("value")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(BLPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.blpop(new GlideString[] {key}, timeout);
+        GlideString[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void rpushx_returns_success() {
         // setup
         String key = "testKey";
@@ -8006,6 +8387,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<String[]> response = service.brpop(new String[] {key}, timeout);
         String[] payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void brpop_binary_returns_success() {
+        // setup
+        GlideString key = gs("key");
+        double timeout = 0.5;
+        GlideString[] arguments = new GlideString[] {key, gs("0.5")};
+        GlideString[] value = new GlideString[] {gs("key"), gs("value")};
+
+        CompletableFuture<GlideString[]> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString[]>submitNewCommand(eq(BRPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString[]> response = service.brpop(new GlideString[] {key}, timeout);
+        GlideString[] payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -9489,6 +9895,39 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void blmpop_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        GlideString[] keys = {key, key2};
+        ListDirection listDirection = ListDirection.LEFT;
+        double timeout = 0.1;
+        GlideString[] arguments =
+                new GlideString[] {
+                    gs(Double.toString(timeout)), gs("2"), key, key2, gs(listDirection.toString())
+                };
+        Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
+
+        CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+                        eq(BLMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, GlideString[]>> response =
+                service.blmpop(keys, listDirection, timeout);
+        Map<GlideString, GlideString[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void blmpop_with_count_returns_success() {
         // setup
         String key = "testKey";
@@ -9520,6 +9959,46 @@ public class RedisClientTest {
         CompletableFuture<Map<String, String[]>> response =
                 service.blmpop(keys, listDirection, count, timeout);
         Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void blmpop_with_count_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        GlideString[] keys = {key, key2};
+        ListDirection listDirection = ListDirection.LEFT;
+        long count = 1L;
+        double timeout = 0.1;
+        GlideString[] arguments =
+                new GlideString[] {
+                    gs(Double.toString(timeout)),
+                    gs("2"),
+                    key,
+                    key2,
+                    gs(listDirection.toString()),
+                    gs(COUNT_FOR_LIST_REDIS_API),
+                    gs(Long.toString(count))
+                };
+        Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
+
+        CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+                        eq(BLMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, GlideString[]>> response =
+                service.blmpop(keys, listDirection, count, timeout);
+        Map<GlideString, GlideString[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -9793,6 +10272,35 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void lmpop_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        GlideString[] keys = {key, key2};
+        ListDirection listDirection = ListDirection.LEFT;
+        GlideString[] arguments = new GlideString[] {gs("2"), key, key2, gs(listDirection.toString())};
+        Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
+
+        CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+                        eq(LMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, GlideString[]>> response =
+                service.lmpop(keys, listDirection);
+        Map<GlideString, GlideString[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void lmpop_with_count_returns_success() {
         // setup
         String key = "testKey";
@@ -9816,6 +10324,44 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Map<String, String[]>> response = service.lmpop(keys, listDirection, count);
         Map<String, String[]> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void lmpop_with_count_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString key2 = gs("testKey2");
+        GlideString[] keys = {key, key2};
+        ListDirection listDirection = ListDirection.LEFT;
+        long count = 1L;
+        GlideString[] arguments =
+                new GlideString[] {
+                    gs("2"),
+                    key,
+                    key2,
+                    gs(listDirection.toString()),
+                    gs(COUNT_FOR_LIST_REDIS_API),
+                    gs(Long.toString(count))
+                };
+        Map<GlideString, GlideString[]> value = Map.of(key, new GlideString[] {gs("five")});
+
+        CompletableFuture<Map<GlideString, GlideString[]>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Map<GlideString, GlideString[]>>submitNewCommand(
+                        eq(LMPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Map<GlideString, GlideString[]>> response =
+                service.lmpop(keys, listDirection, count);
+        Map<GlideString, GlideString[]> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
@@ -10205,6 +10751,30 @@ public class RedisClientTest {
 
     @SneakyThrows
     @Test
+    public void spop_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        GlideString[] arguments = new GlideString[] {key};
+        GlideString value = gs("value");
+
+        CompletableFuture<GlideString> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<GlideString>submitNewCommand(eq(SPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<GlideString> response = service.spop(key);
+        GlideString payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
     public void spopCount_returns_success() {
         // setup
         String key = "testKey";
@@ -10222,6 +10792,31 @@ public class RedisClientTest {
         // exercise
         CompletableFuture<Set<String>> response = service.spopCount(key, count);
         Set<String> payload = response.get();
+
+        // verify
+        assertEquals(testResponse, response);
+        assertEquals(value, payload);
+    }
+
+    @SneakyThrows
+    @Test
+    public void spopCount_binary_returns_success() {
+        // setup
+        GlideString key = gs("testKey");
+        long count = 2;
+        GlideString[] arguments = new GlideString[] {key, gs(Long.toString(count))};
+        Set<GlideString> value = Set.of(gs("one"), gs("two"));
+
+        CompletableFuture<Set<GlideString>> testResponse = new CompletableFuture<>();
+        testResponse.complete(value);
+
+        // match on protobuf request
+        when(commandManager.<Set<GlideString>>submitNewCommand(eq(SPop), eq(arguments), any()))
+                .thenReturn(testResponse);
+
+        // exercise
+        CompletableFuture<Set<GlideString>> response = service.spopCount(key, count);
+        Set<GlideString> payload = response.get();
 
         // verify
         assertEquals(testResponse, response);
