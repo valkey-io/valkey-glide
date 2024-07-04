@@ -813,11 +813,12 @@ public class TransactionTestUtilities {
 
     private static Object[] streamCommands(BaseTransaction<?> transaction) {
         final String streamKey1 = "{streamKey}-1-" + UUID.randomUUID();
+        final String streamKey2 = "{streamKey}-2-" + UUID.randomUUID();
+        final String streamKey3 = "{streamKey}-3-" + UUID.randomUUID();
         final String groupName1 = "{groupName}-1-" + UUID.randomUUID();
         final String groupName2 = "{groupName}-2-" + UUID.randomUUID();
-        final String consumer1 = "{consumer}-1-" + UUID.randomUUID();
-        final String streamKey2 = "{streamKey}-2-" + UUID.randomUUID();
         final String groupName3 = "{groupName}-2-" + UUID.randomUUID();
+        final String consumer1 = "{consumer}-1-" + UUID.randomUUID();
 
         transaction
                 .xadd(streamKey1, Map.of("field1", "value1"), StreamAddOptions.builder().id("0-1").build())
@@ -832,6 +833,7 @@ public class TransactionTestUtilities {
                 .xrevrange(streamKey1, IdBound.of("0-1"), IdBound.of("0-1"), 1L)
                 .xtrim(streamKey1, new MinId(true, "0-2"))
                 .xgroupCreate(streamKey1, groupName1, "0-2")
+                .xinfoConsumers(streamKey1, groupName1)
                 .xgroupCreate(
                         streamKey1, groupName2, "0-0", StreamGroupOptions.builder().makeStream().build())
                 .xgroupCreateConsumer(streamKey1, groupName1, consumer1)
@@ -869,7 +871,10 @@ public class TransactionTestUtilities {
                 .xgroupDelConsumer(streamKey1, groupName1, consumer1)
                 .xgroupDestroy(streamKey1, groupName1)
                 .xgroupDestroy(streamKey1, groupName2)
-                .xdel(streamKey1, new String[] {"0-3", "0-5"});
+                .xdel(streamKey1, new String[] {"0-3", "0-5"})
+                .xadd(streamKey3, Map.of("f0", "v0"), StreamAddOptions.builder().id("1-0").build())
+                .xgroupCreate(streamKey3, groupName3, "0")
+                .xinfoGroups(streamKey1);
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
             transaction
@@ -898,6 +903,7 @@ public class TransactionTestUtilities {
                     "0-1", new String[][] {{"field1", "value1"}}), // .xrevrange(streamKey1, "0-1", "0-1", 1l)
             1L, // xtrim(streamKey1, new MinId(true, "0-2"))
             OK, // xgroupCreate(streamKey1, groupName1, "0-0")
+            new Map[] {}, // .xinfoConsumers(streamKey1, groupName1)
             OK, // xgroupCreate(streamKey1, groupName1, "0-0", options)
             true, // xgroupCreateConsumer(streamKey1, groupName1, consumer1)
             OK, // xgroupSetId(streamKey1, groupName1, "0-2")
@@ -925,7 +931,10 @@ public class TransactionTestUtilities {
             0L, // xgroupDelConsumer(streamKey1, groupName1, consumer1)
             true, // xgroupDestroy(streamKey1, groupName1)
             true, // xgroupDestroy(streamKey1, groupName2)
-            1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"});
+            1L, // .xdel(streamKey1, new String[] {"0-1", "0-5"})
+            "1-0", // xadd(streamKey3, Map.of("f0", "v0"), id("1-0"))
+            OK, // xgroupCreate(streamKey3, groupName3, "0")
+            new Map[] {}, // xinfoGroups(streamKey3)
         };
 
         if (REDIS_VERSION.isGreaterThanOrEqualTo("7.0.0")) {
