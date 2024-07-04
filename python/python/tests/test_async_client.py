@@ -8288,7 +8288,7 @@ class TestCommands:
                 try:
                     # attempt to kill the function
                     result = await redis_client.function_kill()
-                    if result is "OK":
+                    if result == "OK":
                         killSuccess = True
                 except RequestError as e:
                     # a RequestError may occur if the function is not yet running
