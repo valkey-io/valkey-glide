@@ -168,6 +168,56 @@ public class TestUtilities {
         assertTrue(hasLib);
     }
 
+    private <T> void assertSetsEqual(Set<T> expected, Set<T> actual) {
+        // Convert both sets to lists. It is needed due to issue that rust return the flags as string
+        List<GlideString> expectedList =
+                expected.stream().sorted().map(GlideString::of).collect(Collectors.toList());
+        List<GlideString> actualList =
+                actual.stream().sorted().map(GlideString::of).collect(Collectors.toList());
+
+        assertEquals(expectedList, actualList);
+    }
+
+    /**
+     * Validate whether `FUNCTION LIST` response contains required info.
+     *
+     * @param response The response from redis.
+     * @param libName Expected library name.
+     * @param functionDescriptions Expected function descriptions. Key - function name, value -
+     *     description.
+     * @param functionFlags Expected function flags. Key - function name, value - flags set.
+     * @param libCode Expected library to check if given.
+     */
+    @SuppressWarnings("unchecked")
+    public static void checkFunctionListResponseBinary(
+            Map<GlideString, Object>[] response,
+            GlideString libName,
+            Map<GlideString, GlideString> functionDescriptions,
+            Map<GlideString, Set<GlideString>> functionFlags,
+            Optional<GlideString> libCode) {
+        assertTrue(response.length > 0);
+        boolean hasLib = false;
+        for (var lib : response) {
+            hasLib = lib.containsValue(libName);
+            if (hasLib) {
+                var functions = (Object[]) lib.get(gs("functions"));
+                assertEquals(functionDescriptions.size(), functions.length);
+                for (var functionInfo : functions) {
+                    var function = (Map<GlideString, Object>) functionInfo;
+                    var functionName = (GlideString) function.get(gs("name"));
+                    assertEquals(functionDescriptions.get(functionName), function.get(gs("description")));
+                    assertSetsEqual(
+                            functionFlags.get(functionName), (Set<GlideString>) function.get(gs("flags")));
+                }
+                if (libCode.isPresent()) {
+                    assertEquals(libCode.get(), lib.get(gs("library_code")));
+                }
+                break;
+            }
+        }
+        assertTrue(hasLib);
+    }
+
     /**
      * Validate whether `FUNCTION STATS` response contains required info.
      *
