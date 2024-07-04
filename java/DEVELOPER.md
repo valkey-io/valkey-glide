@@ -8,9 +8,11 @@ The Valkey GLIDE Java wrapper consists of both Java and Rust code. Rust bindings
 
 ### Build from source
 
+**Note:** See the [Troubleshooting](#troubleshooting) section below for possible solutions to problems.
+
 #### Prerequisites
 
-Software Dependencies
+**Software Dependencies**
 
 -   git
 -   GCC
@@ -20,6 +22,42 @@ Software Dependencies
 -   openssl-dev
 -   rustup
 -   Java 11
+
+**Dependencies installation for Ubuntu**
+
+```bash
+sudo apt update -y
+sudo apt install -y openjdk-11-jdk git gcc pkg-config openssl libssl-dev unzip
+# Install rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+# Check that the Rust compiler is installed
+rustc --version
+```
+
+Continue with **Install protobuf compiler** below.
+
+**Dependencies installation for CentOS**
+
+```bash
+sudo yum update -y
+sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-devel unzip
+# Install rust
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Continue with **Install protobuf compiler** below.
+
+**Dependencies installation for MacOS**
+
+```bash
+brew update
+brew install openjdk@11 git gcc pkgconfig protobuf openssl protobuf
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+source "$HOME/.cargo/env"
+```
+
+Continue with **Install protobuf compiler** below.
 
 **Install protobuf compiler**
 
@@ -38,35 +76,6 @@ unzip protoc-26.1-linux-x86_64.zip -d $HOME/.local
 export PATH="$PATH:$HOME/.local/bin"
 # Check that the protobuf compiler version 26.1 or higher is installed
 protoc --version
-```
-
-**Dependencies installation for Ubuntu**
-
-```bash
-sudo apt update -y
-sudo apt install -y openjdk-11-jdk git gcc pkg-config openssl libssl-dev unzip
-# Install rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
-# Check that the Rust compiler is installed
-rustc --version
-```
-
-**Dependencies installation for CentOS**
-
-```bash
-sudo yum update -y
-sudo yum install -y java-11-openjdk-devel git gcc pkgconfig openssl openssl-devel unzip
-# Install rust
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-```
-**Dependencies installation for MacOS**
-
-```bash
-brew update
-brew install openjdk@11 git gcc pkgconfig protobuf openssl protobuf
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-source "$HOME/.cargo/env"
 ```
 
 #### Building and installation steps
@@ -151,7 +160,11 @@ For Java, we use Spotless and SpotBugs.
 ### Troubleshooting
 
 Some troubleshooting issues:
-- Failed to find `cargo` after `rustup`: `gradle` daemon may need to be restarted via `./gradlew --stop` to recognize the new `$PATH`. If that doesn't work, you may need to restart your machine.
+- If the build fails after following the installation instructions, the `gradle` daemon may need to be 
+  restarted (`./gradlew --stop`) so that it recognizes changes to environment variables (e.g. `$PATH`). If that doesn't work,
+  you may need to restart your machine. In particular, this may solve the following problems:
+    - Failed to find `cargo` after `rustup`.
+    - No Protobuf compiler (protoc) found.
 - If build fails because of rust compiler fails, make sure submodules are updated using `git submodule update`.
 - If protobuf 26.0 or earlier is detected, upgrade to the latest protobuf release.
 
