@@ -13,7 +13,14 @@ from glide.async_commands.core import (
     _build_sort_args,
 )
 from glide.async_commands.transaction import BaseTransaction, Transaction
-from glide.constants import OK, TOK, TEncodable, TFunctionListResponse, TResult
+from glide.constants import (
+    OK,
+    TOK,
+    TEncodable,
+    TFunctionListResponse,
+    TFunctionStatsResponse,
+    TResult,
+)
 from glide.protobuf.redis_request_pb2 import RequestType
 
 
@@ -360,6 +367,42 @@ class StandaloneCommands(CoreCommands):
                 RequestType.FunctionDelete,
                 [library_name],
             ),
+        )
+
+    async def function_stats(self) -> TFunctionStatsResponse:
+        """
+        Returns information about the function that's currently running and information about the
+        available execution engines.
+
+        See https://valkey.io/commands/function-stats/ for more details
+
+        Returns:
+            TFunctionStatsResponse: A `Mapping` with two keys:
+                - `running_script` with information about the running script.
+                - `engines` with information about available engines and their stats.
+                See example for more details.
+
+        Examples:
+            >>> await client.function_stats()
+                {
+                    'running_script': {
+                        'name': 'foo',
+                        'command': ['FCALL', 'foo', '0', 'hello'],
+                        'duration_ms': 7758
+                    },
+                    'engines': {
+                        'LUA': {
+                            'libraries_count': 1,
+                            'functions_count': 1,
+                        }
+                    }
+                }
+
+        Since: Redis version 7.0.0.
+        """
+        return cast(
+            TFunctionStatsResponse,
+            await self._execute_command(RequestType.FunctionStats, []),
         )
 
     async def function_dump(self) -> bytes:
