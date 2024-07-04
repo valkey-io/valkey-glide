@@ -8297,6 +8297,67 @@ class TestCommands:
            assert await redis_client.function_kill()
         assert "NotBusy" in str(e)
 
+    @pytest.mark.parametrize("cluster_mode", [True, False])
+    @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
+    async def test_function_kill_write(self, request, cluster_mode, protocol, redis_client: TGlideClient):
+        min_version = "7.0.0"
+        if await check_if_server_version_lt(redis_client, min_version):
+            return pytest.mark.skip(reason=f"Redis version required >= {min_version}")
+
+        lib_name = f"mylib1C{get_random_string(5)}"
+        func_name = f"myfunc1c{get_random_string(5)}"
+        code = create_lua_lib_with_long_running_function(lib_name, func_name, 20, False)
+
+        # nothing to kill
+        with pytest.raises(RequestError) as e:
+            await redis_client.function_kill()
+        assert "NotBusy" in str(e)
+
+        # load the library
+        assert await redis_client.function_load(code) == lib_name.encode()
+
+        # create a second client to run fcall
+        test_client = await create_client(request, cluster_mode=cluster_mode, protocol=protocol, timeout=20000)
+
+        # call fcall to run the function
+        # make sure that fcall routes to a primary node, and not a replica
+        # if this happens, function_kill and function_stats won't find the function and will fail
+        primaryRoute = SlotKeyRoute(SlotType.PRIMARY, lib_name)
+        async def endless_fcall_route_call():
+            # fcall is supposed to be killed, and will return a RequestError
+            with pytest.raises(RequestError) as e:
+                if (cluster_mode):
+                    await test_client.fcall_route(func_name, arguments=[], route=primaryRoute)
+                else:
+                    await test_client.fcall(func_name, arguments=[])
+            # assert func_name in str(e)
+
+        async def wait_and_function_kill():
+            # it can take up to 5 seconds for FCALL to register as running
+            await asyncio.sleep(5)
+            timeout=0
+            # try for another 3 seconds to see if FCALL is now running
+            while (timeout <= 3):
+                stats = await redis_client.custom_command(["FUNCTION", "STATS"])
+                print(f"function_stats: %s", stats)
+                if (f"{func_name}" in str(stats)):
+                    print("function running")
+                    break
+                timeout += .5
+                await asyncio.sleep(.5)
+            # kill the function
+            assert await redis_client.function_kill() is "OK"
+
+        await asyncio.gather(
+            endless_fcall_route_call(),
+            wait_and_function_kill(),
+        )
+
+        # no functions running
+        with pytest.raises(RequestError) as e:
+           assert await redis_client.function_kill()
+        assert "NotBusy" in str(e)
+
     @pytest.mark.parametrize("cluster_mode", [True])
     @pytest.mark.parametrize("protocol", [ProtocolVersion.RESP2, ProtocolVersion.RESP3])
     async def test_fcall_with_key(self, glide_client: GlideClusterClient):
