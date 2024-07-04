@@ -1063,17 +1063,21 @@ class TestTransaction:
         info = response[1]
         assert info.get(b"length") == 1
         assert info.get(b"groups") == 0
-        assert info.get(b"first-entry") == {
-            stream_id1_0.encode(): [[b"foo", b"bar"]]
-        }
+        assert info.get(b"first-entry") == [
+            stream_id1_0.encode(),
+            [b"foo", b"bar"]
+        ]
         assert info.get(b"first-entry") == info.get(b"last-entry")
 
         # transaction.xinfo_stream_full(key)
         info_full = response[2]
         assert info_full.get(b"length") == 1
-        assert info_full.get(b"entries") == {
-            stream_id1_0.encode(): [[b"foo", b"bar"]]
-        }
+        assert info_full.get(b"entries") == [
+            [
+                stream_id1_0.encode(),
+                [b"foo", b"bar"]
+            ]
+        ]
         assert info_full.get(b"groups") == []
 
     @pytest.mark.parametrize("cluster_mode", [True, False])

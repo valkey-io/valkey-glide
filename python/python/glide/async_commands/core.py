@@ -3572,17 +3572,14 @@ class CoreCommands(Protocol):
                     b"entries-added": 4L,  # This field was added in Redis version 7.0.0.
                     b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Redis version 7.0.0.
                     b"groups": 1L,
-                    b"first-entry": {
-                        b"1719710679916-0": [
-                            [b"foo1", b"bar1"],
-                            [b"foo2", b"bar2"],
-                        ]
-                    },
-                    b"last-entry": {
-                        b"1719877599564-0": [
-                            [b"field1", b"value1"],
-                        ]
-                    },
+                    b"first-entry": [
+                        b"1719710679916-0",
+                        [b"foo1", b"bar1", b"foo2", b"bar2"],
+                    ],
+                    b"last-entry": [
+                        b"1719877599564-0",
+                        [b"field1", b"value1"],
+                    ],
                 }
                 # Stream information for "my_stream". Note that "first-entry" and "last-entry" could both be `None` if
                 # the stream is empty.
@@ -3621,15 +3618,16 @@ class CoreCommands(Protocol):
                     b"max-deleted-entry-id": b"0-0",  # This field was added in Redis version 7.0.0.
                     b"entries-added": 4L,  # This field was added in Redis version 7.0.0.
                     b"recorded-first-entry-id": b"1719710679916-0",  # This field was added in Redis version 7.0.0.
-                    b"entries": {
-                        b"1719710679916-0": [
-                            [b"foo1", b"bar1"],
-                            [b"foo2", b"bar2"],
+                    b"entries": [
+                        [
+                            b"1719710679916-0",
+                            [b"foo1", b"bar1", b"foo2", b"bar2"],
                         ],
-                        b"1719877599564-0": [
+                        [
+                            b"1719877599564-0":
                             [b"field1", b"value1"],
-                        ],
-                    },
+                        ]
+                    ],
                     b"groups": [
                         {
                             b"name": b"mygroup",
