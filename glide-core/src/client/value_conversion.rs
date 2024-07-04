@@ -1376,9 +1376,13 @@ mod tests {
             Value::BulkString("groups".to_string().into_bytes()),
             Value::Array(vec![
                 Value::Array(vec![
+                    Value::BulkString("name".to_string().into_bytes()),
+                    Value::BulkString("group1".to_string().into_bytes()),
                     Value::BulkString("consumers".to_string().into_bytes()),
                     Value::Array(vec![
                         Value::Array(vec![
+                            Value::BulkString("name".to_string().into_bytes()),
+                            Value::BulkString("consumer1".to_string().into_bytes()),
                             Value::BulkString("pending".to_string().into_bytes()),
                             Value::Array(vec![Value::Array(vec![
                                 Value::BulkString("1-0".to_string().into_bytes()),
@@ -1418,22 +1422,34 @@ mod tests {
             (
                 Value::BulkString("groups".to_string().into_bytes()),
                 Value::Array(vec![
-                    Value::Map(vec![(
-                        Value::BulkString("consumers".to_string().into_bytes()),
-                        Value::Array(vec![
-                            Value::Map(vec![(
-                                Value::BulkString("pending".to_string().into_bytes()),
-                                Value::Array(vec![Value::Array(vec![
-                                    Value::BulkString("1-0".to_string().into_bytes()),
-                                    Value::Int(1),
-                                ])]),
-                            )]),
-                            Value::Map(vec![(
-                                Value::BulkString("pending".to_string().into_bytes()),
-                                Value::Array(vec![]),
-                            )]),
-                        ]),
-                    )]),
+                    Value::Map(vec![
+                        (
+                            Value::BulkString("name".to_string().into_bytes()),
+                            Value::BulkString("group1".to_string().into_bytes()),
+                        ),
+                        (
+                            Value::BulkString("consumers".to_string().into_bytes()),
+                            Value::Array(vec![
+                                Value::Map(vec![
+                                    (
+                                        Value::BulkString("name".to_string().into_bytes()),
+                                        Value::BulkString("consumer1".to_string().into_bytes()),
+                                    ),
+                                    (
+                                        Value::BulkString("pending".to_string().into_bytes()),
+                                        Value::Array(vec![Value::Array(vec![
+                                            Value::BulkString("1-0".to_string().into_bytes()),
+                                            Value::Int(1),
+                                        ])]),
+                                    )
+                                ]),
+                                Value::Map(vec![(
+                                    Value::BulkString("pending".to_string().into_bytes()),
+                                    Value::Array(vec![]),
+                                )]),
+                            ]),
+                        )
+                    ]),
                     Value::Map(vec![(
                         Value::BulkString("consumers".to_string().into_bytes()),
                         Value::Array(vec![]),
