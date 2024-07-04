@@ -752,7 +752,7 @@ class TestTransaction:
         self, glide_client: TGlideClient, transaction: BaseTransaction
     ) -> Optional[List[TResult]]:
         """
-        Exec a transaction on a client with proper client. Casts are required to satisfy `mypy`.
+        Exec a transaction on a client with proper typing. Casts are required to satisfy `mypy`.
         """
         if isinstance(glide_client, GlideClient):
             return await cast(GlideClient, glide_client).exec(
