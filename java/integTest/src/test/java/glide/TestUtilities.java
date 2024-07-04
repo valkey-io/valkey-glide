@@ -8,13 +8,14 @@ import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import java.util.Arrays;
+
 import glide.api.models.ClusterValue;
 import glide.api.models.GlideString;
 import glide.api.models.configuration.NodeAddress;
 import glide.api.models.configuration.RedisClientConfiguration;
 import glide.api.models.configuration.RedisClusterClientConfiguration;
 import java.security.SecureRandom;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
